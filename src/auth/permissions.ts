@@ -1,20 +1,29 @@
 // ============================================================================
 // AUTHORIZATION LAYER - pure function per kombinasi role x aksi.
-// Lihat CLAUDE.md bagian "Role matrix" untuk definisi lengkap 7 role dan
-// cakupan aksesnya - file ini implementasi dari tabel itu.
+// Lihat CLAUDE.md bagian "Simulasi role matrix lengkap" untuk definisi
+// lengkap 6 role dan cakupan aksesnya - file ini implementasi dari tabel
+// itu (role & aksi detail: dashboard unit/lintas unit, SK KGB, SK Hukuman
+// Disiplin, Anggaran Realisasi, Bukti Potong Pajak, usulan perubahan role).
 //
-// PENTING: file ini BELUM disambungkan ke middleware/route/dashboard
-// manapun (itu langkah 3, belum dikerjakan). Semua fungsi di sini pure -
-// tidak ada I/O, cuma logika keputusan izin/tolak berdasarkan data yang
-// dikasih si pemanggil. Caller (nanti di langkah 3) yang tanggung jawab
-// ngambil data User/Pegawai/Sanggahan dari database lalu panggil fungsi
-// yang sesuai sebelum ngizinin aksi.
+// PENTING: file ini BELUM disambungkan ke dashboard/endpoint manapun untuk
+// fitur-fitur BARU di atas (itu langkah 4, UI bertahap per role - belum
+// dikerjakan). Guard yang SUDAH tersambung ke UI cuma yang dari fitur user
+// & role versi awal (approval Tukin/Uang Makan/Uang Lembur, dashboard
+// approver, self-service /saya, Banding jenjang 1/pengajuan). Semua fungsi
+// di sini pure - tidak ada I/O, cuma logika keputusan izin/tolak
+// berdasarkan data yang dikasih si pemanggil.
 //
 // KONVENSI: setiap fungsi return boolean murni (true = boleh). Nama fungsi
-// pakai prefix "can" sesuai style yang diminta. Kalau kombinasi role x aksi
-// TIDAK disebut eksplisit di role matrix, defaultnya DITOLAK (bukan
-// diizinkan) - lihat komentar per fungsi buat referensi baris di role
-// matrix yang jadi acuan.
+// pakai prefix "can". Kalau kombinasi role x aksi TIDAK disebut eksplisit
+// di role matrix, defaultnya DITOLAK (bukan diizinkan).
+//
+// TODO(confirm) BESAR - ADMIN "privilege semua role": role matrix simulasi
+// ini eksplisit minta ADMIN bisa melakukan APAPUN yang bisa dilakukan role
+// lain (lihat enum Role di schema.prisma untuk alasan & catatan "BUKAN
+// desain final production"). Supaya gampang di-grep & dicabut kalau role
+// ini dipecah lagi nanti, bypass ADMIN SELALU eksplisit lewat helper
+// `cekRoleAtauAdmin`/`cekScopeSatkerAtauAdmin`/`cekPpabpAtauAdmin` di bawah
+// - JANGAN taruh `user.role === "ADMIN"` tersebar ad-hoc di fungsi lain.
 // ============================================================================
 
 import type { Role } from "@prisma/client";
@@ -32,7 +41,7 @@ export interface TargetPegawai {
   satuanKerja: string;
 }
 
-export interface TargetSanggahan {
+export interface TargetBanding {
   pengajuNip: string;
   satuanKerjaPegawai: string;
 }
@@ -41,9 +50,21 @@ function cekRole(user: AuthUser, role: Role): boolean {
   return user.aktif && user.role === role;
 }
 
+/** ADMIN "privilege semua role" - lihat TODO(confirm) besar di atas. */
+function cekRoleAtauAdmin(user: AuthUser, role: Role): boolean {
+  return user.aktif && (user.role === role || user.role === "ADMIN");
+}
+
+/** Sama seperti cekRoleAtauAdmin, tapi untuk aksi yang di-scope ke satuan kerja tertentu. */
+function cekScopeSatkerAtauAdmin(user: AuthUser, role: Role, targetSatuanKerja: string): boolean {
+  if (!user.aktif) return false;
+  if (user.role === "ADMIN") return true;
+  return user.role === role && user.satuanKerja === targetSatuanKerja;
+}
+
 /**
  * PPABP di-scope ke satuanKerja SETELAH di-scale per-satker (TODO(confirm)
- * di schema.prisma model User) - untuk sekarang (pilot: 1 PPABP pusat)
+ * di schema.prisma model User) - untuk sekarang (pilot: tim PPABP pusat)
  * satuanKerja = NULL berarti berwenang lintas SEMUA satker.
  */
 function cekPpabp(user: AuthUser, targetSatuanKerja?: string): boolean {
@@ -52,35 +73,60 @@ function cekPpabp(user: AuthUser, targetSatuanKerja?: string): boolean {
   return user.satuanKerja === targetSatuanKerja;
 }
 
+function cekPpabpAtauAdmin(user: AuthUser, targetSatuanKerja?: string): boolean {
+  if (!user.aktif) return false;
+  if (user.role === "ADMIN") return true;
+  return cekPpabp(user, targetSatuanKerja);
+}
+
 // ---------------------------------------------------------------------------
-// PEGAWAI - self-service, data sendiri saja
+// PEGAWAI - self-service, data sendiri saja. SEMUA role (KASUBAG_TU, OSDMA,
+// PPABP, PIMPINAN, ADMIN) OTOMATIS punya privilege ini juga untuk data
+// MEREKA SENDIRI (role matrix: "PEGAWAI - semua role di bawah otomatis
+// punya privilege ini juga") - makanya fungsi-fungsi di bawah SENGAJA
+// TIDAK mengecek role tertentu, cuma mengecek kecocokan NIP + akun aktif.
 // ---------------------------------------------------------------------------
 
 /**
- * Lihat presensi/predikat kinerja/estimasi pendapatan/histori pembayaran
- * SENDIRI. Role matrix: "TIDAK BOLEH lihat data pegawai lain".
+ * Lihat presensi/predikat kinerja/pendapatan (periode berjalan & sebelumnya)/
+ * histori pembayaran SENDIRI - berlaku semua role. Role matrix: "TIDAK
+ * BOLEH lihat data pegawai lain" (itu diatur canViewPegawai, bukan di sini).
  */
 export function canViewDataSendiri(user: AuthUser, targetNip: string): boolean {
-  return cekRole(user, "PEGAWAI") && user.nip === targetNip;
+  return user.aktif && user.nip === targetNip;
 }
 
 /**
- * Ajukan sanggahan atas data sendiri. Schema Sanggahan mencatat: "pengaju
- * HARUS pegawai yang sama dengan targetnya - sanggahan diri sendiri, bukan
- * diwakilkan" (lihat komentar model Sanggahan).
+ * Ajukan banding atas data sendiri. Schema Banding mencatat: "pengaju
+ * HARUS pegawai yang sama dengan targetnya - banding diri sendiri, bukan
+ * diwakilkan" (lihat komentar model Banding).
  */
-export function canAjukanSanggahan(user: AuthUser, targetPegawaiNip: string): boolean {
-  return cekRole(user, "PEGAWAI") && user.nip === targetPegawaiNip;
+export function canAjukanBanding(user: AuthUser, targetPegawaiNip: string): boolean {
+  return user.aktif && user.nip === targetPegawaiNip;
 }
 
-/** Upload bukti pendukung HANYA buat sanggahan yang diajukan sendiri. */
-export function canUploadBuktiPendukung(user: AuthUser, sanggahan: TargetSanggahan): boolean {
-  return cekRole(user, "PEGAWAI") && user.nip === sanggahan.pengajuNip;
+/** Upload bukti dukung HANYA buat banding yang diajukan sendiri. */
+export function canUploadBuktiDukung(user: AuthUser, banding: TargetBanding): boolean {
+  return user.aktif && user.nip === banding.pengajuNip;
 }
 
-/** Lihat status sanggahan sendiri - berlaku buat siapapun yang jadi pengaju (biasanya PEGAWAI). */
-export function canLihatStatusSanggahanSendiri(user: AuthUser, sanggahan: TargetSanggahan): boolean {
-  return user.aktif && user.nip === sanggahan.pengajuNip;
+/** Lihat status banding sendiri (diajukan -> verifikasi Kasubag TU -> approval final OSDMA). */
+export function canLihatStatusBandingSendiri(user: AuthUser, banding: TargetBanding): boolean {
+  return user.aktif && user.nip === banding.pengajuNip;
+}
+
+/** Cetak/download slip gaji sendiri - format PLACEHOLDER, lihat TODO(confirm) di CLAUDE.md. */
+export function canCetakSlipGajiSendiri(user: AuthUser, targetNip: string): boolean {
+  return user.aktif && user.nip === targetNip;
+}
+
+/**
+ * Download (BUKAN upload - lihat canUploadBuktiPotongPajak di bawah) bukti
+ * potong pajak sendiri. Role matrix PEGAWAI: "pegawai cuma bisa lihat/
+ * download, bukan upload sendiri".
+ */
+export function canDownloadBuktiPotongPajakSendiri(user: AuthUser, targetNip: string): boolean {
+  return user.aktif && user.nip === targetNip;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,12 +135,14 @@ export function canLihatStatusSanggahanSendiri(user: AuthUser, sanggahan: Target
 
 /** Lihat rekap SELURUH pegawai di satuan kerjanya sendiri saja. */
 export function canViewRekapUnitKerja(user: AuthUser, targetSatuanKerja: string): boolean {
-  return cekRole(user, "KASUBAG_TU") && user.satuanKerja === targetSatuanKerja;
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
 }
 
-/** Verifikasi (tahap 1) sanggahan yang masuk dari pegawai di unitnya sendiri. */
-export function canVerifikasiSanggahanTahap1(user: AuthUser, sanggahan: TargetSanggahan): boolean {
-  return cekRole(user, "KASUBAG_TU") && user.satuanKerja === sanggahan.satuanKerjaPegawai;
+/** Verifikasi (jenjang 1) banding yang masuk dari pegawai di unitnya sendiri. */
+export function canVerifikasiBandingJenjang1(user: AuthUser, banding: TargetBanding): boolean {
+  if (!user.aktif) return false;
+  if (user.role === "ADMIN") return true;
+  return user.role === "KASUBAG_TU" && user.satuanKerja === banding.satuanKerjaPegawai;
 }
 
 /**
@@ -103,17 +151,126 @@ export function canVerifikasiSanggahanTahap1(user: AuthUser, sanggahan: TargetSa
  * lihat unit lain".
  */
 export function canApproveJenjang1(user: AuthUser, targetSatuanKerja: string): boolean {
-  return cekRole(user, "KASUBAG_TU") && user.satuanKerja === targetSatuanKerja;
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
 }
 
 /** Monitor status rekonsiliasi (ReconciliationStatus) unitnya sendiri. */
 export function canMonitorRekonsiliasiUnit(user: AuthUser, targetSatuanKerja: string): boolean {
-  return cekRole(user, "KASUBAG_TU") && user.satuanKerja === targetSatuanKerja;
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/**
+ * Tarik data presensi dari database, ATAU upload manual sebagai fallback
+ * kalau adapter API e-Presensi belum konek (role matrix: "atau upload
+ * manual kalau adapter API belum konek") - satu izin yang sama buat kedua
+ * cara, bedanya cuma di service layer/UI nanti.
+ */
+export function canTarikAtauUploadPresensiUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/**
+ * Tombol "tarik ulang data" presensi - dipisah dari canTarikAtauUploadPresensiUnit
+ * biar eksplisit sesuai daftar fitur, TAPI izinnya sama (satu unit yang
+ * sama). Role matrix: koreksi sebenarnya terjadi di e-Presensi (eksternal),
+ * tombol ini CUMA nge-refresh, BUKAN auto-sync - lihat CLAUDE.md.
+ */
+export function canTarikUlangPresensiUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/** Upload predikat kinerja (bobot 70% Tukin) + koreksi langsung di Gajihub kalau ada yang salah. */
+export function canUploadKoreksiPredikatKinerjaUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/** Tombol "ajukan semua pegawai unit" - kalkulasi Tukin 30/70 massal + preview nominal sebelum diajukan. */
+export function canAjukanKalkulasiTukinMassalUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/** Telaah dan ajukan Uang Makan pegawai unitnya. */
+export function canTelaahAjukanUangMakanUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/** Telaah, periksa kebenaran, koreksi, dan ajukan Uang Lembur pegawai unitnya. */
+export function canTelaahKoreksiAjukanUangLemburUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/** Dashboard unit sendiri: total pegawai, total nominal, status siklus, jumlah tertolak/belum diajukan. */
+export function canViewDashboardUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/** Ajukan SK KGB pegawai unitnya (approval final OSDMA - lihat canApproveSkKgb). */
+export function canAjukanSkKgb(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/**
+ * Input SK Hukuman Disiplin pegawai unitnya (approval OSDMA - lihat
+ * canApproveSkHukumanDisiplin). TODO(confirm) BESAR: alur approval OSDMA
+ * untuk SK ini ASUMSI dari spesifikasi simulasi, BELUM konfirmasi resmi -
+ * lihat komentar panjang di model SkHukumanDisiplin (schema.prisma).
+ */
+export function canInputSkHukumanDisiplin(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
 }
 
 // ---------------------------------------------------------------------------
-// PPABP - approval jenjang final, lintas satker (asumsi pilot: 1 PPABP pusat)
+// OSDMA - data steward, approval final Banding & SK KGB/Hukuman Disiplin,
+// update SK pegawai
 // ---------------------------------------------------------------------------
+
+/** Review & approve perubahan data master pegawai (SK, mutasi, kenaikan pangkat) yang disengketakan. */
+export function canReviewPerubahanDataMaster(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "OSDMA");
+}
+
+/** Update SK pegawai yang baru dilantik struktural/fungsional, atau naik pangkat. */
+export function canUpdateSkPegawaiStrukturalFungsional(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "OSDMA");
+}
+
+/** Approval final (jenjang 2) Banding - lihat alur 2 jenjang di model Banding. */
+export function canApproveBandingFinal(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "OSDMA");
+}
+
+/** Approval SK KGB (jenjang tunggal). */
+export function canApproveSkKgb(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "OSDMA");
+}
+
+/**
+ * Approval SK Hukuman Disiplin (jenjang tunggal) - lihat TODO(confirm)
+ * besar di canInputSkHukumanDisiplin/model SkHukumanDisiplin soal alur ini.
+ */
+export function canApproveSkHukumanDisiplin(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "OSDMA");
+}
+
+/** Monitor kepatuhan penggunaan data & lihat log akses (pola pemakaian, BUKAN data personal satu-satu). */
+export function canMonitorKepatuhanData(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "OSDMA");
+}
+
+// ---------------------------------------------------------------------------
+// PPABP (Tim PPABP Rokeu) - validasi lintas unit, export ADK, anggaran
+// realisasi, usulan role, dashboard lintas unit
+// ---------------------------------------------------------------------------
+
+/** Tarik/upload manual data presensi - fallback kalau Kasubag TU/unit tidak bisa (lintas unit). */
+export function canTarikAtauUploadPresensiFallback(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "PPABP");
+}
+
+/** Telaah dan validasi pengajuan Tukin/Uang Makan/Uang Lembur dari SEMUA unit kerja. */
+export function canTelaahValidasiPengajuanLintasUnit(user: AuthUser, targetSatuanKerja?: string): boolean {
+  return cekPpabpAtauAdmin(user, targetSatuanKerja);
+}
 
 /**
  * Approval jenjang FINAL (jenjang terakhir sebelum status APPROVED, siap
@@ -121,115 +278,109 @@ export function canMonitorRekonsiliasiUnit(user: AuthUser, targetSatuanKerja: st
  * scoped per-satker (belum terjadi di pilot), WAJIB diisi dan dicocokkan.
  */
 export function canApproveJenjangFinal(user: AuthUser, targetSatuanKerja?: string): boolean {
-  return cekPpabp(user, targetSatuanKerja);
+  return cekPpabpAtauAdmin(user, targetSatuanKerja);
 }
 
 /** Handle kasus SELISIH (hasil rekonsiliasi data sumber tidak cocok). */
 export function canHandleSelisih(user: AuthUser, targetSatuanKerja?: string): boolean {
-  return cekPpabp(user, targetSatuanKerja);
+  return cekPpabpAtauAdmin(user, targetSatuanKerja);
 }
 
-/** Generate file output (ADK) untuk Web Gaji Kemenkeu & SAKTI. */
+/** Export ADK (Tunjangan Kinerja, Uang Makan, Uang Lembur - 3 jenis terpisah) untuk diunggah ke Web Gaji. */
 export function canGenerateAdk(user: AuthUser): boolean {
-  return cekRole(user, "PPABP");
+  return cekRoleAtauAdmin(user, "PPABP");
+}
+
+/** Upload data Anggaran dan Realisasi Belanja Pegawai. */
+export function canUploadAnggaranRealisasi(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "PPABP");
+}
+
+/** Monitoring status belanja pegawai lintas unit, DAN ubah status pengajuan/approval/validasi. */
+export function canMonitorUbahStatusLintasUnit(user: AuthUser, targetSatuanKerja?: string): boolean {
+  return cekPpabpAtauAdmin(user, targetSatuanKerja);
 }
 
 /** Lihat status rekonsiliasi LINTAS satker (dalam kewenangannya). */
 export function canViewRekonsiliasiLintasSatker(user: AuthUser, targetSatuanKerja?: string): boolean {
-  return cekPpabp(user, targetSatuanKerja);
-}
-
-// ---------------------------------------------------------------------------
-// BIRO_OSDMA - data steward, TIDAK BOLEH approval pembayaran
-// ---------------------------------------------------------------------------
-
-/** Review & approve perubahan data master pegawai (SK, mutasi, kenaikan pangkat) yang disengketakan. */
-export function canReviewPerubahanDataMaster(user: AuthUser): boolean {
-  return cekRole(user, "BIRO_OSDMA");
-}
-
-/** Verifikasi sanggahan tahap lanjutan (kalau diteruskan dari Kasubag TU - lihat TODO alur di model Sanggahan). */
-export function canVerifikasiSanggahanTahapOsdma(user: AuthUser): boolean {
-  return cekRole(user, "BIRO_OSDMA");
-}
-
-/** Monitor kepatuhan penggunaan data & lihat log akses (pola pemakaian, BUKAN data personal satu-satu). */
-export function canMonitorKepatuhanData(user: AuthUser): boolean {
-  return cekRole(user, "BIRO_OSDMA");
-}
-
-// ---------------------------------------------------------------------------
-// ADMIN_SISTEM - kewenangan TEKNIS saja, SENGAJA tidak boleh data payroll
-// ---------------------------------------------------------------------------
-
-export function canKelolaAssignmentRole(user: AuthUser): boolean {
-  return cekRole(user, "ADMIN_SISTEM");
-}
-
-export function canMonitorKesehatanSistem(user: AuthUser): boolean {
-  return cekRole(user, "ADMIN_SISTEM");
-}
-
-export function canKonfigurasiAdapter(user: AuthUser): boolean {
-  return cekRole(user, "ADMIN_SISTEM");
+  return cekPpabpAtauAdmin(user, targetSatuanKerja);
 }
 
 /**
- * Guard EKSPLISIT: ADMIN_SISTEM TIDAK BOLEH lihat data substantif payroll
- * (kalkulasi Tukin/Uang Makan/Uang Lembur individual) - ini pemisahan
- * kewenangan teknis vs bisnis dari role matrix, JANGAN dilonggarkan.
- * Dipakai sebagai guard tambahan di fungsi-fungsi lain yang berhubungan
- * dengan data payroll (lihat canViewPegawai).
+ * MELIHAT dan MENGUSULKAN perubahan role user - eksekusi final ada di
+ * ADMIN (lihat canEksekusiPerubahanRole), supaya tidak ada dua pihak yang
+ * sama-sama bisa eksekusi langsung.
+ */
+export function canUsulkanPerubahanRole(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "PPABP");
+}
+
+/**
+ * Dashboard lintas unit: total pegawai, total nominal belanja pegawai
+ * periode berjalan (filter periode), status siklus pembayaran, jumlah
+ * tertolak/belum diajukan, total Anggaran vs Realisasi. PPABP & ADMIN bisa
+ * approve/ubah data dari dashboard ini (lihat fungsi lain di atas);
+ * PIMPINAN dapat dashboard yang SAMA tapi read-only (role matrix) - itu
+ * dibedakan di level UI (PIMPINAN tidak dikasih tombol aksi), BUKAN di
+ * fungsi ini, karena fungsi ini cuma soal "boleh LIHAT dashboardnya".
+ */
+export function canViewDashboardLintasUnit(user: AuthUser): boolean {
+  return user.aktif && (user.role === "PPABP" || user.role === "PIMPINAN" || user.role === "ADMIN");
+}
+
+// ---------------------------------------------------------------------------
+// PIMPINAN - dashboard lintas unit SAMA seperti PPABP, read-only. Lihat
+// canViewDashboardLintasUnit di atas (izin lihat dashboard-nya sama-sama
+// dipakai PPABP/PIMPINAN/ADMIN) - TIDAK ADA fungsi canApprove/canUbah...
+// yang mengizinkan PIMPINAN secara SENGAJA (role matrix: "read-only, tanpa
+// kemampuan approval/ubah data").
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// ADMIN - kewenangan teknis (config, monitoring, eksekusi role) + privilege
+// SEMUA role lain (lihat TODO(confirm) besar di kepala file & enum Role).
+// ---------------------------------------------------------------------------
+
+export function canKelolaAssignmentRole(user: AuthUser): boolean {
+  return cekRole(user, "ADMIN");
+}
+
+/**
+ * Eksekusi FINAL perubahan role (dari usulan PPABP - lihat
+ * canUsulkanPerubahanRole) - SENGAJA cuma ADMIN, TANPA bypass PPABP,
+ * supaya cuma satu pihak yang bisa eksekusi langsung (role matrix poin 4 & 6).
+ */
+export function canEksekusiPerubahanRole(user: AuthUser): boolean {
+  return cekRole(user, "ADMIN");
+}
+
+export function canMonitorKesehatanSistem(user: AuthUser): boolean {
+  return cekRole(user, "ADMIN");
+}
+
+export function canKonfigurasiAdapter(user: AuthUser): boolean {
+  return cekRole(user, "ADMIN");
+}
+
+/**
+ * TODO(confirm): guard ADMIN_SISTEM lama (blokir data payroll) SENGAJA
+ * dinonaktifkan buat role ADMIN yang baru, karena role matrix simulasi ini
+ * eksplisit minta ADMIN "privilege SEMUA role". Ini BUKAN keputusan final -
+ * lihat TODO(confirm) besar di enum Role (schema.prisma) soal kewajiban
+ * memecah role ini lagi sebelum production.
  */
 export function canViewDataPayroll(user: AuthUser): boolean {
-  if (cekRole(user, "ADMIN_SISTEM")) return false;
-  // Role lain diatur oleh fungsi masing-masing (canViewDataSendiri,
-  // canViewRekapUnitKerja, dst) - fungsi ini KHUSUS buat negative guard
-  // ADMIN_SISTEM, bukan pengganti pengecekan scoping role lain.
   return user.aktif;
 }
 
 /**
  * Guard gabungan buat 3 dashboard approver (Tukin/Uang Makan/Uang Lembur):
- * ADMIN_SISTEM diblokir (canViewDataPayroll) DAN PEGAWAI diarahkan ke
- * dashboard self-service sendiri (/saya) - dashboard approver nampilin
- * SEMUA pegawai per satker, yang melanggar "TIDAK BOLEH lihat pegawai lain"
- * di role matrix kalau PEGAWAI dibiarkan masuk.
+ * PEGAWAI diarahkan ke dashboard self-service sendiri (/saya) - dashboard
+ * approver nampilin SEMUA pegawai per satker, yang melanggar "TIDAK BOLEH
+ * lihat pegawai lain" di role matrix kalau PEGAWAI dibiarkan masuk.
  */
 export function canViewApproverDashboard(user: AuthUser): boolean {
   return canViewDataPayroll(user) && user.role !== "PEGAWAI";
-}
-
-// ---------------------------------------------------------------------------
-// ITJEN - auditor, read-only ke SELURUH data terkait audit
-// ---------------------------------------------------------------------------
-
-export function canViewAuditTrail(user: AuthUser): boolean {
-  return cekRole(user, "ITJEN");
-}
-
-export function canViewApprovalLogSemua(user: AuthUser): boolean {
-  return cekRole(user, "ITJEN");
-}
-
-export function canViewHistoriSanggahanSemua(user: AuthUser): boolean {
-  return cekRole(user, "ITJEN");
-}
-
-export function canExportLaporan(user: AuthUser): boolean {
-  return cekRole(user, "ITJEN");
-}
-
-// ITJEN read-only - TIDAK ada canApprove/canEdit/canHapus apapun buat role
-// ini secara SENGAJA (tidak ditulis, bukan lupa). Role matrix: "TIDAK BOLEH
-// approve/edit/hapus apapun".
-
-// ---------------------------------------------------------------------------
-// PIMPINAN - executive dashboard, ringkasan tingkat kementerian
-// ---------------------------------------------------------------------------
-
-export function canViewDashboardRingkasanKementerian(user: AuthUser): boolean {
-  return cekRole(user, "PIMPINAN");
 }
 
 // ---------------------------------------------------------------------------
@@ -250,14 +401,12 @@ export function canViewPegawai(user: AuthUser, target: TargetPegawai): boolean {
       return user.satuanKerja === target.satuanKerja; // unit kerjanya saja
     case "PPABP":
       return cekPpabp(user, target.satuanKerja); // lintas satker (pilot: pusat)
-    case "BIRO_OSDMA":
+    case "OSDMA":
       return true; // data steward, perlu visibilitas luas buat review data master
-    case "ITJEN":
-      return true; // auditor read-only, perlu visibilitas luas
     case "PIMPINAN":
       return true; // dashboard ringkasan tingkat kementerian
-    case "ADMIN_SISTEM":
-      return false; // SENGAJA - lihat canViewDataPayroll
+    case "ADMIN":
+      return true; // TODO(confirm): privilege penuh - lihat catatan di canViewDataPayroll
     default:
       return false;
   }
@@ -265,9 +414,12 @@ export function canViewPegawai(user: AuthUser, target: TargetPegawai): boolean {
 
 /**
  * TIDAK ADA role yang boleh edit data presensi/kinerja secara LANGSUNG -
- * satu-satunya jalur koreksi adalah lewat Sanggahan (ajukan -> diverifikasi
- * berjenjang). Fungsi ini SENGAJA selalu false, didokumentasikan eksplisit
- * di sini supaya tidak ada yang "lupa" nambahin fitur edit langsung nanti.
+ * jalur koreksi yang SAH cuma: (1) Banding (ajukan -> diverifikasi
+ * berjenjang), atau (2) KASUBAG_TU pakai
+ * canTarikAtauUploadPresensiUnit/canUploadKoreksiPredikatKinerjaUnit (masih
+ * di-scope unitnya, bukan "edit bebas"). Fungsi ini SENGAJA selalu false
+ * dan TIDAK ikut kena bypass ADMIN - didokumentasikan eksplisit di sini
+ * supaya tidak ada yang "lupa" nambahin fitur edit langsung tanpa jejak.
  */
 export function canEditPresensiKinerjaLangsung(_user: AuthUser): boolean {
   return false;

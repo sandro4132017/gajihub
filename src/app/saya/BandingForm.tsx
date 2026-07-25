@@ -1,18 +1,18 @@
 "use client";
 
 import { useActionState } from "react";
-import { ajukanSanggahanAction, type AjukanSanggahanFormState } from "./actions";
+import { ajukanBandingAction, type AjukanBandingFormState } from "./actions";
 
-const INITIAL_STATE: AjukanSanggahanFormState = {};
+const INITIAL_STATE: AjukanBandingFormState = {};
 
-export function SanggahanForm({
+export function BandingForm({
   referensiTipe,
   referensiId,
 }: {
   referensiTipe: "TUKIN" | "UANG_MAKAN" | "UANG_LEMBUR";
   referensiId: string;
 }) {
-  const [state, formAction, pending] = useActionState(ajukanSanggahanAction, INITIAL_STATE);
+  const [state, formAction, pending] = useActionState(ajukanBandingAction, INITIAL_STATE);
 
   if (state.success) {
     return <p className="mt-3 text-xs font-semibold text-green">{state.success}</p>;
@@ -24,13 +24,13 @@ export function SanggahanForm({
       <input type="hidden" name="referensiId" value={referensiId} />
       <textarea
         name="alasan"
-        placeholder="Alasan sanggahan (misal: jumlah hari hadir tidak sesuai)"
+        placeholder="Alasan banding (misal: jumlah hari hadir tidak sesuai)"
         required
         rows={2}
         className="field-input"
       />
       <button type="submit" disabled={pending} className="btn btn-gold btn-sm">
-        Ajukan sanggahan
+        Ajukan banding
       </button>
       {state.error && <p className="text-sm font-medium text-red">{state.error}</p>}
     </form>

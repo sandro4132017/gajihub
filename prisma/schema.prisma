@@ -24,75 +24,78 @@ datasource db {
 // PEGAWAI - mirror data pokok dari SIAP
 // ---------------------------------------------------------------------------
 model Pegawai {
-  id              String   @id @default(uuid())
-  nip             String   @unique
-  nama            String
-  unitKerja       String   @map("unit_kerja")
-  satuanKerja     String   @map("satuan_kerja") // untuk filter per satker saat pilot
-  statusPegawai   String   @map("status_pegawai") // AKTIF, CUTI, MUTASI, PENSIUN, dst
-  jabatan         String?
-  golongan        String?
+  id            String    @id @default(uuid())
+  nip           String    @unique
+  nama          String
+  unitKerja     String    @map("unit_kerja")
+  satuanKerja   String    @map("satuan_kerja") // untuk filter per satker saat pilot
+  statusPegawai String    @map("status_pegawai") // AKTIF, CUTI, MUTASI, PENSIUN, dst
+  jabatan       String?
+  golongan      String?
   // Dipakai buat lookup tukinPokokKelasJabatan (src/business-logic/tarifTukinPokok.ts).
   // Sebelumnya cuma ada di PegawaiRecord adapter (tidak persisten) - sekarang
   // dipersist karena ada sumber data pegawai asli (basis data pegawai) yang
   // punya kolom GRADE ini.
-  kelasJabatan    Int?     @map("kelas_jabatan")
-  tmtSkTerakhir   DateTime? @map("tmt_sk_terakhir")
+  kelasJabatan  Int?      @map("kelas_jabatan")
+  tmtSkTerakhir DateTime? @map("tmt_sk_terakhir")
 
-  sourceSystem    String   @default("SIAP") @map("source_system")
-  sourceSyncedAt  DateTime @map("source_synced_at")
+  sourceSystem   String   @default("SIAP") @map("source_system")
+  sourceSyncedAt DateTime @map("source_synced_at")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  presensi        PresensiHarian[]
-  predikatKinerja PredikatKinerja[]
-  tukinCalc       TukinCalculation[]
-  uangMakan       UangMakan[]
-  uangLembur      UangLembur[]
-  sanggahan       Sanggahan[]
+  presensi          PresensiHarian[]
+  predikatKinerja   PredikatKinerja[]
+  tukinCalc         TukinCalculation[]
+  uangMakan         UangMakan[]
+  uangLembur        UangLembur[]
+  banding           Banding[]
+  skKgb             SkKgb[]
+  skHukumanDisiplin SkHukumanDisiplin[]
+  buktiPotongPajak  BuktiPotongPajak[]
 
-  @@map("pegawai")
   @@index([satuanKerja])
   @@index([statusPegawai])
+  @@map("pegawai")
 }
 
 // ---------------------------------------------------------------------------
 // PRESENSI HARIAN - mirror dari e-Presensi
 // ---------------------------------------------------------------------------
 model PresensiHarian {
-  id             String   @id @default(uuid())
-  pegawaiId      String   @map("pegawai_id")
-  pegawai        Pegawai  @relation(fields: [pegawaiId], references: [id])
+  id        String  @id @default(uuid())
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
 
-  tanggal        DateTime
-  jamMasuk       DateTime? @map("jam_masuk")
-  jamKeluar      DateTime? @map("jam_keluar")
-  statusKehadiran String   @map("status_kehadiran") // HADIR, TERLAMBAT, ALPHA, IZIN, SAKIT, CUTI, WFA
-  menitTerlambat Int      @default(0) @map("menit_terlambat")
+  tanggal         DateTime
+  jamMasuk        DateTime? @map("jam_masuk")
+  jamKeluar       DateTime? @map("jam_keluar")
+  statusKehadiran String    @map("status_kehadiran") // HADIR, TERLAMBAT, ALPHA, IZIN, SAKIT, CUTI, WFA
+  menitTerlambat  Int       @default(0) @map("menit_terlambat")
 
   sourceSystem   String   @default("e-Presensi") @map("source_system")
   sourceSyncedAt DateTime @map("source_synced_at")
 
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  @@map("presensi_harian")
   @@unique([pegawaiId, tanggal])
   @@index([tanggal])
+  @@map("presensi_harian")
 }
 
 // ---------------------------------------------------------------------------
 // PREDIKAT KINERJA - dari e-Kinerja BKN (via upload manual / API, lihat adapter)
 // ---------------------------------------------------------------------------
 model PredikatKinerja {
-  id             String   @id @default(uuid())
-  pegawaiId      String   @map("pegawai_id")
-  pegawai        Pegawai  @relation(fields: [pegawaiId], references: [id])
+  id        String  @id @default(uuid())
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
 
-  periodeBulan   Int      @map("periode_bulan")
-  periodeTahun   Int      @map("periode_tahun")
-  predikat       String   // SANGAT BAIK, BAIK, CUKUP, KURANG, SANGAT KURANG
-  nilaiAngka     Float    @map("nilai_angka") // konversi predikat ke skala 0-100
+  periodeBulan Int    @map("periode_bulan")
+  periodeTahun Int    @map("periode_tahun")
+  predikat     String // SANGAT BAIK, BAIK, CUKUP, KURANG, SANGAT KURANG
+  nilaiAngka   Float  @map("nilai_angka") // konversi predikat ke skala 0-100
 
   sourceSystem   String   @default("e-Kinerja BKN") @map("source_system")
   sourceSyncedAt DateTime @map("source_synced_at")
@@ -100,158 +103,165 @@ model PredikatKinerja {
   // apakah data masuk lewat upload manual sesuai workaround, atau via API resmi.
   inputMethod    String   @default("MANUAL_UPLOAD") @map("input_method") // MANUAL_UPLOAD | API
 
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  @@map("predikat_kinerja")
   @@unique([pegawaiId, periodeBulan, periodeTahun])
+  @@map("predikat_kinerja")
 }
 
 // ---------------------------------------------------------------------------
 // TUKIN CALCULATION - hasil kalkulasi business logic engine
 // ---------------------------------------------------------------------------
 model TukinCalculation {
-  id                 String   @id @default(uuid())
-  pegawaiId          String   @map("pegawai_id")
-  pegawai            Pegawai  @relation(fields: [pegawaiId], references: [id])
+  id        String  @id @default(uuid())
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
 
-  periodeBulan       Int      @map("periode_bulan")
-  periodeTahun       Int      @map("periode_tahun")
+  periodeBulan Int @map("periode_bulan")
+  periodeTahun Int @map("periode_tahun")
 
-  komponenKehadiran  Float    @map("komponen_kehadiran") // hasil 30%
-  komponenKinerja    Float    @map("komponen_kinerja")   // hasil 70%
-  tukinPokok         Float    @map("tukin_pokok")
-  potonganPph        Float    @default(0) @map("potongan_pph")
-  tukinBersih         Float   @map("tukin_bersih")
+  komponenKehadiran Float @map("komponen_kehadiran") // hasil 30%
+  komponenKinerja   Float @map("komponen_kinerja") // hasil 70%
+  tukinPokok        Float @map("tukin_pokok")
+  potonganPph       Float @default(0) @map("potongan_pph")
+  tukinBersih       Float @map("tukin_bersih")
 
-  status             String   @default("DRAFT") // DRAFT, COCOK, SELISIH, SANGGAH, APPROVED, DIKIRIM
-  catatanAnomali      String?  @map("catatan_anomali")
+  status         String  @default("DRAFT") // DRAFT, COCOK, SELISIH, SANGGAH, APPROVED, DIKIRIM
+  catatanAnomali String? @map("catatan_anomali")
 
-  calculatedAt       DateTime @default(now()) @map("calculated_at")
-  approvedAt         DateTime? @map("approved_at")
-  approvedBy         String?   @map("approved_by")
+  calculatedAt DateTime  @default(now()) @map("calculated_at")
+  approvedAt   DateTime? @map("approved_at")
+  approvedBy   String?   @map("approved_by")
 
-  @@map("tukin_calculation")
   @@unique([pegawaiId, periodeBulan, periodeTahun])
   @@index([status])
+  @@map("tukin_calculation")
 }
 
 model UangMakan {
-  id            String   @id @default(uuid())
-  pegawaiId     String   @map("pegawai_id")
-  pegawai       Pegawai  @relation(fields: [pegawaiId], references: [id])
+  id        String  @id @default(uuid())
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
 
-  periodeBulan  Int      @map("periode_bulan")
-  periodeTahun  Int      @map("periode_tahun")
-  jumlahHariKerja Int    @map("jumlah_hari_kerja")
-  jumlahHariHadir Int    @map("jumlah_hari_hadir")
-  tarifHarian   Float    @map("tarif_harian")
-  totalUangMakan Float   @map("total_uang_makan")
+  periodeBulan    Int   @map("periode_bulan")
+  periodeTahun    Int   @map("periode_tahun")
+  jumlahHariKerja Int   @map("jumlah_hari_kerja")
+  jumlahHariHadir Int   @map("jumlah_hari_hadir")
+  tarifHarian     Float @map("tarif_harian")
+  totalUangMakan  Float @map("total_uang_makan")
 
-  status        String   @default("DRAFT")
-  catatanAnomali String? @map("catatan_anomali")
-  calculatedAt  DateTime @default(now()) @map("calculated_at")
-  approvedAt    DateTime? @map("approved_at")
-  approvedBy    String?   @map("approved_by")
+  status         String    @default("DRAFT")
+  catatanAnomali String?   @map("catatan_anomali")
+  calculatedAt   DateTime  @default(now()) @map("calculated_at")
+  approvedAt     DateTime? @map("approved_at")
+  approvedBy     String?   @map("approved_by")
 
-  @@map("uang_makan")
   @@unique([pegawaiId, periodeBulan, periodeTahun])
+  @@map("uang_makan")
 }
 
 model UangLembur {
-  id            String   @id @default(uuid())
-  pegawaiId     String   @map("pegawai_id")
-  pegawai       Pegawai  @relation(fields: [pegawaiId], references: [id])
+  id        String  @id @default(uuid())
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
 
-  periodeBulan  Int      @map("periode_bulan")
-  periodeTahun  Int      @map("periode_tahun")
-  totalJamLembur Float   @map("total_jam_lembur")
-  tarifPerJam   Float    @map("tarif_per_jam")
-  totalUangLembur Float  @map("total_uang_lembur")
+  periodeBulan    Int   @map("periode_bulan")
+  periodeTahun    Int   @map("periode_tahun")
+  totalJamLembur  Float @map("total_jam_lembur")
+  tarifPerJam     Float @map("tarif_per_jam")
+  totalUangLembur Float @map("total_uang_lembur")
 
-  status        String   @default("DRAFT")
-  catatanAnomali String? @map("catatan_anomali")
-  calculatedAt  DateTime @default(now()) @map("calculated_at")
-  approvedAt    DateTime? @map("approved_at")
-  approvedBy    String?   @map("approved_by")
+  status         String    @default("DRAFT")
+  catatanAnomali String?   @map("catatan_anomali")
+  calculatedAt   DateTime  @default(now()) @map("calculated_at")
+  approvedAt     DateTime? @map("approved_at")
+  approvedBy     String?   @map("approved_by")
 
-  @@map("uang_lembur")
   @@unique([pegawaiId, periodeBulan, periodeTahun])
+  @@map("uang_lembur")
 }
 
 // ---------------------------------------------------------------------------
 // APPROVAL LOG - approval digital berjenjang, pengganti nota dinas fisik.
-//
-// Sejak model Sanggahan ditambahkan: referensiTipe = "SANGGAHAN" dipakai
-// buat mencatat histori verifikasi berjenjang atas sanggahan (referensiId =
-// id baris Sanggahan) - lihat komentar di model Sanggahan untuk detail.
-// Tabel ini generik/reusable, BUKAN cuma buat approval kalkulasi payroll.
+// Tabel generik/reusable, BUKAN cuma buat approval kalkulasi payroll - juga
+// dipakai buat histori verifikasi berjenjang Banding, SK KGB, dan SK Hukuman
+// Disiplin (referensiId = id baris model masing-masing). Nilai referensiTipe
+// yang dipakai saat ini:
+//   - TUKIN, UANG_MAKAN, UANG_LEMBUR      -> approval kalkulasi payroll
+//   - BANDING                              -> jenjang 1 = verifikasi Kasubag
+//                                             TU, jenjang 2 = approval final
+//                                             OSDMA (lihat model Banding)
+//   - SK_KGB, SK_HUKUMAN_DISIPLIN          -> approval tunggal (jenjang 1)
+//                                             oleh OSDMA (lihat model
+//                                             masing-masing untuk asumsi
+//                                             yang masih TODO(confirm))
 // ---------------------------------------------------------------------------
 model ApprovalLog {
-  id             String   @id @default(uuid())
-  referensiTipe  String   @map("referensi_tipe") // TUKIN, UANG_MAKAN, UANG_LEMBUR, SANGGAHAN
-  referensiId    String   @map("referensi_id")
+  id            String @id @default(uuid())
+  referensiTipe String @map("referensi_tipe")
+  referensiId   String @map("referensi_id")
 
-  approverNip    String   @map("approver_nip")
-  approverNama   String   @map("approver_nama")
-  approverJabatan String  @map("approver_jabatan")
-  jenjang        Int      // urutan approval berjenjang (1, 2, dst)
+  approverNip     String @map("approver_nip")
+  approverNama    String @map("approver_nama")
+  approverJabatan String @map("approver_jabatan")
+  jenjang         Int // urutan approval berjenjang (1, 2, dst)
 
-  keputusan      String   // SETUJU, TOLAK, REVISI
-  catatan        String?
+  keputusan String // SETUJU, TOLAK, REVISI
+  catatan   String?
 
-  timestampAksi  DateTime @default(now()) @map("timestamp_aksi")
+  timestampAksi DateTime @default(now()) @map("timestamp_aksi")
 
-  @@map("approval_log")
   @@index([referensiTipe, referensiId])
+  @@map("approval_log")
 }
 
 // ---------------------------------------------------------------------------
 // AUDIT TRAIL - jejak audit lengkap untuk semua perubahan data penting
 // ---------------------------------------------------------------------------
 model AuditTrail {
-  id            String   @id @default(uuid())
-  entitas       String   // nama tabel/entitas yang berubah
-  entitasId     String   @map("entitas_id")
-  aksi          String   // CREATE, UPDATE, DELETE, SYNC, APPROVE
-  aktor         String   // NIP atau "SYSTEM" untuk proses otomatis
-  dataSebelum   Json?    @map("data_sebelum")
-  dataSesudah   Json?    @map("data_sesudah")
-  timestamp     DateTime @default(now())
+  id          String   @id @default(uuid())
+  entitas     String // nama tabel/entitas yang berubah
+  entitasId   String   @map("entitas_id")
+  aksi        String // CREATE, UPDATE, DELETE, SYNC, APPROVE
+  aktor       String // NIP atau "SYSTEM" untuk proses otomatis
+  dataSebelum Json?    @map("data_sebelum")
+  dataSesudah Json?    @map("data_sesudah")
+  timestamp   DateTime @default(now())
 
-  @@map("audit_trail")
   @@index([entitas, entitasId])
   @@index([timestamp])
+  @@map("audit_trail")
 }
 
 // ---------------------------------------------------------------------------
 // RECONCILIATION STATUS - workflow DRAFT -> COCOK/SELISIH/SANGGAH
 //
-// TODO(confirm): status "SANGGAH" di sini SEHARUSNYA berkorelasi dengan ada/
-// tidaknya baris Sanggahan yang masih terbuka untuk pegawai+periode yang
-// sama - BELUM ada logic yang menghubungkan otomatis (lihat model Sanggahan
-// untuk detail). Jangan asumsikan keduanya sudah tersinkron.
+// Status "SANGGAH" di sini terhubung otomatis ke ada/tidaknya baris Banding
+// yang masih terbuka untuk pegawai+periode yang sama - lihat
+// `ajukanBandingAction` (src/app/saya/actions.ts) yang meng-upsert baris ini
+// jadi "SANGGAH" tiap kali Banding baru diajukan.
 // ---------------------------------------------------------------------------
 model ReconciliationStatus {
-  id              String   @id @default(uuid())
-  pegawaiId       String   @map("pegawai_id")
-  periodeBulan    Int      @map("periode_bulan")
-  periodeTahun    Int      @map("periode_tahun")
+  id           String @id @default(uuid())
+  pegawaiId    String @map("pegawai_id")
+  periodeBulan Int    @map("periode_bulan")
+  periodeTahun Int    @map("periode_tahun")
 
-  status          String   @default("DRAFT") // DRAFT, COCOK, SELISIH, SANGGAH, DIPUTUSKAN
-  detailSelisih   Json?    @map("detail_selisih") // field mana yang beda & nilai dari masing-masing sumber
+  status        String @default("DRAFT") // DRAFT, COCOK, SELISIH, SANGGAH, DIPUTUSKAN
+  detailSelisih Json?  @map("detail_selisih") // field mana yang beda & nilai dari masing-masing sumber
 
   // NOTE: durasi window verifikasi & aturan "hold vs koreksi siklus berikutnya"
   // masih jadi open policy decision (lihat CLAUDE.md) - field di bawah
   // disiapkan tapi behavior-nya menunggu keputusan kebijakan.
   windowVerifikasiBerakhir DateTime? @map("window_verifikasi_berakhir")
-  keputusanAkhir  String?  @map("keputusan_akhir") // HOLD_PEMBAYARAN | KOREKSI_SIKLUS_BERIKUTNYA
+  keputusanAkhir           String?   @map("keputusan_akhir") // HOLD_PEMBAYARAN | KOREKSI_SIKLUS_BERIKUTNYA
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("reconciliation_status")
   @@unique([pegawaiId, periodeBulan, periodeTahun])
   @@index([status])
+  @@map("reconciliation_status")
 }
 
 // ---------------------------------------------------------------------------
@@ -274,8 +284,9 @@ model AkunApprover {
 }
 
 // ---------------------------------------------------------------------------
-// ROLE & USER - sistem role/otorisasi buat 7 peran (lihat CLAUDE.md bagian
-// "Role matrix" untuk daftar hak akses lengkap per role).
+// ROLE & USER - sistem role/otorisasi (lihat CLAUDE.md bagian "Role matrix"
+// untuk daftar hak akses lengkap per role - versi simulasi/demo lengkap,
+// 6 role).
 //
 // TODO(confirm) BESAR: model ini SENGAJA terpisah dari AkunApprover di atas.
 // AkunApprover = login sementara (NIP + password) khusus approver Tukin/
@@ -286,130 +297,150 @@ model AkunApprover {
 // disatukan supaya satu login = satu identitas + satu role - jangan biarkan
 // dua sistem akun berjalan paralel selamanya. Belum diputuskan caranya,
 // jangan asumsikan salah satu bakal "menang" begitu saja.
-// ---------------------------------------------------------------------------
+//
+// TODO(confirm) - PERUBAHAN ENUM: sebelumnya ada 7 role (termasuk ITJEN
+// auditor terpisah, BIRO_OSDMA, ADMIN_SISTEM). Untuk kebutuhan simulasi/demo
+// stakeholder saat ini di-enumerate ulang jadi 6 role di bawah - ITJEN
+// DIHAPUS dari cakupan simulasi ini (bukan diputuskan tidak perlu secara
+// permanen, cuma belum masuk skenario demo ini), BIRO_OSDMA -> OSDMA dan
+// ADMIN_SISTEM -> ADMIN cuma perubahan penamaan MENUJU role ADMIN yang
+// cakupannya SENGAJA diperluas jauh melebihi ADMIN_SISTEM lama (lihat
+// catatan "BUKAN DESAIN FINAL" di bawah) - kalau ITJEN/auditor read-only
+// dibutuhkan lagi nanti, tinggal ditambahkan lagi ke enum ini.
 enum Role {
-  PEGAWAI // self-service, ±5.000 user
-  KASUBAG_TU // Kasubag TU / Petugas Kepegawaian Unit Kerja - verifikator tingkat satker
-  PPABP // Pejabat Pembuat Administrasi Belanja Pegawai - approval jenjang final
-  BIRO_OSDMA // Data steward - approve perubahan data master pegawai yang disengketakan
-  ADMIN_SISTEM // Pusdatik/TA IT - kelola assignment role, BUKAN data payroll
-  ITJEN // Inspektorat Jenderal - auditor read-only
-  PIMPINAN // executive dashboard tingkat kementerian
+  PEGAWAI // self-service, semua role lain otomatis punya privilege ini juga
+  KASUBAG_TU // Kasubag TU / Bagian Kepegawaian Unit Kerja - verifikator tingkat satker
+  OSDMA // Biro OSDMA - approval final Banding & SK KGB, update SK pegawai
+  PPABP // Tim PPABP Rokeu - validasi lintas unit, export ADK, dashboard kementerian
+  PIMPINAN // dashboard kementerian read-only (sama dengan PPABP, tanpa approval/ubah data)
+
+  // TODO(confirm) - BUKAN DESAIN FINAL UNTUK PRODUCTION: role ADMIN di bawah
+  // ini SENGAJA diberi akses PENUH ke SEMUA fitur (privilege seluruh role di
+  // atas + konfigurasi sistem + eksekusi final perubahan role), supaya SATU
+  // akun bisa dipakai menunjukkan SELURUH alur ke stakeholder dalam satu
+  // sesi. Ini BERTENTANGAN dengan prinsip pemisahan kewenangan teknis vs
+  // bisnis yang sudah didokumentasikan (lihat catatan lama soal
+  // ADMIN_SISTEM yang SENGAJA TIDAK BOLEH lihat data payroll). SEBELUM
+  // production, role ini WAJIB dipecah lagi jadi System Admin (akses teknis
+  // saja: config, monitoring, eksekusi role assignment) + role bisnis
+  // terpisah - JANGAN biarkan satu akun super-admin ini jadi permanen cuma
+  // karena praktis buat demo.
+  ADMIN
 }
 
 // TODO(legal-confirm): belum diputuskan apakah role di-assign OTOMATIS dari
-// jabatan/eselon di SIAP, atau MANUAL oleh Admin Sistem. Untuk sekarang role
-// diisi manual/lewat seed script (mirip pola AkunApprover) - JANGAN bikin
-// logic auto-mapping jabatan->role tanpa konfirmasi ke Biro OSDMA, karena
-// pemetaan jabatan struktural ke role sistem ini bisa banyak pengecualian
-// (misal siapa yang jadi Kasubag TU kalau posisinya kosong/Plt.).
+// jabatan/eselon di SIAP, atau MANUAL oleh Admin. Untuk sekarang role diisi
+// manual/lewat seed script (mirip pola AkunApprover) - JANGAN bikin logic
+// auto-mapping jabatan->role tanpa konfirmasi ke Biro OSDMA, karena pemetaan
+// jabatan struktural ke role sistem ini bisa banyak pengecualian (misal
+// siapa yang jadi Kasubag TU kalau posisinya kosong/Plt.).
 model User {
-  id          String   @id @default(uuid())
-  nip         String   @unique
-  nama        String
-  role        Role
+  id   String @id @default(uuid())
+  nip  String @unique
+  nama String
+  role Role
 
   // WAJIB diisi untuk role KASUBAG_TU (scoping: cuma boleh lihat/approve
-  // pegawai & sanggahan di satuan kerja ini). Untuk role lain:
+  // pegawai & banding di satuan kerja ini). Untuk role lain:
   // - PEGAWAI: scoping akses ke data sendiri dilakukan lewat relasi NIP ke
   //   Pegawai, BUKAN lewat field ini - biarkan NULL.
   // - PPABP: NULL berarti berwenang LINTAS SEMUA satuan kerja (asumsi pilot:
-  //   satu PPABP pusat untuk Setjen). TODO(confirm): kalau nanti di-scale ke
-  //   PPABP per satker, tinggal isi field ini per user PPABP yang baru -
-  //   SENGAJA didesain begini supaya tidak perlu migrasi skema waktu itu
-  //   terjadi, cuma perlu keputusan kebijakan + update data.
-  // - BIRO_OSDMA, ADMIN_SISTEM, ITJEN, PIMPINAN: kewenangan lintas satker,
-  //   biarkan NULL.
-  satuanKerja String?  @map("satuan_kerja")
+  //   tim PPABP pusat). TODO(confirm): kalau nanti di-scale ke PPABP per
+  //   satker, tinggal isi field ini per user PPABP yang baru - SENGAJA
+  //   didesain begini supaya tidak perlu migrasi skema waktu itu terjadi,
+  //   cuma perlu keputusan kebijakan + update data.
+  // - OSDMA, PIMPINAN, ADMIN: kewenangan lintas satker, biarkan NULL.
+  satuanKerja String? @map("satuan_kerja")
 
-  aktif       Boolean  @default(true)
+  aktif Boolean @default(true)
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  sanggahanDiajukan Sanggahan[]
-  buktiDiunggah     BuktiPendukungUpload[]
+  bandingDiajukan          Banding[]
+  buktiDiunggah            BuktiDukung[]
+  skKgbDiajukan            SkKgb[]               @relation("SkKgbDiajukanOleh")
+  skHukdisDiajukan         SkHukumanDisiplin[]   @relation("SkHukdisDiajukanOleh")
+  anggaranDiunggah         AnggaranRealisasi[]
+  buktiPotongPajakDiunggah BuktiPotongPajak[]
+  usulanRoleDiajukan       UsulanPerubahanRole[] @relation("UsulanRoleDiajukanOleh")
+  usulanRoleDiputuskan     UsulanPerubahanRole[] @relation("UsulanRoleDiputuskanOleh")
+  UsulanPerubahanRole      UsulanPerubahanRole[]
 
-  @@map("app_user")
   @@index([role])
   @@index([satuanKerja])
+  @@map("app_user")
 }
 
 // ---------------------------------------------------------------------------
-// SANGGAHAN - pegawai membantah hasil kalkulasi Tukin/Uang Makan/Uang Lembur
-// yang menurutnya tidak sesuai.
+// BANDING (dulu bernama "Sanggahan") - pegawai membantah hasil kalkulasi
+// Tukin/Uang Makan/Uang Lembur yang menurutnya tidak sesuai.
 //
 // CATATAN DESAIN PENTING:
-// - Referensi ke kalkulasi yang disanggah pakai pola GENERIK yang sama
+// - Referensi ke kalkulasi yang dibanding pakai pola GENERIK yang sama
 //   dengan ApprovalLog (referensiTipe + referensiId), BUKAN foreign key
 //   terpisah per TukinCalculation/UangMakan/UangLembur - supaya konsisten
 //   dan tidak perlu 3 kolom nullable berbeda.
-// - Histori verifikasi berjenjang (Kasubag TU, lalu mungkin diteruskan ke
-//   OSDMA) DICATAT DI ApprovalLog juga, dengan referensiTipe = "SANGGAHAN"
-//   dan referensiId = id baris Sanggahan ini. `jenjang` di ApprovalLog jadi
-//   "tingkat verifikasi keberapa", `keputusan` jadi SETUJU/TOLAK verifikator.
-//   TIDAK ada kolom verifikator terpisah di model ini - sengaja, supaya
-//   otomatis mendukung berapa pun jumlah tahap verifikasi tanpa migrasi
-//   skema baru kalau nanti dipastikan butuh diteruskan ke OSDMA.
-// - TODO(confirm): field `status` di bawah BELUM final alurnya - apakah
-//   verifikasi cukup 1 tahap (Kasubag TU) atau wajib diteruskan ke OSDMA
-//   untuk kasus yang menyangkut data kepegawaian (SK, mutasi, dst) masih
-//   perlu didiskusikan. Model ini didesain supaya BISA mendukung alur
-//   panjang, tapi jangan hardcode alurnya di kode sebagai final.
-// - TODO(confirm) - KAITAN DENGAN ReconciliationStatus: ReconciliationStatus
-//   SUDAH punya nilai status "SANGGAH" dari awal (lihat model itu), tapi
-//   belum ada apapun yang men-trigger transisi ke status itu. Secara logis,
-//   Sanggahan yang diajukan untuk pegawai+periode tertentu SEHARUSNYA bikin
-//   ReconciliationStatus baris terkait pindah ke status "SANGGAH" - INI
-//   BELUM DISAMBUNGKAN, sengaja dibiarkan independen dulu di level skema.
-//   Sambungkan nanti di service layer, bukan di sini.
+// - Alur verifikasi SEKARANG SUDAH DITETAPKAN (untuk kebutuhan simulasi ini
+//   - lihat TODO di bawah): 2 jenjang tetap, DIAJUKAN -> jenjang 1 verifikasi
+//   Kasubag TU -> jenjang 2 approval final OSDMA. Histori tiap jenjang
+//   DICATAT DI ApprovalLog, dengan referensiTipe = "BANDING" dan
+//   referensiId = id baris Banding ini - pola & alasan yang sama dengan
+//   approval Tukin/Uang Makan/Uang Lembur (reuse evaluasiApproval), BUKAN
+//   kolom verifikator terpisah di model ini.
+//   TODO(confirm): penetapan "2 jenjang tetap, Kasubag TU lalu OSDMA final"
+//   ini datang dari spesifikasi simulasi/demo, BELUM tentu kebijakan resmi
+//   final - konfirmasi ke Biro OSDMA/Hukum sebelum dipakai ke production.
+// - Sudah terhubung ke ReconciliationStatus: lihat catatan di model itu.
 // ---------------------------------------------------------------------------
-model Sanggahan {
-  id           String   @id @default(uuid())
+model Banding {
+  id String @id @default(uuid())
 
-  pegawaiId    String   @map("pegawai_id")
-  pegawai      Pegawai  @relation(fields: [pegawaiId], references: [id])
-  periodeBulan Int      @map("periode_bulan")
-  periodeTahun Int      @map("periode_tahun")
+  pegawaiId    String  @map("pegawai_id")
+  pegawai      Pegawai @relation(fields: [pegawaiId], references: [id])
+  periodeBulan Int     @map("periode_bulan")
+  periodeTahun Int     @map("periode_tahun")
 
-  referensiTipe String  @map("referensi_tipe") // TUKIN, UANG_MAKAN, UANG_LEMBUR
-  referensiId   String  @map("referensi_id")
+  referensiTipe String @map("referensi_tipe") // TUKIN, UANG_MAKAN, UANG_LEMBUR
+  referensiId   String @map("referensi_id")
 
   // Pengaju HARUS role PEGAWAI dan (asumsi saat ini) selalu pegawai yang
-  // sama dengan `pegawaiId` di atas - sanggahan diri sendiri, bukan
+  // sama dengan `pegawaiId` di atas - banding diri sendiri, bukan
   // diwakilkan. TODO(confirm) kalau ternyata ada skenario pengajuan
   // terwakilkan (misal pegawai cuti panjang/sakit berat).
-  pengajuId    String   @map("pengaju_id")
-  pengaju      User     @relation(fields: [pengajuId], references: [id])
+  pengajuId String @map("pengaju_id")
+  pengaju   User   @relation(fields: [pengajuId], references: [id])
 
-  alasan       String
+  alasan String
 
-  // DIAJUKAN, DIVERIFIKASI_SETUJU, DIVERIFIKASI_TOLAK, DITERUSKAN_OSDMA,
-  // SELESAI - daftar ini BELUM final, lihat TODO alur verifikasi di atas.
-  status       String   @default("DIAJUKAN")
+  // DIAJUKAN -> MENUNGGU_APPROVAL_FINAL (jenjang 1/Kasubag TU sudah SETUJU)
+  // -> DISETUJUI | DITOLAK (jenjang 2/OSDMA final). Lihat TODO(confirm) di
+  // atas soal status alur 2-jenjang ini.
+  status String @default("DIAJUKAN")
 
-  // TODO(confirm): SLA batas waktu sanggahan (berapa hari sejak data
+  // TODO(confirm): SLA batas waktu banding (berapa hari sejak data
   // kalkulasi tayang) belum ditentukan kebijakannya. Isi field ini dari
   // konstanta yang jelas ditandai TODO(confirm) di kode - JANGAN hardcode
   // angka final tanpa konfirmasi. Konsepnya sama dengan
-  // ReconciliationStatus.windowVerifikasiBerakhir, cuma di level sanggahan
+  // ReconciliationStatus.windowVerifikasiBerakhir, cuma di level banding
   // individual - kemungkinan besar diisi dari sumber SLA yang sama nanti.
   batasWaktuVerifikasi DateTime? @map("batas_waktu_verifikasi")
 
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  buktiPendukung BuktiPendukungUpload[]
+  buktiDukung BuktiDukung[]
 
-  @@map("sanggahan")
   @@index([pegawaiId])
   @@index([referensiTipe, referensiId])
   @@index([status])
+  @@map("banding")
 }
 
 // ---------------------------------------------------------------------------
-// BUKTI PENDUKUNG UPLOAD - lampiran dokumen (SK, surat sakit, surat cuti/
-// izin, dll) yang diunggah pegawai untuk mendukung sanggahannya.
+// BUKTI DUKUNG (dulu bernama "BuktiPendukungUpload") - lampiran dokumen (SK,
+// surat sakit, surat cuti/izin, dll) yang diunggah pegawai untuk mendukung
+// bandingnya.
 //
 // TODO(confirm): mekanisme penyimpanan file BELUM diputuskan (local disk,
 // object storage/S3-compatible, atau lewat modul lain) - `fileUrl` di bawah
@@ -417,22 +448,209 @@ model Sanggahan {
 // Jangan asumsikan salah satu mekanisme sebelum dikonfirmasi (terutama
 // terkait kebijakan retensi dokumen kepegawaian ke Biro Hukum/OSDMA).
 // ---------------------------------------------------------------------------
-model BuktiPendukungUpload {
-  id            String    @id @default(uuid())
+model BuktiDukung {
+  id String @id @default(uuid())
 
-  sanggahanId   String    @map("sanggahan_id")
-  sanggahan     Sanggahan @relation(fields: [sanggahanId], references: [id])
+  bandingId String  @map("banding_id")
+  banding   Banding @relation(fields: [bandingId], references: [id])
 
-  jenisDokumen  String    @map("jenis_dokumen") // SK, SURAT_SAKIT, SURAT_CUTI_IZIN, LAINNYA
-  namaFile      String    @map("nama_file")
-  fileUrl       String    @map("file_url")
-  ukuranBita    Int?      @map("ukuran_bita")
+  jenisDokumen String @map("jenis_dokumen") // SK, SURAT_SAKIT, SURAT_CUTI_IZIN, LAINNYA
+  namaFile     String @map("nama_file")
+  fileUrl      String @map("file_url")
+  ukuranBita   Int?   @map("ukuran_bita")
 
-  diunggahOlehId String   @map("diunggah_oleh_id")
-  diunggahOleh   User     @relation(fields: [diunggahOlehId], references: [id])
+  diunggahOlehId String @map("diunggah_oleh_id")
+  diunggahOleh   User   @relation(fields: [diunggahOlehId], references: [id])
 
-  createdAt     DateTime  @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  @@map("bukti_pendukung_upload")
-  @@index([sanggahanId])
+  @@index([bandingId])
+  @@map("bukti_dukung")
+}
+
+// ---------------------------------------------------------------------------
+// SK KGB - pengajuan Kenaikan Gaji Berkala oleh Kasubag TU, approval final
+// OSDMA. Approval TUNGGAL (jenjang 1 saja) dicatat di ApprovalLog dengan
+// referensiTipe = "SK_KGB".
+//
+// TODO(confirm): sistem ini TIDAK punya tabel skala gaji pokok PNS (di luar
+// cakupan "don't replace, integrate" - itu domain Web Gaji/BKN). Field
+// golonganBaru di bawah SENGAJA disederhanakan jadi representasi golongan
+// saja untuk kebutuhan simulasi - belum menangani masa-kerja-golongan/step
+// increment yang sebenarnya jadi inti KGB. `appliedAt`/`appliedBy` diisi
+// SETELAH disetujui OSDMA DAN service layer benar-benar meng-update
+// `Pegawai.golongan` (belum diimplementasikan di langkah ini - schema-only).
+// ---------------------------------------------------------------------------
+model SkKgb {
+  id String @id @default(uuid())
+
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  nomorSk   String   @map("nomor_sk")
+  tanggalSk DateTime @map("tanggal_sk")
+  tmtKgb    DateTime @map("tmt_kgb") // terhitung mulai tanggal
+
+  golonganLama String @map("golongan_lama")
+  golonganBaru String @map("golongan_baru")
+
+  fileUrl String? @map("file_url")
+
+  diajukanOlehId String @map("diajukan_oleh_id")
+  diajukanOleh   User   @relation("SkKgbDiajukanOleh", fields: [diajukanOlehId], references: [id])
+
+  // DIAJUKAN, DISETUJUI, DITOLAK
+  status String @default("DIAJUKAN")
+
+  appliedAt DateTime? @map("applied_at")
+  appliedBy String?   @map("applied_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([pegawaiId])
+  @@index([status])
+  @@map("sk_kgb")
+}
+
+// ---------------------------------------------------------------------------
+// SK HUKUMAN DISIPLIN - input Kasubag TU, mempengaruhi perhitungan Tukin
+// (Pasal 15 - lihat CLAUDE.md item open #2, BELUM diimplementasi di
+// business-logic/tukin.ts).
+//
+// TODO(confirm) BESAR - INI ASUMSI, BUKAN KEPUTUSAN FINAL: alur approval SK
+// hukuman disiplin di bawah ini (approval OSDMA, jenjang tunggal - pola
+// SAMA dengan SK KGB) adalah ASUMSI dari spesifikasi simulasi, BUKAN
+// konfirmasi resmi dari OSDMA/Biro Hukum. Alasan diberi alur approval OSDMA:
+// (1) Pasal 15 soal potongan disiplin belum diimplementasi sama sekali di
+// business logic engine, (2) data ini sensitif (menyangkut catatan disiplin
+// pegawai). Desain skema/alur SIAP dipakai kalau asumsi ini benar, tapi
+// WAJIB dikonfirmasi ke OSDMA/Biro Hukum dulu sebelum dipakai ke production.
+//
+// jenisHukuman SENGAJA free-text (bukan enum kaku) karena kategorisasi resmi
+// tingkat hukuman disiplin (ringan/sedang/berat per PP 94/2021) belum
+// dikonfirmasi pemetaannya ke sistem ini.
+// ---------------------------------------------------------------------------
+model SkHukumanDisiplin {
+  id String @id @default(uuid())
+
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  nomorSk      String   @map("nomor_sk")
+  tanggalSk    DateTime @map("tanggal_sk")
+  jenisHukuman String   @map("jenis_hukuman")
+  keterangan   String?
+
+  // Rentang periode kalkulasi Tukin yang terdampak potongan disiplin ini.
+  // periodeSelesaiBulan/Tahun NULL berarti masih berlaku sampai dicabut.
+  periodeMulaiBulan   Int  @map("periode_mulai_bulan")
+  periodeMulaiTahun   Int  @map("periode_mulai_tahun")
+  periodeSelesaiBulan Int? @map("periode_selesai_bulan")
+  periodeSelesaiTahun Int? @map("periode_selesai_tahun")
+
+  fileUrl String? @map("file_url")
+
+  diajukanOlehId String @map("diajukan_oleh_id")
+  diajukanOleh   User   @relation("SkHukdisDiajukanOleh", fields: [diajukanOlehId], references: [id])
+
+  // DIAJUKAN, DISETUJUI, DITOLAK
+  status String @default("DIAJUKAN")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([pegawaiId])
+  @@index([status])
+  @@map("sk_hukuman_disiplin")
+}
+
+// ---------------------------------------------------------------------------
+// ANGGARAN REALISASI - upload PPABP, dasar dashboard "total Anggaran vs
+// Realisasi" lintas unit. Satu baris = total pagu & realisasi belanja
+// pegawai satu satuan kerja untuk satu periode (BELUM dipecah per jenis
+// belanja/Tukin-UM-Lembur - lihat kebutuhan dashboard saat ini yang cuma
+// minta total, bukan breakdown).
+// ---------------------------------------------------------------------------
+model AnggaranRealisasi {
+  id String @id @default(uuid())
+
+  satuanKerja  String @map("satuan_kerja")
+  periodeBulan Int    @map("periode_bulan")
+  periodeTahun Int    @map("periode_tahun")
+
+  pagu      Float
+  realisasi Float
+
+  sourceFileUrl String? @map("source_file_url")
+
+  diunggahOlehId String @map("diunggah_oleh_id")
+  diunggahOleh   User   @relation(fields: [diunggahOlehId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([satuanKerja, periodeBulan, periodeTahun])
+  @@index([periodeBulan, periodeTahun])
+  @@map("anggaran_realisasi")
+}
+
+// ---------------------------------------------------------------------------
+// BUKTI POTONG PAJAK - hasil UPLOAD MANUAL oleh Kasubag TU/PPABP (diunduh
+// dari Web Gaji dulu, BELUM ada koneksi API ke sistem Kemenkeu). Pegawai
+// cuma bisa lihat/download, TIDAK BISA upload sendiri (lihat role matrix
+// PEGAWAI di CLAUDE.md).
+// ---------------------------------------------------------------------------
+model BuktiPotongPajak {
+  id String @id @default(uuid())
+
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  tahunPajak       Int     @map("tahun_pajak")
+  nomorBuktiPotong String? @map("nomor_bukti_potong")
+  fileUrl          String  @map("file_url")
+
+  diunggahOlehId String @map("diunggah_oleh_id")
+  diunggahOleh   User   @relation(fields: [diunggahOlehId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([pegawaiId, tahunPajak])
+  @@map("bukti_potong_pajak")
+}
+
+// ---------------------------------------------------------------------------
+// USULAN PERUBAHAN ROLE - PPABP bisa MELIHAT & MENGUSULKAN perubahan role
+// user (Pegawai/Kasubag TU/OSDMA/PPABP/Pimpinan), TAPI eksekusi final ada
+// di ADMIN (role matrix, poin 4 & 6) - supaya tidak ada dua pihak yang
+// sama-sama bisa eksekusi langsung dan berpotensi konflik. Baris ini BUKAN
+// approval berjenjang (beda dengan ApprovalLog) - cuma usul (oleh PPABP) lalu
+// keputusan tunggal (oleh ADMIN): eksekusi atau tolak.
+// ---------------------------------------------------------------------------
+model UsulanPerubahanRole {
+  id String @id @default(uuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  roleSaatIni   Role    @map("role_saat_ini") // snapshot waktu diusulkan
+  roleDiusulkan Role    @map("role_diusulkan")
+  alasan        String?
+
+  diusulkanOlehId String @map("diusulkan_oleh_id")
+  diusulkanOleh   User   @relation("UsulanRoleDiajukanOleh", fields: [diusulkanOlehId], references: [id])
+
+  // MENUNGGU, DIEKSEKUSI, DITOLAK
+  status String @default("MENUNGGU")
+
+  diputuskanOlehId String?   @map("diputuskan_oleh_id")
+  diputuskanOleh   User?     @relation("UsulanRoleDiputuskanOleh", fields: [diputuskanOlehId], references: [id])
+  diputuskanPada   DateTime? @map("diputuskan_pada")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([status])
+  @@map("usulan_perubahan_role")
 }

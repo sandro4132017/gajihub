@@ -4,9 +4,8 @@ import type { Role } from "@prisma/client";
 export const LABEL_ROLE: Record<Role, string> = {
   PEGAWAI: "Pegawai",
   KASUBAG_TU: "Kasubag TU",
+  OSDMA: "OSDMA",
   PPABP: "PPABP",
-  BIRO_OSDMA: "Biro OSDMA",
-  ADMIN_SISTEM: "Admin Sistem",
-  ITJEN: "Itjen",
   PIMPINAN: "Pimpinan",
+  ADMIN: "Admin",
 };
