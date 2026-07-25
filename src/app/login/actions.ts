@@ -35,9 +35,8 @@ export async function loginAction(
   }
 
   // Jabatan buat ditampilkan & dicatat di ApprovalLog - ambil dari data
-  // Pegawai kalau NIP-nya cocok (sekarang ada 5.067 data pegawai asli),
-  // fallback ke label role kalau tidak ketemu (misal role ADMIN_SISTEM/ITJEN
-  // yang belum tentu ada di basis data pegawai).
+  // Pegawai kalau NIP-nya cocok (sekarang ada 5.069 data pegawai asli),
+  // fallback ke label role kalau tidak ketemu.
   const pegawai = await prisma.pegawai.findUnique({ where: { nip } });
   const jabatan = pegawai?.jabatan ?? LABEL_ROLE[user.role];
 

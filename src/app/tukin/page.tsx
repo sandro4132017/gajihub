@@ -23,9 +23,11 @@ export default async function TukinPage({
 }) {
   const { bulan, tahun, satker } = await searchParams;
 
-  // Guard eksplisit: ADMIN_SISTEM SENGAJA tidak boleh lihat data payroll
-  // substantif, dan PEGAWAI diarahkan ke dashboard self-service sendiri
-  // (/saya) - lihat canViewApproverDashboard + role matrix di CLAUDE.md.
+  // Guard eksplisit: PEGAWAI diarahkan ke dashboard self-service sendiri
+  // (/saya), bukan halaman approver ini - lihat canViewApproverDashboard +
+  // role matrix di CLAUDE.md. TODO(confirm): ADMIN SEKARANG BOLEH lihat
+  // halaman ini (privilege penuh, lihat enum Role di schema.prisma) - ini
+  // BUKAN desain final untuk production.
   const akun = await getSessionAccount();
   const authUser = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canViewApproverDashboard(authUser)) {
@@ -134,7 +136,11 @@ export default async function TukinPage({
                 </ul>
               )}
 
-              {!sudahApproved && evaluasi.outcome === "MENUNGGU_APPROVAL" && evaluasi.jenjangBerikutnya && (
+              {/* PIMPINAN: role matrix "read-only, tanpa approval/ubah data apapun" -
+                  server action sudah menolak PIMPINAN juga, ini cuma biar tombolnya
+                  tidak nongol dead-end di UI (lihat DashboardLintasUnit.tsx buat
+                  pola readOnly yang sama di dashboard lintas unit PPABP/Pimpinan). */}
+              {!sudahApproved && authUser.role !== "PIMPINAN" && evaluasi.outcome === "MENUNGGU_APPROVAL" && evaluasi.jenjangBerikutnya && (
                 <ApprovalForm
                   action={ajukanApprovalTukinAction}
                   calculationId={kalkulasi.id}

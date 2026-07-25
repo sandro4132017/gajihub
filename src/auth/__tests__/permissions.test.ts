@@ -1,29 +1,46 @@
 import { describe, it, expect } from "vitest";
 import {
   canViewDataSendiri,
-  canAjukanSanggahan,
-  canUploadBuktiPendukung,
-  canLihatStatusSanggahanSendiri,
+  canAjukanBanding,
+  canUploadBuktiDukung,
+  canLihatStatusBandingSendiri,
+  canCetakSlipGajiSendiri,
+  canDownloadBuktiPotongPajakSendiri,
   canViewRekapUnitKerja,
-  canVerifikasiSanggahanTahap1,
+  canVerifikasiBandingJenjang1,
   canApproveJenjang1,
   canMonitorRekonsiliasiUnit,
+  canTarikAtauUploadPresensiUnit,
+  canTarikUlangPresensiUnit,
+  canUploadKoreksiPredikatKinerjaUnit,
+  canAjukanKalkulasiTukinMassalUnit,
+  canTelaahAjukanUangMakanUnit,
+  canTelaahKoreksiAjukanUangLemburUnit,
+  canViewDashboardUnit,
+  canAjukanSkKgb,
+  canInputSkHukumanDisiplin,
+  canReviewPerubahanDataMaster,
+  canUpdateSkPegawaiStrukturalFungsional,
+  canApproveBandingFinal,
+  canApproveSkKgb,
+  canApproveSkHukumanDisiplin,
+  canMonitorKepatuhanData,
+  canTarikAtauUploadPresensiFallback,
+  canTelaahValidasiPengajuanLintasUnit,
   canApproveJenjangFinal,
   canHandleSelisih,
   canGenerateAdk,
+  canUploadAnggaranRealisasi,
+  canMonitorUbahStatusLintasUnit,
   canViewRekonsiliasiLintasSatker,
-  canReviewPerubahanDataMaster,
-  canVerifikasiSanggahanTahapOsdma,
-  canMonitorKepatuhanData,
+  canUsulkanPerubahanRole,
+  canViewDashboardLintasUnit,
   canKelolaAssignmentRole,
+  canEksekusiPerubahanRole,
   canMonitorKesehatanSistem,
   canKonfigurasiAdapter,
   canViewDataPayroll,
-  canViewAuditTrail,
-  canViewApprovalLogSemua,
-  canViewHistoriSanggahanSemua,
-  canExportLaporan,
-  canViewDashboardRingkasanKementerian,
+  canViewApproverDashboard,
   canViewPegawai,
   canEditPresensiKinerjaLangsung,
   type AuthUser,
@@ -39,23 +56,23 @@ function buatUser(overrides: Partial<AuthUser>): AuthUser {
   };
 }
 
+const SEMUA_ROLE: AuthUser["role"][] = ["PEGAWAI", "KASUBAG_TU", "PPABP", "OSDMA", "PIMPINAN", "ADMIN"];
 const SETJEN = "Sekretariat Jenderal";
 const BIRO_UMUM = "Biro Umum";
 
-describe("PEGAWAI - self-service", () => {
-  it("canViewDataSendiri: diizinkan kalau nip cocok", () => {
-    const user = buatUser({ role: "PEGAWAI", nip: "111" });
-    expect(canViewDataSendiri(user, "111")).toBe(true);
+describe("PEGAWAI - self-service, SEMUA role otomatis punya privilege ini buat data sendiri", () => {
+  it("canViewDataSendiri: diizinkan kalau nip cocok, apapun role-nya", () => {
+    for (const role of SEMUA_ROLE) {
+      const user = buatUser({ role, nip: "111", satuanKerja: role === "KASUBAG_TU" ? SETJEN : null });
+      expect(canViewDataSendiri(user, "111")).toBe(true);
+    }
   });
 
-  it("canViewDataSendiri: DITOLAK kalau lihat NIP pegawai lain", () => {
-    const user = buatUser({ role: "PEGAWAI", nip: "111" });
-    expect(canViewDataSendiri(user, "222")).toBe(false);
-  });
-
-  it("canViewDataSendiri: DITOLAK buat role lain walau nip cocok", () => {
-    const user = buatUser({ role: "KASUBAG_TU", nip: "111", satuanKerja: SETJEN });
-    expect(canViewDataSendiri(user, "111")).toBe(false);
+  it("canViewDataSendiri: DITOLAK kalau lihat NIP pegawai lain, apapun role-nya", () => {
+    for (const role of SEMUA_ROLE) {
+      const user = buatUser({ role, nip: "111" });
+      expect(canViewDataSendiri(user, "222")).toBe(false);
+    }
   });
 
   it("canViewDataSendiri: DITOLAK kalau akun tidak aktif", () => {
@@ -63,27 +80,31 @@ describe("PEGAWAI - self-service", () => {
     expect(canViewDataSendiri(user, "111")).toBe(false);
   });
 
-  it("canAjukanSanggahan: diizinkan buat data sendiri, ditolak buat orang lain", () => {
-    const user = buatUser({ role: "PEGAWAI", nip: "111" });
-    expect(canAjukanSanggahan(user, "111")).toBe(true);
-    expect(canAjukanSanggahan(user, "222")).toBe(false);
+  it("canAjukanBanding, canCetakSlipGajiSendiri, canDownloadBuktiPotongPajakSendiri: sama pola dengan canViewDataSendiri", () => {
+    const user = buatUser({ role: "KASUBAG_TU", nip: "111", satuanKerja: SETJEN });
+    expect(canAjukanBanding(user, "111")).toBe(true);
+    expect(canAjukanBanding(user, "222")).toBe(false);
+    expect(canCetakSlipGajiSendiri(user, "111")).toBe(true);
+    expect(canCetakSlipGajiSendiri(user, "222")).toBe(false);
+    expect(canDownloadBuktiPotongPajakSendiri(user, "111")).toBe(true);
+    expect(canDownloadBuktiPotongPajakSendiri(user, "222")).toBe(false);
   });
 
-  it("canUploadBuktiPendukung: diizinkan cuma buat sanggahan sendiri", () => {
+  it("canUploadBuktiDukung: diizinkan cuma buat banding sendiri", () => {
     const user = buatUser({ role: "PEGAWAI", nip: "111" });
-    expect(canUploadBuktiPendukung(user, { pengajuNip: "111", satuanKerjaPegawai: SETJEN })).toBe(true);
-    expect(canUploadBuktiPendukung(user, { pengajuNip: "222", satuanKerjaPegawai: SETJEN })).toBe(false);
+    expect(canUploadBuktiDukung(user, { pengajuNip: "111", satuanKerjaPegawai: SETJEN })).toBe(true);
+    expect(canUploadBuktiDukung(user, { pengajuNip: "222", satuanKerjaPegawai: SETJEN })).toBe(false);
   });
 
-  it("canUploadBuktiPendukung: DITOLAK buat KASUBAG_TU walau sama unit (bukan pengaju)", () => {
+  it("canUploadBuktiDukung: DITOLAK buat KASUBAG_TU walau sama unit (bukan pengaju)", () => {
     const kasubag = buatUser({ role: "KASUBAG_TU", nip: "999", satuanKerja: SETJEN });
-    expect(canUploadBuktiPendukung(kasubag, { pengajuNip: "111", satuanKerjaPegawai: SETJEN })).toBe(false);
+    expect(canUploadBuktiDukung(kasubag, { pengajuNip: "111", satuanKerjaPegawai: SETJEN })).toBe(false);
   });
 
-  it("canLihatStatusSanggahanSendiri: cocok nip = diizinkan, tidak cocok = ditolak", () => {
+  it("canLihatStatusBandingSendiri: cocok nip = diizinkan, tidak cocok = ditolak", () => {
     const user = buatUser({ role: "PEGAWAI", nip: "111" });
-    expect(canLihatStatusSanggahanSendiri(user, { pengajuNip: "111", satuanKerjaPegawai: SETJEN })).toBe(true);
-    expect(canLihatStatusSanggahanSendiri(user, { pengajuNip: "222", satuanKerjaPegawai: SETJEN })).toBe(false);
+    expect(canLihatStatusBandingSendiri(user, { pengajuNip: "111", satuanKerjaPegawai: SETJEN })).toBe(true);
+    expect(canLihatStatusBandingSendiri(user, { pengajuNip: "222", satuanKerjaPegawai: SETJEN })).toBe(false);
   });
 });
 
@@ -103,10 +124,10 @@ describe("KASUBAG_TU - verifikator satker", () => {
     expect(canViewRekapUnitKerja(user, SETJEN)).toBe(false);
   });
 
-  it("canVerifikasiSanggahanTahap1: diizinkan cuma buat sanggahan dari unitnya", () => {
+  it("canVerifikasiBandingJenjang1: diizinkan cuma buat banding dari unitnya", () => {
     const user = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
-    expect(canVerifikasiSanggahanTahap1(user, { pengajuNip: "111", satuanKerjaPegawai: SETJEN })).toBe(true);
-    expect(canVerifikasiSanggahanTahap1(user, { pengajuNip: "111", satuanKerjaPegawai: BIRO_UMUM })).toBe(false);
+    expect(canVerifikasiBandingJenjang1(user, { pengajuNip: "111", satuanKerjaPegawai: SETJEN })).toBe(true);
+    expect(canVerifikasiBandingJenjang1(user, { pengajuNip: "111", satuanKerjaPegawai: BIRO_UMUM })).toBe(false);
   });
 
   it("canApproveJenjang1: diizinkan buat unitnya, DITOLAK buat unit lain", () => {
@@ -124,6 +145,27 @@ describe("KASUBAG_TU - verifikator satker", () => {
     const user = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
     expect(canMonitorRekonsiliasiUnit(user, SETJEN)).toBe(true);
     expect(canMonitorRekonsiliasiUnit(user, BIRO_UMUM)).toBe(false);
+  });
+
+  it("fungsi presensi/kinerja/kalkulasi massal/telaah UM & lembur/dashboard unit/SK KGB/SK hukdis: sama pola scoping unit", () => {
+    const user = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
+    const lain = buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM });
+    const fungsi = [
+      canTarikAtauUploadPresensiUnit,
+      canTarikUlangPresensiUnit,
+      canUploadKoreksiPredikatKinerjaUnit,
+      canAjukanKalkulasiTukinMassalUnit,
+      canTelaahAjukanUangMakanUnit,
+      canTelaahKoreksiAjukanUangLemburUnit,
+      canViewDashboardUnit,
+      canAjukanSkKgb,
+      canInputSkHukumanDisiplin,
+    ];
+    for (const fn of fungsi) {
+      expect(fn(user, SETJEN)).toBe(true);
+      expect(fn(user, BIRO_UMUM)).toBe(false);
+      expect(fn(lain, SETJEN)).toBe(false);
+    }
   });
 });
 
@@ -145,61 +187,103 @@ describe("PPABP - approval jenjang final, lintas satker", () => {
     expect(canApproveJenjangFinal(kasubag, SETJEN)).toBe(false);
   });
 
-  it("canHandleSelisih & canViewRekonsiliasiLintasSatker: ikut pola scoping PPABP yang sama", () => {
+  it("canHandleSelisih, canViewRekonsiliasiLintasSatker, canTelaahValidasiPengajuanLintasUnit, canMonitorUbahStatusLintasUnit: ikut pola scoping PPABP yang sama", () => {
     const ppabpPusat = buatUser({ role: "PPABP", satuanKerja: null });
     expect(canHandleSelisih(ppabpPusat, SETJEN)).toBe(true);
     expect(canViewRekonsiliasiLintasSatker(ppabpPusat, SETJEN)).toBe(true);
+    expect(canTelaahValidasiPengajuanLintasUnit(ppabpPusat, SETJEN)).toBe(true);
+    expect(canMonitorUbahStatusLintasUnit(ppabpPusat, SETJEN)).toBe(true);
 
-    const bukanPpabp = buatUser({ role: "BIRO_OSDMA", satuanKerja: null });
+    const bukanPpabp = buatUser({ role: "OSDMA", satuanKerja: null });
     expect(canHandleSelisih(bukanPpabp, SETJEN)).toBe(false);
     expect(canViewRekonsiliasiLintasSatker(bukanPpabp, SETJEN)).toBe(false);
+    expect(canTelaahValidasiPengajuanLintasUnit(bukanPpabp, SETJEN)).toBe(false);
+    expect(canMonitorUbahStatusLintasUnit(bukanPpabp, SETJEN)).toBe(false);
   });
 
-  it("canGenerateAdk: cuma PPABP", () => {
-    expect(canGenerateAdk(buatUser({ role: "PPABP", satuanKerja: null }))).toBe(true);
-    expect(canGenerateAdk(buatUser({ role: "ADMIN_SISTEM" }))).toBe(false);
+  it("canGenerateAdk, canUploadAnggaranRealisasi, canUsulkanPerubahanRole, canTarikAtauUploadPresensiFallback: PPABP (dan ADMIN lewat bypass privilege penuh), DITOLAK buat OSDMA/PIMPINAN", () => {
+    const ppabp = buatUser({ role: "PPABP", satuanKerja: null });
+    expect(canGenerateAdk(ppabp)).toBe(true);
+    expect(canUploadAnggaranRealisasi(ppabp)).toBe(true);
+    expect(canUsulkanPerubahanRole(ppabp)).toBe(true);
+    expect(canTarikAtauUploadPresensiFallback(ppabp)).toBe(true);
+
+    const admin = buatUser({ role: "ADMIN" });
+    expect(canGenerateAdk(admin)).toBe(true);
+    expect(canUploadAnggaranRealisasi(admin)).toBe(true);
+    expect(canUsulkanPerubahanRole(admin)).toBe(true);
+    expect(canTarikAtauUploadPresensiFallback(admin)).toBe(true);
+
+    const pimpinan = buatUser({ role: "PIMPINAN" });
+    expect(canGenerateAdk(pimpinan)).toBe(false);
+    expect(canUploadAnggaranRealisasi(pimpinan)).toBe(false);
+    expect(canUsulkanPerubahanRole(pimpinan)).toBe(false);
+    expect(canTarikAtauUploadPresensiFallback(pimpinan)).toBe(false);
+  });
+
+  it("canViewDashboardLintasUnit: diizinkan buat PPABP & PIMPINAN, ditolak buat KASUBAG_TU/OSDMA/PEGAWAI", () => {
+    expect(canViewDashboardLintasUnit(buatUser({ role: "PPABP" }))).toBe(true);
+    expect(canViewDashboardLintasUnit(buatUser({ role: "PIMPINAN" }))).toBe(true);
+    expect(canViewDashboardLintasUnit(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }))).toBe(false);
+    expect(canViewDashboardLintasUnit(buatUser({ role: "OSDMA" }))).toBe(false);
+    expect(canViewDashboardLintasUnit(buatUser({ role: "PEGAWAI" }))).toBe(false);
   });
 });
 
-describe("BIRO_OSDMA - data steward", () => {
-  it("canReviewPerubahanDataMaster: diizinkan buat BIRO_OSDMA, ditolak buat role lain", () => {
-    expect(canReviewPerubahanDataMaster(buatUser({ role: "BIRO_OSDMA" }))).toBe(true);
+describe("OSDMA - data steward, approval final Banding & SK", () => {
+  it("canReviewPerubahanDataMaster, canUpdateSkPegawaiStrukturalFungsional: diizinkan buat OSDMA, ditolak buat role lain", () => {
+    expect(canReviewPerubahanDataMaster(buatUser({ role: "OSDMA" }))).toBe(true);
+    expect(canUpdateSkPegawaiStrukturalFungsional(buatUser({ role: "OSDMA" }))).toBe(true);
     expect(canReviewPerubahanDataMaster(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }))).toBe(false);
   });
 
-  it("canVerifikasiSanggahanTahapOsdma & canMonitorKepatuhanData: sama, cuma BIRO_OSDMA", () => {
-    const osdma = buatUser({ role: "BIRO_OSDMA" });
-    expect(canVerifikasiSanggahanTahapOsdma(osdma)).toBe(true);
+  it("canApproveBandingFinal, canApproveSkKgb, canApproveSkHukumanDisiplin, canMonitorKepatuhanData: sama, cuma OSDMA", () => {
+    const osdma = buatUser({ role: "OSDMA" });
+    expect(canApproveBandingFinal(osdma)).toBe(true);
+    expect(canApproveSkKgb(osdma)).toBe(true);
+    expect(canApproveSkHukumanDisiplin(osdma)).toBe(true);
     expect(canMonitorKepatuhanData(osdma)).toBe(true);
 
     const pimpinan = buatUser({ role: "PIMPINAN" });
-    expect(canVerifikasiSanggahanTahapOsdma(pimpinan)).toBe(false);
+    expect(canApproveBandingFinal(pimpinan)).toBe(false);
+    expect(canApproveSkKgb(pimpinan)).toBe(false);
+    expect(canApproveSkHukumanDisiplin(pimpinan)).toBe(false);
     expect(canMonitorKepatuhanData(pimpinan)).toBe(false);
   });
 
-  it("canReviewPerubahanDataMaster: DITOLAK kalau BIRO_OSDMA tidak aktif", () => {
-    expect(canReviewPerubahanDataMaster(buatUser({ role: "BIRO_OSDMA", aktif: false }))).toBe(false);
+  it("canReviewPerubahanDataMaster: DITOLAK kalau OSDMA tidak aktif", () => {
+    expect(canReviewPerubahanDataMaster(buatUser({ role: "OSDMA", aktif: false }))).toBe(false);
   });
 });
 
-describe("ADMIN_SISTEM - teknis saja, SENGAJA tidak boleh data payroll", () => {
-  it("canKelolaAssignmentRole, canMonitorKesehatanSistem, canKonfigurasiAdapter: diizinkan buat ADMIN_SISTEM", () => {
-    const admin = buatUser({ role: "ADMIN_SISTEM" });
+describe("ADMIN - privilege teknis + SEMUA role lain (simulasi/demo, lihat TODO(confirm) di schema)", () => {
+  it("canKelolaAssignmentRole, canEksekusiPerubahanRole, canMonitorKesehatanSistem, canKonfigurasiAdapter: diizinkan buat ADMIN", () => {
+    const admin = buatUser({ role: "ADMIN" });
     expect(canKelolaAssignmentRole(admin)).toBe(true);
+    expect(canEksekusiPerubahanRole(admin)).toBe(true);
     expect(canMonitorKesehatanSistem(admin)).toBe(true);
     expect(canKonfigurasiAdapter(admin)).toBe(true);
   });
 
-  it("fungsi teknis: DITOLAK buat role lain (misal PIMPINAN)", () => {
+  it("fungsi teknis: DITOLAK buat role lain (misal PIMPINAN) - TIDAK ADA bypass admin buat fungsi admin-only ini sendiri", () => {
     const pimpinan = buatUser({ role: "PIMPINAN" });
     expect(canKelolaAssignmentRole(pimpinan)).toBe(false);
+    expect(canEksekusiPerubahanRole(pimpinan)).toBe(false);
     expect(canMonitorKesehatanSistem(pimpinan)).toBe(false);
     expect(canKonfigurasiAdapter(pimpinan)).toBe(false);
   });
 
-  it("canViewDataPayroll: DITOLAK buat ADMIN_SISTEM meskipun aktif - INI ATURAN PALING PENTING, jangan sampai regresi", () => {
-    const admin = buatUser({ role: "ADMIN_SISTEM", aktif: true });
-    expect(canViewDataPayroll(admin)).toBe(false);
+  it("canEksekusiPerubahanRole: DITOLAK buat PPABP (cuma bisa usulkan, bukan eksekusi - lihat canUsulkanPerubahanRole)", () => {
+    expect(canEksekusiPerubahanRole(buatUser({ role: "PPABP", satuanKerja: null }))).toBe(false);
+  });
+
+  it("canViewDataPayroll: diizinkan buat ADMIN (privilege penuh, BUKAN desain final - lihat TODO(confirm))", () => {
+    const admin = buatUser({ role: "ADMIN", aktif: true });
+    expect(canViewDataPayroll(admin)).toBe(true);
+  });
+
+  it("canViewDataPayroll: DITOLAK kalau akun tidak aktif, apapun role-nya", () => {
+    expect(canViewDataPayroll(buatUser({ role: "ADMIN", aktif: false }))).toBe(false);
   });
 
   it("canViewDataPayroll: diizinkan (secara umum) buat role lain yang aktif", () => {
@@ -207,40 +291,32 @@ describe("ADMIN_SISTEM - teknis saja, SENGAJA tidak boleh data payroll", () => {
     expect(canViewDataPayroll(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }))).toBe(true);
   });
 
-  it("canViewPegawai: DITOLAK buat ADMIN_SISTEM walaupun aktif (guard eksplisit)", () => {
-    const admin = buatUser({ role: "ADMIN_SISTEM" });
-    expect(canViewPegawai(admin, { nip: "111", satuanKerja: SETJEN })).toBe(false);
-  });
-});
-
-describe("ITJEN - auditor read-only", () => {
-  it("canViewAuditTrail, canViewApprovalLogSemua, canViewHistoriSanggahanSemua, canExportLaporan: diizinkan buat ITJEN", () => {
-    const itjen = buatUser({ role: "ITJEN" });
-    expect(canViewAuditTrail(itjen)).toBe(true);
-    expect(canViewApprovalLogSemua(itjen)).toBe(true);
-    expect(canViewHistoriSanggahanSemua(itjen)).toBe(true);
-    expect(canExportLaporan(itjen)).toBe(true);
+  it("canViewPegawai: diizinkan buat ADMIN (privilege penuh)", () => {
+    const admin = buatUser({ role: "ADMIN" });
+    expect(canViewPegawai(admin, { nip: "111", satuanKerja: SETJEN })).toBe(true);
   });
 
-  it("fungsi ITJEN: DITOLAK buat role lain (misal PPABP, biar nggak asal lintas kewenangan)", () => {
-    const ppabp = buatUser({ role: "PPABP", satuanKerja: null });
-    expect(canViewAuditTrail(ppabp)).toBe(false);
-    expect(canViewApprovalLogSemua(ppabp)).toBe(false);
-    expect(canViewHistoriSanggahanSemua(ppabp)).toBe(false);
-    expect(canExportLaporan(ppabp)).toBe(false);
+  it("canViewApproverDashboard: diizinkan buat ADMIN, DITOLAK buat PEGAWAI (diarahkan ke /saya)", () => {
+    expect(canViewApproverDashboard(buatUser({ role: "ADMIN" }))).toBe(true);
+    expect(canViewApproverDashboard(buatUser({ role: "PEGAWAI" }))).toBe(false);
   });
 
-  it("canViewPegawai: ITJEN boleh lihat pegawai manapun (read-only audit)", () => {
-    const itjen = buatUser({ role: "ITJEN" });
-    expect(canViewPegawai(itjen, { nip: "111", satuanKerja: SETJEN })).toBe(true);
-    expect(canViewPegawai(itjen, { nip: "222", satuanKerja: BIRO_UMUM })).toBe(true);
+  it("ADMIN privilege semua role lain - fungsi role-scoped (KASUBAG_TU/OSDMA/PPABP) diizinkan buat ADMIN apapun target-nya", () => {
+    const admin = buatUser({ role: "ADMIN" });
+    expect(canViewRekapUnitKerja(admin, SETJEN)).toBe(true);
+    expect(canApproveJenjang1(admin, BIRO_UMUM)).toBe(true);
+    expect(canAjukanKalkulasiTukinMassalUnit(admin, SETJEN)).toBe(true);
+    expect(canReviewPerubahanDataMaster(admin)).toBe(true);
+    expect(canApproveBandingFinal(admin)).toBe(true);
+    expect(canApproveJenjangFinal(admin, SETJEN)).toBe(true);
+    expect(canGenerateAdk(admin)).toBe(true);
+    expect(canViewDashboardLintasUnit(admin)).toBe(true);
   });
-});
 
-describe("PIMPINAN - executive dashboard", () => {
-  it("canViewDashboardRingkasanKementerian: diizinkan buat PIMPINAN, ditolak buat role lain", () => {
-    expect(canViewDashboardRingkasanKementerian(buatUser({ role: "PIMPINAN" }))).toBe(true);
-    expect(canViewDashboardRingkasanKementerian(buatUser({ role: "PEGAWAI" }))).toBe(false);
+  it("canEditPresensiKinerjaLangsung: SELALU false, TIDAK ikut bypass ADMIN (invariant, bukan role permission)", () => {
+    for (const role of SEMUA_ROLE) {
+      expect(canEditPresensiKinerjaLangsung(buatUser({ role, satuanKerja: SETJEN }))).toBe(false);
+    }
   });
 });
 
@@ -262,33 +338,12 @@ describe("canViewPegawai - gabungan aturan lintas role", () => {
     expect(canViewPegawai(buatUser({ role: "PPABP", satuanKerja: null }), { nip: "222", satuanKerja: BIRO_UMUM })).toBe(true);
   });
 
-  it("BIRO_OSDMA & PIMPINAN: boleh lihat pegawai manapun", () => {
-    expect(canViewPegawai(buatUser({ role: "BIRO_OSDMA" }), target)).toBe(true);
+  it("OSDMA & PIMPINAN: boleh lihat pegawai manapun", () => {
+    expect(canViewPegawai(buatUser({ role: "OSDMA" }), target)).toBe(true);
     expect(canViewPegawai(buatUser({ role: "PIMPINAN" }), target)).toBe(true);
-  });
-
-  it("ADMIN_SISTEM: SELALU ditolak, walaupun target-nya siapapun", () => {
-    expect(canViewPegawai(buatUser({ role: "ADMIN_SISTEM" }), target)).toBe(false);
   });
 
   it("akun nonaktif: DITOLAK apapun role-nya", () => {
     expect(canViewPegawai(buatUser({ role: "PIMPINAN", aktif: false }), target)).toBe(false);
-  });
-});
-
-describe("canEditPresensiKinerjaLangsung - selalu false buat semua role", () => {
-  it("tidak ada satupun role yang boleh edit langsung", () => {
-    const semuaRole: AuthUser["role"][] = [
-      "PEGAWAI",
-      "KASUBAG_TU",
-      "PPABP",
-      "BIRO_OSDMA",
-      "ADMIN_SISTEM",
-      "ITJEN",
-      "PIMPINAN",
-    ];
-    for (const role of semuaRole) {
-      expect(canEditPresensiKinerjaLangsung(buatUser({ role, satuanKerja: SETJEN }))).toBe(false);
-    }
   });
 });

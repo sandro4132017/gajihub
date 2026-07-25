@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../lib/prisma";
 import { getSessionAccount } from "../../auth/getSessionAccount";
-import { canAjukanSanggahan, type AuthUser } from "../../auth/permissions";
+import { canAjukanBanding, type AuthUser } from "../../auth/permissions";
 
-export interface AjukanSanggahanFormState {
+export interface AjukanBandingFormState {
   error?: string;
   success?: string;
 }
@@ -16,7 +16,7 @@ function isReferensiTipeValid(value: string): value is ReferensiTipe {
   return value === "TUKIN" || value === "UANG_MAKAN" || value === "UANG_LEMBUR";
 }
 
-/** Ambil kalkulasi yang mau disanggah dari tabel yang sesuai referensiTipe-nya. */
+/** Ambil kalkulasi yang mau dibanding dari tabel yang sesuai referensiTipe-nya. */
 function cariKalkulasi(referensiTipe: ReferensiTipe, referensiId: string) {
   switch (referensiTipe) {
     case "TUKIN":
@@ -29,26 +29,31 @@ function cariKalkulasi(referensiTipe: ReferensiTipe, referensiId: string) {
 }
 
 /**
- * Ajukan sanggahan atas kalkulasi Tukin/Uang Makan/Uang Lembur milik sendiri
+ * Ajukan banding atas kalkulasi Tukin/Uang Makan/Uang Lembur milik sendiri
  * (role matrix PEGAWAI - lihat CLAUDE.md). Sama seperti action approval,
  * fetch ULANG User dari database (bukan percaya cookie sesi) sebelum
  * mengizinkan aksi yang mengubah data.
  *
- * periodeBulan/periodeTahun DIAMBIL DARI kalkulasi yang disanggah, bukan
+ * periodeBulan/periodeTahun DIAMBIL DARI kalkulasi yang dibanding, bukan
  * dari input form - supaya tidak bisa dipalsukan lewat DevTools.
  *
- * Sanggahan yang diajukan memicu ReconciliationStatus (pegawai+periode yang
- * sama) pindah ke status "SANGGAH" - lihat catatan "SEHARUSNYA" di model
- * Sanggahan/ReconciliationStatus di schema.prisma. Upsert (bukan update)
- * karena belum ada job/service lain yang membuat baris ReconciliationStatus
- * duluan (belum ada proses rekonsiliasi otomatis di sistem ini). Durasi
- * window verifikasi & aturan hold-pembayaran-vs-koreksi-siklus-berikutnya
- * TETAP belum diisi di sini - itu masih TODO(confirm) kebijakan terpisah.
+ * Banding yang diajukan memicu ReconciliationStatus (pegawai+periode yang
+ * sama) pindah ke status "SANGGAH" - lihat catatan di model Banding/
+ * ReconciliationStatus di schema.prisma. Upsert (bukan update) karena belum
+ * ada job/service lain yang membuat baris ReconciliationStatus duluan
+ * (belum ada proses rekonsiliasi otomatis di sistem ini). Durasi window
+ * verifikasi & aturan hold-pembayaran-vs-koreksi-siklus-berikutnya TETAP
+ * belum diisi di sini - itu masih TODO(confirm) kebijakan terpisah.
+ *
+ * TODO: baru menangani jenjang 1 (pengajuan awal). Verifikasi berjenjang
+ * (Kasubag TU -> approval final OSDMA, lihat model Banding di schema.prisma)
+ * belum ada action-nya - itu bagian authorization layer/UI langkah
+ * berikutnya (dashboard Kasubag TU & OSDMA).
  */
-export async function ajukanSanggahanAction(
-  _state: AjukanSanggahanFormState,
+export async function ajukanBandingAction(
+  _state: AjukanBandingFormState,
   formData: FormData
-): Promise<AjukanSanggahanFormState> {
+): Promise<AjukanBandingFormState> {
   try {
     const akun = await getSessionAccount();
     if (!akun) {
@@ -63,7 +68,7 @@ export async function ajukanSanggahanAction(
       return { error: "Jenis kalkulasi tidak valid." };
     }
     if (!alasan) {
-      return { error: "Alasan sanggahan wajib diisi." };
+      return { error: "Alasan banding wajib diisi." };
     }
 
     const user = await prisma.user.findUnique({ where: { nip: akun.nip } });
@@ -76,8 +81,8 @@ export async function ajukanSanggahanAction(
       satuanKerja: user.satuanKerja,
       aktif: user.aktif,
     };
-    if (!canAjukanSanggahan(authUser, user.nip)) {
-      return { error: "Role kamu tidak berwenang mengajukan sanggahan." };
+    if (!canAjukanBanding(authUser, user.nip)) {
+      return { error: "Role kamu tidak berwenang mengajukan banding." };
     }
 
     const pegawai = await prisma.pegawai.findUnique({ where: { nip: user.nip } });
@@ -87,14 +92,14 @@ export async function ajukanSanggahanAction(
 
     const kalkulasi = await cariKalkulasi(referensiTipeRaw, referensiId);
     if (!kalkulasi) {
-      return { error: "Kalkulasi yang mau disanggah tidak ditemukan." };
+      return { error: "Kalkulasi yang mau dibanding tidak ditemukan." };
     }
     if (kalkulasi.pegawaiId !== pegawai.id) {
       return { error: "Kalkulasi ini bukan milik kamu." };
     }
 
     await prisma.$transaction([
-      prisma.sanggahan.create({
+      prisma.banding.create({
         data: {
           pegawaiId: pegawai.id,
           periodeBulan: kalkulasi.periodeBulan,
@@ -124,7 +129,7 @@ export async function ajukanSanggahanAction(
     ]);
 
     revalidatePath("/saya");
-    return { success: "Sanggahan berhasil diajukan, menunggu verifikasi." };
+    return { success: "Banding berhasil diajukan, menunggu verifikasi." };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
   }

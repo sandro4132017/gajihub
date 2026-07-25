@@ -24,8 +24,8 @@ export default async function UangMakanPage({
   const { bulan, tahun, satker } = await searchParams;
 
   // Guard sama dengan Dashboard Tukin (lihat src/app/tukin/page.tsx) -
-  // ADMIN_SISTEM diblokir total, KASUBAG_TU discope ke unit kerjanya
-  // sendiri, PEGAWAI diarahkan ke dashboard self-service (/saya).
+  // KASUBAG_TU discope ke unit kerjanya sendiri, PEGAWAI diarahkan ke
+  // dashboard self-service (/saya).
   const akun = await getSessionAccount();
   const authUser = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canViewApproverDashboard(authUser)) {
@@ -134,7 +134,8 @@ export default async function UangMakanPage({
                 </ul>
               )}
 
-              {!sudahApproved && evaluasi.outcome === "MENUNGGU_APPROVAL" && evaluasi.jenjangBerikutnya && (
+              {/* PIMPINAN: read-only, lihat catatan sama di src/app/tukin/page.tsx */}
+              {!sudahApproved && authUser.role !== "PIMPINAN" && evaluasi.outcome === "MENUNGGU_APPROVAL" && evaluasi.jenjangBerikutnya && (
                 <ApprovalForm
                   action={ajukanApprovalUangMakanAction}
                   calculationId={kalkulasi.id}
