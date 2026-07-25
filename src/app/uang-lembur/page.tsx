@@ -5,25 +5,16 @@ import type { KeputusanApproval } from "../../approval/types";
 import { ApprovalForm } from "../ApprovalForm";
 import { ajukanApprovalUangLemburAction } from "../actions";
 import { FilterBar } from "../FilterBar";
+import { getSessionAccount } from "../../auth/getSessionAccount";
+import { canViewApproverDashboard } from "../../auth/permissions";
+import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
+import { AksesDitolak } from "../AksesDitolak";
+import { StatusBadge } from "../StatusBadge";
 
 export const dynamic = "force-dynamic";
 
 const formatRupiah = (nilai: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(nilai);
-
-function StatusBadge({ label, warna }: { label: string; warna: "hijau" | "amber" | "merah" | "abu" }) {
-  const kelas = {
-    hijau: "bg-emerald-100 text-emerald-800",
-    amber: "bg-amber-100 text-amber-800",
-    merah: "bg-red-100 text-red-800",
-    abu: "bg-gray-100 text-gray-700",
-  }[warna];
-  return (
-    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${kelas}`}>
-      {label}
-    </span>
-  );
-}
 
 export default async function UangLemburPage({
   searchParams,
@@ -32,18 +23,39 @@ export default async function UangLemburPage({
 }) {
   const { bulan, tahun, satker } = await searchParams;
 
+  // Guard sama dengan Dashboard Tukin (lihat src/app/tukin/page.tsx) -
+  // ADMIN_SISTEM diblokir total, KASUBAG_TU discope ke unit kerjanya
+  // sendiri, PEGAWAI diarahkan ke dashboard self-service (/saya).
+  const akun = await getSessionAccount();
+  const authUser = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
+  if (!authUser || !canViewApproverDashboard(authUser)) {
+    return authUser?.role === "PEGAWAI" ? (
+      <AksesDitolak
+        pesan="Halaman ini untuk approver, bukan pegawai."
+        hrefAlternatif="/saya"
+        labelAlternatif="Lihat data saya"
+      />
+    ) : (
+      <AksesDitolak pesan="Role kamu tidak berwenang melihat data kalkulasi payroll." />
+    );
+  }
+  const satkerEfektif = resolveSatkerEfektif(authUser, satker);
+
   const satuanKerjaRows = await prisma.pegawai.findMany({
     distinct: ["satuanKerja"],
     select: { satuanKerja: true },
     orderBy: { satuanKerja: "asc" },
   });
-  const satuanKerjaList = satuanKerjaRows.map((r) => r.satuanKerja);
+  const satuanKerjaList = resolveSatuanKerjaListUntukFilter(
+    authUser,
+    satuanKerjaRows.map((r) => r.satuanKerja)
+  );
 
   const kalkulasiList = await prisma.uangLembur.findMany({
     where: {
       periodeBulan: bulan ? Number(bulan) : undefined,
       periodeTahun: tahun ? Number(tahun) : undefined,
-      pegawai: satker ? { satuanKerja: satker } : undefined,
+      pegawai: satkerEfektif ? { satuanKerja: satkerEfektif } : undefined,
     },
     include: { pegawai: true },
     orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }, { pegawai: { nama: "asc" } }],
@@ -55,17 +67,17 @@ export default async function UangLemburPage({
   });
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <h1 className="text-xl font-semibold">Uang Lembur</h1>
-      <p className="mt-1 text-sm text-gray-500">
+    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Lembur</h1>
+      <p className="mt-1 text-sm text-muted">
         Hasil kalkulasi uang lembur dari job scheduler, siap direview dan disetujui berjenjang.
       </p>
 
-      <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satker} />
+      <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
 
       <div className="mt-8 space-y-4">
         {kalkulasiList.length === 0 && (
-          <p className="text-sm text-gray-500">
+          <p className="card p-6 text-sm text-muted">
             Tidak ada data untuk filter ini. Kalau memang belum ada data sama sekali, jalankan job scheduler dulu (npx tsx src/jobs/runUangLemburJobDemo.ts).
           </p>
         )}
@@ -82,17 +94,17 @@ export default async function UangLemburPage({
           const sudahApproved = kalkulasi.status === "APPROVED";
 
           return (
-            <div key={kalkulasi.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-medium">{kalkulasi.pegawai.nama}</p>
-                  <p className="text-sm text-gray-500">
+            <div key={kalkulasi.id} className="card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold text-ink">{kalkulasi.pegawai.nama}</p>
+                  <p className="text-sm text-muted">
                     NIP {kalkulasi.pegawai.nip} - Periode {kalkulasi.periodeBulan}/{kalkulasi.periodeTahun}
                   </p>
-                  <p className="text-xs text-gray-400">{kalkulasi.totalJamLembur} jam lembur</p>
+                  <p className="text-xs text-muted/80">{kalkulasi.totalJamLembur} jam lembur</p>
                 </div>
-                <div className="text-right">
-                  <p className="font-medium">{formatRupiah(kalkulasi.totalUangLembur)}</p>
+                <div className="shrink-0 text-right">
+                  <p className="font-mono font-bold text-ink">{formatRupiah(kalkulasi.totalUangLembur)}</p>
                   {sudahApproved && <StatusBadge label="Disetujui" warna="hijau" />}
                   {!sudahApproved && evaluasi.outcome === "MENUNGGU_APPROVAL" && (
                     <StatusBadge label={`Menunggu jenjang ${evaluasi.jenjangBerikutnya}`} warna="amber" />
@@ -104,13 +116,13 @@ export default async function UangLemburPage({
               </div>
 
               {kalkulasi.catatanAnomali && (
-                <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                <p className="mt-2 rounded-lg bg-gold-tint px-2.5 py-1.5 text-xs font-medium text-gold-deep">
                   Catatan validasi: {kalkulasi.catatanAnomali}
                 </p>
               )}
 
               {logSiklusIni.length > 0 && (
-                <ul className="mt-2 space-y-1 text-xs text-gray-500">
+                <ul className="mt-2 space-y-1 text-xs text-muted">
                   {logSiklusIni.map((l) => (
                     <li key={l.id}>
                       Jenjang {l.jenjang} - {l.approverNama} ({l.approverJabatan}): {l.keputusan}
@@ -129,7 +141,7 @@ export default async function UangLemburPage({
               )}
 
               {!sudahApproved && evaluasi.outcome === "PERLU_REVISI" && (
-                <p className="mt-3 text-xs text-gray-500">
+                <p className="mt-3 text-xs text-muted">
                   Perlu recalculation (job scheduler dijalankan ulang) sebelum bisa diajukan approval lagi.
                 </p>
               )}

@@ -21,17 +21,10 @@ export function FilterBar({
   const adaFilterAktif = Boolean(bulan || tahun || satker);
 
   return (
-    <form
-      method="get"
-      className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4"
-    >
+    <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
       <div>
-        <label className="block text-xs font-medium text-gray-500">Bulan</label>
-        <select
-          name="bulan"
-          defaultValue={bulan ?? ""}
-          className="mt-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
-        >
+        <label className="field-label">Bulan</label>
+        <select name="bulan" defaultValue={bulan ?? ""} className="field-input py-1.5">
           <option value="">Semua bulan</option>
           {NAMA_BULAN.map((nama, index) => (
             <option key={nama} value={index + 1}>
@@ -42,23 +35,19 @@ export function FilterBar({
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-500">Tahun</label>
+        <label className="field-label">Tahun</label>
         <input
           type="number"
           name="tahun"
           defaultValue={tahun ?? ""}
           placeholder="cth. 2026"
-          className="mt-1 w-24 rounded border border-gray-300 px-2 py-1.5 text-sm"
+          className="field-input w-24 py-1.5"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-gray-500">Satuan kerja</label>
-        <select
-          name="satker"
-          defaultValue={satker ?? ""}
-          className="mt-1 min-w-[200px] rounded border border-gray-300 px-2 py-1.5 text-sm"
-        >
+        <label className="field-label">Satuan kerja</label>
+        <select name="satker" defaultValue={satker ?? ""} className="field-input min-w-[200px] py-1.5">
           <option value="">Semua satuan kerja</option>
           {satuanKerjaList.map((s) => (
             <option key={s} value={s}>
@@ -68,15 +57,12 @@ export function FilterBar({
         </select>
       </div>
 
-      <button
-        type="submit"
-        className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
-      >
+      <button type="submit" className="btn btn-primary">
         Terapkan filter
       </button>
 
       {adaFilterAktif && (
-        <a href="?" className="text-sm text-gray-500 underline">
+        <a href="?" className="text-sm font-medium text-muted underline">
           Reset filter
         </a>
       )}

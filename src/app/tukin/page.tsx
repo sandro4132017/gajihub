@@ -6,26 +6,15 @@ import { ApprovalForm } from "../ApprovalForm";
 import { ajukanApprovalTukinAction } from "../actions";
 import { FilterBar } from "../FilterBar";
 import { getSessionAccount } from "../../auth/getSessionAccount";
-import { canViewDataPayroll } from "../../auth/permissions";
+import { canViewApproverDashboard } from "../../auth/permissions";
+import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
+import { AksesDitolak } from "../AksesDitolak";
+import { StatusBadge } from "../StatusBadge";
 
 export const dynamic = "force-dynamic";
 
 const formatRupiah = (nilai: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(nilai);
-
-function StatusBadge({ label, warna }: { label: string; warna: "hijau" | "amber" | "merah" | "abu" }) {
-  const kelas = {
-    hijau: "bg-emerald-100 text-emerald-800",
-    amber: "bg-amber-100 text-amber-800",
-    merah: "bg-red-100 text-red-800",
-    abu: "bg-gray-100 text-gray-700",
-  }[warna];
-  return (
-    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${kelas}`}>
-      {label}
-    </span>
-  );
-}
 
 export default async function TukinPage({
   searchParams,
@@ -35,43 +24,41 @@ export default async function TukinPage({
   const { bulan, tahun, satker } = await searchParams;
 
   // Guard eksplisit: ADMIN_SISTEM SENGAJA tidak boleh lihat data payroll
-  // substantif (lihat canViewDataPayroll + role matrix di CLAUDE.md). Ini
-  // BARU langkah 3 pertama (approval Tukin) - role lain yang belum
-  // seharusnya lihat halaman ini juga (misal PEGAWAI) BELUM diblokir di
-  // sini, itu perlu desain terpisah (dashboard self-service pegawai belum
-  // dibangun) - jangan asumsikan halaman ini sudah full ter-scope per role.
+  // substantif, dan PEGAWAI diarahkan ke dashboard self-service sendiri
+  // (/saya) - lihat canViewApproverDashboard + role matrix di CLAUDE.md.
   const akun = await getSessionAccount();
-  if (
-    !akun ||
-    !canViewDataPayroll({
-      nip: akun.nip,
-      role: akun.role,
-      satuanKerja: akun.satuanKerja,
-      aktif: true,
-    })
-  ) {
-    return (
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="text-xl font-semibold">Akses ditolak</h1>
-        <p className="mt-2 text-sm text-gray-500">
-          Role kamu tidak berwenang melihat data kalkulasi payroll.
-        </p>
-      </main>
+  const authUser = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
+  if (!authUser || !canViewApproverDashboard(authUser)) {
+    return authUser?.role === "PEGAWAI" ? (
+      <AksesDitolak
+        pesan="Halaman ini untuk approver, bukan pegawai."
+        hrefAlternatif="/saya"
+        labelAlternatif="Lihat data saya"
+      />
+    ) : (
+      <AksesDitolak pesan="Role kamu tidak berwenang melihat data kalkulasi payroll." />
     );
   }
+
+  // KASUBAG_TU cuma boleh lihat rekap unit kerjanya sendiri (role matrix) -
+  // paksa filter ke unitnya, abaikan ?satker= dari query kalau ada.
+  const satkerEfektif = resolveSatkerEfektif(authUser, satker);
 
   const satuanKerjaRows = await prisma.pegawai.findMany({
     distinct: ["satuanKerja"],
     select: { satuanKerja: true },
     orderBy: { satuanKerja: "asc" },
   });
-  const satuanKerjaList = satuanKerjaRows.map((r) => r.satuanKerja);
+  const satuanKerjaList = resolveSatuanKerjaListUntukFilter(
+    authUser,
+    satuanKerjaRows.map((r) => r.satuanKerja)
+  );
 
   const kalkulasiList = await prisma.tukinCalculation.findMany({
     where: {
       periodeBulan: bulan ? Number(bulan) : undefined,
       periodeTahun: tahun ? Number(tahun) : undefined,
-      pegawai: satker ? { satuanKerja: satker } : undefined,
+      pegawai: satkerEfektif ? { satuanKerja: satkerEfektif } : undefined,
     },
     include: { pegawai: true },
     orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }, { pegawai: { nama: "asc" } }],
@@ -83,17 +70,17 @@ export default async function TukinPage({
   });
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <h1 className="text-xl font-semibold">Dashboard Tukin</h1>
-      <p className="mt-1 text-sm text-gray-500">
+    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <h1 className="text-xl font-extrabold tracking-tight text-ink">Dashboard Tukin</h1>
+      <p className="mt-1 text-sm text-muted">
         Hasil kalkulasi tukin dari job scheduler, siap direview dan disetujui berjenjang.
       </p>
 
-      <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satker} />
+      <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
 
       <div className="mt-8 space-y-4">
         {kalkulasiList.length === 0 && (
-          <p className="text-sm text-gray-500">
+          <p className="card p-6 text-sm text-muted">
             Tidak ada data untuk filter ini. Kalau memang belum ada data sama sekali, jalankan job scheduler dulu (npx tsx src/jobs/runTukinJobDemo.ts).
           </p>
         )}
@@ -110,16 +97,16 @@ export default async function TukinPage({
           const sudahApproved = kalkulasi.status === "APPROVED";
 
           return (
-            <div key={kalkulasi.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-medium">{kalkulasi.pegawai.nama}</p>
-                  <p className="text-sm text-gray-500">
+            <div key={kalkulasi.id} className="card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold text-ink">{kalkulasi.pegawai.nama}</p>
+                  <p className="text-sm text-muted">
                     NIP {kalkulasi.pegawai.nip} - Periode {kalkulasi.periodeBulan}/{kalkulasi.periodeTahun}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="font-medium">{formatRupiah(kalkulasi.tukinBersih)}</p>
+                <div className="shrink-0 text-right">
+                  <p className="font-mono font-bold text-ink">{formatRupiah(kalkulasi.tukinBersih)}</p>
                   {sudahApproved && <StatusBadge label="Disetujui" warna="hijau" />}
                   {!sudahApproved && evaluasi.outcome === "MENUNGGU_APPROVAL" && (
                     <StatusBadge label={`Menunggu jenjang ${evaluasi.jenjangBerikutnya}`} warna="amber" />
@@ -131,13 +118,13 @@ export default async function TukinPage({
               </div>
 
               {kalkulasi.catatanAnomali && (
-                <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                <p className="mt-2 rounded-lg bg-gold-tint px-2.5 py-1.5 text-xs font-medium text-gold-deep">
                   Catatan validasi: {kalkulasi.catatanAnomali}
                 </p>
               )}
 
               {logSiklusIni.length > 0 && (
-                <ul className="mt-2 space-y-1 text-xs text-gray-500">
+                <ul className="mt-2 space-y-1 text-xs text-muted">
                   {logSiklusIni.map((l) => (
                     <li key={l.id}>
                       Jenjang {l.jenjang} - {l.approverNama} ({l.approverJabatan}): {l.keputusan}
@@ -156,7 +143,7 @@ export default async function TukinPage({
               )}
 
               {!sudahApproved && evaluasi.outcome === "PERLU_REVISI" && (
-                <p className="mt-3 text-xs text-gray-500">
+                <p className="mt-3 text-xs text-muted">
                   Perlu recalculation (job scheduler dijalankan ulang) sebelum bisa diajukan approval lagi.
                 </p>
               )}

@@ -189,6 +189,17 @@ export function canViewDataPayroll(user: AuthUser): boolean {
   return user.aktif;
 }
 
+/**
+ * Guard gabungan buat 3 dashboard approver (Tukin/Uang Makan/Uang Lembur):
+ * ADMIN_SISTEM diblokir (canViewDataPayroll) DAN PEGAWAI diarahkan ke
+ * dashboard self-service sendiri (/saya) - dashboard approver nampilin
+ * SEMUA pegawai per satker, yang melanggar "TIDAK BOLEH lihat pegawai lain"
+ * di role matrix kalau PEGAWAI dibiarkan masuk.
+ */
+export function canViewApproverDashboard(user: AuthUser): boolean {
+  return canViewDataPayroll(user) && user.role !== "PEGAWAI";
+}
+
 // ---------------------------------------------------------------------------
 // ITJEN - auditor, read-only ke SELURUH data terkait audit
 // ---------------------------------------------------------------------------

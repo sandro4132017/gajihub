@@ -1,1 +1,94 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
+
+/* Palet & tipografi diambil dari Gajihub_Prototype.html - lihat file itu
+   kalau mau bandingkan/adjust warna lebih lanjut. */
+@theme {
+  --font-sans: "Plus Jakarta Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-navy: #1b2b4b;
+  --color-navy-deep: #13203a;
+  --color-navy-soft: #24375c;
+  --color-navy-line: #2c4068;
+
+  --color-teal: #00b3a4;
+  --color-teal-deep: #009286;
+  --color-teal-tint: #e0f5f2;
+
+  --color-gold: #d4a017;
+  --color-gold-deep: #a87c13;
+  --color-gold-tint: #faf1d9;
+
+  --color-bg: #f4f6f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfcfd;
+
+  --color-ink: #192234;
+  --color-ink-2: #3a465c;
+  --color-muted: #6b7689;
+  --color-line: #e7eaf1;
+  --color-line-2: #eef1f6;
+
+  --color-green: #2e7d52;
+  --color-green-tint: #e7f3ec;
+  --color-red: #c0492f;
+  --color-red-tint: #fbeae6;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-[0_1px_2px_rgba(20,33,58,0.04),0_6px_22px_rgba(20,33,58,0.06)];
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  .btn-primary {
+    @apply bg-teal text-white hover:bg-teal-deep;
+  }
+  .btn-gold {
+    @apply bg-gold text-white hover:bg-gold-deep;
+  }
+  .btn-danger {
+    @apply bg-red text-white hover:bg-[#a83c26];
+  }
+  .btn-ghost {
+    @apply border border-line bg-surface text-ink-2 hover:border-muted;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-bold;
+  }
+  .chip-wait {
+    @apply bg-gold-tint text-gold-deep;
+  }
+  .chip-ok {
+    @apply bg-green-tint text-green;
+  }
+  .chip-draft {
+    @apply bg-line-2 text-muted;
+  }
+  .chip-danger {
+    @apply bg-red-tint text-red;
+  }
+  .chip-navy {
+    @apply bg-[#e9eef7] text-navy;
+  }
+
+  .field-label {
+    @apply block text-xs font-semibold text-muted;
+  }
+  .field-input {
+    @apply mt-1 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none transition focus:border-teal focus:bg-white focus:shadow-[0_0_0_3px_rgba(13,125,106,0.1)];
+  }
+}
