@@ -1,0 +1,438 @@
+// ============================================================================
+// GAJIHUB - INTEGRATION LAYER SCHEMA
+// Sentralisasi Pengelolaan Belanja Pegawai - Kementerian Ketenagakerjaan
+// ============================================================================
+// Catatan desain:
+// - Tabel ini adalah CACHE/MIRROR dari data sumber (SIAP, e-Presensi, e-Kinerja),
+//   BUKAN source of truth. Source of truth tetap di aplikasi masing-masing.
+// - Setiap tabel hasil tarikan data eksternal punya kolom `source_synced_at`
+//   dan `source_system` untuk jejak dari mana & kapan data ditarik.
+// - Semua perubahan status (approval, rekonsiliasi) tercatat di audit_trail,
+//   jangan pernah overwrite tanpa jejak.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// PEGAWAI - mirror data pokok dari SIAP
+// ---------------------------------------------------------------------------
+model Pegawai {
+  id              String   @id @default(uuid())
+  nip             String   @unique
+  nama            String
+  unitKerja       String   @map("unit_kerja")
+  satuanKerja     String   @map("satuan_kerja") // untuk filter per satker saat pilot
+  statusPegawai   String   @map("status_pegawai") // AKTIF, CUTI, MUTASI, PENSIUN, dst
+  jabatan         String?
+  golongan        String?
+  // Dipakai buat lookup tukinPokokKelasJabatan (src/business-logic/tarifTukinPokok.ts).
+  // Sebelumnya cuma ada di PegawaiRecord adapter (tidak persisten) - sekarang
+  // dipersist karena ada sumber data pegawai asli (basis data pegawai) yang
+  // punya kolom GRADE ini.
+  kelasJabatan    Int?     @map("kelas_jabatan")
+  tmtSkTerakhir   DateTime? @map("tmt_sk_terakhir")
+
+  sourceSystem    String   @default("SIAP") @map("source_system")
+  sourceSyncedAt  DateTime @map("source_synced_at")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  presensi        PresensiHarian[]
+  predikatKinerja PredikatKinerja[]
+  tukinCalc       TukinCalculation[]
+  uangMakan       UangMakan[]
+  uangLembur      UangLembur[]
+  sanggahan       Sanggahan[]
+
+  @@map("pegawai")
+  @@index([satuanKerja])
+  @@index([statusPegawai])
+}
+
+// ---------------------------------------------------------------------------
+// PRESENSI HARIAN - mirror dari e-Presensi
+// ---------------------------------------------------------------------------
+model PresensiHarian {
+  id             String   @id @default(uuid())
+  pegawaiId      String   @map("pegawai_id")
+  pegawai        Pegawai  @relation(fields: [pegawaiId], references: [id])
+
+  tanggal        DateTime
+  jamMasuk       DateTime? @map("jam_masuk")
+  jamKeluar      DateTime? @map("jam_keluar")
+  statusKehadiran String   @map("status_kehadiran") // HADIR, TERLAMBAT, ALPHA, IZIN, SAKIT, CUTI, WFA
+  menitTerlambat Int      @default(0) @map("menit_terlambat")
+
+  sourceSystem   String   @default("e-Presensi") @map("source_system")
+  sourceSyncedAt DateTime @map("source_synced_at")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("presensi_harian")
+  @@unique([pegawaiId, tanggal])
+  @@index([tanggal])
+}
+
+// ---------------------------------------------------------------------------
+// PREDIKAT KINERJA - dari e-Kinerja BKN (via upload manual / API, lihat adapter)
+// ---------------------------------------------------------------------------
+model PredikatKinerja {
+  id             String   @id @default(uuid())
+  pegawaiId      String   @map("pegawai_id")
+  pegawai        Pegawai  @relation(fields: [pegawaiId], references: [id])
+
+  periodeBulan   Int      @map("periode_bulan")
+  periodeTahun   Int      @map("periode_tahun")
+  predikat       String   // SANGAT BAIK, BAIK, CUKUP, KURANG, SANGAT KURANG
+  nilaiAngka     Float    @map("nilai_angka") // konversi predikat ke skala 0-100
+
+  sourceSystem   String   @default("e-Kinerja BKN") @map("source_system")
+  sourceSyncedAt DateTime @map("source_synced_at")
+  // Karena akses API BKN masih informal (lihat CLAUDE.md), field ini menandai
+  // apakah data masuk lewat upload manual sesuai workaround, atau via API resmi.
+  inputMethod    String   @default("MANUAL_UPLOAD") @map("input_method") // MANUAL_UPLOAD | API
+
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("predikat_kinerja")
+  @@unique([pegawaiId, periodeBulan, periodeTahun])
+}
+
+// ---------------------------------------------------------------------------
+// TUKIN CALCULATION - hasil kalkulasi business logic engine
+// ---------------------------------------------------------------------------
+model TukinCalculation {
+  id                 String   @id @default(uuid())
+  pegawaiId          String   @map("pegawai_id")
+  pegawai            Pegawai  @relation(fields: [pegawaiId], references: [id])
+
+  periodeBulan       Int      @map("periode_bulan")
+  periodeTahun       Int      @map("periode_tahun")
+
+  komponenKehadiran  Float    @map("komponen_kehadiran") // hasil 30%
+  komponenKinerja    Float    @map("komponen_kinerja")   // hasil 70%
+  tukinPokok         Float    @map("tukin_pokok")
+  potonganPph        Float    @default(0) @map("potongan_pph")
+  tukinBersih         Float   @map("tukin_bersih")
+
+  status             String   @default("DRAFT") // DRAFT, COCOK, SELISIH, SANGGAH, APPROVED, DIKIRIM
+  catatanAnomali      String?  @map("catatan_anomali")
+
+  calculatedAt       DateTime @default(now()) @map("calculated_at")
+  approvedAt         DateTime? @map("approved_at")
+  approvedBy         String?   @map("approved_by")
+
+  @@map("tukin_calculation")
+  @@unique([pegawaiId, periodeBulan, periodeTahun])
+  @@index([status])
+}
+
+model UangMakan {
+  id            String   @id @default(uuid())
+  pegawaiId     String   @map("pegawai_id")
+  pegawai       Pegawai  @relation(fields: [pegawaiId], references: [id])
+
+  periodeBulan  Int      @map("periode_bulan")
+  periodeTahun  Int      @map("periode_tahun")
+  jumlahHariKerja Int    @map("jumlah_hari_kerja")
+  jumlahHariHadir Int    @map("jumlah_hari_hadir")
+  tarifHarian   Float    @map("tarif_harian")
+  totalUangMakan Float   @map("total_uang_makan")
+
+  status        String   @default("DRAFT")
+  catatanAnomali String? @map("catatan_anomali")
+  calculatedAt  DateTime @default(now()) @map("calculated_at")
+  approvedAt    DateTime? @map("approved_at")
+  approvedBy    String?   @map("approved_by")
+
+  @@map("uang_makan")
+  @@unique([pegawaiId, periodeBulan, periodeTahun])
+}
+
+model UangLembur {
+  id            String   @id @default(uuid())
+  pegawaiId     String   @map("pegawai_id")
+  pegawai       Pegawai  @relation(fields: [pegawaiId], references: [id])
+
+  periodeBulan  Int      @map("periode_bulan")
+  periodeTahun  Int      @map("periode_tahun")
+  totalJamLembur Float   @map("total_jam_lembur")
+  tarifPerJam   Float    @map("tarif_per_jam")
+  totalUangLembur Float  @map("total_uang_lembur")
+
+  status        String   @default("DRAFT")
+  catatanAnomali String? @map("catatan_anomali")
+  calculatedAt  DateTime @default(now()) @map("calculated_at")
+  approvedAt    DateTime? @map("approved_at")
+  approvedBy    String?   @map("approved_by")
+
+  @@map("uang_lembur")
+  @@unique([pegawaiId, periodeBulan, periodeTahun])
+}
+
+// ---------------------------------------------------------------------------
+// APPROVAL LOG - approval digital berjenjang, pengganti nota dinas fisik.
+//
+// Sejak model Sanggahan ditambahkan: referensiTipe = "SANGGAHAN" dipakai
+// buat mencatat histori verifikasi berjenjang atas sanggahan (referensiId =
+// id baris Sanggahan) - lihat komentar di model Sanggahan untuk detail.
+// Tabel ini generik/reusable, BUKAN cuma buat approval kalkulasi payroll.
+// ---------------------------------------------------------------------------
+model ApprovalLog {
+  id             String   @id @default(uuid())
+  referensiTipe  String   @map("referensi_tipe") // TUKIN, UANG_MAKAN, UANG_LEMBUR, SANGGAHAN
+  referensiId    String   @map("referensi_id")
+
+  approverNip    String   @map("approver_nip")
+  approverNama   String   @map("approver_nama")
+  approverJabatan String  @map("approver_jabatan")
+  jenjang        Int      // urutan approval berjenjang (1, 2, dst)
+
+  keputusan      String   // SETUJU, TOLAK, REVISI
+  catatan        String?
+
+  timestampAksi  DateTime @default(now()) @map("timestamp_aksi")
+
+  @@map("approval_log")
+  @@index([referensiTipe, referensiId])
+}
+
+// ---------------------------------------------------------------------------
+// AUDIT TRAIL - jejak audit lengkap untuk semua perubahan data penting
+// ---------------------------------------------------------------------------
+model AuditTrail {
+  id            String   @id @default(uuid())
+  entitas       String   // nama tabel/entitas yang berubah
+  entitasId     String   @map("entitas_id")
+  aksi          String   // CREATE, UPDATE, DELETE, SYNC, APPROVE
+  aktor         String   // NIP atau "SYSTEM" untuk proses otomatis
+  dataSebelum   Json?    @map("data_sebelum")
+  dataSesudah   Json?    @map("data_sesudah")
+  timestamp     DateTime @default(now())
+
+  @@map("audit_trail")
+  @@index([entitas, entitasId])
+  @@index([timestamp])
+}
+
+// ---------------------------------------------------------------------------
+// RECONCILIATION STATUS - workflow DRAFT -> COCOK/SELISIH/SANGGAH
+//
+// TODO(confirm): status "SANGGAH" di sini SEHARUSNYA berkorelasi dengan ada/
+// tidaknya baris Sanggahan yang masih terbuka untuk pegawai+periode yang
+// sama - BELUM ada logic yang menghubungkan otomatis (lihat model Sanggahan
+// untuk detail). Jangan asumsikan keduanya sudah tersinkron.
+// ---------------------------------------------------------------------------
+model ReconciliationStatus {
+  id              String   @id @default(uuid())
+  pegawaiId       String   @map("pegawai_id")
+  periodeBulan    Int      @map("periode_bulan")
+  periodeTahun    Int      @map("periode_tahun")
+
+  status          String   @default("DRAFT") // DRAFT, COCOK, SELISIH, SANGGAH, DIPUTUSKAN
+  detailSelisih   Json?    @map("detail_selisih") // field mana yang beda & nilai dari masing-masing sumber
+
+  // NOTE: durasi window verifikasi & aturan "hold vs koreksi siklus berikutnya"
+  // masih jadi open policy decision (lihat CLAUDE.md) - field di bawah
+  // disiapkan tapi behavior-nya menunggu keputusan kebijakan.
+  windowVerifikasiBerakhir DateTime? @map("window_verifikasi_berakhir")
+  keputusanAkhir  String?  @map("keputusan_akhir") // HOLD_PEMBAYARAN | KOREKSI_SIKLUS_BERIKUTNYA
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("reconciliation_status")
+  @@unique([pegawaiId, periodeBulan, periodeTahun])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// AKUN APPROVER - DEPRECATED. Login approver lama, SUDAH TIDAK DIPAKAI oleh
+// halaman /login lagi - digantikan login berbasis model User (nip sebagai
+// username & password sekaligus, lihat src/auth/session.ts dan
+// src/app/login/actions.ts). Tabel ini SENGAJA belum dihapus/di-drop supaya
+// tidak ada migrasi destruktif tanpa perlu, tapi JANGAN dikembangkan lebih
+// lanjut atau dipakai di kode baru manapun.
+// ---------------------------------------------------------------------------
+model AkunApprover {
+  id           String   @id @default(uuid())
+  nip          String   @unique
+  nama         String
+  jabatan      String
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("akun_approver")
+}
+
+// ---------------------------------------------------------------------------
+// ROLE & USER - sistem role/otorisasi buat 7 peran (lihat CLAUDE.md bagian
+// "Role matrix" untuk daftar hak akses lengkap per role).
+//
+// TODO(confirm) BESAR: model ini SENGAJA terpisah dari AkunApprover di atas.
+// AkunApprover = login sementara (NIP + password) khusus approver Tukin/
+// Uang Makan/Uang Lembur, dibuat sebelum User/Role ini ada. User di sini
+// murni soal SIAPA-BOLEH-APA (otorisasi), belum tersambung ke mekanisme
+// login manapun. Begitu SSO SIAP tersedia (atau kalau AkunApprover mau
+// dipertahankan lebih lama), kedua model ini KEMUNGKINAN BESAR perlu
+// disatukan supaya satu login = satu identitas + satu role - jangan biarkan
+// dua sistem akun berjalan paralel selamanya. Belum diputuskan caranya,
+// jangan asumsikan salah satu bakal "menang" begitu saja.
+// ---------------------------------------------------------------------------
+enum Role {
+  PEGAWAI // self-service, ±5.000 user
+  KASUBAG_TU // Kasubag TU / Petugas Kepegawaian Unit Kerja - verifikator tingkat satker
+  PPABP // Pejabat Pembuat Administrasi Belanja Pegawai - approval jenjang final
+  BIRO_OSDMA // Data steward - approve perubahan data master pegawai yang disengketakan
+  ADMIN_SISTEM // Pusdatik/TA IT - kelola assignment role, BUKAN data payroll
+  ITJEN // Inspektorat Jenderal - auditor read-only
+  PIMPINAN // executive dashboard tingkat kementerian
+}
+
+// TODO(legal-confirm): belum diputuskan apakah role di-assign OTOMATIS dari
+// jabatan/eselon di SIAP, atau MANUAL oleh Admin Sistem. Untuk sekarang role
+// diisi manual/lewat seed script (mirip pola AkunApprover) - JANGAN bikin
+// logic auto-mapping jabatan->role tanpa konfirmasi ke Biro OSDMA, karena
+// pemetaan jabatan struktural ke role sistem ini bisa banyak pengecualian
+// (misal siapa yang jadi Kasubag TU kalau posisinya kosong/Plt.).
+model User {
+  id          String   @id @default(uuid())
+  nip         String   @unique
+  nama        String
+  role        Role
+
+  // WAJIB diisi untuk role KASUBAG_TU (scoping: cuma boleh lihat/approve
+  // pegawai & sanggahan di satuan kerja ini). Untuk role lain:
+  // - PEGAWAI: scoping akses ke data sendiri dilakukan lewat relasi NIP ke
+  //   Pegawai, BUKAN lewat field ini - biarkan NULL.
+  // - PPABP: NULL berarti berwenang LINTAS SEMUA satuan kerja (asumsi pilot:
+  //   satu PPABP pusat untuk Setjen). TODO(confirm): kalau nanti di-scale ke
+  //   PPABP per satker, tinggal isi field ini per user PPABP yang baru -
+  //   SENGAJA didesain begini supaya tidak perlu migrasi skema waktu itu
+  //   terjadi, cuma perlu keputusan kebijakan + update data.
+  // - BIRO_OSDMA, ADMIN_SISTEM, ITJEN, PIMPINAN: kewenangan lintas satker,
+  //   biarkan NULL.
+  satuanKerja String?  @map("satuan_kerja")
+
+  aktif       Boolean  @default(true)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  sanggahanDiajukan Sanggahan[]
+  buktiDiunggah     BuktiPendukungUpload[]
+
+  @@map("app_user")
+  @@index([role])
+  @@index([satuanKerja])
+}
+
+// ---------------------------------------------------------------------------
+// SANGGAHAN - pegawai membantah hasil kalkulasi Tukin/Uang Makan/Uang Lembur
+// yang menurutnya tidak sesuai.
+//
+// CATATAN DESAIN PENTING:
+// - Referensi ke kalkulasi yang disanggah pakai pola GENERIK yang sama
+//   dengan ApprovalLog (referensiTipe + referensiId), BUKAN foreign key
+//   terpisah per TukinCalculation/UangMakan/UangLembur - supaya konsisten
+//   dan tidak perlu 3 kolom nullable berbeda.
+// - Histori verifikasi berjenjang (Kasubag TU, lalu mungkin diteruskan ke
+//   OSDMA) DICATAT DI ApprovalLog juga, dengan referensiTipe = "SANGGAHAN"
+//   dan referensiId = id baris Sanggahan ini. `jenjang` di ApprovalLog jadi
+//   "tingkat verifikasi keberapa", `keputusan` jadi SETUJU/TOLAK verifikator.
+//   TIDAK ada kolom verifikator terpisah di model ini - sengaja, supaya
+//   otomatis mendukung berapa pun jumlah tahap verifikasi tanpa migrasi
+//   skema baru kalau nanti dipastikan butuh diteruskan ke OSDMA.
+// - TODO(confirm): field `status` di bawah BELUM final alurnya - apakah
+//   verifikasi cukup 1 tahap (Kasubag TU) atau wajib diteruskan ke OSDMA
+//   untuk kasus yang menyangkut data kepegawaian (SK, mutasi, dst) masih
+//   perlu didiskusikan. Model ini didesain supaya BISA mendukung alur
+//   panjang, tapi jangan hardcode alurnya di kode sebagai final.
+// - TODO(confirm) - KAITAN DENGAN ReconciliationStatus: ReconciliationStatus
+//   SUDAH punya nilai status "SANGGAH" dari awal (lihat model itu), tapi
+//   belum ada apapun yang men-trigger transisi ke status itu. Secara logis,
+//   Sanggahan yang diajukan untuk pegawai+periode tertentu SEHARUSNYA bikin
+//   ReconciliationStatus baris terkait pindah ke status "SANGGAH" - INI
+//   BELUM DISAMBUNGKAN, sengaja dibiarkan independen dulu di level skema.
+//   Sambungkan nanti di service layer, bukan di sini.
+// ---------------------------------------------------------------------------
+model Sanggahan {
+  id           String   @id @default(uuid())
+
+  pegawaiId    String   @map("pegawai_id")
+  pegawai      Pegawai  @relation(fields: [pegawaiId], references: [id])
+  periodeBulan Int      @map("periode_bulan")
+  periodeTahun Int      @map("periode_tahun")
+
+  referensiTipe String  @map("referensi_tipe") // TUKIN, UANG_MAKAN, UANG_LEMBUR
+  referensiId   String  @map("referensi_id")
+
+  // Pengaju HARUS role PEGAWAI dan (asumsi saat ini) selalu pegawai yang
+  // sama dengan `pegawaiId` di atas - sanggahan diri sendiri, bukan
+  // diwakilkan. TODO(confirm) kalau ternyata ada skenario pengajuan
+  // terwakilkan (misal pegawai cuti panjang/sakit berat).
+  pengajuId    String   @map("pengaju_id")
+  pengaju      User     @relation(fields: [pengajuId], references: [id])
+
+  alasan       String
+
+  // DIAJUKAN, DIVERIFIKASI_SETUJU, DIVERIFIKASI_TOLAK, DITERUSKAN_OSDMA,
+  // SELESAI - daftar ini BELUM final, lihat TODO alur verifikasi di atas.
+  status       String   @default("DIAJUKAN")
+
+  // TODO(confirm): SLA batas waktu sanggahan (berapa hari sejak data
+  // kalkulasi tayang) belum ditentukan kebijakannya. Isi field ini dari
+  // konstanta yang jelas ditandai TODO(confirm) di kode - JANGAN hardcode
+  // angka final tanpa konfirmasi. Konsepnya sama dengan
+  // ReconciliationStatus.windowVerifikasiBerakhir, cuma di level sanggahan
+  // individual - kemungkinan besar diisi dari sumber SLA yang sama nanti.
+  batasWaktuVerifikasi DateTime? @map("batas_waktu_verifikasi")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  buktiPendukung BuktiPendukungUpload[]
+
+  @@map("sanggahan")
+  @@index([pegawaiId])
+  @@index([referensiTipe, referensiId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// BUKTI PENDUKUNG UPLOAD - lampiran dokumen (SK, surat sakit, surat cuti/
+// izin, dll) yang diunggah pegawai untuk mendukung sanggahannya.
+//
+// TODO(confirm): mekanisme penyimpanan file BELUM diputuskan (local disk,
+// object storage/S3-compatible, atau lewat modul lain) - `fileUrl` di bawah
+// cuma referensi string generik, bukan implementasi storage tertentu.
+// Jangan asumsikan salah satu mekanisme sebelum dikonfirmasi (terutama
+// terkait kebijakan retensi dokumen kepegawaian ke Biro Hukum/OSDMA).
+// ---------------------------------------------------------------------------
+model BuktiPendukungUpload {
+  id            String    @id @default(uuid())
+
+  sanggahanId   String    @map("sanggahan_id")
+  sanggahan     Sanggahan @relation(fields: [sanggahanId], references: [id])
+
+  jenisDokumen  String    @map("jenis_dokumen") // SK, SURAT_SAKIT, SURAT_CUTI_IZIN, LAINNYA
+  namaFile      String    @map("nama_file")
+  fileUrl       String    @map("file_url")
+  ukuranBita    Int?      @map("ukuran_bita")
+
+  diunggahOlehId String   @map("diunggah_oleh_id")
+  diunggahOleh   User     @relation(fields: [diunggahOlehId], references: [id])
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("bukti_pendukung_upload")
+  @@index([sanggahanId])
+}
