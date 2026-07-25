@@ -57,10 +57,12 @@ akses resmi tersedia - tanpa refactor besar.
   di schema untuk catatan kenapa ini bukan solusi final)
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
   session login di atas (`npm test`)
-- Model `User`/`Role`/`Sanggahan`/`BuktiPendukungUpload` di schema (LANGKAH 1
-  dari fitur "user & role" - BARU skema, BELUM ada authorization layer atau
-  koneksi ke dashboard/endpoint manapun. Lihat "Role matrix" di bawah untuk
-  progress & open items fitur ini secara detail).
+- Fitur "user & role" (skema `User`/`Role`/`Sanggahan`/`BuktiPendukungUpload`,
+  authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
+  approval action, dan dashboard self-service PEGAWAI di `src/app/saya/`) -
+  ketiga langkahnya SUDAH SELESAI. Lihat "Role matrix" di bawah untuk detail
+  & sisa open item per role (upload bukti pendukung, alur verifikasi
+  sanggahan, dst - masih menunggu keputusan kebijakan eksternal).
 
 ## Role matrix (fitur user & role - in progress)
 
@@ -96,10 +98,18 @@ sudah berjalan cuma karena modelnya ada.
 - **SLA batas waktu sanggahan** - field `Sanggahan.batasWaktuVerifikasi` dan
   `ReconciliationStatus.windowVerifikasiBerakhir` sudah ada, durasinya belum
   diisi dari konstanta resmi manapun.
-- **Sanggahan ↔ ReconciliationStatus belum tersambung** - `Sanggahan` yang
-  diajukan SEHARUSNYA memicu `ReconciliationStatus.status` jadi `"SANGGAH"`
-  untuk pegawai+periode yang sama, tapi ini masih 2 hal independen di level
-  skema. Sambungkan di service layer nanti, bukan asumsi otomatis.
+- ~~Sanggahan ↔ ReconciliationStatus belum tersambung~~ **RESOLVED** -
+  `ajukanSanggahanAction` (`src/app/saya/actions.ts`) sekarang upsert
+  `ReconciliationStatus.status` jadi `"SANGGAH"` untuk pegawai+periode yang
+  sama, dalam satu `$transaction` bareng pembuatan baris `Sanggahan`-nya.
+  Upsert (bukan update) karena belum ada job/service lain yang bikin baris
+  `ReconciliationStatus` duluan (belum ada proses rekonsiliasi otomatis di
+  sistem ini) - diverifikasi manual: 2 sanggahan beda referensi
+  (Tukin & Uang Makan) buat pegawai+periode yang sama menghasilkan SATU
+  baris `ReconciliationStatus` (bukan duplikat), status `SANGGAH`. Durasi
+  `windowVerifikasiBerakhir` dan aturan hold-pembayaran-vs-koreksi-siklus
+  TETAP belum diisi - itu masih TODO(confirm) kebijakan terpisah (lihat
+  item SLA di atas).
 - **Mekanisme penyimpanan file bukti pendukung** - `BuktiPendukungUpload.
   fileUrl` cuma referensi string generik, belum ada implementasi storage
   (local disk vs object storage) ataupun kebijakan retensi dokumen.
@@ -196,12 +206,59 @@ Urutan yang sedang dikerjakan:
    - `src/app/tukin/page.tsx`: `ADMIN_SISTEM` diblokir total (halaman
      "Akses ditolak") pakai `canViewDataPayroll` - guard paling eksplisit
      di role matrix.
-   - **BELUM DIKERJAKAN**: approval Uang Makan & Uang Lembur (masih belum
-     ada pengecekan otorisasi sama sekali - lihat komentar TODO di
-     `actions.ts`), filter/scoping halaman Tukin per role (KASUBAG_TU
-     masih lihat SEMUA pegawai di dashboard, bukan cuma unitnya - baru
-     approve-nya yang di-guard, bukan visibility list-nya), dan
-     dashboard self-service PEGAWAI (belum dibangun sama sekali).
+   - `src/app/actions.ts` (`ajukanApprovalUangMakanAction`,
+     `ajukanApprovalUangLemburAction`): SUDAH di-guard juga - pakai helper
+     generik `cekOtorisasiApprovalJenjang` (refactor dari
+     `cekOtorisasiApprovalTukin` biar reusable lintas 3 domain), fetch ulang
+     `User` dari database sama seperti Tukin. Sudah diverifikasi manual di
+     browser buat kedua domain: KASUBAG_TU approve jenjang 1 unit sendiri
+     berhasil, approve jenjang 2 (final) ditolak dengan pesan yang jelas.
+   - `src/app/uang-makan/page.tsx` & `src/app/uang-lembur/page.tsx`: SUDAH
+     dipasangi guard `canViewDataPayroll` yang sama dengan Tukin - sebelumnya
+     KEDUA halaman ini TIDAK PUNYA guard sama sekali (celah yang ketemu
+     waktu ngerjain scoping, bukan cuma "belum sempat" - ADMIN_SISTEM bisa
+     lihat data payroll Uang Makan/Lembur penuh sebelum ini). Sudah
+     diverifikasi manual: ADMIN_SISTEM sekarang "Akses ditolak" di ketiga
+     halaman.
+   - **Scoping list pegawai per role** - SUDAH DIKERJAKAN buat ketiga
+     dashboard (Tukin, Uang Makan, Uang Lembur), lewat helper baru
+     `src/app/dashboardScope.ts` (`resolveSatkerEfektif`,
+     `resolveSatuanKerjaListUntukFilter`): KASUBAG_TU sekarang filter
+     satuan-kerja-nya DIPAKSA ke unit sendiri (query `?satker=` dari luar
+     diabaikan, dropdown filter cuma nampilin unitnya sendiri) - jadi
+     visibility list-nya sudah konsisten dengan approve-nya. Role lintas
+     satker (PPABP, BIRO_OSDMA, ITJEN, PIMPINAN) tidak berubah, sudah
+     diverifikasi manual PPABP tetap lihat "Semua satuan kerja".
+   - **Dashboard self-service PEGAWAI** - SUDAH DIBANGUN, `src/app/saya/`:
+     - `page.tsx`: guard `canViewDataSendiri` (cuma role PEGAWAI, cuma data
+       sendiri lewat NIP). Nampilin presensi terbaru (14 hari), predikat
+       kinerja, dan kalkulasi Tukin/Uang Makan/Uang Lembur milik sendiri
+       (label "estimasi" kalau belum APPROVED, "histori pembayaran" kalau
+       sudah).
+     - `actions.ts` (`ajukanSanggahanAction`): fetch ulang `User` dari
+       database (pola sama dengan approval action), cek
+       `canAjukanSanggahan`, DAN verifikasi kalkulasi yang disanggah
+       memang milik pegawai itu sendiri (bukan cuma percaya `referensiId`
+       dari form) sebelum bikin baris `Sanggahan`. `periodeBulan`/`Tahun`
+       diambil dari kalkulasi asli, bukan dari form.
+     - Ketiga dashboard approver (Tukin/Uang Makan/Uang Lembur) SEKARANG
+       pakai guard baru `canViewApproverDashboard` (kombinasi
+       `canViewDataPayroll` + blok PEGAWAI) - PEGAWAI diarahkan ke `/saya`
+       kalau nyoba akses (sebelumnya PEGAWAI bisa lihat SEMUA pegawai di
+       ketiga dashboard itu, celah yang ketemu waktu bangun fitur ini).
+       Login & `NavBar` juga disesuaikan: PEGAWAI diarahkan ke `/saya`
+       setelah login, nav cuma nampilin "Data Saya" (bukan 3 menu
+       approver).
+     - **BELUM ADA**: upload bukti pendukung (SENGAJA tidak diimplementasi
+       - mekanisme penyimpanan file masih TODO(confirm), lihat item 
+       terkait di atas dan komentar di `BuktiPendukungUpload`
+       schema.prisma; halaman `/saya` cuma nampilin pesan placeholder,
+       jangan bikin storage sendiri tanpa konfirmasi kebijakan retensi
+       dokumen). Sudah diverifikasi manual: login PEGAWAI demo (NIP
+       ...001) redirect ke `/saya`, data Tukin/Uang Makan/Uang Lembur
+       miliknya tampil benar, ajukan sanggahan berhasil dan langsung
+       muncul di "Sanggahan saya", akses ke `/tukin` ditolak dengan link
+       balik ke `/saya`.
 
 Login sekarang (lihat `src/app/login/`) SUDAH pakai model `User` (bukan
 `AkunApprover` lagi, yang itu di-deprecate) - NIP jadi username & password

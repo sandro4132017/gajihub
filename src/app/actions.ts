@@ -6,8 +6,14 @@ import {
   ajukanApprovalTukin,
   DEFAULT_TOTAL_JENJANG_APPROVAL,
 } from "../approval/approvalTukinService";
-import { ajukanApprovalUangMakan } from "../approval/approvalUangMakanService";
-import { ajukanApprovalUangLembur } from "../approval/approvalUangLemburService";
+import {
+  ajukanApprovalUangMakan,
+  DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_MAKAN,
+} from "../approval/approvalUangMakanService";
+import {
+  ajukanApprovalUangLembur,
+  DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_LEMBUR,
+} from "../approval/approvalUangLemburService";
 import type { KeputusanApproval } from "../approval/types";
 import { getSessionAccount } from "../auth/getSessionAccount";
 import {
@@ -141,17 +147,69 @@ export async function ajukanApprovalTukinAction(
   }
 }
 
-// TODO: belum ada pengecekan otorisasi role (canApproveJenjang1/
-// canApproveJenjangFinal) di action Uang Makan & Uang Lembur - langkah 3
-// fitur user & role baru nyambungin approval Tukin dulu (lihat CLAUDE.md).
-// Siapa pun yang login (role apapun) masih bisa approve Uang Makan/Uang
-// Lembur sampai ini dikerjakan juga.
+/**
+ * Sama seperti cekOtorisasiApprovalTukin di atas, tapi generik buat Uang
+ * Makan & Uang Lembur - keduanya pakai pola jenjang yang sama (jenjang 1 =
+ * KASUBAG_TU, jenjang terakhir = PPABP), cuma total jenjangnya per domain
+ * (lihat DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_MAKAN/_LEMBUR).
+ */
+async function cekOtorisasiApprovalJenjang(
+  approverNip: string,
+  jenjang: number,
+  totalJenjang: number,
+  satuanKerjaPegawai: string
+): Promise<{ diizinkan: true } | { diizinkan: false; alasan: string }> {
+  const user = await prisma.user.findUnique({ where: { nip: approverNip } });
+  if (!user) {
+    return { diizinkan: false, alasan: "Akun tidak terdaftar sebagai User berwenang." };
+  }
+
+  const authUser: AuthUser = {
+    nip: user.nip,
+    role: user.role,
+    satuanKerja: user.satuanKerja,
+    aktif: user.aktif,
+  };
+
+  const diizinkan =
+    jenjang >= totalJenjang
+      ? canApproveJenjangFinal(authUser, satuanKerjaPegawai)
+      : canApproveJenjang1(authUser, satuanKerjaPegawai);
+
+  if (!diizinkan) {
+    return {
+      diizinkan: false,
+      alasan: `Role ${LABEL_ROLE[user.role]} tidak berwenang approve jenjang ${jenjang} untuk satuan kerja "${satuanKerjaPegawai}".`,
+    };
+  }
+  return { diizinkan: true };
+}
+
 export async function ajukanApprovalUangMakanAction(
   _state: AjukanApprovalFormState,
   formData: FormData
 ): Promise<AjukanApprovalFormState> {
   try {
     const input = await bacaInputApproval(formData);
+
+    const uangMakan = await prisma.uangMakan.findUnique({
+      where: { id: input.calculationId },
+      include: { pegawai: true },
+    });
+    if (!uangMakan) {
+      return { error: "Kalkulasi tidak ditemukan." };
+    }
+
+    const otorisasi = await cekOtorisasiApprovalJenjang(
+      input.approverNip,
+      input.jenjang,
+      DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_MAKAN,
+      uangMakan.pegawai.satuanKerja
+    );
+    if (!otorisasi.diizinkan) {
+      return { error: otorisasi.alasan };
+    }
+
     const hasil = await ajukanApprovalUangMakan(prisma, {
       uangMakanId: input.calculationId,
       approverNip: input.approverNip,
@@ -174,6 +232,25 @@ export async function ajukanApprovalUangLemburAction(
 ): Promise<AjukanApprovalFormState> {
   try {
     const input = await bacaInputApproval(formData);
+
+    const uangLembur = await prisma.uangLembur.findUnique({
+      where: { id: input.calculationId },
+      include: { pegawai: true },
+    });
+    if (!uangLembur) {
+      return { error: "Kalkulasi tidak ditemukan." };
+    }
+
+    const otorisasi = await cekOtorisasiApprovalJenjang(
+      input.approverNip,
+      input.jenjang,
+      DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_LEMBUR,
+      uangLembur.pegawai.satuanKerja
+    );
+    if (!otorisasi.diizinkan) {
+      return { error: otorisasi.alasan };
+    }
+
     const hasil = await ajukanApprovalUangLembur(prisma, {
       uangLemburId: input.calculationId,
       approverNip: input.approverNip,

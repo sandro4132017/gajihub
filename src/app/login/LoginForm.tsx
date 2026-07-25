@@ -11,31 +11,17 @@ export function LoginForm() {
   return (
     <form action={formAction} className="space-y-3">
       <div>
-        <label className="block text-xs font-medium text-gray-500">NIP</label>
-        <input
-          name="nip"
-          required
-          autoFocus
-          className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-        />
+        <label className="field-label">NIP</label>
+        <input name="nip" required autoFocus className="field-input" />
       </div>
       <div>
-        <label className="block text-xs font-medium text-gray-500">Password</label>
-        <input
-          name="password"
-          type="password"
-          required
-          className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-        />
+        <label className="field-label">Password</label>
+        <input name="password" type="password" required className="field-input" />
       </div>
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-      >
+      <button type="submit" disabled={pending} className="btn btn-primary w-full">
         {pending ? "Memproses..." : "Login"}
       </button>
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {state.error && <p className="text-sm font-medium text-red">{state.error}</p>}
     </form>
   );
 }

@@ -59,7 +59,7 @@ export async function loginAction(
     maxAge: 60 * 60 * 8,
   });
 
-  redirect("/tukin");
+  redirect(user.role === "PEGAWAI" ? "/saya" : "/tukin");
 }
 
 export async function logoutAction(): Promise<void> {
