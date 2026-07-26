@@ -54,6 +54,18 @@ export default async function AdminDashboardPage() {
           <Link href="/ppabp" className="btn btn-ghost btn-sm">
             Dashboard Lintas Unit
           </Link>
+          <Link href="/ppabp/rekonsiliasi" className="btn btn-ghost btn-sm">
+            Rekonsiliasi (PPABP)
+          </Link>
+          <Link href="/ppabp/adk" className="btn btn-ghost btn-sm">
+            Export ADK (PPABP)
+          </Link>
+          <Link href="/ppabp/anggaran" className="btn btn-ghost btn-sm">
+            Anggaran & Realisasi (PPABP)
+          </Link>
+          <Link href="/ppabp/usulan-role" className="btn btn-ghost btn-sm">
+            Usulan Perubahan Role (PPABP)
+          </Link>
           <Link href="/kasubag" className="btn btn-ghost btn-sm">
             Dashboard Unit (Kasubag TU)
           </Link>
