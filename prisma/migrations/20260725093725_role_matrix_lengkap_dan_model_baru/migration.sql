@@ -10,11 +10,17 @@ DELETE FROM "sanggahan";
 DELETE FROM "app_user";
 
 -- AlterEnum
+-- NOTE: baris ALTER TABLE "usulan_perubahan_role" yang tadinya ada di sini
+-- SENGAJA dihapus - tabel itu belum ada sama sekali di titik ini (baru
+-- dibuat di CREATE TABLE "usulan_perubahan_role" di bawah, sudah otomatis
+-- pakai tipe "Role" yang benar). Baris itu cuma nongol di diff awal karena
+-- DB lokal waktu itu kebetulan sudah punya tabel itu dari percobaan
+-- migrasi yang gagal sebelumnya - di database fresh (migrate deploy dari
+-- nol) baris itu bikin migrasi ini gagal dengan error "relation
+-- usulan_perubahan_role does not exist". Ketemu saat deploy pertama ke VPS.
 BEGIN;
 CREATE TYPE "Role_new" AS ENUM ('PEGAWAI', 'KASUBAG_TU', 'OSDMA', 'PPABP', 'PIMPINAN', 'ADMIN');
 ALTER TABLE "app_user" ALTER COLUMN "role" TYPE "Role_new" USING ("role"::text::"Role_new");
-ALTER TABLE "usulan_perubahan_role" ALTER COLUMN "role_saat_ini" TYPE "Role_new" USING ("role_saat_ini"::text::"Role_new");
-ALTER TABLE "usulan_perubahan_role" ALTER COLUMN "role_diusulkan" TYPE "Role_new" USING ("role_diusulkan"::text::"Role_new");
 ALTER TYPE "Role" RENAME TO "Role_old";
 ALTER TYPE "Role_new" RENAME TO "Role";
 DROP TYPE "Role_old";

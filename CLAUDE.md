@@ -758,6 +758,57 @@ dua kali tanpa sadar).
   Hukum, DJA, dst), tandai eksplisit dengan komentar `TODO(legal-confirm)`
   atau `TODO(confirm)` - jangan diam-diam mengasumsikan sesuatu sebagai final.
 
+## Deployment testing internal (VPS kantor)
+
+Di-deploy ke VPS kantor (`192.168.221.44`, hostname `AIhelpdeskRokeu`, cuma
+bisa diakses lewat jaringan kantor/VPN) buat testing terbatas ke beberapa
+pegawai SEBELUM dapat subdomain resmi dari Kemnaker - `gajihub.rokeubmn.id`
+(domain pribadi user di Hostinger) dipakai sementara, DNS A record
+mengarah ke IP privat itu (makanya cuma bisa diakses dari jaringan yang
+bisa route ke sana). Server ini SHARED dengan aplikasi lain (`bot-siska`
+di port 3000, `meeting-room-display-api` di port 3001 - JANGAN ganggu
+keduanya kalau maintenance server ini lagi) - Gajihub jalan di port 3002
+lewat pm2 (`pm2 start npm --name gajihub -- start -- -p 3002`, sudah
+`pm2 save` + `pm2-support.service` systemd enabled, jadi otomatis restart
+kalau server reboot), nginx reverse-proxy `gajihub.rokeubmn.id` -> port
+3002 (config di `/etc/nginx/sites-available/gajihub`). HTTPS SENGAJA belum
+dipasang - Let's Encrypt HTTP-01 tidak bisa validasi domain yang resolve ke
+IP privat (server tidak bisa diakses publik), jadi jalan HTTP dulu sampai
+subdomain resmi Kemnaker (yang publik) tersedia baru upgrade ke HTTPS.
+
+**Bug yang ketemu waktu deploy pertama** (SUDAH DIPERBAIKI di
+`prisma/migrations/20260725093725_role_matrix_lengkap_dan_model_baru/migration.sql`):
+migrasi itu awalnya generate 2 baris `ALTER TABLE "usulan_perubahan_role"`
+di dalam blok AlterEnum, PADAHAL tabel itu baru dibuat beberapa baris di
+bawahnya (CREATE TABLE) - jadi `prisma migrate deploy` ke database fresh
+(baru pertama kali dipakai, kayak di VPS ini) selalu gagal dengan error
+"relation usulan_perubahan_role does not exist". Ini kelewatan sebelumnya
+karena database dev lokal kebetulan sudah punya tabel itu (residual dari
+percobaan migrasi yang gagal saat langkah 1 dulu), jadi generate-nya salah
+tapi tidak ketahuan sampai dicoba di database yang benar-benar kosong.
+Sudah dihapus baris yang salah itu dari file migrasi - migrasi ini SEKARANG
+aman dijalankan dari database kosong (`prisma migrate deploy` langsung,
+TANPA perlu workaround manual psql lagi seperti sebelumnya).
+
+**Alur seed di server production/VPS BEDA dari lokal**: data Pegawai asli
+(±5.069 baris) TIDAK diimpor ulang dari file XLSX (file itu tidak ada di
+repo, sengaja - data pribadi pegawai) - dipindahkan langsung via
+`pg_dump --data-only --table=pegawai` dari database dev lokal lalu
+di-restore ke database VPS, BARU jalanin `seedUsers.ts` dan
+`seedSimulasi.ts` seperti biasa (keduanya butuh baris Pegawai dengan NIP
+asli sudah ada duluan). Kalau nanti pindah ke server lain lagi, ulangi pola
+yang sama (dump+restore tabel `pegawai`) KECUALI sudah ada sumber data
+pegawai yang lebih baru buat diimpor ulang via `importPegawaiXlsx.ts`.
+
+**Catatan lain**: tabel-tabel baru dari migrasi role-matrix (`banding`,
+`bukti_dukung`, `sk_kgb`, `sk_hukuman_disiplin`, `anggaran_realisasi`,
+`bukti_potong_pajak`, `usulan_perubahan_role`) sempat ke-`OWNER`-kan ke
+`postgres` karena migrasi dijalankan manual lewat `sudo -u postgres psql`
+(bukan lewat koneksi `DATABASE_URL` biasa) - sudah di-`ALTER TABLE ...
+OWNER TO gajihub_app` semua supaya user aplikasi punya privilege yang
+benar. Kalau deploy ke server baru lagi dan migrasi butuh dijalankan manual
+lagi (lihat alasan di atas), jangan lupa langkah re-owner ini.
+
 ## Cara lanjutin dengan Claude Code
 
 Roadmap awal (validation gate → job scheduler → dashboard + approval
