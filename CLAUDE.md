@@ -758,6 +758,90 @@ dua kali tanpa sadar).
   Hukum, DJA, dst), tandai eksplisit dengan komentar `TODO(legal-confirm)`
   atau `TODO(confirm)` - jangan diam-diam mengasumsikan sesuatu sebagai final.
 
+## Perbaikan pasca-deploy (real ADK format, struktur eselon, admin buat akun)
+
+Batch perubahan setelah testing internal mulai jalan, dipicu 5 file dari
+user: 3 contoh/template ADK asli (`templatelemburPPPK202606.xlsx`,
+`ADK-U.Lembur-PNS-Romum_JUni.2026.xlsm`, `adk_tunkin-PNS_ROMUM_JUni__2026.xlsx`),
+1 file struktur unit Eselon I/II, 1 contoh tarikan data presensi.
+
+- **Login page** - dibersihkan dari copy "Login approver"/"Login sementara
+  khusus untuk pemberi approval berjenjang. Belum terhubung ke SIAP." jadi
+  cukup "Gajihub - Login" (`src/app/login/page.tsx`). Info "sementara"
+  itu tetap benar secara teknis (lihat TODO(legal-confirm) di
+  `src/auth/session.ts`) tapi tidak perlu ditampilkan ke user yang login.
+- **Admin bisa buat akun baru langsung** (`src/app/admin/role-assignment/`)
+  - SEBELUM ini, "Kelola Assignment Role" cuma bisa ubah role 13 akun yang
+    SUDAH ada; tidak ada cara membuat akun otorisasi baru untuk pegawai
+    lain dari ±5.069 data Pegawai TANPA lewat alur usulan PPABP (yang juga
+    butuh User sudah ada duluan - `UsulanPerubahanRole.userId` mengacu ke
+    User, bukan Pegawai). `buatAkunBaruAction` (actions.ts) + pencarian
+    pegawai GET-based (pola sama dengan `osdma/update-sk`) mengisi celah
+    ini - dipakai kalau ada nodin/arahan Pimpinan yang perlu dieksekusi
+    cepat (mis. pegawai baru dilantik jadi Kasubag TU) tanpa nunggu PPABP
+    mengusulkan dulu. Password akun baru = NIP (konvensi yang sama).
+    Pencarian otomatis menyembunyikan opsi "Pilih" buat pegawai yang
+    sudah punya akun (chip "Sudah punya akun") - diarahkan ke tabel di
+    bawah buat ubah role yang sudah ada, bukan bikin akun duplikat.
+- **`src/business-logic/strukturEselon.ts`** (BARU) - lookup statis Unit
+  Eselon II (== `Pegawai.satuanKerja`) ke Unit Eselon I-nya, sumber file
+  "Struktur unit kemnaker sd eselon II.xlsx" dari user. Disiapkan supaya
+  dashboard Pimpinan/PPABP NANTI gampang dikelompokkan per Eselon I -
+  **BELUM dipakai di UI manapun**, murni data referensi dulu (user minta
+  "biar nanti gampang", bukan "kelompokkan sekarang"). TODO(confirm)
+  PENTING: mapping ini TIDAK 100% cocok dengan `satuanKerja` hasil
+  `importPegawaiXlsx.ts` (basis data ±Januari 2026) - beberapa nama unit
+  beda (kemungkinan reorganisasi/rename), dan file referensi tidak
+  menyebut "Staf Ahli Bidang..." sama sekali padahal ada di data pegawai.
+  `getEselon1()` return `undefined` (bukan fuzzy-match/tebak) buat unit
+  yang tidak ketemu persis - lihat komentar lengkap di file itu sebelum
+  dipakai buat fitur apapun.
+- **Export ADK Tukin disamakan dengan format "daftar bayar" ASLI**
+  (`src/app/ppabp/adk/tukin/route.ts`, contoh dari user:
+  `adk_tunkin-PNS_ROMUM_JUni__2026.xlsx`) - kolom sekarang: NO, Kode
+  Satker, Bulan, Tahun, NIP, Nama Pegawai, Nomor SK, Kode Grade, Nilai
+  Bruto, Nilai Potongan, Nilai Bersih, Kode Bank SPAN, Nama Bank, Nomor
+  Rekening, Nama Rekening, Bulan Awal, Tahun Awal, Bulan Akhir, Tahun
+  Akhir, Tukin Kali, Nomor Tukin Lama, Nomor Tukin Baru. Nilai
+  Bruto/Potongan/Bersih = tukinPokok/potonganPph/tukinBersih (sudah
+  dicek: tukinBersih = tukinPokok - potonganPph, PERSIS sama dengan
+  aritmatika di contoh asli). **Kolom yang SENGAJA dikosongkan** (bukan
+  lupa - datanya benar-benar tidak ada di skema manapun): Kode Satker
+  (belum ada mapping satuanKerja -> kode satker resmi), Nomor SK/Nomor
+  Tukin Lama/Baru (TukinCalculation tidak menyimpan referensi SK), Kode
+  Bank SPAN/Nama Bank/Nomor Rekening/Nama Rekening (Pegawai TIDAK punya
+  data rekening bank sama sekali - PII finansial, JANGAN pernah diisi
+  tebakan/dummy - kalau nanti ada sumber datanya, itu migrasi skema
+  terpisah, bukan hardcode di route export), Bulan/Tahun Awal/Akhir
+  (di contoh asli nilainya beda dari bulan pembayaran, artinya belum
+  jelas). "Tukin Kali" default 1 (SEMUA baris contoh asli nilainya 1,
+  bukan ditebak - pola konsisten di data referensi).
+- **Export ADK Uang Lembur TIDAK diubah** (`src/app/ppabp/adk/uang-lembur/route.ts`)
+  - format asli (`templatelemburPPPK202606.xlsx`,
+  `ADK-U.Lembur-PNS-Romum_JUni.2026.xlsm`) per-HARI (kolom NIP +
+  JHARI1..JHARI31 + total), sementara `UangLembur` di skema Gajihub cuma
+  simpan `totalJamLembur` SATU ANGKA per bulan - tidak ada rincian jam
+  lembur per tanggal di skema manapun (TODO(confirm) lama yang sama di
+  `RekapKehadiranPeriode`, `src/types/index.ts`). Bikin kolom JHARI1..31
+  dari data yang ada berarti mengarang rincian harian yang sebenarnya
+  tidak tercatat - CSV tetap format ringkas (total per pegawai) sampai
+  ada sumber data jam lembur harian yang jelas. Ditambahkan komentar
+  penjelasan di route-nya, TIDAK ada perubahan kode fungsional.
+- **Contoh tarikan data presensi** ("contoh tarikan data ketidakhadiran
+  presensi.xlsx", sheet "Master", ~942rb baris) - CUMA referensi, user
+  eksplisit bilang "nanti kalau udah konek ke presensi gw update lagi" -
+  TIDAK ada adapter/import job yang dibangun dari file ini sekarang.
+  Catatan buat nanti: file ini key oleh **nama_pegawai (nama), BUKAN
+  NIP** - ada inkonsistensi penulisan nama yang sama persis di baris
+  berbeda (mis. "Ayla Raffany, S.I.Kom" vs "Ayla Raffany S.I.Kom", beda
+  koma) - matching by name ke NIP asli PASTI butuh proses
+  rekonsiliasi/fuzzy-match manual dulu, TIDAK BISA langsung dipetakan
+  1:1 begitu integrasi ini dikerjakan. Kolom yang ada: nama_pegawai,
+  nama_sistem_kerja (jenis: Izin/Tidak Hadir/Tidak Presensi/dst),
+  tanggal, jam_masuk, jam_keluar, menit_kerja, jumlah_potongan,
+  keterangan - berguna dipetakan ke `PresensiHarian.statusKehadiran`
+  begitu proses rekonsiliasi nama selesai.
+
 ## Deployment testing internal (VPS kantor)
 
 Di-deploy ke VPS kantor (`192.168.221.44`, hostname `AIhelpdeskRokeu`, cuma
