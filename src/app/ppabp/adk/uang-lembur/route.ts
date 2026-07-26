@@ -3,7 +3,19 @@ import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canGenerateAdk } from "../../../../auth/permissions";
 
-/** Export ADK Uang Lembur - lihat catatan lengkap di ../tukin/route.ts. */
+/**
+ * Export ADK Uang Lembur - lihat catatan lengkap di ../tukin/route.ts.
+ *
+ * TIDAK disamakan dengan format ADK lembur ASLI (contoh dari user:
+ * templatelemburPPPK202606.xlsx, ADK-U.Lembur-PNS-Romum_JUni.2026.xlsm) -
+ * format asli itu per-HARI (kolom NIP + JHARI1..JHARI31 + total), sementara
+ * UangLembur di skema Gajihub cuma simpan totalJamLembur SATU ANGKA per
+ * bulan (tidak ada rincian jam lembur per tanggal di skema manapun - lihat
+ * TODO(confirm) di RekapKehadiranPeriode, src/types/index.ts). Bikin
+ * kolom JHARI1..31 dari data yang ada berarti mengarang rincian per hari
+ * yang sebenarnya tidak tercatat - CSV di bawah tetap format ringkas
+ * (total per pegawai) sampai ada sumber data jam lembur harian yang jelas.
+ */
 export async function GET(req: NextRequest) {
   const akun = await getSessionAccount();
   if (!akun) return new Response("Belum login.", { status: 401 });
