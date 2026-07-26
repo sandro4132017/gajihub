@@ -52,7 +52,14 @@ export async function loginAction(
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // BUKAN process.env.NODE_ENV === "production" - `next start` SELALU
+    // set NODE_ENV=production terlepas dari ada/tidaknya HTTPS, jadi kalau
+    // dipakai di situ cookie Secure bakal ke-set walau server jalan HTTP
+    // biasa (browser diam-diam MENOLAK nyimpen cookie Secure lewat koneksi
+    // non-HTTPS - user kelihatan "berhasil login" tapi langsung logout
+    // lagi di request berikutnya). COOKIE_SECURE eksplisit di .env,
+    // default false - set "true" begitu server ini sudah pakai HTTPS asli.
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 8,
