@@ -19,5 +19,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // icon.svg dikecualikan sama seperti favicon.ico - file convention Next.js
+  // (src/app/icon.svg) buat favicon tab browser, harus bisa dimuat SEBELUM
+  // login juga (browser minta favicon terlepas dari status auth) - kelewatan
+  // waktu file itu ditambahkan, ketahuan karena browser yang belum login
+  // dapat redirect ke /login (HTML) bukan gambar ikonnya.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg).*)"],
 };
