@@ -665,13 +665,21 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
 
 ### Seed data simulasi
 
-Dijalankan berurutan (`src/auth/seedUsers.ts` DULU, baru
-`src/db/seedSimulasi.ts`):
+Dijalankan BERURUTAN (urutannya penting - lihat catatan di tiap file):
 
 ```bash
-npx tsx src/auth/seedUsers.ts
-npx tsx src/db/seedSimulasi.ts
+npx tsx src/auth/seedUsers.ts        # 13 akun demo dgn role khusus
+npx tsx src/db/seedSimulasi.ts       # presensi/kalkulasi/approval/banding/dst
+npx tsx src/auth/seedAkunPegawai.ts  # akun PEGAWAI massal buat SISA pegawai
 ```
+
+**`seedAkunPegawai.ts` HARUS terakhir** (atau minimal setelah
+`seedUsers.ts`): skrip itu cuma membuat akun buat NIP yang BELUM punya
+`User` sama sekali, jadi kalau dijalankan duluan, 13 akun demo bakal
+terlanjur dibuat sebagai PEGAWAI dan `seedUsers.ts` yang jalan belakangan
+tetap membenarkan role-nya (upsert) - tapi urutan di atas lebih aman &
+tidak bikin bingung. Ketiganya idempoten kecuali bagian `banding`/SK/usulan
+role di `seedSimulasi.ts` (lihat catatan di bawah).
 
 **PENTING**: NIP di seed ini adalah NIP ASLI dari data pegawai yang sudah
 diimpor (`prisma.pegawai`, ±5.069 baris via `src/jobs/importPegawaiXlsx.ts`)
@@ -712,6 +720,40 @@ kalkulasi/presensi/kinerja/anggaran/bukti potong pajak; `banding`/SK/usulan
 role pakai create biasa, jadi kalau di-run ulang akan bikin baris duplikat
 untuk bagian itu - belum ditambah guard idempotency di situ, jangan run
 dua kali tanpa sadar).
+
+### Akun PEGAWAI massal (`src/auth/seedAkunPegawai.ts`)
+
+SEMUA pegawai (±5.069) sekarang otomatis punya akun `User` role `PEGAWAI` -
+bukan cuma 13 karakter simulasi. Tujuannya: siapapun bisa dites/login, dan
+pengelolaan role tinggal MENGUBAH role akun yang sudah ada (Pegawai ->
+Kasubag TU/OSDMA/dst) lewat halaman Admin, BUKAN bikin akun dari nol.
+
+- **Idempoten & tidak merusak**: cuma membuat akun buat NIP yang belum
+  punya `User`. Akun yang sudah ada (termasuk 6 akun ber-role khusus dari
+  `seedUsers.ts`) TIDAK di-reset - aman di-run ulang, termasuk setelah ada
+  penambahan data Pegawai baru dari `importPegawaiXlsx.ts`.
+- `satuanKerja` diisi NULL (bukan disalin dari `Pegawai.satuanKerja`) -
+  konsisten dengan konvensi skema: scoping PEGAWAI ke data sendiri lewat
+  relasi NIP ke Pegawai, field `User.satuanKerja` cuma dipakai KASUBAG_TU
+  (lihat komentar model `User` di schema.prisma).
+- **Konsekuensi keamanan yang perlu diketahui**: password = NIP (konvensi
+  login sementara yang sudah ada), jadi SEKARANG setiap pegawai di basis
+  data otomatis bisa login pakai NIP-nya sendiri. Disengaja buat testing
+  internal (akses cuma lewat jaringan kantor/VPN, HTTP), TAPI ini
+  memperluas permukaan dibanding sebelumnya yang cuma 13 akun - WAJIB
+  diganti begitu SSO Kemnaker tersambung, jangan dibiarkan begini kalau
+  sistem dibuka ke jaringan publik. Lihat TODO(legal-confirm) di
+  `src/auth/session.ts`.
+
+**Dampak ke UI "Kelola Assignment Role"** (`src/app/admin/role-assignment/`):
+tabel akun di bawah SEKARANG cuma menampilkan akun ber-role SELAIN
+`PEGAWAI` (kalau semua ditampilkan jadi 5.000+ baris dan tidak berguna
+buat cari "siapa yang punya kewenangan khusus"). Buat mengubah role
+pegawai biasa, pakai pencarian nama/NIP di atasnya - hasil pencarian
+nampilin role akun yang berlaku sekarang sebagai chip, lalu tombol "Ubah
+role" (kalau akunnya sudah ada) atau "Buat akun" (fallback buat pegawai
+yang belum punya akun sama sekali, mis. data Pegawai yang diimpor SETELAH
+`seedAkunPegawai.ts` terakhir dijalankan).
 
 ## Yang BELUM ada / open items (jangan asumsikan sudah beres)
 

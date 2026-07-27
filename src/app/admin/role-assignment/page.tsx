@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../../auth/permissions";
+import { LABEL_ROLE } from "../../../auth/roleLabel";
 import { AksesDitolak } from "../../AksesDitolak";
 import { AssignmentRow } from "./AssignmentRow";
 import { BuatAkunBaruForm } from "./BuatAkunBaruForm";
@@ -20,8 +21,18 @@ export default async function RoleAssignmentPage({
     return <AksesDitolak pesan="Role kamu tidak berwenang mengelola assignment role." />;
   }
 
-  const userList = await prisma.user.findMany({ orderBy: { nama: "asc" } });
+  // Tabel di bawah SENGAJA cuma menampilkan akun ber-role NON-PEGAWAI:
+  // sejak seedAkunPegawai.ts, SEMUA pegawai (±5.069) otomatis punya akun
+  // role PEGAWAI - kalau semuanya ditampilkan, tabel ini jadi 5.000+ baris
+  // dan tidak ada gunanya buat "cari siapa yang punya kewenangan khusus".
+  // Buat mengubah role pegawai biasa, pakai pencarian di atasnya.
+  const [userNonPegawai, totalAkun] = await Promise.all([
+    prisma.user.findMany({ where: { role: { not: "PEGAWAI" } }, orderBy: { nama: "asc" } }),
+    prisma.user.count(),
+  ]);
+
   const pegawaiTerpilih = pegawaiId ? await prisma.pegawai.findUnique({ where: { id: pegawaiId } }) : null;
+  const akunTerpilih = pegawaiTerpilih ? await prisma.user.findUnique({ where: { nip: pegawaiTerpilih.nip } }) : null;
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -31,10 +42,10 @@ export default async function RoleAssignmentPage({
         Perubahan Role&quot;), ini jalur administratif langsung tanpa proses usul-lalu-eksekusi.
       </p>
 
-      <h2 className="mt-8 text-sm font-bold uppercase tracking-wide text-muted">Buat Akun Baru</h2>
+      <h2 className="mt-8 text-sm font-bold uppercase tracking-wide text-muted">Cari Pegawai &amp; Ubah Role</h2>
       <p className="mt-1 text-xs text-muted">
-        Buat akun otorisasi langsung dari data pegawai (tanpa nunggu usulan PPABP) - buat kebutuhan eksekusi cepat
-        kalau ada nodin/arahan Pimpinan (mis. pegawai baru dilantik).
+        Semua pegawai sudah punya akun dengan role Pegawai secara default ({totalAkun.toLocaleString("id-ID")} akun) -
+        buat memberi kewenangan khusus, cari orangnya di sini lalu ganti role-nya.
       </p>
 
       <form method="get" className="card mt-3 flex flex-wrap items-end gap-3 p-4">
@@ -54,21 +65,46 @@ export default async function RoleAssignmentPage({
             <p className="text-sm text-muted">
               NIP {pegawaiTerpilih.nip} - {pegawaiTerpilih.satuanKerja} - {pegawaiTerpilih.jabatan ?? "-"}
             </p>
-            <Link href={q ? `/admin/role-assignment?q=${encodeURIComponent(q)}` : "/admin/role-assignment"} className="mt-2 inline-block text-xs font-semibold text-teal-deep underline">
+            <Link
+              href={q ? `/admin/role-assignment?q=${encodeURIComponent(q)}` : "/admin/role-assignment"}
+              className="mt-2 inline-block text-xs font-semibold text-teal-deep underline"
+            >
               Ganti pegawai
             </Link>
           </div>
-          <BuatAkunBaruForm
-            pegawai={{ id: pegawaiTerpilih.id, nama: pegawaiTerpilih.nama, nip: pegawaiTerpilih.nip, satuanKerja: pegawaiTerpilih.satuanKerja }}
-          />
+          {akunTerpilih ? (
+            <div className="card mt-4">
+              <AssignmentRow user={akunTerpilih} />
+            </div>
+          ) : (
+            // Fallback: pegawai yang belum punya akun sama sekali (mis. data
+            // Pegawai baru diimpor SETELAH seedAkunPegawai.ts terakhir jalan).
+            <BuatAkunBaruForm
+              pegawai={{
+                id: pegawaiTerpilih.id,
+                nama: pegawaiTerpilih.nama,
+                nip: pegawaiTerpilih.nip,
+                satuanKerja: pegawaiTerpilih.satuanKerja,
+              }}
+            />
+          )}
         </>
       ) : q ? (
         <PegawaiHasilPencarian q={q} />
       ) : null}
 
-      <h2 className="mt-10 text-sm font-bold uppercase tracking-wide text-muted">Akun yang sudah ada</h2>
+      <h2 className="mt-10 text-sm font-bold uppercase tracking-wide text-muted">
+        Akun dengan kewenangan khusus ({userNonPegawai.length})
+      </h2>
+      <p className="mt-1 text-xs text-muted">
+        Cuma akun ber-role SELAIN Pegawai yang ditampilkan di sini, biar gampang dicari. Akun role Pegawai (mayoritas)
+        diakses lewat pencarian di atas.
+      </p>
       <div className="card mt-3 divide-y divide-line-2">
-        {userList.map((u) => (
+        {userNonPegawai.length === 0 && (
+          <p className="p-6 text-sm text-muted">Belum ada akun dengan kewenangan khusus.</p>
+        )}
+        {userNonPegawai.map((u) => (
           <AssignmentRow key={u.id} user={u} />
         ))}
       </div>
@@ -77,33 +113,36 @@ export default async function RoleAssignmentPage({
 }
 
 async function PegawaiHasilPencarian({ q }: { q: string }) {
-  const semuaUserNip = new Set((await prisma.user.findMany({ select: { nip: true } })).map((u) => u.nip));
   const hasil = await prisma.pegawai.findMany({
     where: { OR: [{ nama: { contains: q, mode: "insensitive" } }, { nip: { contains: q } }] },
     orderBy: { nama: "asc" },
     take: 20,
   });
+  const akunByNip = new Map(
+    (await prisma.user.findMany({ where: { nip: { in: hasil.map((p) => p.nip) } } })).map((u) => [u.nip, u])
+  );
 
   return (
     <div className="card mt-4 divide-y divide-line-2">
       {hasil.length === 0 && <p className="p-6 text-sm text-muted">Tidak ada pegawai yang cocok.</p>}
       {hasil.map((p) => {
-        const sudahPunyaAkun = semuaUserNip.has(p.nip);
+        const akun = akunByNip.get(p.nip);
         return (
           <div key={p.id} className="flex items-center justify-between gap-3 p-4">
-            <div>
+            <div className="min-w-0">
               <p className="font-semibold text-ink">{p.nama}</p>
               <p className="text-xs text-muted">
                 NIP {p.nip} - {p.satuanKerja} - {p.jabatan ?? "-"}
               </p>
             </div>
-            {sudahPunyaAkun ? (
-              <span className="chip chip-draft">Sudah punya akun</span>
-            ) : (
+            <div className="flex flex-none items-center gap-2">
+              <span className={`chip ${akun && akun.role !== "PEGAWAI" ? "chip-navy" : "chip-draft"}`}>
+                {akun ? LABEL_ROLE[akun.role] : "Belum ada akun"}
+              </span>
               <Link href={`/admin/role-assignment?q=${encodeURIComponent(q)}&pegawaiId=${p.id}`} className="btn btn-ghost btn-sm">
-                Pilih
+                {akun ? "Ubah role" : "Buat akun"}
               </Link>
-            )}
+            </div>
           </div>
         );
       })}
