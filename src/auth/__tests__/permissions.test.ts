@@ -43,6 +43,9 @@ import {
   canViewApproverDashboard,
   canViewPegawai,
   canEditPresensiKinerjaLangsung,
+  canKelolaDataPegawai,
+  canEditDataPegawai,
+  canPindahSatuanKerjaPegawai,
   type AuthUser,
 } from "../permissions";
 
@@ -317,6 +320,52 @@ describe("ADMIN - privilege teknis + SEMUA role lain (simulasi/demo, lihat TODO(
     for (const role of SEMUA_ROLE) {
       expect(canEditPresensiKinerjaLangsung(buatUser({ role, satuanKerja: SETJEN }))).toBe(false);
     }
+  });
+});
+
+describe("Data pokok pegawai (/pegawai) - ADMIN, PPABP, KASUBAG_TU", () => {
+  it("canKelolaDataPegawai: cuma ADMIN, PPABP, KASUBAG_TU", () => {
+    expect(canKelolaDataPegawai(buatUser({ role: "ADMIN" }))).toBe(true);
+    expect(canKelolaDataPegawai(buatUser({ role: "PPABP" }))).toBe(true);
+    expect(canKelolaDataPegawai(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }))).toBe(true);
+    expect(canKelolaDataPegawai(buatUser({ role: "OSDMA" }))).toBe(false);
+    expect(canKelolaDataPegawai(buatUser({ role: "PIMPINAN" }))).toBe(false);
+    expect(canKelolaDataPegawai(buatUser({ role: "PEGAWAI" }))).toBe(false);
+  });
+
+  it("canEditDataPegawai: KASUBAG_TU cuma pegawai unitnya sendiri", () => {
+    const kasubag = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
+    expect(canEditDataPegawai(kasubag, SETJEN)).toBe(true);
+    expect(canEditDataPegawai(kasubag, BIRO_UMUM)).toBe(false);
+  });
+
+  it("canEditDataPegawai: KASUBAG_TU tanpa satuan kerja (akun 'buta unit') DITOLAK di semua unit", () => {
+    const butaUnit = buatUser({ role: "KASUBAG_TU", satuanKerja: null });
+    expect(canEditDataPegawai(butaUnit, SETJEN)).toBe(false);
+    expect(canEditDataPegawai(butaUnit, BIRO_UMUM)).toBe(false);
+  });
+
+  it("canEditDataPegawai: PPABP pusat & ADMIN lintas satker", () => {
+    expect(canEditDataPegawai(buatUser({ role: "PPABP", satuanKerja: null }), BIRO_UMUM)).toBe(true);
+    expect(canEditDataPegawai(buatUser({ role: "ADMIN" }), BIRO_UMUM)).toBe(true);
+  });
+
+  it("canEditDataPegawai: OSDMA/PIMPINAN/PEGAWAI DITOLAK", () => {
+    for (const role of ["OSDMA", "PIMPINAN", "PEGAWAI"] as const) {
+      expect(canEditDataPegawai(buatUser({ role }), SETJEN)).toBe(false);
+    }
+  });
+
+  it("canPindahSatuanKerjaPegawai: KASUBAG_TU DITOLAK walau di unitnya sendiri (mutasi keluar tidak bisa dibatalkan sendiri)", () => {
+    expect(canPindahSatuanKerjaPegawai(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }), SETJEN)).toBe(false);
+    expect(canPindahSatuanKerjaPegawai(buatUser({ role: "PPABP", satuanKerja: null }), SETJEN)).toBe(true);
+    expect(canPindahSatuanKerjaPegawai(buatUser({ role: "ADMIN" }), SETJEN)).toBe(true);
+  });
+
+  it("akun nonaktif: DITOLAK apapun role-nya", () => {
+    expect(canKelolaDataPegawai(buatUser({ role: "ADMIN", aktif: false }))).toBe(false);
+    expect(canEditDataPegawai(buatUser({ role: "ADMIN", aktif: false }), SETJEN)).toBe(false);
+    expect(canPindahSatuanKerjaPegawai(buatUser({ role: "ADMIN", aktif: false }), SETJEN)).toBe(false);
   });
 });
 

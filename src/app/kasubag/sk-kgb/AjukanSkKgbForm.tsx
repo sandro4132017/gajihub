@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { ajukanSkKgbAction, type AjukanSkKgbFormState } from "./actions";
+import { SearchableSelect } from "../../SearchableSelect";
 
 const INITIAL_STATE: AjukanSkKgbFormState = {};
 
@@ -12,14 +13,16 @@ export function AjukanSkKgbForm({ pegawaiList }: { pegawaiList: { id: string; na
     <form action={formAction} className="card mt-4 grid gap-3 p-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
         <label className="field-label">Pegawai</label>
-        <select name="pegawaiId" required className="field-input">
-          <option value="">Pilih pegawai...</option>
-          {pegawaiList.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nama} - {p.nip} (golongan saat ini: {p.golongan ?? "-"})
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="pegawaiId"
+          options={pegawaiList.map((p) => ({
+            value: p.id,
+            label: p.nama,
+            keterangan: `NIP ${p.nip} - golongan saat ini: ${p.golongan ?? "-"}`,
+          }))}
+          placeholder="Cari nama atau NIP pegawai..."
+          required
+        />
       </div>
       <div>
         <label className="field-label">Nomor SK</label>

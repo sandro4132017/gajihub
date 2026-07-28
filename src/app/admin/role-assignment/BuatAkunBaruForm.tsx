@@ -4,11 +4,18 @@ import { useActionState, useState } from "react";
 import type { Role } from "@prisma/client";
 import { buatAkunBaruAction, type BuatAkunBaruFormState } from "./actions";
 import { LABEL_ROLE } from "../../../auth/roleLabel";
+import { SearchableSelect } from "../../SearchableSelect";
 
 const INITIAL_STATE: BuatAkunBaruFormState = {};
 const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
 
-export function BuatAkunBaruForm({ pegawai }: { pegawai: { id: string; nama: string; nip: string; satuanKerja: string } }) {
+export function BuatAkunBaruForm({
+  pegawai,
+  satuanKerjaList,
+}: {
+  pegawai: { id: string; nama: string; nip: string; satuanKerja: string };
+  satuanKerjaList: string[];
+}) {
   const [state, formAction, pending] = useActionState(buatAkunBaruAction, INITIAL_STATE);
   const [role, setRole] = useState<Role>("PEGAWAI");
 
@@ -21,18 +28,23 @@ export function BuatAkunBaruForm({ pegawai }: { pegawai: { id: string; nama: str
       <input type="hidden" name="pegawaiId" value={pegawai.id} />
       <div className="sm:col-span-2">
         <label className="field-label">Role</label>
-        <select name="role" value={role} onChange={(e) => setRole(e.target.value as Role)} className="field-input">
-          {SEMUA_ROLE.map((r) => (
-            <option key={r} value={r}>
-              {LABEL_ROLE[r]}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="role"
+          options={SEMUA_ROLE.map((r) => ({ value: r, label: LABEL_ROLE[r] }))}
+          defaultValue="PEGAWAI"
+          onValueChange={(v) => setRole(v as Role)}
+          required
+        />
       </div>
       {role === "KASUBAG_TU" && (
         <div className="sm:col-span-2">
           <label className="field-label">Satuan kerja</label>
-          <input name="satuanKerja" defaultValue={pegawai.satuanKerja} className="field-input" />
+          <SearchableSelect
+            name="satuanKerja"
+            options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
+            defaultValue={pegawai.satuanKerja}
+            required
+          />
         </div>
       )}
       <div className="sm:col-span-2">

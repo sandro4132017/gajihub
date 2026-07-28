@@ -1,11 +1,16 @@
 import { NAMA_BULAN } from "./bulan";
+import { SearchableSelect } from "./SearchableSelect";
 
 /**
  * Form filter periode + satuan kerja - dipakai sama persis di ketiga
- * dashboard (Tukin, Uang Makan, Uang Lembur). Pakai <form method="get">
- * biasa (bukan client component) supaya filter jalan lewat URL query string
- * tanpa perlu JavaScript - konsisten dengan pendekatan Server Component di
- * halaman-halaman dashboard.
+ * dashboard (Tukin, Uang Makan, Uang Lembur). Tetap <form method="get">
+ * biasa supaya filter jalan lewat URL query string - konsisten dengan
+ * pendekatan Server Component di halaman-halaman dashboard.
+ *
+ * Dropdown-nya pakai SearchableSelect (bisa dicari realtime; daftar satuan
+ * kerja ada 82 baris, scroll manual tidak praktis). Komponen itu sendiri
+ * yang client-side, plus fallback <select> native di dalam <noscript> -
+ * jadi janji "filter jalan tanpa JavaScript" tetap dipegang.
  */
 export function FilterBar({
   satuanKerjaList,
@@ -24,14 +29,13 @@ export function FilterBar({
     <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
       <div>
         <label className="field-label">Bulan</label>
-        <select name="bulan" defaultValue={bulan ?? ""} className="field-input py-1.5">
-          <option value="">Semua bulan</option>
-          {NAMA_BULAN.map((nama, index) => (
-            <option key={nama} value={index + 1}>
-              {nama}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="bulan"
+          className="w-40"
+          options={NAMA_BULAN.map((nama, index) => ({ value: String(index + 1), label: nama }))}
+          defaultValue={bulan ?? ""}
+          emptyLabel="Semua bulan"
+        />
       </div>
 
       <div>
@@ -47,14 +51,13 @@ export function FilterBar({
 
       <div>
         <label className="field-label">Satuan kerja</label>
-        <select name="satker" defaultValue={satker ?? ""} className="field-input min-w-[200px] py-1.5">
-          <option value="">Semua satuan kerja</option>
-          {satuanKerjaList.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="satker"
+          className="min-w-[260px]"
+          options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
+          defaultValue={satker ?? ""}
+          emptyLabel="Semua satuan kerja"
+        />
       </div>
 
       <button type="submit" className="btn btn-primary">

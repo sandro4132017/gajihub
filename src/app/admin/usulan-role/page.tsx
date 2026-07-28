@@ -17,10 +17,25 @@ export default async function EksekusiUsulanRolePage() {
     return <AksesDitolak pesan="Role kamu tidak berwenang mengeksekusi usulan perubahan role." />;
   }
 
-  const usulanList = await prisma.usulanPerubahanRole.findMany({
-    include: { user: true, diusulkanOleh: true, diputuskanOleh: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const [usulanList, satuanKerjaRows] = await Promise.all([
+    prisma.usulanPerubahanRole.findMany({
+      include: { user: true, diusulkanOleh: true, diputuskanOleh: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.pegawai.findMany({ distinct: ["satuanKerja"], select: { satuanKerja: true }, orderBy: { satuanKerja: "asc" } }),
+  ]);
+  const satuanKerjaList = satuanKerjaRows.map((r) => r.satuanKerja);
+
+  // Prefill unit akun buat usulan yang mempromosikan ke KASUBAG_TU: pakai
+  // unit akunnya kalau sudah ada, kalau belum pakai satuan kerja data
+  // pegawainya (tebakan paling masuk akal - Kasubag TU biasanya memimpin
+  // unitnya sendiri). Admin tetap bisa menggantinya sebelum eksekusi.
+  const nipPerluPrefill = usulanList
+    .filter((u) => u.status === "MENUNGGU" && u.roleDiusulkan === "KASUBAG_TU")
+    .map((u) => u.user.nip);
+  const pegawaiByNip = new Map(
+    (await prisma.pegawai.findMany({ where: { nip: { in: nipPerluPrefill } } })).map((p) => [p.nip, p])
+  );
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -48,7 +63,14 @@ export default async function EksekusiUsulanRolePage() {
               </div>
               <StatusBadge label={u.status} warna={WARNA_STATUS[u.status as keyof typeof WARNA_STATUS] ?? "abu"} />
             </div>
-            {u.status === "MENUNGGU" && <EksekusiUsulanForm usulanId={u.id} />}
+            {u.status === "MENUNGGU" && (
+              <EksekusiUsulanForm
+                usulanId={u.id}
+                butuhSatuanKerja={u.roleDiusulkan === "KASUBAG_TU"}
+                satuanKerjaList={satuanKerjaList}
+                satuanKerjaDefault={u.user.satuanKerja ?? pegawaiByNip.get(u.user.nip)?.satuanKerja ?? ""}
+              />
+            )}
           </div>
         ))}
       </div>
