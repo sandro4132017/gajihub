@@ -16,7 +16,18 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="id">
       <body className="min-h-screen antialiased">
-        <AppShell account={akun ? { nama: akun.nama, jabatan: akun.jabatan, role: akun.role } : null}>
+        <AppShell
+          account={
+            akun
+              ? {
+                  nama: akun.nama,
+                  jabatan: akun.jabatan,
+                  role: akun.role,
+                  rolesTersedia: akun.rolesTersedia,
+                }
+              : null
+          }
+        >
           {children}
         </AppShell>
       </body>

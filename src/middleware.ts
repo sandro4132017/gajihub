@@ -3,6 +3,9 @@
 // cuma tombol approve) karena datanya menyangkut nominal gaji/tukin pegawai.
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME, verifikasiTokenSesi } from "./auth/session";
+// Cuma konstanta + type - aman dipakai di Edge runtime (tidak menarik
+// Prisma Client ataupun modul Node manapun).
+import { LANDING_ROLE } from "./auth/roleAktif";
 
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
@@ -13,7 +16,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
   if (session && isLoginPage) {
-    return NextResponse.redirect(new URL("/tukin", request.url));
+    // Diarahkan ke "rumah" role AKTIF sesi, bukan selalu /tukin - /tukin
+    // bahkan tidak ada di menu OSDMA/PIMPINAN/ADMIN (lihat LANDING_ROLE).
+    return NextResponse.redirect(new URL(LANDING_ROLE[session.role], request.url));
   }
   return NextResponse.next();
 }

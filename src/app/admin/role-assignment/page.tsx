@@ -26,8 +26,14 @@ export default async function RoleAssignmentPage({
   // role PEGAWAI - kalau semuanya ditampilkan, tabel ini jadi 5.000+ baris
   // dan tidak ada gunanya buat "cari siapa yang punya kewenangan khusus".
   // Buat mengubah role pegawai biasa, pakai pencarian di atasnya.
+  // Akun ber-role PEGAWAI TAPI punya role tambahan ikut ditampilkan juga -
+  // kalau tidak, akun yang dikasih role tambahan buat testing "hilang" dari
+  // tabel ini dan cuma bisa ditemukan lewat pencarian.
   const [userNonPegawai, totalAkun] = await Promise.all([
-    prisma.user.findMany({ where: { role: { not: "PEGAWAI" } }, orderBy: { nama: "asc" } }),
+    prisma.user.findMany({
+      where: { OR: [{ role: { not: "PEGAWAI" } }, { rolesTambahan: { isEmpty: false } }] },
+      orderBy: { nama: "asc" },
+    }),
     prisma.user.count(),
   ]);
 
@@ -39,7 +45,9 @@ export default async function RoleAssignmentPage({
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Kelola Assignment Role</h1>
       <p className="mt-1 text-sm text-muted">
         Ubah role/satuan kerja/status aktif akun secara langsung - BEDA dari alur usulan PPABP (lihat menu &quot;Usulan
-        Perubahan Role&quot;), ini jalur administratif langsung tanpa proses usul-lalu-eksekusi.
+        Perubahan Role&quot;), ini jalur administratif langsung tanpa proses usul-lalu-eksekusi. Satu akun juga bisa
+        dikasih beberapa <strong>role tambahan</strong> buat kemudahan testing - pemiliknya lalu bisa ganti sudut
+        pandang sendiri lewat tombol akun di sidebar, tanpa logout.
       </p>
 
       <h2 className="mt-8 text-sm font-bold uppercase tracking-wide text-muted">Cari Pegawai &amp; Ubah Role</h2>
@@ -139,6 +147,11 @@ async function PegawaiHasilPencarian({ q }: { q: string }) {
               <span className={`chip ${akun && akun.role !== "PEGAWAI" ? "chip-navy" : "chip-draft"}`}>
                 {akun ? LABEL_ROLE[akun.role] : "Belum ada akun"}
               </span>
+              {akun && akun.rolesTambahan.length > 0 && (
+                <span className="chip chip-draft" title={akun.rolesTambahan.map((r) => LABEL_ROLE[r]).join(", ")}>
+                  +{akun.rolesTambahan.length} role
+                </span>
+              )}
               <Link href={`/admin/role-assignment?q=${encodeURIComponent(q)}&pegawaiId=${p.id}`} className="btn btn-ghost btn-sm">
                 {akun ? "Ubah role" : "Buat akun"}
               </Link>

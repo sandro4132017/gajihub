@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
-import { getSessionAccount } from "../../../auth/getSessionAccount";
+import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canApproveBandingFinal, type AuthUser } from "../../../auth/permissions";
 import type { SetujuTolakFormState } from "../SetujuTolakForm";
 
@@ -28,7 +28,7 @@ export async function approveBandingFinalAction(
       return { error: "Keputusan tidak valid." };
     }
 
-    const user = await prisma.user.findUnique({ where: { nip: akun.nip } });
+    const user = await ambilUserSesi();
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canApproveBandingFinal(authUser)) {
