@@ -1,4 +1,5 @@
 import { getSessionAccount } from "../../../auth/getSessionAccount";
+import { SearchableSelect } from "../../SearchableSelect";
 import { canGenerateAdk, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { NAMA_BULAN } from "../../bulan";
@@ -31,13 +32,12 @@ export default async function ExportAdkPage({
       <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
         <div>
           <label className="field-label">Bulan</label>
-          <select name="bulan" defaultValue={periodeBulan} className="field-input py-1.5">
-            {NAMA_BULAN.map((nama, index) => (
-              <option key={nama} value={index + 1}>
-                {nama}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            name="bulan"
+            className="w-40"
+            options={NAMA_BULAN.map((nama, index) => ({ value: String(index + 1), label: nama }))}
+            defaultValue={String(periodeBulan)}
+          />
         </div>
         <div>
           <label className="field-label">Tahun</label>

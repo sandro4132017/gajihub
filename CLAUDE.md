@@ -649,11 +649,12 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
   eksekusi") - action/UI SUDAH ADA (langkah 4d PPABP mengusulkan, langkah
   4e Admin eksekusi/tolak). Bukan approval berjenjang seperti
   `ApprovalLog` - cuma usul (PPABP) lalu keputusan tunggal (Admin):
-  eksekusi atau tolak. **Gap yang ketemu**: model ini TIDAK punya kolom
-  `satuanKerja` - promosi ke `KASUBAG_TU` lewat alur ini mengubah
-  `User.role` tapi TIDAK mengisi `User.satuanKerja` (tetap NULL sampai
-  Admin mengisinya manual lewat halaman "Kelola Assignment Role" terpisah)
-  - lihat detail di "Detail UI Admin (langkah 4e)" di atas.
+  eksekusi atau tolak. ~~**Gap yang ketemu**: model ini TIDAK punya kolom
+  `satuanKerja`, jadi promosi ke `KASUBAG_TU` lewat alur ini menghasilkan
+  akun "buta unit".~~ **RESOLVED** - unit kerja sekarang diminta di form
+  EKSEKUSI (Admin), bukan di model usulannya, jadi tidak perlu migrasi.
+  Lihat bagian "Bug akun ber-role Kasubag TU tapi tidak bisa lihat
+  apa-apa (FIXED)" di bawah.
 - **Kalkulasi massal Kasubag TU tidak punya pengaman "sudah APPROVED"** -
   tombol "Hitung sekarang" (`src/app/kasubag/kalkulasi/`) akan mem-buka-
   lagi siklus approval pegawai yang datanya sudah disetujui penuh (reset
@@ -847,6 +848,103 @@ tambahan lewat UI Admin tersimpan benar di database + tercatat di
 berisi Logout, tanpa bagian "Ganti role"; logout dari menu baru berfungsi.
 Semua mutasi verifikasi (role tambahan Ayu + baris AuditTrail-nya) SUDAH
 DI-REVERT.
+
+### Data Pegawai (`/pegawai`) - ADMIN / PPABP / KASUBAG_TU
+
+Halaman perbaikan data pokok pegawai, diminta user karena satuan kerja yang
+salah/kosong bikin pegawai "hilang" dari semua rekap. SATU halaman dipakai
+bertiga (bukan tiga salinan di `/admin`, `/ppabp`, `/kasubag`) - yang beda
+cuma cakupan datanya, dan itu diurus fungsi izin.
+
+- **Izin baru** di `src/auth/permissions.ts` (+13 unit test):
+  `canKelolaDataPegawai` (buka halamannya - ADMIN/PPABP/KASUBAG_TU saja,
+  OSDMA/PIMPINAN/PEGAWAI ditolak), `canEditDataPegawai(user, satkerTarget)`
+  (KASUBAG_TU cuma unitnya sendiri), dan `canPindahSatuanKerjaPegawai` -
+  **mutasi keluar unit SENGAJA cuma PPABP & ADMIN**: buat Kasubag TU itu
+  operasi satu arah yang tidak bisa dia batalkan sendiri (begitu pegawainya
+  pindah, dia langsung di luar jangkauannya).
+- Field yang bisa diubah: nama, unit kerja, satuan kerja, jabatan, golongan,
+  kelas jabatan (divalidasi 1-17, di luar itu lookup tarif tukin pasti
+  gagal), status pegawai, TMT SK. **NIP SENGAJA read-only** - itu kunci
+  relasi ke akun `User`, presensi, kalkulasi, banding, dan seluruh seed.
+- **BEDA dari `/osdma/update-sk`** (yang sudah ada): halaman OSDMA itu
+  KHUSUS perubahan karena SK (jabatan/golongan/kelas/TMT) dan lintas satker
+  tanpa batas. Yang ini perbaikan data pokok TERMASUK satuan kerja, dengan
+  Kasubag TU di-scope. Keduanya sama-sama menulis `AuditTrail`, jadi
+  jejaknya tetap ada lewat jalur manapun. Sengaja tidak digabung - beda
+  role, beda cakupan field, beda scoping.
+- Halaman ini juga menampilkan **panel "Akun login pegawai ini"** (role +
+  unit AKUN). Tujuannya menunjukkan bahwa `User.satuanKerja` (unit AKUN,
+  dipakai buat scoping) itu kolom yang BEDA dari `Pegawai.satuanKerja`
+  (unit ORANGNYA) - kebingungan antara keduanya yang bikin keluhan "role
+  sudah diganti tapi tidak bisa lihat apa-apa".
+- Tanpa kata kunci pencarian: KASUBAG_TU langsung dapat roster unitnya
+  (~80 baris), ADMIN/PPABP diminta mencari dulu (5.069 baris tidak berguna
+  ditampilkan semua).
+
+### Bug "akun ber-role Kasubag TU tapi tidak bisa lihat apa-apa" (FIXED)
+
+Penyebabnya BUKAN data yang hilang, tapi akun ber-role `KASUBAG_TU` dengan
+`User.satuanKerja` NULL - lolos guard role, tapi tidak cocok dengan satuan
+kerja manapun, jadi setiap halaman unit tampil kosong TANPA penjelasan.
+Ini gap yang sudah didokumentasikan sejak langkah 4e (lihat "Detail UI
+Admin"), sekarang ditutup dari empat sisi:
+
+1. **`/admin/usulan-role` (sumber utamanya)** - eksekusi usulan dulu cuma
+   `update({ role })`, tidak pernah mengisi `satuanKerja`. Sekarang form
+   eksekusinya punya field unit kerja (WAJIB kalau role yang diusulkan
+   KASUBAG_TU, prefill dari satuan kerja data pegawainya), dan action-nya
+   menolak eksekusi tanpa unit. **SENGAJA TIDAK menambah kolom
+   `satuanKerja` ke model `UsulanPerubahanRole`** (tidak perlu migrasi):
+   unit ditentukan saat EKSEKUSI oleh Admin, bukan saat PPABP mengusulkan -
+   PPABP mengusulkan orangnya, Admin yang tahu penempatannya. Ini
+   menggantikan TODO(confirm) lama yang menyebut opsi "tambah kolom atau
+   dokumentasikan sebagai langkah manual dua tahap".
+2. **`/admin/role-assignment`** - banner kuning di atas halaman yang
+   mendaftar semua akun Kasubag TU tanpa unit, plus peringatan per-baris.
+   Field satuan kerja sekarang prefill dari satuan kerja data pegawainya
+   kalau unit akunnya masih kosong.
+3. **`/pegawai`** - kalau yang login KASUBAG_TU tanpa unit, halaman ini
+   TIDAK menampilkan tabel kosong, tapi menjelaskan penyebab & jalan
+   keluarnya.
+4. `ubahAssignmentRoleAction` sudah menolak simpan kalau KASUBAG_TU dipilih
+   tanpa satuan kerja (ditambahkan bareng fitur multi-role).
+
+### Dropdown searchable (`src/app/SearchableSelect.tsx`)
+
+SEMUA `<select>` di aplikasi diganti komponen ini (grep `<select` sekarang
+cuma menemukan komentar + string fallback di file komponennya sendiri) -
+diminta user, dan memang perlu: daftar satuan kerja ada 82 baris, daftar
+pegawai per unit ~80.
+
+- Nilai sebenarnya disimpan di `<input type="hidden" name={name}>`, jadi
+  dari sisi Server Action / `<form method="get">` komponen ini TIDAK ADA
+  BEDANYA dengan `<select name={name}>` - **tidak ada satupun action yang
+  perlu diubah**. Sudah diverifikasi lewat POST no-JS: field `golongan`,
+  `kelasJabatan`, `statusPegawai` terkirim persis seperti select biasa.
+- Pencarian realtime, cocok ke label DAN baris `keterangan` (mis. cari
+  pegawai pakai NIP walau yang tampil namanya). Navigasi panah + Enter +
+  Escape.
+- **Fallback tanpa JavaScript**: `<select>` native yang sama ditaruh di
+  dalam `<noscript>` (via `dangerouslySetInnerHTML` - kalau ditulis sebagai
+  JSX, React ribut soal hydration mismatch karena isi `<noscript>`
+  diperlakukan sebagai teks saat JS hidup). Jadi janji "filter jalan tanpa
+  JavaScript" yang dipegang project ini tetap utuh, dan tidak ada dua field
+  bernama sama yang ikut terkirim.
+- Dipakai di: FilterBar (bulan + satuan kerja), SatkerPicker, form SK KGB &
+  SK Hukuman Disiplin (pilih pegawai), Anggaran & Realisasi, Usulan
+  Perubahan Role (akun + role), Export ADK (bulan), Kelola Assignment Role
+  (role + satuan kerja), Buat Akun Baru, form eksekusi usulan role, dan
+  form edit Data Pegawai.
+
+**Catatan lingkungan dev (BUKAN bug aplikasi)**: waktu verifikasi, dev
+server Next 16 + Turbopack beberapa kali HANG total setelah POST Server
+Action ke `/pegawai` (request menggantung, GET berikutnya ikut timeout,
+sementara PostgreSQL sendiri idle - dicek lewat `pg_stat_activity`).
+Request yang SAMA PERSIS jalan normal di production build (`next build` +
+`next start`, 44 ms) - dan itu yang dipakai di VPS. Kalau ketemu lagi waktu
+`npm run dev`, restart dev server-nya, jangan buang waktu mencari bug di
+kode action.
 
 ## Yang BELUM ada / open items (jangan asumsikan sudah beres)
 

@@ -52,26 +52,59 @@ export async function eksekusiUsulanRoleAction(
       return { success: `Usulan perubahan role ${usulan.user.nama} ditolak.` };
     }
 
+    // BUG YANG DITUTUP DI SINI: dulu eksekusi cuma mengubah `role`, sementara
+    // `UsulanPerubahanRole` tidak punya kolom satuanKerja - jadi promosi ke
+    // KASUBAG_TU menghasilkan akun ber-role Kasubag TU dengan satuanKerja
+    // NULL ("buta unit": lolos guard role, tapi tidak cocok dengan satuan
+    // kerja manapun, sehingga semua halaman unit tampil kosong). Sekarang
+    // unitnya diminta di form eksekusi dan divalidasi di sini.
+    //
+    // Sengaja TIDAK menambah kolom satuanKerja ke model UsulanPerubahanRole
+    // (tidak perlu migrasi): unit ditentukan saat EKSEKUSI oleh Admin, bukan
+    // saat PPABP mengusulkan - PPABP mengusulkan orangnya, Admin yang tahu
+    // penempatannya.
+    const butuhSatuanKerja = usulan.roleDiusulkan === "KASUBAG_TU";
+    const satuanKerjaInput = String(formData.get("satuanKerja") ?? "").trim();
+    if (butuhSatuanKerja && !satuanKerjaInput) {
+      return { error: "Unit kerja wajib diisi buat role Kasubag TU - tanpa itu akunnya tidak bisa melihat data apa pun." };
+    }
+    // Role selain KASUBAG_TU: unit akun dikosongkan, konsisten dengan
+    // konvensi di model User (cuma KASUBAG_TU yang pakai field ini).
+    const satuanKerjaBaru = butuhSatuanKerja ? satuanKerjaInput : null;
+
     await prisma.$transaction([
       prisma.usulanPerubahanRole.update({
         where: { id: usulanId },
         data: { status: "DIEKSEKUSI", diputuskanOlehId: admin.id, diputuskanPada: new Date() },
       }),
-      prisma.user.update({ where: { id: usulan.userId }, data: { role: usulan.roleDiusulkan } }),
+      prisma.user.update({
+        where: { id: usulan.userId },
+        data: { role: usulan.roleDiusulkan, satuanKerja: satuanKerjaBaru },
+      }),
       prisma.auditTrail.create({
         data: {
           entitas: "app_user",
           entitasId: usulan.userId,
           aksi: "UPDATE",
           aktor: admin.nip,
-          dataSebelum: { role: usulan.roleSaatIni },
-          dataSesudah: { role: usulan.roleDiusulkan, sumber: "Eksekusi Usulan Perubahan Role", usulanId },
+          dataSebelum: { role: usulan.roleSaatIni, satuanKerja: usulan.user.satuanKerja },
+          dataSesudah: {
+            role: usulan.roleDiusulkan,
+            satuanKerja: satuanKerjaBaru,
+            sumber: "Eksekusi Usulan Perubahan Role",
+            usulanId,
+          },
         },
       }),
     ]);
 
     revalidatePath("/admin/usulan-role");
-    return { success: `Role ${usulan.user.nama} berhasil diubah jadi ${usulan.roleDiusulkan}.` };
+    revalidatePath("/admin/role-assignment");
+    return {
+      success: `Role ${usulan.user.nama} berhasil diubah jadi ${usulan.roleDiusulkan}${
+        satuanKerjaBaru ? ` (unit: ${satuanKerjaBaru})` : ""
+      }.`,
+    };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
   }

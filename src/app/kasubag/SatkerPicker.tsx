@@ -1,3 +1,5 @@
+import { SearchableSelect } from "../SearchableSelect";
+
 /**
  * Picker satuan kerja SAJA (tanpa bulan/tahun) - dipakai di halaman
  * src/app/kasubag/* yang tidak perlu filter periode (roster pegawai,
@@ -11,16 +13,13 @@ export function SatkerPicker({ satuanKerjaList, satkerTerpilih }: { satuanKerjaL
     <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
       <div>
         <label className="field-label">Satuan kerja</label>
-        <select name="satker" defaultValue={satkerTerpilih ?? ""} className="field-input min-w-[240px] py-1.5">
-          <option value="" disabled>
-            Pilih satuan kerja&hellip;
-          </option>
-          {satuanKerjaList.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="satker"
+          className="min-w-[280px]"
+          options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
+          defaultValue={satkerTerpilih ?? ""}
+          placeholder="Pilih satuan kerja..."
+        />
       </div>
       <button type="submit" className="btn btn-primary">
         Tampilkan

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { uploadAnggaranRealisasiAction, type UploadAnggaranFormState } from "./actions";
+import { SearchableSelect } from "../../SearchableSelect";
 
 const INITIAL_STATE: UploadAnggaranFormState = {};
 
@@ -12,14 +13,12 @@ export function UploadAnggaranForm({ satuanKerjaList }: { satuanKerjaList: strin
     <form action={formAction} className="card mt-4 grid gap-3 p-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
         <label className="field-label">Satuan kerja</label>
-        <select name="satuanKerja" required className="field-input">
-          <option value="">Pilih satuan kerja...</option>
-          {satuanKerjaList.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="satuanKerja"
+          options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
+          placeholder="Cari satuan kerja..."
+          required
+        />
       </div>
       <div>
         <label className="field-label">Bulan</label>

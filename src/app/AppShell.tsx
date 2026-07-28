@@ -41,6 +41,11 @@ const MENU_KASUBAG = [
     icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
   },
   {
+    href: "/pegawai",
+    label: "Data Pegawai",
+    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M12 20h9" /></>,
+  },
+  {
     href: "/kasubag/kalkulasi",
     label: "Kalkulasi",
     icon: <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />,
@@ -134,6 +139,11 @@ const MENU_PPABP = [
   { href: "/uang-makan", label: "Uang Makan", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
   { href: "/uang-lembur", label: "Uang Lembur", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
   {
+    href: "/pegawai",
+    label: "Data Pegawai",
+    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M12 20h9" /></>,
+  },
+  {
     href: "/ppabp/rekonsiliasi",
     label: "Rekonsiliasi",
     icon: <><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></>,
@@ -182,6 +192,11 @@ const MENU_ADMIN = [
     href: "/admin/role-assignment",
     label: "Kelola Assignment Role",
     icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
+  },
+  {
+    href: "/pegawai",
+    label: "Data Pegawai",
+    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M12 20h9" /></>,
   },
   {
     href: "/admin/usulan-role",

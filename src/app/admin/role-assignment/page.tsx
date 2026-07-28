@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../../auth/permissions";
+import { daftarRoleTersedia } from "../../../auth/roleAktif";
 import { LABEL_ROLE } from "../../../auth/roleLabel";
 import { AksesDitolak } from "../../AksesDitolak";
 import { AssignmentRow } from "./AssignmentRow";
@@ -29,13 +30,35 @@ export default async function RoleAssignmentPage({
   // Akun ber-role PEGAWAI TAPI punya role tambahan ikut ditampilkan juga -
   // kalau tidak, akun yang dikasih role tambahan buat testing "hilang" dari
   // tabel ini dan cuma bisa ditemukan lewat pencarian.
-  const [userNonPegawai, totalAkun] = await Promise.all([
+  const [userNonPegawai, totalAkun, satuanKerjaRows] = await Promise.all([
     prisma.user.findMany({
       where: { OR: [{ role: { not: "PEGAWAI" } }, { rolesTambahan: { isEmpty: false } }] },
       orderBy: { nama: "asc" },
     }),
     prisma.user.count(),
+    prisma.pegawai.findMany({ distinct: ["satuanKerja"], select: { satuanKerja: true }, orderBy: { satuanKerja: "asc" } }),
   ]);
+  const satuanKerjaList = satuanKerjaRows.map((r) => r.satuanKerja);
+
+  // Akun ber-role Kasubag TU (utama ATAU tambahan) yang unitnya kosong =
+  // "buta unit": lolos guard role tapi tidak cocok dengan satuan kerja
+  // manapun, jadi semua halaman unit tampil kosong tanpa penjelasan. Ini
+  // penyebab keluhan "role sudah diganti tapi tidak bisa lihat apa-apa" -
+  // ditonjolkan di sini supaya ketahuan tanpa harus mengecek satu-satu.
+  const akunButaUnit = userNonPegawai.filter(
+    (u) => daftarRoleTersedia(u).includes("KASUBAG_TU") && !u.satuanKerja
+  );
+
+  // Default unit buat akun yang belum punya: satuan kerja data pegawainya
+  // sendiri (tebakan paling masuk akal, Admin tetap bisa menggantinya).
+  const satkerPegawaiByNip = new Map(
+    (
+      await prisma.pegawai.findMany({
+        where: { nip: { in: userNonPegawai.map((u) => u.nip) } },
+        select: { nip: true, satuanKerja: true },
+      })
+    ).map((p) => [p.nip, p.satuanKerja])
+  );
 
   const pegawaiTerpilih = pegawaiId ? await prisma.pegawai.findUnique({ where: { id: pegawaiId } }) : null;
   const akunTerpilih = pegawaiTerpilih ? await prisma.user.findUnique({ where: { nip: pegawaiTerpilih.nip } }) : null;
@@ -49,6 +72,26 @@ export default async function RoleAssignmentPage({
         dikasih beberapa <strong>role tambahan</strong> buat kemudahan testing - pemiliknya lalu bisa ganti sudut
         pandang sendiri lewat tombol akun di sidebar, tanpa logout.
       </p>
+
+      {akunButaUnit.length > 0 && (
+        <div className="card mt-4 border-l-4 border-l-gold p-4">
+          <p className="font-bold text-ink">
+            {akunButaUnit.length} akun Kasubag TU belum punya unit kerja
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Akun ini lolos sebagai Kasubag TU tapi tidak terhubung ke satuan kerja manapun, jadi semua halaman unit
+            (Dashboard Unit, Pegawai Unit, Kalkulasi) tampil kosong buat mereka. Isi kolom satuan kerja di tabel bawah,
+            lalu Simpan.
+          </p>
+          <ul className="mt-2 list-inside list-disc text-sm text-ink-2">
+            {akunButaUnit.map((u) => (
+              <li key={u.id}>
+                {u.nama} <span className="text-xs text-muted">(NIP {u.nip})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <h2 className="mt-8 text-sm font-bold uppercase tracking-wide text-muted">Cari Pegawai &amp; Ubah Role</h2>
       <p className="mt-1 text-xs text-muted">
@@ -82,7 +125,11 @@ export default async function RoleAssignmentPage({
           </div>
           {akunTerpilih ? (
             <div className="card mt-4">
-              <AssignmentRow user={akunTerpilih} />
+              <AssignmentRow
+                user={akunTerpilih}
+                satuanKerjaList={satuanKerjaList}
+                satuanKerjaPegawai={pegawaiTerpilih.satuanKerja}
+              />
             </div>
           ) : (
             // Fallback: pegawai yang belum punya akun sama sekali (mis. data
@@ -94,6 +141,7 @@ export default async function RoleAssignmentPage({
                 nip: pegawaiTerpilih.nip,
                 satuanKerja: pegawaiTerpilih.satuanKerja,
               }}
+              satuanKerjaList={satuanKerjaList}
             />
           )}
         </>
@@ -113,7 +161,12 @@ export default async function RoleAssignmentPage({
           <p className="p-6 text-sm text-muted">Belum ada akun dengan kewenangan khusus.</p>
         )}
         {userNonPegawai.map((u) => (
-          <AssignmentRow key={u.id} user={u} />
+          <AssignmentRow
+            key={u.id}
+            user={u}
+            satuanKerjaList={satuanKerjaList}
+            satuanKerjaPegawai={satkerPegawaiByNip.get(u.nip) ?? null}
+          />
         ))}
       </div>
     </main>

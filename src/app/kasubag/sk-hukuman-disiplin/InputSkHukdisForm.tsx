@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { inputSkHukdisAction, type InputSkHukdisFormState } from "./actions";
+import { SearchableSelect } from "../../SearchableSelect";
 
 const INITIAL_STATE: InputSkHukdisFormState = {};
 
@@ -12,14 +13,12 @@ export function InputSkHukdisForm({ pegawaiList }: { pegawaiList: { id: string; 
     <form action={formAction} className="card mt-4 grid gap-3 p-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
         <label className="field-label">Pegawai</label>
-        <select name="pegawaiId" required className="field-input">
-          <option value="">Pilih pegawai...</option>
-          {pegawaiList.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nama} - {p.nip}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="pegawaiId"
+          options={pegawaiList.map((p) => ({ value: p.id, label: p.nama, keterangan: `NIP ${p.nip}` }))}
+          placeholder="Cari nama atau NIP pegawai..."
+          required
+        />
       </div>
       <div>
         <label className="field-label">Nomor SK</label>

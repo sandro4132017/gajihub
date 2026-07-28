@@ -4,11 +4,21 @@ import { useActionState, useState } from "react";
 import type { Role, User } from "@prisma/client";
 import { ubahAssignmentRoleAction, type UbahAssignmentRoleFormState } from "./actions";
 import { LABEL_ROLE } from "../../../auth/roleLabel";
+import { SearchableSelect } from "../../SearchableSelect";
 
 const INITIAL_STATE: UbahAssignmentRoleFormState = {};
 const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
 
-export function AssignmentRow({ user }: { user: User }) {
+export function AssignmentRow({
+  user,
+  satuanKerjaList,
+  satuanKerjaPegawai,
+}: {
+  user: User;
+  satuanKerjaList: string[];
+  /** Satuan kerja di data Pegawai - dipakai sebagai default kalau unit akunnya masih kosong. */
+  satuanKerjaPegawai: string | null;
+}) {
   const [state, formAction, pending] = useActionState(ubahAssignmentRoleAction, INITIAL_STATE);
   const [role, setRole] = useState<Role>(user.role);
   // Role TAMBAHAN - akun bisa ganti-ganti sudut pandang lewat menu di tombol
@@ -22,6 +32,7 @@ export function AssignmentRow({ user }: { user: User }) {
   // Satu akun cuma punya SATU satuanKerja (lihat model User) - jadi field ini
   // relevan begitu KASUBAG_TU ada di role utama ATAU role tambahan.
   const butuhSatuanKerja = role === "KASUBAG_TU" || rolesTambahan.includes("KASUBAG_TU");
+  const unitKosong = butuhSatuanKerja && !user.satuanKerja;
 
   return (
     <form action={formAction} className="border-b border-line-2 p-4">
@@ -31,20 +42,27 @@ export function AssignmentRow({ user }: { user: User }) {
           <p className="font-semibold text-ink">{user.nama}</p>
           <p className="text-xs text-muted">NIP {user.nip}</p>
         </div>
-        <select
-          name="role"
-          value={role}
-          onChange={(e) => setRole(e.target.value as Role)}
-          className="field-input w-auto py-1.5"
-        >
-          {SEMUA_ROLE.map((r) => (
-            <option key={r} value={r}>
-              {LABEL_ROLE[r]}
-            </option>
-          ))}
-        </select>
+        <div className="w-[150px]">
+          <SearchableSelect
+            name="role"
+            options={SEMUA_ROLE.map((r) => ({ value: r, label: LABEL_ROLE[r] }))}
+            defaultValue={user.role}
+            onValueChange={(v) => setRole(v as Role)}
+            required
+          />
+        </div>
         {butuhSatuanKerja && (
-          <input name="satuanKerja" defaultValue={user.satuanKerja ?? ""} placeholder="Satuan kerja" className="field-input w-auto py-1.5" />
+          <div className="w-[260px]">
+            <SearchableSelect
+              name="satuanKerja"
+              options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
+              // Kalau unit akun masih kosong, prefill dari satuan kerja data
+              // pegawainya - tebakan paling masuk akal, tetap bisa diganti.
+              defaultValue={user.satuanKerja ?? satuanKerjaPegawai ?? ""}
+              placeholder="Pilih satuan kerja..."
+              required
+            />
+          </div>
         )}
         <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-2">
           <input type="checkbox" name="aktif" defaultChecked={user.aktif} className="size-4" />
@@ -54,6 +72,13 @@ export function AssignmentRow({ user }: { user: User }) {
           {pending ? "..." : "Simpan"}
         </button>
       </div>
+
+      {unitKosong && (
+        <p className="mt-2 text-xs font-semibold text-gold-deep">
+          Akun ini ber-role Kasubag TU tapi unitnya masih kosong - tanpa unit, semua halaman unit tampil kosong buat
+          dia. Pilih satuan kerjanya lalu Simpan.
+        </p>
+      )}
 
       <div className="mt-3 rounded-lg bg-surface-2 p-3">
         <p className="text-[11px] font-bold uppercase tracking-wide text-muted">

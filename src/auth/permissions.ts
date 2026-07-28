@@ -412,6 +412,58 @@ export function canViewPegawai(user: AuthUser, target: TargetPegawai): boolean {
   }
 }
 
+// ---------------------------------------------------------------------------
+// DATA POKOK PEGAWAI (halaman /pegawai) - ADMIN, PPABP, KASUBAG_TU
+//
+// Diminta eksplisit oleh user: ketiga role ini butuh bisa memperbaiki data
+// pokok pegawai (termasuk MENGISI/MENGUBAH satuan kerja), karena satuan kerja
+// adalah kunci scoping di hampir semua fitur - pegawai dengan satuan kerja
+// salah/kosong otomatis "hilang" dari dashboard unit manapun.
+//
+// BEDA dengan canUpdateSkPegawaiStrukturalFungsional (OSDMA, /osdma/update-sk):
+// yang itu KHUSUS perubahan karena SK (jabatan/golongan/kelas jabatan/TMT) dan
+// lintas satker tanpa batas. Yang ini perbaikan data pokok termasuk satuan
+// kerja, dengan KASUBAG_TU di-scope ke unitnya sendiri. Keduanya sama-sama
+// menulis AuditTrail, jadi jejaknya tetap ada dari jalur manapun.
+//
+// TIDAK termasuk presensi/predikat kinerja - itu tetap dilarang lewat semua
+// jalur, lihat canEditPresensiKinerjaLangsung di bawah.
+// ---------------------------------------------------------------------------
+
+/**
+ * Buka halaman daftar/pencarian data pegawai buat diedit. Cek "boleh edit
+ * pegawai yang MANA" dilakukan terpisah per baris lewat canEditDataPegawai.
+ */
+export function canKelolaDataPegawai(user: AuthUser): boolean {
+  if (!user.aktif) return false;
+  return user.role === "ADMIN" || user.role === "PPABP" || user.role === "KASUBAG_TU";
+}
+
+/**
+ * Edit data pokok SATU pegawai. KASUBAG_TU cuma unitnya sendiri (konsisten
+ * dengan canViewRekapUnitKerja dkk), PPABP lintas satker (pilot: tim pusat),
+ * ADMIN bypass.
+ */
+export function canEditDataPegawai(user: AuthUser, targetSatuanKerja: string): boolean {
+  if (!user.aktif) return false;
+  if (user.role === "ADMIN") return true;
+  if (user.role === "PPABP") return cekPpabp(user, targetSatuanKerja);
+  return user.role === "KASUBAG_TU" && user.satuanKerja === targetSatuanKerja;
+}
+
+/**
+ * Memindahkan pegawai ke satuan kerja LAIN (mutasi). Sengaja dipisah dari
+ * canEditDataPegawai: buat KASUBAG_TU ini operasi satu arah yang tidak bisa
+ * dibatalkan sendiri - begitu pegawainya dipindah keluar unit, dia langsung
+ * di luar jangkauan Kasubag TU itu (tidak bisa dikembalikan tanpa bantuan
+ * PPABP/Admin). Makanya mutasi keluar unit SENGAJA cuma PPABP & ADMIN.
+ */
+export function canPindahSatuanKerjaPegawai(user: AuthUser, satuanKerjaAsal: string): boolean {
+  if (!user.aktif) return false;
+  if (user.role === "ADMIN") return true;
+  return user.role === "PPABP" && cekPpabp(user, satuanKerjaAsal);
+}
+
 /**
  * TIDAK ADA role yang boleh edit data presensi/kinerja secara LANGSUNG -
  * jalur koreksi yang SAH cuma: (1) Banding (ajukan -> diverifikasi
