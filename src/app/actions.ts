@@ -15,7 +15,7 @@ import {
   DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_LEMBUR,
 } from "../approval/approvalUangLemburService";
 import type { KeputusanApproval } from "../approval/types";
-import { getSessionAccount } from "../auth/getSessionAccount";
+import { getSessionAccount, ambilUserSesi } from "../auth/getSessionAccount";
 import {
   canApproveJenjang1,
   canApproveJenjangFinal,
@@ -81,8 +81,11 @@ async function cekOtorisasiApprovalTukin(
   jenjang: number,
   satuanKerjaPegawai: string
 ): Promise<{ diizinkan: true } | { diizinkan: false; alasan: string }> {
-  const user = await prisma.user.findUnique({ where: { nip: approverNip } });
-  if (!user) {
+  // ambilUserSesi = baris User dari database DENGAN role AKTIF sesi (bukan
+  // selalu role utama) - approver yang sedang memakai role tambahan dinilai
+  // dengan role yang benar-benar sedang dipakainya. Lihat src/auth/roleAktif.ts.
+  const user = await ambilUserSesi();
+  if (!user || user.nip !== approverNip) {
     return { diizinkan: false, alasan: "Akun tidak terdaftar sebagai User berwenang." };
   }
 
@@ -159,8 +162,8 @@ async function cekOtorisasiApprovalJenjang(
   totalJenjang: number,
   satuanKerjaPegawai: string
 ): Promise<{ diizinkan: true } | { diizinkan: false; alasan: string }> {
-  const user = await prisma.user.findUnique({ where: { nip: approverNip } });
-  if (!user) {
+  const user = await ambilUserSesi();
+  if (!user || user.nip !== approverNip) {
     return { diizinkan: false, alasan: "Akun tidak terdaftar sebagai User berwenang." };
   }
 

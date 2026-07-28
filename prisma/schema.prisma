@@ -352,6 +352,36 @@ model User {
   // - OSDMA, PIMPINAN, ADMIN: kewenangan lintas satker, biarkan NULL.
   satuanKerja String? @map("satuan_kerja")
 
+  // Role TAMBAHAN yang boleh dipakai akun ini lewat menu "Ganti role" di
+  // tombol akun (sidebar). Kosong = akun single-role seperti sebelumnya.
+  //
+  // KENAPA ADA: kebutuhan TESTING/DEMO - satu orang penguji bisa mencoba
+  // alur lintas role (mis. ajukan SK KGB sebagai Kasubag TU, lalu approve
+  // sebagai OSDMA) tanpa logout-login berkali-kali pakai NIP orang lain.
+  //
+  // Yang PENTING dipahami soal semantiknya:
+  // - Ini BUKAN "role gabungan": pada satu waktu akun tetap berperan
+  //   sebagai SATU role aktif saja (disimpan di cookie sesi). Otorisasi
+  //   tetap dievaluasi terhadap satu role itu lewat src/auth/permissions.ts
+  //   - tidak ada fungsi izin yang meng-OR-kan beberapa role sekaligus.
+  // - `role` di atas tetap role UTAMA/default (dipakai waktu login).
+  // - `satuanKerja` TETAP SATU untuk semua role akun ini - jadi kalau
+  //   KASUBAG_TU ada di daftar role (utama maupun tambahan), field itu
+  //   WAJIB diisi, kalau tidak akun jadi "buta unit" begitu ganti ke role
+  //   Kasubag TU (gap yang sama dengan UsulanPerubahanRole, lihat CLAUDE.md).
+  //
+  // TODO(confirm): ini fitur untuk kemudahan TESTING, BUKAN desain final
+  // production. Satu orang memegang beberapa kewenangan sekaligus
+  // bertentangan dengan pemisahan kewenangan (mis. pengaju SK KGB tidak
+  // seharusnya juga jadi approver-nya) - sebelum production, putuskan
+  // apakah kolom ini dihapus, atau dibatasi (mis. cuma boleh di lingkungan
+  // non-production / kombinasi role tertentu saja). Jejak pergantian role
+  // TIDAK dicatat ke AuditTrail (bukan perubahan data, cuma sudut pandang),
+  // tapi setiap aksi tetap tercatat atas NIP yang sama - jadi kalau kolom
+  // ini dipakai di production, log approval TIDAK akan menunjukkan "role
+  // apa yang sedang dipakai" waktu aksi itu dilakukan.
+  rolesTambahan Role[] @map("roles_tambahan")
+
   aktif Boolean @default(true)
 
   createdAt DateTime @default(now()) @map("created_at")

@@ -3,7 +3,7 @@
 import { type ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { logoutAction } from "./login/actions";
+import { AccountMenu } from "./AccountMenu";
 import { LABEL_ROLE } from "../auth/roleLabel";
 import type { Role } from "@prisma/client";
 
@@ -276,7 +276,10 @@ export function AppShell({
   account,
   children,
 }: {
-  account: { nama: string; jabatan: string; role: Role } | null;
+  // rolesTersedia = role utama + role tambahan akun ini (lihat
+  // src/auth/roleAktif.ts). Panjang 1 = akun single-role seperti sebelumnya,
+  // menu "Ganti role" tidak ditampilkan.
+  account: { nama: string; jabatan: string; role: Role; rolesTersedia: Role[] } | null;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -316,8 +319,10 @@ export function AppShell({
 
   return (
     <div className="min-h-screen print:block md:grid md:grid-cols-[264px_1fr]">
-      {/* Topbar mobile - cuma nampilin logo + hamburger + logout, sidebar
-          penuh disembunyikan jadi drawer supaya tidak makan tempat di HP.
+      {/* Topbar mobile - logo + hamburger + penanda role yang sedang aktif,
+          sidebar penuh disembunyikan jadi drawer supaya tidak makan tempat
+          di HP. Logout SEKARANG ada di dalam menu akun (kaki drawer), bukan
+          tombol terpisah di sini - satu tempat buat semua aksi akun.
           print:hidden - biar halaman kayak slip gaji bisa dicetak bersih
           tanpa chrome nav (lihat src/app/saya/slip-gaji/). */}
       <div className="flex items-center justify-between border-b border-line bg-surface px-4 py-2.5 md:hidden print:hidden">
@@ -336,11 +341,7 @@ export function AppShell({
             Gaji<span className="font-semibold text-muted">hub</span>
           </span>
         </div>
-        <form action={logoutAction}>
-          <button type="submit" className="text-xs font-bold text-muted underline">
-            Logout
-          </button>
-        </form>
+        <span className="chip chip-navy">{LABEL_ROLE[account.role]}</span>
       </div>
 
       {open && (
@@ -399,26 +400,17 @@ export function AppShell({
             })}
           </nav>
 
+          {/* Tombol akun = menu (ganti role + logout), lihat AccountMenu.tsx.
+              Logout SENGAJA tidak lagi berdiri sendiri di sini biar kaki
+              sidebar tetap ringkas. */}
           <div className="border-t border-white/10 p-3.5">
-            <div className="flex items-center gap-2.5 rounded-[10px] bg-white/[.04] p-2.5">
-              <div className="grid size-[34px] flex-none place-items-center rounded-[9px] bg-gradient-to-br from-gold to-gold-deep text-[13px] font-extrabold text-white">
-                {initials(account.nama)}
-              </div>
-              <div className="min-w-0">
-                <div className="truncate text-[12.5px] font-bold leading-tight text-white">{account.nama}</div>
-                <div className="truncate text-[10.5px] text-[#8ea0c0]">
-                  {LABEL_ROLE[account.role]} &middot; {account.jabatan}
-                </div>
-              </div>
-            </div>
-            <form action={logoutAction} className="mt-2">
-              <button
-                type="submit"
-                className="w-full rounded-[10px] px-2.5 py-2 text-left text-[12px] font-bold text-[#8ea0c0] hover:bg-white/[.06] hover:text-white"
-              >
-                Logout
-              </button>
-            </form>
+            <AccountMenu
+              nama={account.nama}
+              jabatan={account.jabatan}
+              role={account.role}
+              rolesTersedia={account.rolesTersedia}
+              initials={initials(account.nama)}
+            />
           </div>
         </aside>
 

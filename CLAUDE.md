@@ -691,7 +691,7 @@ username SEKALIGUS password (sama seperti pola login lain di project ini).
 
 | NIP | Nama | Satuan kerja | Role | Skenario periode berjalan (7/2026) |
 |---|---|---|---|---|
-| 198703232015031002 | Alpha Sandro Adithyaswara | Biro Keuangan dan BMN | `ADMIN` | lancar |
+| 198703232015031002 | Alpha Sandro Adithyaswara | Biro Keuangan dan BMN (`User.satuanKerja` = Pusdatik, lihat catatan multi-role) | `ADMIN` + SEMUA role lain sebagai role tambahan | lancar |
 | 197303072005011001 | Irwan Syafril | Biro Keuangan dan BMN | `PPABP` | lancar |
 | 198312302009121004 | John Pieter | Biro Keuangan dan BMN | `PEGAWAI` | banding (baru DIAJUKAN) |
 | 199611272018121001 | Prasetyo Muhammad Sidqi | Biro Keuangan dan BMN | `PEGAWAI` | uang lembur tidak biasa (52 jam, kena cap 40 jam + anomali) |
@@ -754,6 +754,99 @@ nampilin role akun yang berlaku sekarang sebagai chip, lalu tombol "Ubah
 role" (kalau akunnya sudah ada) atau "Buat akun" (fallback buat pegawai
 yang belum punya akun sama sekali, mis. data Pegawai yang diimpor SETELAH
 `seedAkunPegawai.ts` terakhir dijalankan).
+
+### Multi-role per akun & menu akun (buat kemudahan TESTING)
+
+Satu akun bisa dikasih beberapa role, lalu pemiliknya ganti "sudut pandang"
+sendiri lewat menu di tombol akun (sidebar kiri bawah) - TANPA logout-login
+pakai NIP orang lain. Dipakai buat testing alur lintas role (mis. ajukan SK
+KGB sebagai Kasubag TU, lalu approve sebagai OSDMA).
+
+**Model mentalnya - INI YANG PALING PENTING**: ini BUKAN "role gabungan".
+Pada satu waktu akun tetap berperan sebagai SATU **role aktif** saja
+(disimpan di cookie sesi). Otorisasi tetap dievaluasi terhadap satu role itu
+lewat `src/auth/permissions.ts` - TIDAK ADA fungsi izin yang meng-OR-kan
+beberapa role sekaligus, dan tidak ada satupun fungsi di `permissions.ts`
+yang diubah oleh fitur ini. Konsekuensi praktisnya: ADMIN yang sedang
+memakai role Kasubag TU BENAR-BENAR kehilangan akses `/admin` sampai dia
+ganti balik (sudah diverifikasi manual - lihat di bawah).
+
+- **Skema**: `User.rolesTambahan Role[]` (migrasi
+  `20260728000000_tambah_roles_tambahan_multi_role`, satu `ALTER TABLE`,
+  aman di database kosong maupun yang sudah ada isi - baris lama otomatis
+  `{}` = single-role, perilaku persis seperti sebelumnya). `User.role` tetap
+  role UTAMA/default yang dipakai waktu login.
+- **`src/auth/roleAktif.ts`** (BARU, pure): `daftarRoleTersedia()` (role
+  utama selalu paling depan, duplikat dibuang), `punyaMultiRole()`,
+  `resolveRoleAktif()` (kandidat dari cookie kalau memang dimiliki, kalau
+  tidak JATUH BALIK ke role utama), dan `LANDING_ROLE` (halaman tujuan per
+  role). 12 unit test baru.
+- **`getSessionAccount()` SEKARANG SELALU query database** (`src/auth/
+  getSessionAccount.ts`) - dulu cuma mendekode cookie. Ini yang membuat role
+  aktif tidak bisa jadi basi: (1) role aktif dicocokkan ulang dengan role
+  yang benar-benar dimiliki akun, (2) akun yang dinonaktifkan langsung
+  dianggap tidak login, (3) `satuanKerja` dibaca dari database. Return
+  type-nya bertambah `rolesTersedia` (backwards compatible - field lama
+  tetap ada). **Konsekuensi performa**: +1 query per halaman/action; belum
+  jadi masalah di prototype ini, tapi ingat ini kalau nanti ada halaman yang
+  memanggilnya berkali-kali.
+- **`ambilUserSesi()`** (di file yang sama) = baris `User` LENGKAP dengan
+  `role` sudah diganti role aktif. MENGGANTIKAN pola lama `getSessionAccount()`
+  lalu `prisma.user.findUnique({ where: { nip: akun.nip } })` di ~15 Server
+  Action - pola itu selalu memakai role UTAMA, jadi kalau dibiarkan, user
+  yang sedang ganti role tetap dinilai dengan role lamanya. **Kalau nanti
+  nulis action baru, pakai `ambilUserSesi()`, JANGAN `prisma.user.findUnique`
+  by nip lagi.**
+- **UI**: `src/app/AccountMenu.tsx` (BARU) - tombol akun jadi popover berisi
+  daftar "Ganti role" (role aktif ditandai centang & tidak bisa diklik) +
+  Logout. Menu "Ganti role" cuma muncul kalau akun punya >1 role. Tombol
+  Logout yang dulu berdiri sendiri di kaki sidebar DAN di topbar mobile
+  SUDAH DIHAPUS - di mobile, sisi kanan topbar sekarang chip role yang
+  sedang aktif, logout-nya lewat drawer.
+- **`gantiRoleAction`** (`src/app/login/actions.ts`) cuma menerbitkan ulang
+  cookie sesi. TIDAK mengubah data akun sama sekali (`User.role` di database
+  tetap role utama) dan TIDAK menulis `AuditTrail` (bukan perubahan data) -
+  lihat catatan di bawah soal implikasinya. Role tujuan diverifikasi ULANG
+  ke database, bukan dipercaya dari form.
+- **Login & middleware sekarang pakai `LANDING_ROLE`** - dulu semua role
+  non-PEGAWAI mendarat di `/tukin`, padahal `/tukin` tidak ada di menu
+  OSDMA/PIMPINAN/ADMIN. Sekarang tiap role diarahkan ke dashboard menu
+  pertamanya (PEGAWAI `/saya`, KASUBAG_TU `/kasubag`, OSDMA `/osdma`, PPABP
+  `/ppabp`, PIMPINAN `/pimpinan`, ADMIN `/admin`). Ini perbaikan sampingan
+  yang kebawa fitur ini, bukan permintaan terpisah.
+- **UI Admin** (`/admin/role-assignment`): tiap baris akun dapat blok
+  checkbox "Role tambahan (buat testing)". Field "Satuan kerja" sekarang
+  muncul kalau KASUBAG_TU ada di role utama ATAU role tambahan (satu akun
+  cuma punya SATU `satuanKerja`) - dan action-nya MENOLAK simpan kalau
+  KASUBAG_TU dipilih tapi satuan kerjanya kosong, supaya tidak bikin akun
+  "buta unit". Tabel "akun dengan kewenangan khusus" sekarang juga
+  memunculkan akun ber-role PEGAWAI yang punya role tambahan.
+- **Seed**: akun demo ADMIN (Alpha Sandro, NIP 198703232015031002) dikasih
+  SEMUA role lain sebagai role tambahan + `satuanKerja` diisi Pusdatik
+  (WAJIB, karena KASUBAG_TU ada di daftarnya). Jadi satu login itu cukup
+  buat keliling semua sudut pandang. Akun demo lain tetap single-role.
+
+**TODO(confirm) - BUKAN desain final production**: satu orang memegang
+beberapa kewenangan sekaligus bertentangan dengan pemisahan kewenangan
+(pengaju SK KGB tidak seharusnya juga jadi approver-nya). Sebelum
+production, putuskan: kolom `rolesTambahan` dihapus, atau dibatasi (cuma
+lingkungan non-production / kombinasi role tertentu). Catatan penting kalau
+tetap dipakai: pergantian role TIDAK dicatat di `AuditTrail`, jadi
+`ApprovalLog` cuma menunjukkan NIP approver - TIDAK menunjukkan role apa
+yang sedang dipakai waktu aksi itu dilakukan.
+
+**Diverifikasi manual** (dev lokal, akun Alpha Sandro): login mendarat di
+`/admin`; menu akun menampilkan 6 role dengan Admin bercentang; ganti ke
+Kasubag TU -> sidebar berubah jadi MENU_KASUBAG, redirect ke `/kasubag`
+dengan scope Pusdatik (81 pegawai), dan `/admin` jadi "Akses ditolak"
+(bukti otorisasi ikut role AKTIF, bukan role utama di database); role
+tambahan dihapus lewat SQL saat sesi masih jalan -> halaman berikutnya
+otomatis balik ke ADMIN (bukti cookie basi tidak dipercaya); assign role
+tambahan lewat UI Admin tersimpan benar di database + tercatat di
+`AuditTrail`; login akun single-role (Ayu Puspita Sari) -> menu akun cuma
+berisi Logout, tanpa bagian "Ganti role"; logout dari menu baru berfungsi.
+Semua mutasi verifikasi (role tambahan Ayu + baris AuditTrail-nya) SUDAH
+DI-REVERT.
 
 ## Yang BELUM ada / open items (jangan asumsikan sudah beres)
 
@@ -934,6 +1027,17 @@ pegawai yang lebih baru buat diimpor ulang via `importPegawaiXlsx.ts`.
 OWNER TO gajihub_app` semua supaya user aplikasi punya privilege yang
 benar. Kalau deploy ke server baru lagi dan migrasi butuh dijalankan manual
 lagi (lihat alasan di atas), jangan lupa langkah re-owner ini.
+
+**Deploy fitur multi-role ke VPS**: butuh migrasi database, jadi urutannya
+`git pull origin main && npx prisma migrate deploy && npm run build && pm2
+restart gajihub` (bukan cuma pull-build-restart seperti biasa). Migrasinya
+satu `ALTER TABLE ... ADD COLUMN` yang aman & non-destruktif - semua akun
+yang sudah ada tetap single-role sampai Admin menambahkan role tambahan
+lewat UI. Kalau mau akun demo ADMIN di VPS langsung punya semua role,
+jalankan ulang `npx tsx src/auth/seedUsers.ts` (idempotent, upsert) - TAPI
+ingat itu juga akan mengembalikan role 12 akun demo lain ke nilai seed, jadi
+kalau ada assignment manual di VPS yang mau dipertahankan, lebih aman
+tambahkan role tambahannya lewat halaman "Kelola Assignment Role" saja.
 
 ## Cara lanjutin dengan Claude Code
 

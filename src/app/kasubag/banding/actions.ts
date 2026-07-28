@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
-import { getSessionAccount } from "../../../auth/getSessionAccount";
+import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canVerifikasiBandingJenjang1, type AuthUser } from "../../../auth/permissions";
 
 export interface VerifikasiBandingFormState {
@@ -35,7 +35,7 @@ export async function verifikasiBandingJenjang1Action(
       return { error: "Keputusan tidak valid." };
     }
 
-    const user = await prisma.user.findUnique({ where: { nip: akun.nip } });
+    const user = await ambilUserSesi();
     if (!user) {
       return { error: "Akun tidak terdaftar sebagai User." };
     }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
-import { getSessionAccount } from "../../../auth/getSessionAccount";
+import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canEksekusiPerubahanRole, type AuthUser } from "../../../auth/permissions";
 
 export interface EksekusiUsulanFormState {
@@ -24,7 +24,7 @@ export async function eksekusiUsulanRoleAction(
     const akun = await getSessionAccount();
     if (!akun) return { error: "Sesi login sudah habis - silakan login ulang." };
 
-    const admin = await prisma.user.findUnique({ where: { nip: akun.nip } });
+    const admin = await ambilUserSesi();
     if (!admin) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: admin.nip, role: admin.role, satuanKerja: admin.satuanKerja, aktif: admin.aktif };
     if (!canEksekusiPerubahanRole(authUser)) {

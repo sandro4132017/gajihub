@@ -41,12 +41,22 @@ const AKUN_CONTOH: Array<{
   nama: string;
   role: Role;
   satuanKerja: string | null;
+  /** Role tambahan buat kemudahan testing - lihat model User (schema.prisma). */
+  rolesTambahan?: Role[];
 }> = [
   {
     nip: "198703232015031002",
     nama: "Alpha Sandro Adithyaswara",
     role: "ADMIN",
-    satuanKerja: null,
+    // satuanKerja diisi (padahal ADMIN lintas satker) KHUSUS karena akun ini
+    // punya role tambahan KASUBAG_TU: satu akun cuma punya SATU satuanKerja,
+    // dan KASUBAG_TU tanpa unit = "buta unit" (tidak bisa lihat data apapun).
+    satuanKerja: "Pusat Data dan Teknologi Informasi Ketenagakerjaan",
+    // Akun demo ADMIN sengaja dikasih SEMUA role lain supaya penguji bisa
+    // keliling semua sudut pandang lewat menu "Ganti role" di tombol akun,
+    // tanpa logout-login pakai NIP orang lain. Ini KHUSUS akun demo -
+    // jangan jadikan pola default waktu bikin akun production.
+    rolesTambahan: ["KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "PEGAWAI"],
   },
   {
     nip: "197303072005011001",
@@ -141,15 +151,19 @@ async function main() {
         nama: akun.nama,
         role: akun.role,
         satuanKerja: akun.satuanKerja,
+        rolesTambahan: akun.rolesTambahan ?? [],
       },
       update: {
         nama: akun.nama,
         role: akun.role,
         satuanKerja: akun.satuanKerja,
+        rolesTambahan: akun.rolesTambahan ?? [],
       },
     });
+    const catatanRoleTambahan =
+      akun.rolesTambahan && akun.rolesTambahan.length > 0 ? ` (+ role tambahan: ${akun.rolesTambahan.join(", ")})` : "";
     console.log(
-      `Akun User siap: NIP ${akun.nip} (login pakai NIP ini sebagai password juga) - role ${akun.role} - ${pegawai.satuanKerja}`
+      `Akun User siap: NIP ${akun.nip} (login pakai NIP ini sebagai password juga) - role ${akun.role}${catatanRoleTambahan} - ${pegawai.satuanKerja}`
     );
   }
 

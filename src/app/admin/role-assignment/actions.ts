@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { Role } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
-import { getSessionAccount } from "../../../auth/getSessionAccount";
+import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../../auth/permissions";
 
 export interface UbahAssignmentRoleFormState {
@@ -31,7 +31,7 @@ export async function ubahAssignmentRoleAction(
     const akun = await getSessionAccount();
     if (!akun) return { error: "Sesi login sudah habis - silakan login ulang." };
 
-    const admin = await prisma.user.findUnique({ where: { nip: akun.nip } });
+    const admin = await ambilUserSesi();
     if (!admin) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: admin.nip, role: admin.role, satuanKerja: admin.satuanKerja, aktif: admin.aktif };
     if (!canKelolaAssignmentRole(authUser)) {
@@ -42,6 +42,13 @@ export async function ubahAssignmentRoleAction(
     const role = String(formData.get("role") ?? "") as Role;
     const satuanKerjaRaw = String(formData.get("satuanKerja") ?? "").trim();
     const aktif = formData.get("aktif") === "on";
+    // Role TAMBAHAN (checkbox, boleh lebih dari satu) - buat kemudahan
+    // testing lintas role. Role utama dibuang dari daftar supaya tidak
+    // dobel, lihat daftarRoleTersedia().
+    const rolesTambahan = formData
+      .getAll("rolesTambahan")
+      .map((r) => String(r) as Role)
+      .filter((r) => ROLE_VALID.includes(r) && r !== role);
 
     if (!targetUserId || !ROLE_VALID.includes(role)) {
       return { error: "Akun dan role tujuan wajib diisi dengan benar." };
@@ -50,11 +57,27 @@ export async function ubahAssignmentRoleAction(
     const target = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!target) return { error: "Akun tidak ditemukan." };
 
-    const dataSebelum = { role: target.role, satuanKerja: target.satuanKerja, aktif: target.aktif };
-    const satuanKerja = role === "KASUBAG_TU" ? satuanKerjaRaw || target.satuanKerja : null;
+    const dataSebelum = {
+      role: target.role,
+      rolesTambahan: target.rolesTambahan,
+      satuanKerja: target.satuanKerja,
+      aktif: target.aktif,
+    };
+    // satuanKerja dipertahankan kalau KASUBAG_TU ada di role utama ATAU role
+    // tambahan - kalau tidak, akun itu bakal "buta unit" begitu ganti ke role
+    // Kasubag TU (satu akun cuma punya SATU satuanKerja, lihat model User).
+    const butuhSatuanKerja = role === "KASUBAG_TU" || rolesTambahan.includes("KASUBAG_TU");
+    const satuanKerja = butuhSatuanKerja ? satuanKerjaRaw || target.satuanKerja : null;
+
+    if (butuhSatuanKerja && !satuanKerja) {
+      return { error: "Satuan kerja wajib diisi kalau akun ini punya role Kasubag TU." };
+    }
 
     await prisma.$transaction([
-      prisma.user.update({ where: { id: targetUserId }, data: { role, satuanKerja, aktif } }),
+      prisma.user.update({
+        where: { id: targetUserId },
+        data: { role, rolesTambahan, satuanKerja, aktif },
+      }),
       prisma.auditTrail.create({
         data: {
           entitas: "app_user",
@@ -62,13 +85,14 @@ export async function ubahAssignmentRoleAction(
           aksi: "UPDATE",
           aktor: admin.nip,
           dataSebelum,
-          dataSesudah: { role, satuanKerja, aktif, sumber: "Kelola assignment role (Admin)" },
+          dataSesudah: { role, rolesTambahan, satuanKerja, aktif, sumber: "Kelola assignment role (Admin)" },
         },
       }),
     ]);
 
     revalidatePath("/admin/role-assignment");
-    return { success: `Assignment role ${target.nama} diperbarui jadi ${role}.` };
+    const catatanTambahan = rolesTambahan.length > 0 ? ` (+ role tambahan: ${rolesTambahan.join(", ")})` : "";
+    return { success: `Assignment role ${target.nama} diperbarui jadi ${role}${catatanTambahan}.` };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
   }
@@ -96,7 +120,7 @@ export async function buatAkunBaruAction(
     const akun = await getSessionAccount();
     if (!akun) return { error: "Sesi login sudah habis - silakan login ulang." };
 
-    const admin = await prisma.user.findUnique({ where: { nip: akun.nip } });
+    const admin = await ambilUserSesi();
     if (!admin) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: admin.nip, role: admin.role, satuanKerja: admin.satuanKerja, aktif: admin.aktif };
     if (!canKelolaAssignmentRole(authUser)) {

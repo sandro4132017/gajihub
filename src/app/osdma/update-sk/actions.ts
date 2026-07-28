@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "../../../lib/prisma";
-import { getSessionAccount } from "../../../auth/getSessionAccount";
+import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canUpdateSkPegawaiStrukturalFungsional, type AuthUser } from "../../../auth/permissions";
 
 export interface UpdateSkStrukturalFormState {
@@ -26,7 +26,7 @@ export async function updateSkStrukturalAction(
     const akun = await getSessionAccount();
     if (!akun) return { error: "Sesi login sudah habis - silakan login ulang." };
 
-    const user = await prisma.user.findUnique({ where: { nip: akun.nip } });
+    const user = await ambilUserSesi();
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canUpdateSkPegawaiStrukturalFungsional(authUser)) {

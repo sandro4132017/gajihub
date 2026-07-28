@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../lib/prisma";
-import { getSessionAccount } from "../../auth/getSessionAccount";
+import { getSessionAccount, ambilUserSesi } from "../../auth/getSessionAccount";
 import { canAjukanBanding, type AuthUser } from "../../auth/permissions";
 
 export interface AjukanBandingFormState {
@@ -71,7 +71,7 @@ export async function ajukanBandingAction(
       return { error: "Alasan banding wajib diisi." };
     }
 
-    const user = await prisma.user.findUnique({ where: { nip: akun.nip } });
+    const user = await ambilUserSesi();
     if (!user) {
       return { error: "Akun tidak terdaftar sebagai User." };
     }

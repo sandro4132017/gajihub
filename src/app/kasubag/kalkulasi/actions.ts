@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
-import { getSessionAccount } from "../../../auth/getSessionAccount";
+import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canAjukanKalkulasiTukinMassalUnit, canTelaahKoreksiAjukanUangLemburUnit, type AuthUser } from "../../../auth/permissions";
 import { hitungTukin } from "../../../business-logic/tukin";
 import { hitungUangMakan } from "../../../business-logic/uangMakan";
@@ -26,7 +26,7 @@ export interface KalkulasiMassalFormState {
 async function ambilAuthUser(): Promise<AuthUser | null> {
   const akun = await getSessionAccount();
   if (!akun) return null;
-  const user = await prisma.user.findUnique({ where: { nip: akun.nip } });
+  const user = await ambilUserSesi();
   if (!user) return null;
   return { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
 }
