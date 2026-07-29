@@ -55,6 +55,7 @@ model Pegawai {
   skHukumanDisiplin SkHukumanDisiplin[]
   buktiPotongPajak  BuktiPotongPajak[]
   gajiInduk         GajiInduk[]
+  rekapPresensi     RekapPresensiPeriode[]
 
   @@index([satuanKerja])
   @@index([statusPegawai])
@@ -73,7 +74,19 @@ model PresensiHarian {
   jamMasuk        DateTime? @map("jam_masuk")
   jamKeluar       DateTime? @map("jam_keluar")
   statusKehadiran String    @map("status_kehadiran") // HADIR, TERLAMBAT, ALPHA, IZIN, SAKIT, CUTI, WFA
-  menitTerlambat  Int       @default(0) @map("menit_terlambat")
+  // Pasal 13 ayat (3) Permenaker 15/2024 menyebut TIGA pelanggaran dengan
+  // tarif sama (0,01%/menit): terlambat hadir, pulang cepat, dan
+  // meninggalkan kantor. Disimpan terpisah - bukan karena tarifnya beda,
+  // tapi supaya bisa dijelaskan ke pegawai/auditor menitnya dari mana.
+  // Sebelumnya cuma ada menit_terlambat, jadi dua jenis lain tidak punya
+  // tempat dan terpaksa dititipkan ke keterlambatan.
+  menitTerlambat           Int @default(0) @map("menit_terlambat")
+  menitPulangCepat         Int @default(0) @map("menit_pulang_cepat")
+  menitMeninggalkanKantor  Int @default(0) @map("menit_meninggalkan_kantor")
+  // Pasal 13 ayat (4) - potongan 3% karena tidak ikut upacara bendera tanpa
+  // alasan sah. Ditandai per HARI presensi karena upacara memang terjadi di
+  // tanggal tertentu (umumnya tanggal 17).
+  tidakIkutUpacara         Boolean @default(false) @map("tidak_ikut_upacara")
 
   sourceSystem   String   @default("e-Presensi") @map("source_system")
   sourceSyncedAt DateTime @map("source_synced_at")
@@ -402,6 +415,7 @@ model User {
   anggaranDiunggah         AnggaranRealisasi[]
   buktiPotongPajakDiunggah BuktiPotongPajak[]
   gajiIndukDiunggah        GajiInduk[]
+  rekapPresensiDiunggah    RekapPresensiPeriode[]
   usulanRoleDiajukan       UsulanPerubahanRole[] @relation("UsulanRoleDiajukanOleh")
   usulanRoleDiputuskan     UsulanPerubahanRole[] @relation("UsulanRoleDiputuskanOleh")
   UsulanPerubahanRole      UsulanPerubahanRole[]
@@ -782,4 +796,57 @@ model GajiInduk {
   @@unique([pegawaiId, periodeBulan, periodeTahun])
   @@index([periodeBulan, periodeTahun])
   @@map("gaji_induk")
+}
+
+// ---------------------------------------------------------------------------
+// REKAP PRESENSI PERIODE - hasil UPLOAD MANUAL rekap kehadiran bulanan,
+// sumber komponen 30% kehadiran Tukin.
+//
+// KENAPA tabel sendiri, bukan menulis ke PresensiHarian: yang di-upload adalah
+// REKAP BULANAN (total hari alpha, total menit terlambat, dst), bukan catatan
+// per hari. Memecahnya jadi baris harian palsu berarti mengarang tanggal
+// kejadian yang tidak ada di sumbernya.
+//
+// Dua jalur data hidup berdampingan, dan itu disengaja:
+// - PresensiHarian : diisi sinkronisasi e-Presensi (per hari, detail)
+// - RekapPresensiPeriode : diisi upload manual (per bulan, agregat)
+// Kalkulasi Tukin memakai rekap ini kalau ada; kalau tidak ada, dihitung dari
+// PresensiHarian. Ini sejalan dengan Pasal 23 Permenaker 15/2024 yang memang
+// mengakui penghitungan manual selama sistem informasi belum berjalan.
+//
+// TODO(confirm): belum ada aturan mana yang menang kalau KEDUANYA terisi untuk
+// periode yang sama. Sekarang rekap manual yang dipakai (asumsi: kalau orang
+// sampai meng-upload manual, itu koreksi atas data otomatis). Perlu
+// dikonfirmasi begitu e-Presensi benar-benar tersambung.
+// ---------------------------------------------------------------------------
+model RekapPresensiPeriode {
+  id        String  @id @default(uuid())
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  periodeBulan Int @map("periode_bulan")
+  periodeTahun Int @map("periode_tahun")
+
+  // Enam field pertama memetakan LANGSUNG ke tabel potongan Pasal 13.
+  jumlahHariAlpha             Int @default(0) @map("jumlah_hari_alpha") // ayat (1) - 3%/hari
+  jumlahTidakPresensi         Int @default(0) @map("jumlah_tidak_presensi") // ayat (2) - 1%/kejadian
+  totalMenitTerlambat         Int @default(0) @map("total_menit_terlambat") // ayat (3) - 0,01%/menit
+  totalMenitPulangCepat       Int @default(0) @map("total_menit_pulang_cepat") // ayat (3)
+  totalMenitMeninggalkanKantor Int @default(0) @map("total_menit_meninggalkan_kantor") // ayat (3)
+  jumlahTidakIkutUpacara      Int @default(0) @map("jumlah_tidak_ikut_upacara") // ayat (4) - 3%/kejadian
+
+  // Dipakai Uang Makan, BUKAN potongan Tukin.
+  jumlahHariKerja Int @default(0) @map("jumlah_hari_kerja")
+  jumlahHariHadir Int @default(0) @map("jumlah_hari_hadir")
+
+  sourceSystem   String   @default("UPLOAD_MANUAL") @map("source_system")
+  sourceFileName String?  @map("source_file_name")
+  diunggahOlehId String   @map("diunggah_oleh_id")
+  diunggahOleh   User     @relation(fields: [diunggahOlehId], references: [id])
+  diunggahPada   DateTime @default(now()) @map("diunggah_pada")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([pegawaiId, periodeBulan, periodeTahun])
+  @@index([periodeBulan, periodeTahun])
+  @@map("rekap_presensi_periode")
 }

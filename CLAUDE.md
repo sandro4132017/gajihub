@@ -66,7 +66,7 @@ akses resmi tersedia - tanpa refactor besar.
   Penilaian" e-Kinerja BKN ke `PredikatKinerja` (bobot 70% Tukin), PURE -
   lihat "Upload rekap predikat kinerja e-Kinerja BKN" di bawah
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
-  session login di atas (`npm test` - 163 test)
+  session login di atas (`npm test` - 177 test)
 - Fitur "user & role" versi AWAL (skema `User`/`Role`/`Banding`/
   `BuktiDukung` - dulu namanya `Sanggahan`/`BuktiPendukungUpload`,
   authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
@@ -922,6 +922,106 @@ Admin"), sekarang ditutup dari empat sisi:
 4. `ubahAssignmentRoleAction` sudah menolak simpan kalau KASUBAG_TU dipilih
    tanpa satuan kerja (ditambahkan bareng fitur multi-role).
 
+### Kalkulasi Tukin satu pintu + perbaikan logika potongan (Permenaker 15/2024)
+
+Dipicu permintaan user: satukan kalkulasi Tukin di Dashboard Tukin (upload
+presensi manual + tombol sinkronisasi + upload predikat kinerja jadi satu),
+DAN implementasikan tabel potongan Pasal 13/14. User melampirkan PDF
+Permenaker 15/2024 - isinya dicek langsung ke Bab IV, bukan dari ringkasan.
+
+**DUA BUG NYATA ketemu waktu mengerjakan ini. Keduanya mengubah angka yang
+dibayarkan ke pegawai.**
+
+**Bug 1 - potongan Pasal 13 dihitung dari TOTAL tukin, bukan dari bobot
+kehadiran (3,33x terlalu besar).** `hitungTukin` menghitung
+`tukinPokok x (0,30 - potongan)`. Karena 0,30 itu pecahan dari TOTAL tukin,
+mengurangkan 0,03 di satuan yang sama berarti memotong 3% dari TOTAL - persis
+yang dibantah komentarnya sendiri ("dihitung dari bobot kehadiran, bukan dari
+total tukin"). Padahal Pasal 13 ayat (1) berbunyi "potongan sebesar 3% DARI
+BOBOT KEHADIRAN", jadi 1 hari alpha = 3% x 30% = 0,9% dari total.
+Contoh kelas jabatan 10 (tukin pokok Rp 5.979.200), 1 hari alpha:
+potongan seharusnya Rp 53.813, logika lama memotong Rp 179.376.
+Perbaikannya: potongan dikalikan ke nilai rupiah bobot kehadiran
+(`bobotKehadiran x potonganPersen`), bukan dikurangkan dari angka 0,30.
+Ambang anomali ikut berubah dari ">30%" jadi ">100% bobot kehadiran".
+
+**Bug 2 - cuti besar bulan ke-2 & ke-3 terbalik.** Pasal 14 huruf c menulis
+"Tunjangan Kinerja dibayarkan setelah DIKURANGI persentase sebesar 50% /
+75% / 90%", jadi itu POTONGAN. Kode lama mengembalikan 0,75 dan 0,9 sebagai
+persen DIBAYAR - efeknya makin lama cuti besar, tukin makin BESAR (50% ->
+75% -> 90%), kebalikan dari maksud pasal. Seharusnya 50% -> 25% -> 10%.
+Bukti ini keliru dan bukan tafsir sengaja: cuti SAKIT di fungsi yang sama
+(huruf d, kalimatnya identik) sudah benar sejak awal. Perbaikannya bukan
+sekadar mengganti angka - konstantanya sekarang menyimpan POTONGAN persis
+seperti bunyi pasal, lalu yang dibayar diturunkan dengan `1 - potongan`,
+supaya kekeliruan "dikurangi vs dibayar" tidak bisa terulang. Fungsinya
+di-rename `hitungPersenOverrideCuti` -> `hitungPersenDibayarCuti` biar
+namanya menyebut satuan yang dikembalikan.
+
+**Kelengkapan Pasal 13** - dulu cuma 4 dari 6 jenis pelanggaran yang punya
+tempat. Pasal 13 ayat (3) mencakup TIGA hal bertarif sama (terlambat, pulang
+cepat, meninggalkan kantor) tapi skema cuma punya `totalMenitTerlambat`;
+ayat (4) diperlakukan sebagai boolean, bukan hitungan kejadian. Sekarang:
+- `RekapKehadiranPeriode` + `PresensiHarian` + `RekapPresensiPeriode` punya
+  kolom terpisah buat pulang cepat & meninggalkan kantor (migrasi
+  `20260729120000_tambah_rincian_potongan_presensi`, 3 ADD COLUMN
+  non-destruktif). Dipisah bukan karena tarifnya beda, tapi supaya bisa
+  dijelaskan ke pegawai/auditor menitnya datang dari pelanggaran yang mana.
+- Upacara jadi `jumlahTidakIkutUpacara` (per kejadian). TODO(confirm)
+  PENTING: teks ayat (4) TIDAK memuat frasa "setiap kali" (beda dengan ayat
+  (2) yang eksplisit) - dibuat per-kejadian mengikuti tabel yang diberikan
+  user, tapi WAJIB ditegaskan ke Biro Hukum.
+- `TukinResult` sekarang membawa `rincianPotonganKehadiran[]` (jenis, dasar
+  hukum, jumlah, satuan, tarif, total) supaya UI bisa menampilkan "kenapa
+  tukin saya segini" tanpa menghitung ulang.
+
+**Dashboard Tukin jadi satu pintu** (`/tukin`):
+- Panel "Sumber data kalkulasi" menampilkan status kedua komponen untuk
+  periode terpilih: `X / Y pegawai` buat kehadiran 30% dan capaian kinerja
+  70%, masing-masing dengan link ke halamannya. Gunanya supaya ketahuan
+  lebih awal siapa yang datanya belum masuk - tanpa panel ini penyebab
+  "kok pegawai ini dilewati" baru ketahuan setelah kalkulasi.
+- `/predikat-kinerja` DIPINDAH jadi `/tukin/predikat-kinerja`; entri sidebar
+  "Predikat Kinerja" yang berdiri sendiri DIHAPUS dari MENU_KASUBAG &
+  MENU_PPABP.
+- `/tukin/presensi` (BARU) - upload rekap presensi manual + panel
+  sinkronisasi e-Presensi. Tombol sinkronisasi SENGAJA nonaktif dan tanpa
+  action: adapternya memang belum ada, dan tombol yang kelihatan aktif lalu
+  gagal saat diklik lebih membingungkan daripada yang jujur bilang belum
+  tersedia. Begitu RealPresensiAdapter ada, cukup ubah konstanta
+  `TERSAMBUNG` di `SinkronisasiPresensi.tsx` + pasang action-nya.
+- Tombol "Hitung Tukin" cuma muncul buat yang benar-benar berwenang
+  (`canAjukanKalkulasiTukinMassalUnit`). **GAP yang ketemu waktu verifikasi**:
+  PPABP boleh meng-upload KEDUA komponen tapi TIDAK boleh menjalankan
+  kalkulasi massal (itu KASUBAG_TU + ADMIN). Belum diubah - itu keputusan
+  kewenangan tersendiri, bukan efek samping penyatuan menu ini.
+
+**Model `RekapPresensiPeriode`** (migrasi
+`20260729130000_tambah_rekap_presensi_periode`) - yang di-upload adalah rekap
+BULANAN, sementara `PresensiHarian` per hari. Memecah rekap jadi baris harian
+palsu berarti mengarang tanggal kejadian, jadi dibuat tabel sendiri. Kalkulasi
+memakai rekap manual kalau ada, kalau tidak jatuh ke `PresensiHarian` (jalur
+sinkronisasi). Sejalan dengan Pasal 23 yang memang mengakui penghitungan
+manual selama sistem informasi belum berjalan. TODO(confirm): belum ada aturan
+mana yang menang kalau keduanya terisi - sekarang rekap manual yang dipakai.
+
+**Format upload presensi**: template Gajihub sendiri, di-key NIP, bisa diunduh
+sudah terisi daftar pegawai unit (`/tukin/presensi/template`, Route Handler
+CSV). SENGAJA BUKAN parser file export e-Presensi: contoh tarikan e-Presensi
+yang ada di-key NAMA dengan penulisan tidak konsisten antar baris, dan
+menebak pemetaan nama->NIP di sini berbahaya (salah orang = salah potong
+tukin). Kolom templatenya sama persis dengan tabel Pasal 13.
+
+**Diverifikasi manual end-to-end** (production build): unduh template Pusdatik
+(81 pegawai) -> isi pelanggaran buat 3 karakter simulasi -> upload (81 baris
+tersimpan, peringatan "3 pegawai perlu hitung ulang" muncul) -> jalankan
+Kalkulasi Unit (3 dihitung, 78 dilewati dengan alasan "predikat kinerja belum
+diupload") -> hasilnya dicocokkan lewat script yang menghitung ULANG dari
+tabel Pasal 13 secara independen: ketiganya **COCOK persis**. Contoh Ayu
+Puspita Sari (kelas 10): 1 alpha + 2x tidak presensi + 30/20/10 menit + 1x
+bolos upacara = potongan 8,60% dari bobot kehadiran, komponen kehadiran
+Rp 1.639.497 (harapan = aplikasi).
+
 ### Bug "akun multi-role kehilangan jangkauan PPABP" (FIXED)
 
 Diminta user: akun ADMIN yang sedang memakai role PPABP harus bisa upload
@@ -1237,9 +1337,13 @@ kode action.
 3. **Cuti besar/sakit yang mulai/berakhir di tengah periode** - `tukin.ts`
    saat ini cuma terima `bulanKeberapa` (integer), belum bisa proporsional
    harian. Perlu konfirmasi praktik ke Biro OSDMA/Hukum.
-4. **Cuti sakit karena gugur kandungan di atas 1 bulan** - Pasal 14 huruf e
-   butuh perhitungan per hari (1%/hari), belum diimplementasi, masih
-   default ke 100%.
+4. ~~**Cuti sakit karena gugur kandungan di atas 1 bulan** - Pasal 14 huruf e
+   butuh perhitungan per hari (1%/hari), belum diimplementasi.~~ **RESOLVED**
+   - sudah diimplementasi di `hitungPersenDibayarCuti` (butuh input
+   `cutiAktif.jumlahHariCuti`). Tanpa jumlah hari, TIDAK menebak: dibayar
+   penuh + ditandai anomali. TODO(confirm) yang tersisa: pasal tidak
+   mendefinisikan "1 bulan" dalam hari - dipakai 30 hari (batas 1,5 bulan =
+   45 hari).
 5. **Akses API e-Kinerja BKN dan SAKTI** - masih informal (belum ada
    PKS/MoU). `MockEKinerjaAdapter` mensimulasikan alur upload manual file
    rekap dari portal BKN sesuai workaround yang sudah disepakati.

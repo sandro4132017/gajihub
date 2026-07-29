@@ -50,10 +50,30 @@ export interface RekapKehadiranPeriode {
   jumlahHariAlpha: number;
   /** Jumlah kejadian tidak presensi masuk/pulang - dasar potongan 1%/kejadian (Pasal 13 ayat 2) */
   jumlahTidakPresensi: number;
-  /** Total akumulasi menit keterlambatan/pulang cepat - dasar potongan 0.01%/menit (Pasal 13 ayat 3) */
+  /**
+   * Pasal 13 ayat (3) menyebut TIGA pelanggaran dengan tarif yang sama
+   * (0,01%/menit): terlambat hadir, pulang cepat, dan meninggalkan kantor.
+   * Dipisah jadi tiga field - bukan karena tarifnya beda, tapi supaya bisa
+   * dijelaskan ke pegawai/auditor menitnya datang dari pelanggaran yang mana.
+   * Sebelumnya cuma ada `totalMenitTerlambat`, jadi dua jenis lainnya tidak
+   * punya tempat dan terpaksa "dititipkan" ke keterlambatan.
+   */
   totalMenitTerlambat: number;
-  /** false jika tidak ikut upacara bendera tanpa alasan sah - potongan 3% (Pasal 13 ayat 4) */
-  ikutUpacaraBendera: boolean;
+  totalMenitPulangCepat: number;
+  totalMenitMeninggalkanKantor: number;
+  /**
+   * Jumlah KEJADIAN tidak ikut upacara bendera tanpa alasan sah - potongan
+   * 3% per kejadian (Pasal 13 ayat 4).
+   *
+   * TODO(confirm): teks Pasal 13 ayat (4) TIDAK memuat frasa "setiap kali"
+   * (beda dengan ayat (2) yang eksplisit "setiap kali tidak melakukan
+   * presensi"), jadi secara harfiah bisa juga dibaca 3% sekali saja per
+   * periode berapa pun jumlah upacara yang dilewatkan. Dibuat per-kejadian
+   * mengikuti tabel yang diberikan user. Praktis jarang berbeda (upacara
+   * bendera umumnya sebulan sekali), TAPI perlu ditegaskan ke Biro Hukum
+   * sebelum dipakai produksi.
+   */
+  jumlahTidakIkutUpacara: number;
   /**
    * Jika pegawai menjalani cuti dalam periode ini, Pasal 14 mengatur
    * pembayaran tukin dengan skema TERSENDIRI (bukan sekadar potongan
@@ -65,6 +85,13 @@ export interface RekapKehadiranPeriode {
   cutiAktif?: {
     jenis: JenisCuti;
     bulanKeberapa?: number; // untuk cuti besar/sakit yang bertingkat per bulan (1, 2, 3, ...)
+    /**
+     * Jumlah HARI cuti dalam periode ini. Dibutuhkan KHUSUS oleh Pasal 14
+     * huruf e angka 2 (cuti sakit karena gugur kandungan di atas 1 bulan
+     * s.d. 1,5 bulan = potongan 1% PER HARI) - satu-satunya ketentuan cuti
+     * yang tarifnya harian, bukan per bulan.
+     */
+    jumlahHariCuti?: number;
   };
   /**
    * Field di bawah (jumlahHariKerja, jumlahHariHadir, totalJamLembur) dipakai
@@ -90,6 +117,22 @@ export interface TukinInput {
   tarifPphEfektif?: number;
 }
 
+/** Satu baris rincian potongan komponen kehadiran (Pasal 13). */
+export interface RincianPotonganKehadiran {
+  /** Label siap tampil, mis. "Tidak hadir kerja tanpa keterangan yang sah". */
+  jenis: string;
+  /** Pasal yang jadi dasar, mis. "Pasal 13 ayat (1)". */
+  dasarHukum: string;
+  /** Berapa kali/hari/menit pelanggarannya. */
+  jumlah: number;
+  /** Satuan `jumlah` - "hari" | "kejadian" | "menit". */
+  satuan: string;
+  /** Tarif potongan per satuan, dalam pecahan (0.03 = 3%). */
+  tarifPersen: number;
+  /** jumlah x tarifPersen, dalam pecahan dari BOBOT KEHADIRAN (bukan dari total tukin). */
+  totalPersen: number;
+}
+
 export interface TukinResult {
   pegawaiId: string;
   periodeBulan: number;
@@ -97,10 +140,18 @@ export interface TukinResult {
   bobotKehadiran: number;      // nilai rupiah dari 30% tukinPokokKelasJabatan
   bobotKinerja: number;        // nilai rupiah dari 70% tukinPokokKelasJabatan
   potonganKehadiranPersen: number; // akumulasi persentase potongan sesuai Pasal 13
+  /**
+   * Rincian potongan Pasal 13 per jenis pelanggaran - dipakai buat
+   * menampilkan "kenapa tukin saya segini" ke pegawai tanpa harus menghitung
+   * ulang di sisi UI.
+   */
+  rincianPotonganKehadiran: RincianPotonganKehadiran[];
   komponenKehadiranSetelahPotongan: number;
   komponenKinerja: number;
   tukinPokok: number;          // komponenKehadiran + komponenKinerja (sebelum override cuti/disiplin)
   overrideCutiDiterapkan: boolean;
+  /** Persen tukin yang DIBAYARKAN saat override cuti berlaku (Pasal 14). null kalau tidak ada cuti. */
+  persenDibayarCuti: number | null;
   potonganPph: number;
   tukinBersih: number;
   anomali: string[];

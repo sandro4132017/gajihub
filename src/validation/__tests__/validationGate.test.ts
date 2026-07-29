@@ -22,7 +22,9 @@ describe("validasiTukin", () => {
         jumlahHariAlpha: 0,
         jumlahTidakPresensi: 0,
         totalMenitTerlambat: 0,
-        ikutUpacaraBendera: true,
+        totalMenitPulangCepat: 0,
+        totalMenitMeninggalkanKantor: 0,
+        jumlahTidakIkutUpacara: 0,
         jumlahHariKerja: 22,
         jumlahHariHadir: 22,
         totalJamLembur: 0,
@@ -53,7 +55,9 @@ describe("validasiTukin", () => {
         jumlahHariAlpha: 0,
         jumlahTidakPresensi: 0,
         totalMenitTerlambat: 0,
-        ikutUpacaraBendera: true,
+        totalMenitPulangCepat: 0,
+        totalMenitMeninggalkanKantor: 0,
+        jumlahTidakIkutUpacara: 0,
         jumlahHariKerja: 22,
         jumlahHariHadir: 22,
         totalJamLembur: 0,
@@ -72,7 +76,12 @@ describe("validasiTukin", () => {
     expect(validasi.anomali.length).toBeGreaterThan(0);
   });
 
-  it("PERLU_REVIEW kalau potongan kehadiran melebihi bobot 30%", () => {
+  // Batas anomalinya SEKARANG 100% dari bobot kehadiran, bukan 30% dari total
+  // tukin - lihat perbaikan aritmatika potongan Pasal 13 di business-logic/
+  // tukin.ts. 15 hari alpha (45% bobot kehadiran) sudah tidak lagi dianggap
+  // melebihi batas, jadi dipakai kombinasi yang benar-benar menghabiskan
+  // komponen kehadiran.
+  it("PERLU_REVIEW kalau potongan menghabiskan seluruh komponen kehadiran", () => {
     const hasil = hitungTukin({
       pegawaiId: "p1",
       periodeBulan: 7,
@@ -82,10 +91,12 @@ describe("validasiTukin", () => {
         pegawaiId: "p1",
         periodeBulan: 7,
         periodeTahun: 2026,
-        jumlahHariAlpha: 15,
-        jumlahTidakPresensi: 0,
-        totalMenitTerlambat: 0,
-        ikutUpacaraBendera: true,
+        jumlahHariAlpha: 25,
+        jumlahTidakPresensi: 20,
+        totalMenitTerlambat: 600,
+        totalMenitPulangCepat: 0,
+        totalMenitMeninggalkanKantor: 0,
+        jumlahTidakIkutUpacara: 0,
         jumlahHariKerja: 22,
         jumlahHariHadir: 22,
         totalJamLembur: 0,

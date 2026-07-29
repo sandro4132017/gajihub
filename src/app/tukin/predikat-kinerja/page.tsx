@@ -1,11 +1,11 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { prisma } from "../../lib/prisma";
-import { getSessionAccount } from "../../auth/getSessionAccount";
-import { canBukaHalamanPredikatKinerja, type AuthUser } from "../../auth/permissions";
-import { AksesDitolak } from "../AksesDitolak";
-import { NAMA_BULAN } from "../bulan";
-import { SearchableSelect } from "../SearchableSelect";
+import { prisma } from "../../../lib/prisma";
+import { getSessionAccount } from "../../../auth/getSessionAccount";
+import { canBukaHalamanPredikatKinerja, type AuthUser } from "../../../auth/permissions";
+import { AksesDitolak } from "../../AksesDitolak";
+import { NAMA_BULAN } from "../../bulan";
+import { SearchableSelect } from "../../SearchableSelect";
 import { UploadRekapForm } from "./UploadRekapForm";
 
 export const dynamic = "force-dynamic";
@@ -181,7 +181,7 @@ export default async function PredikatKinerjaPage({
               <span key={`${p.periodeTahun}-${p.periodeBulan}`}>
                 {i > 0 && ", "}
                 <Link
-                  href={`/predikat-kinerja?bulan=${p.periodeBulan}&tahun=${p.periodeTahun}`}
+                  href={`/tukin/predikat-kinerja?bulan=${p.periodeBulan}&tahun=${p.periodeTahun}`}
                   className="font-semibold text-teal-deep underline"
                 >
                   {NAMA_BULAN[p.periodeBulan - 1] ?? p.periodeBulan} {p.periodeTahun}

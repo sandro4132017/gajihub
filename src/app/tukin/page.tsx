@@ -6,10 +6,11 @@ import { ApprovalForm } from "../ApprovalForm";
 import { ajukanApprovalTukinAction } from "../actions";
 import { FilterBar } from "../FilterBar";
 import { getSessionAccount } from "../../auth/getSessionAccount";
-import { canViewApproverDashboard } from "../../auth/permissions";
+import { canViewApproverDashboard, canAjukanKalkulasiTukinMassalUnit } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
 import { AksesDitolak } from "../AksesDitolak";
 import { StatusBadge } from "../StatusBadge";
+import { SumberDataTukin } from "./SumberDataTukin";
 
 export const dynamic = "force-dynamic";
 
@@ -71,14 +72,41 @@ export default async function TukinPage({
     orderBy: { timestampAksi: "asc" },
   });
 
+  // --- Status kedua komponen pembentuk Tukin untuk periode yang difilter ---
+  // Ditaruh di halaman yang sama supaya jelas kenapa seorang pegawai belum
+  // punya kalkulasi: presensinya belum ada, predikatnya belum ada, atau
+  // dua-duanya. Sebelumnya kedua sumber ini ada di menu yang terpisah-pisah.
+  const periodeAktif =
+    bulan && tahun ? { periodeBulan: Number(bulan), periodeTahun: Number(tahun) } : null;
+  const filterPegawaiSatker = satkerEfektif ? { pegawai: { satuanKerja: satkerEfektif } } : {};
+
+  const [jumlahPegawai, jumlahPresensi, jumlahPredikat] = periodeAktif
+    ? await Promise.all([
+        prisma.pegawai.count({ where: satkerEfektif ? { satuanKerja: satkerEfektif } : {} }),
+        prisma.rekapPresensiPeriode.count({ where: { ...periodeAktif, ...filterPegawaiSatker } }),
+        prisma.predikatKinerja.count({ where: { ...periodeAktif, ...filterPegawaiSatker } }),
+      ])
+    : [0, 0, 0];
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Dashboard Tukin</h1>
       <p className="mt-1 text-sm text-muted">
-        Hasil kalkulasi tukin dari job scheduler, siap direview dan disetujui berjenjang.
+        Satu tempat untuk kedua komponen pembentuk Tunjangan Kinerja: <strong>kehadiran 30%</strong> dan{" "}
+        <strong>capaian kinerja 70%</strong> (Permenaker 15/2024 Pasal 5 &amp; 18), beserta hasil kalkulasi dan
+        approval berjenjangnya.
       </p>
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
+
+      <SumberDataTukin
+        periodeAktif={periodeAktif}
+        jumlahPegawai={jumlahPegawai}
+        jumlahPresensi={jumlahPresensi}
+        jumlahPredikat={jumlahPredikat}
+        bolehHitung={canAjukanKalkulasiTukinMassalUnit(authUser, satkerEfektif ?? "")}
+        satkerEfektif={satkerEfektif}
+      />
 
       <div className="mt-8 space-y-4">
         {kalkulasiList.length === 0 && (

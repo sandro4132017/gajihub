@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { read, utils } from "xlsx";
-import { prisma } from "../../lib/prisma";
-import { getSessionAccount, ambilUserSesi } from "../../auth/getSessionAccount";
-import { canUploadRekapPredikatKinerja, type AuthUser } from "../../auth/permissions";
-import { parseRekapPredikatKinerja, type BarisRekapPredikat } from "../../business-logic/rekapPredikatKinerja";
+import { prisma } from "../../../lib/prisma";
+import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
+import { canUploadRekapPredikatKinerja, type AuthUser } from "../../../auth/permissions";
+import { parseRekapPredikatKinerja, type BarisRekapPredikat } from "../../../business-logic/rekapPredikatKinerja";
 
 /**
  * Upload file "Rekap Penilaian" dari e-Kinerja BKN -> tabel PredikatKinerja
@@ -212,7 +212,7 @@ export async function uploadRekapPredikatAction(
       },
     });
 
-    revalidatePath("/predikat-kinerja");
+    revalidatePath("/tukin/predikat-kinerja");
     return {
       success: `${siapSimpan.length} predikat kinerja tersimpan dari "${file.name}".`,
       ringkasan: {

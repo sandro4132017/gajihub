@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { uploadRekapPredikatAction, type UploadRekapPredikatFormState } from "./actions";
-import { NAMA_BULAN } from "../bulan";
+import { NAMA_BULAN } from "../../bulan";
 
 const INITIAL_STATE: UploadRekapPredikatFormState = {};
 

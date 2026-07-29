@@ -295,7 +295,7 @@ function RiwayatPredikatKinerja({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Riwayat predikat kinerja</p>
         {bolehUpload && (
-          <Link href="/predikat-kinerja" className="text-xs font-semibold text-teal-deep underline">
+          <Link href="/tukin/predikat-kinerja" className="text-xs font-semibold text-teal-deep underline">
             Upload rekap e-Kinerja
           </Link>
         )}
