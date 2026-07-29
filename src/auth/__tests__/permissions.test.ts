@@ -182,10 +182,16 @@ describe("PPABP - approval jenjang final, lintas satker", () => {
     expect(canApproveJenjangFinal(ppabpPusat, BIRO_UMUM)).toBe(true);
   });
 
-  it("canApproveJenjangFinal: PPABP per-satker (kalau nanti di-scale) cuma diizinkan buat satkernya", () => {
+  it("canApproveJenjangFinal: PPABP tetap lintas satker WALAU User.satuanKerja terisi", () => {
+    // MENGGANTIKAN test lama yang mengunci "PPABP per-satker cuma diizinkan
+    // buat satkernya". Perilaku itu sengaja dicabut: `User.satuanKerja` itu
+    // kolom milik KASUBAG_TU dan WAJIB diisi kalau akun punya role Kasubag
+    // TU, jadi memakainya juga buat men-scope PPABP bikin akun multi-role
+    // kehilangan jangkauan lintas unit tanpa alasan. Lihat komentar cekPpabp
+    // di permissions.ts - scoping PPABP per satker butuh kolomnya sendiri.
     const ppabpSatker = buatUser({ role: "PPABP", satuanKerja: SETJEN });
     expect(canApproveJenjangFinal(ppabpSatker, SETJEN)).toBe(true);
-    expect(canApproveJenjangFinal(ppabpSatker, BIRO_UMUM)).toBe(false);
+    expect(canApproveJenjangFinal(ppabpSatker, BIRO_UMUM)).toBe(true);
   });
 
   it("canApproveJenjangFinal: DITOLAK buat KASUBAG_TU (bukan jenjang final)", () => {
@@ -457,5 +463,60 @@ describe("Upload rekap predikat kinerja e-Kinerja BKN (Kasubag TU + PPABP)", () 
     for (const role of SEMUA_ROLE) {
       expect(canEditPresensiKinerjaLangsung(buatUser({ role, satuanKerja: SETJEN }))).toBe(false);
     }
+  });
+});
+
+/**
+ * Skenario NYATA yang bikin aturan ini ada: akun ADMIN demo (Alpha Sandro)
+ * punya SEMUA role sebagai role tambahan, jadi `User.satuanKerja`-nya WAJIB
+ * terisi (KASUBAG_TU ada di daftar rolenya). Waktu dia ganti sudut pandang
+ * ke PPABP, otorisasi dievaluasi terhadap role AKTIF itu saja - tanpa bypass
+ * ADMIN. Dia harus tetap bisa menindaklanjuti unit MANA SAJA, supaya
+ * perubahan tidak macet nunggu satu orang PPABP.
+ */
+describe("Akun multi-role sedang memakai role PPABP (satuanKerja terisi buat Kasubag TU)", () => {
+  const PUSDATIK = "Pusat Data dan Teknologi Informasi Ketenagakerjaan";
+  // Role AKTIF = PPABP. `satuanKerja` terisi karena akun ini JUGA Kasubag TU.
+  const adminSebagaiPpabp = buatUser({ role: "PPABP", satuanKerja: PUSDATIK });
+
+  it("boleh upload rekap predikat kinerja unit MANA SAJA, bukan cuma unit akunnya", () => {
+    expect(canUploadRekapPredikatKinerja(adminSebagaiPpabp, PUSDATIK)).toBe(true);
+    expect(canUploadRekapPredikatKinerja(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
+    expect(canUploadRekapPredikatKinerja(adminSebagaiPpabp, SETJEN)).toBe(true);
+  });
+
+  it("boleh edit data pegawai unit MANA SAJA, termasuk memindahkan satuan kerjanya", () => {
+    expect(canEditDataPegawai(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
+    expect(canEditDataPegawai(adminSebagaiPpabp, SETJEN)).toBe(true);
+    expect(canPindahSatuanKerjaPegawai(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
+  });
+
+  it("kewenangan PPABP lintas unit lain juga ikut utuh", () => {
+    expect(canApproveJenjangFinal(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
+    expect(canHandleSelisih(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
+    expect(canViewRekonsiliasiLintasSatker(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
+    expect(canTelaahValidasiPengajuanLintasUnit(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
+    expect(canMonitorUbahStatusLintasUnit(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
+    expect(canGenerateAdk(adminSebagaiPpabp)).toBe(true);
+    expect(canKelolaGajiInduk(adminSebagaiPpabp)).toBe(true);
+  });
+
+  it("BUKAN berarti role aktif jadi tidak berarti - sebagai PPABP dia TETAP kehilangan hak khusus ADMIN", () => {
+    // Inti fitur multi-role: yang dievaluasi role AKTIF, bukan role yang
+    // dipunya. Kalau ini bocor, ganti role jadi tidak ada artinya.
+    expect(canKelolaAssignmentRole(adminSebagaiPpabp)).toBe(false);
+    expect(canEksekusiPerubahanRole(adminSebagaiPpabp)).toBe(false);
+    expect(canMonitorKesehatanSistem(adminSebagaiPpabp)).toBe(false);
+    expect(canKonfigurasiAdapter(adminSebagaiPpabp)).toBe(false);
+  });
+
+  it("sebagai KASUBAG_TU akun yang sama TETAP terkunci ke unitnya", () => {
+    // Kolom satuanKerja tetap berfungsi penuh untuk role yang memang
+    // memilikinya - yang dicabut cuma pemakaiannya buat men-scope PPABP.
+    const adminSebagaiKasubag = buatUser({ role: "KASUBAG_TU", satuanKerja: PUSDATIK });
+    expect(canUploadRekapPredikatKinerja(adminSebagaiKasubag, PUSDATIK)).toBe(true);
+    expect(canUploadRekapPredikatKinerja(adminSebagaiKasubag, BIRO_UMUM)).toBe(false);
+    expect(canEditDataPegawai(adminSebagaiKasubag, BIRO_UMUM)).toBe(false);
+    expect(canPindahSatuanKerjaPegawai(adminSebagaiKasubag, PUSDATIK)).toBe(false);
   });
 });
