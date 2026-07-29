@@ -401,7 +401,8 @@ async function hitungDanSimpanPeriode(
     periodeBulan: periode.bulan,
     periodeTahun: periode.tahun,
     jumlahHariKerja: HARI_KERJA,
-    jumlahHariHadir: hariHadir,
+    jumlahHariWfo: hariHadir,
+    jumlahHariWfhWfa: 0,
     tarifHarianUangMakan: TARIF_UANG_MAKAN,
   });
   const validasiUmHasil = validasiUangMakan(hasilUm);

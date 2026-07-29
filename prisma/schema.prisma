@@ -73,7 +73,11 @@ model PresensiHarian {
   tanggal         DateTime
   jamMasuk        DateTime? @map("jam_masuk")
   jamKeluar       DateTime? @map("jam_keluar")
-  statusKehadiran String    @map("status_kehadiran") // HADIR, TERLAMBAT, ALPHA, IZIN, SAKIT, CUTI, WFA
+  // HADIR/WFO/WFH/WFA/TERLAMBAT = berhak uang makan (SBM 2026 item 22.1)
+  // DIKLAT/DINAS_LUAR = bekerja, TAPI tidak berhak uang makan (konsumsi sudah
+  // ditanggung kegiatan/perjalanan dinasnya)
+  // ALPHA/TIDAK_PRESENSI/IZIN/SAKIT/CUTI = tidak berhak
+  statusKehadiran String    @map("status_kehadiran")
   // Pasal 13 ayat (3) Permenaker 15/2024 menyebut TIGA pelanggaran dengan
   // tarif sama (0,01%/menit): terlambat hadir, pulang cepat, dan
   // meninggalkan kantor. Disimpan terpisah - bukan karena tarifnya beda,
@@ -161,7 +165,11 @@ model UangMakan {
   periodeTahun    Int   @map("periode_tahun")
   jumlahHariKerja Int   @map("jumlah_hari_kerja")
   jumlahHariHadir Int   @map("jumlah_hari_hadir")
-  tarifHarian     Float @map("tarif_harian")
+  // Hari yang BENAR-BENAR dibayar (WFO + WFH/WFA). Bisa lebih kecil dari
+  // jumlahHariHadir kalau ada hari diklat/dinas luar - keduanya hadir tapi
+  // tidak berhak uang makan. Disimpan supaya selisihnya bisa dijelaskan.
+  jumlahHariDibayar Int @default(0) @map("jumlah_hari_dibayar")
+  tarifHarian     Float @map("tarif_harian") // SBM 2026 item 22.1, per golongan
   totalUangMakan  Float @map("total_uang_makan")
 
   status         String    @default("DRAFT")
@@ -182,8 +190,15 @@ model UangLembur {
   periodeBulan    Int   @map("periode_bulan")
   periodeTahun    Int   @map("periode_tahun")
   totalJamLembur  Float @map("total_jam_lembur")
-  tarifPerJam     Float @map("tarif_per_jam")
-  totalUangLembur Float @map("total_uang_lembur")
+  tarifPerJam     Float @map("tarif_per_jam") // SBM 2026 item 23.1, per golongan
+  // Pendapatan lembur = uang lembur (per JAM) + uang makan lembur (per HARI).
+  // Disimpan terpisah supaya slip gaji & ADK bisa merincinya, dan supaya
+  // jelas bahwa keduanya tarif & satuannya beda (SBM item 23.1 vs 23.2).
+  jumlahHariMakanLembur Int   @default(0) @map("jumlah_hari_makan_lembur") // hari dengan lembur >= 2 jam
+  tarifMakanLemburPerHari Float @default(0) @map("tarif_makan_lembur_per_hari") // SBM item 23.2
+  uangLembur      Float @default(0) @map("uang_lembur")
+  uangMakanLembur Float @default(0) @map("uang_makan_lembur")
+  totalUangLembur Float @map("total_uang_lembur") // uangLembur + uangMakanLembur
 
   status         String    @default("DRAFT")
   catatanAnomali String?   @map("catatan_anomali")
@@ -835,9 +850,24 @@ model RekapPresensiPeriode {
   totalMenitMeninggalkanKantor Int @default(0) @map("total_menit_meninggalkan_kantor") // ayat (3)
   jumlahTidakIkutUpacara      Int @default(0) @map("jumlah_tidak_ikut_upacara") // ayat (4) - 3%/kejadian
 
-  // Dipakai Uang Makan, BUKAN potongan Tukin.
-  jumlahHariKerja Int @default(0) @map("jumlah_hari_kerja")
-  jumlahHariHadir Int @default(0) @map("jumlah_hari_hadir")
+  // --- Dipakai UANG MAKAN (SBM 2026 item 22.1), BUKAN potongan Tukin ---
+  // Dipecah per status karena tidak semua kehadiran berhak uang makan:
+  // WFO & WFH/WFA berhak, Diklat & Dinas Keluar TIDAK. Kolom diklat & dinas
+  // luar disimpan walau tidak dibayar - supaya selisih antara "hari hadir"
+  // dan "hari dibayar" bisa dijelaskan, bukan hilang begitu saja.
+  jumlahHariKerja    Int @default(0) @map("jumlah_hari_kerja")
+  jumlahHariHadir    Int @default(0) @map("jumlah_hari_hadir")
+  jumlahHariWfo      Int @default(0) @map("jumlah_hari_wfo")
+  jumlahHariWfhWfa   Int @default(0) @map("jumlah_hari_wfh_wfa")
+  jumlahHariDiklat   Int @default(0) @map("jumlah_hari_diklat")
+  jumlahHariDinasLuar Int @default(0) @map("jumlah_hari_dinas_luar")
+
+  // --- Dipakai UANG LEMBUR (SBM 2026 item 23.1 & 23.2) ---
+  // Dua angka, karena dua komponennya beda satuan: uang lembur per JAM,
+  // uang makan lembur per HARI (syarat lembur >= 2 jam pada hari itu).
+  // Total jam saja TIDAK cukup buat menurunkan jumlah harinya.
+  totalJamLembur         Float @default(0) @map("total_jam_lembur")
+  jumlahHariMakanLembur  Int   @default(0) @map("jumlah_hari_makan_lembur")
 
   sourceSystem   String   @default("UPLOAD_MANUAL") @map("source_system")
   sourceFileName String?  @map("source_file_name")

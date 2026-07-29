@@ -5,14 +5,28 @@
 // ============================================================================
 
 export type StatusKehadiran =
-  | "HADIR"
+  | "HADIR"           // dianggap WFO - lihat catatan di bawah
+  | "WFO"             // kerja di kantor - BERHAK uang makan
+  | "WFH"             // kerja dari rumah - BERHAK uang makan
+  | "WFA"             // kerja dari mana saja - BERHAK uang makan
   | "TERLAMBAT"
   | "ALPHA"           // tidak hadir tanpa keterangan sah - Pasal 13 ayat (1)
   | "TIDAK_PRESENSI"  // hadir tapi tidak tap in/out - Pasal 13 ayat (2)
+  | "DIKLAT"          // TIDAK berhak uang makan (konsumsi ditanggung diklat)
+  | "DINAS_LUAR"      // TIDAK berhak uang makan (ditanggung perjalanan dinas)
   | "IZIN"
   | "SAKIT"
-  | "CUTI"
-  | "WFA";
+  | "CUTI";
+
+/**
+ * Status yang BERHAK uang makan (aturan user 2026-07-29): WFO dan WFH/WFA.
+ * "HADIR" ikut masuk karena data lama memakai label itu untuk kehadiran
+ * biasa di kantor - lihat catatan di uangMakan.ts.
+ *
+ * Diklat & Dinas Keluar SENGAJA di luar daftar: pegawainya memang bekerja,
+ * tapi konsumsinya sudah ditanggung kegiatan/perjalanan dinas.
+ */
+export const STATUS_BERHAK_UANG_MAKAN: StatusKehadiran[] = ["HADIR", "WFO", "WFH", "WFA", "TERLAMBAT"];
 
 /** Jenis cuti sesuai Pasal 14 - tiap jenis punya aturan pembayaran tukin berbeda */
 export type JenisCuti =
@@ -162,7 +176,15 @@ export interface UangMakanInput {
   periodeBulan: number;
   periodeTahun: number;
   jumlahHariKerja: number;
-  jumlahHariHadir: number;
+  /**
+   * Hari yang BERHAK uang makan dipecah per status kehadiran, bukan satu
+   * angka "hari hadir" - karena tidak semua kehadiran berhak. Yang berhak
+   * cuma WFO dan WFH/WFA; Diklat & Dinas Keluar TIDAK (konsumsinya sudah
+   * ditanggung kegiatan/perjalanan dinasnya). Lihat uangMakan.ts.
+   */
+  jumlahHariWfo: number;
+  jumlahHariWfhWfa: number;
+  /** SBM 2026 item 22.1 per golongan - lihat tarifSbm.ts. */
   tarifHarianUangMakan: number;
 }
 
@@ -170,6 +192,8 @@ export interface UangMakanResult {
   pegawaiId: string;
   periodeBulan: number;
   periodeTahun: number;
+  /** Hari yang benar-benar dibayar (WFO + WFH/WFA, di-clamp ke hari kerja). */
+  jumlahHariDibayar: number;
   totalUangMakan: number;
   anomali: string[];
 }
@@ -179,7 +203,17 @@ export interface UangLemburInput {
   periodeBulan: number;
   periodeTahun: number;
   totalJamLembur: number;
+  /** SBM 2026 item 23.1 per golongan (OJ) - lihat tarifSbm.ts. */
   tarifPerJam: number;
+  /**
+   * Jumlah HARI yang lemburnya mencapai minimal 2 jam - satu-satunya dasar
+   * uang makan lembur, yang satuannya per hari (OH), bukan per jam. Tidak
+   * bisa diturunkan dari totalJamLembur saja. Pemanggil yang punya rincian
+   * harian bisa memakai hitungHariBerhakMakanLembur().
+   */
+  jumlahHariMakanLembur?: number;
+  /** SBM 2026 item 23.2 per golongan (OH) - lihat tarifSbm.ts. */
+  tarifMakanLemburPerHari?: number;
   batasMaksimalJamLembur?: number;
 }
 
@@ -188,6 +222,12 @@ export interface UangLemburResult {
   periodeBulan: number;
   periodeTahun: number;
   jamLemburDihitung: number;
+  jumlahHariMakanLembur: number;
+  /** Komponen 1 - jam x tarif per jam (SBM item 23.1). */
+  uangLembur: number;
+  /** Komponen 2 - hari (>=2 jam) x tarif per hari (SBM item 23.2). */
+  uangMakanLembur: number;
+  /** uangLembur + uangMakanLembur - inilah yang dibayarkan. */
   totalUangLembur: number;
   anomali: string[];
 }

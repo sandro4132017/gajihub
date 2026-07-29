@@ -18,10 +18,14 @@
 //
 // Kolom template (urutan bebas, header dicocokkan namanya):
 //   NIP | Hari Alpha | Tidak Presensi | Menit Terlambat | Menit Pulang Cepat |
-//   Menit Meninggalkan Kantor | Tidak Ikut Upacara | Hari Kerja | Hari Hadir
+//   Menit Meninggalkan Kantor | Tidak Ikut Upacara | Hari Kerja | Hari Hadir |
+//   Hari WFO | Hari WFH/WFA | Hari Diklat | Hari Dinas Luar |
+//   Jam Lembur | Hari Makan Lembur
 //
-// Tiap kolom memetakan langsung ke satu baris tabel potongan Pasal 13 -
-// lihat hitungPotonganKehadiranPersen() di tukin.ts.
+// Enam kolom pertama memetakan langsung ke tabel potongan Pasal 13 (lihat
+// hitungPotonganKehadiranPersen di tukin.ts). Kolom WFO/WFH/Diklat/Dinas
+// Luar dipakai uang makan, dan dua kolom lembur dipakai uang lembur - lihat
+// uangMakan.ts & uangLembur.ts.
 // ============================================================================
 
 export interface BarisRekapPresensi {
@@ -34,6 +38,20 @@ export interface BarisRekapPresensi {
   jumlahTidakIkutUpacara: number;
   jumlahHariKerja: number;
   jumlahHariHadir: number;
+  // --- Uang makan (SBM 2026 item 22.1) ---
+  // Dipecah per status karena tidak semua kehadiran berhak: WFO & WFH/WFA
+  // berhak, Diklat & Dinas Keluar TIDAK. Kolom diklat/dinas luar tetap
+  // diminta walau tidak dibayar, supaya selisih "hadir vs dibayar" bisa
+  // dijelaskan, bukan hilang begitu saja.
+  jumlahHariWfo: number;
+  jumlahHariWfhWfa: number;
+  jumlahHariDiklat: number;
+  jumlahHariDinasLuar: number;
+  // --- Uang lembur (SBM 2026 item 23.1 & 23.2) ---
+  // Dua angka karena dua komponennya beda satuan: uang lembur per JAM, uang
+  // makan lembur per HARI (syarat lembur >= 2 jam pada hari itu).
+  totalJamLembur: number;
+  jumlahHariMakanLembur: number;
 }
 
 export interface BarisPresensiDilewati {
@@ -57,7 +75,15 @@ const PETA_KOLOM: { field: keyof Omit<BarisRekapPresensi, "nip">; kandidat: stri
   { field: "totalMenitMeninggalkanKantor", kandidat: ["meninggalkan kantor", "keluar kantor"] },
   { field: "jumlahTidakIkutUpacara", kandidat: ["upacara"] },
   { field: "jumlahHariKerja", kandidat: ["hari kerja"] },
-  { field: "jumlahHariHadir", kandidat: ["hari hadir", "hadir"] },
+  { field: "jumlahHariWfo", kandidat: ["hari wfo", "wfo"] },
+  { field: "jumlahHariWfhWfa", kandidat: ["wfh", "wfa"] },
+  { field: "jumlahHariDiklat", kandidat: ["diklat"] },
+  { field: "jumlahHariDinasLuar", kandidat: ["dinas luar", "dinas keluar"] },
+  { field: "totalJamLembur", kandidat: ["jam lembur"] },
+  { field: "jumlahHariMakanLembur", kandidat: ["hari makan lembur", "makan lembur"] },
+  // Ditaruh PALING BAWAH dengan sengaja: kandidat "hadir" cocok juga ke
+  // "Hari Hadir", jadi kalau dicek duluan dia bisa menyerobot kolom lain.
+  { field: "jumlahHariHadir", kandidat: ["hari hadir"] },
 ];
 
 function teks(nilai: unknown): string | null {
@@ -144,6 +170,12 @@ export function parseRekapPresensi(matriks: unknown[][]): HasilParseRekapPresens
 
     baris.push({
       nip,
+      jumlahHariWfo: nilai.jumlahHariWfo,
+      jumlahHariWfhWfa: nilai.jumlahHariWfhWfa,
+      jumlahHariDiklat: nilai.jumlahHariDiklat,
+      jumlahHariDinasLuar: nilai.jumlahHariDinasLuar,
+      totalJamLembur: nilai.totalJamLembur,
+      jumlahHariMakanLembur: nilai.jumlahHariMakanLembur,
       jumlahHariAlpha: nilai.jumlahHariAlpha,
       jumlahTidakPresensi: nilai.jumlahTidakPresensi,
       totalMenitTerlambat: nilai.totalMenitTerlambat,

@@ -118,12 +118,15 @@ export default async function PresensiTukinPage({
               <th className="px-3 py-2.5">Tinggal kantor</th>
               <th className="px-3 py-2.5">Bolos upacara</th>
               <th className="px-3 py-2.5">Hadir/Kerja</th>
+              <th className="px-3 py-2.5">WFO + WFH/WFA</th>
+              <th className="px-3 py-2.5">Diklat / Dinas luar</th>
+              <th className="px-3 py-2.5">Lembur</th>
             </tr>
           </thead>
           <tbody>
             {rekapList.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-muted">
+                <td colSpan={11} className="px-3 py-6 text-center text-muted">
                   Belum ada rekap presensi untuk periode ini. Upload dulu di atas - tanpa presensi, kalkulasi Tukin
                   akan melewati pegawai yang bersangkutan.
                 </td>
@@ -143,6 +146,20 @@ export default async function PresensiTukinPage({
                 <td className="px-3 py-2.5 font-mono text-ink-2">{r.jumlahTidakIkutUpacara}x</td>
                 <td className="px-3 py-2.5 font-mono text-ink-2">
                   {r.jumlahHariHadir}/{r.jumlahHariKerja}
+                </td>
+                {/* Yang berhak uang makan (SBM item 22.1) - bisa lebih kecil
+                    dari hari hadir kalau ada diklat/dinas luar. */}
+                <td className="px-3 py-2.5 font-mono font-semibold text-ink">
+                  {r.jumlahHariWfo + r.jumlahHariWfhWfa} hari
+                </td>
+                <td className="px-3 py-2.5 font-mono text-muted">
+                  {r.jumlahHariDiklat} / {r.jumlahHariDinasLuar}
+                </td>
+                <td className="px-3 py-2.5 font-mono text-ink-2">
+                  {r.totalJamLembur} jam
+                  {r.jumlahHariMakanLembur > 0 && (
+                    <span className="block text-xs text-muted">{r.jumlahHariMakanLembur} hari makan lembur</span>
+                  )}
                 </td>
               </tr>
             ))}

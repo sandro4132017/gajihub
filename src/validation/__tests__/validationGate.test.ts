@@ -121,20 +121,22 @@ describe("validasiUangMakan", () => {
       periodeBulan: 7,
       periodeTahun: 2026,
       jumlahHariKerja: 22,
-      jumlahHariHadir: 20,
+      jumlahHariWfo: 20,
+      jumlahHariWfhWfa: 0,
       tarifHarianUangMakan: 35000,
     });
 
     expect(validasiUangMakan(hasil).outcome).toBe("LOLOS");
   });
 
-  it("PERLU_REVIEW kalau hari hadir melebihi hari kerja", () => {
+  it("PERLU_REVIEW kalau hari berhak uang makan melebihi hari kerja", () => {
     const hasil = hitungUangMakan({
       pegawaiId: "p1",
       periodeBulan: 7,
       periodeTahun: 2026,
       jumlahHariKerja: 20,
-      jumlahHariHadir: 25,
+      jumlahHariWfo: 25,
+      jumlahHariWfhWfa: 0,
       tarifHarianUangMakan: 35000,
     });
 

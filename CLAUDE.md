@@ -66,7 +66,7 @@ akses resmi tersedia - tanpa refactor besar.
   Penilaian" e-Kinerja BKN ke `PredikatKinerja` (bobot 70% Tukin), PURE -
   lihat "Upload rekap predikat kinerja e-Kinerja BKN" di bawah
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
-  session login di atas (`npm test` - 177 test)
+  session login di atas (`npm test` - 195 test)
 - Fitur "user & role" versi AWAL (skema `User`/`Role`/`Banding`/
   `BuktiDukung` - dulu namanya `Sanggahan`/`BuktiPendukungUpload`,
   authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
@@ -922,6 +922,73 @@ Admin"), sekarang ditutup dari empat sisi:
 4. `ubahAssignmentRoleAction` sudah menolak simpan kalau KASUBAG_TU dipilih
    tanpa satuan kerja (ditambahkan bareng fitur multi-role).
 
+### Uang makan & uang lembur mengikuti SBM 2026
+
+Dipicu PDF "SBM 2026" + aturan dari user. Menutup sebagian open item #8
+(tarif), dan mengubah SIAPA yang dibayar - bukan cuma berapa.
+
+**`src/business-logic/tarifSbm.ts`** (BARU) - tarif resmi SBM 2026 halaman
+-13-, dipisah dari engine kalkulasi karena SBM terbit tiap tahun (pola sama
+dengan `tarifTukinPokok.ts`; engine tetap menerima tarif sebagai parameter):
+- item 22.1 uang makan (OH): Gol I & II Rp 35.000, III Rp 37.000, IV Rp 41.000
+- item 23.1 uang lembur (OJ): Gol I Rp 18.000, **II Rp 24.000**, III
+  Rp 30.000, IV Rp 36.000
+- item 23.2 uang makan lembur (OH): sama dengan item 22.1
+
+**PERHATIKAN pengelompokan golongannya BEDA** dan ini bukan salah ketik:
+uang makan menyatukan Gol I & II (3 tingkat), uang lembur per jam
+memisahkannya (4 tingkat). Ada test khusus yang menjaga supaya tidak ada
+yang "merapikan" jadi seragam.
+
+`golonganRomawi("III/d")` menurunkan golongan dari `Pegawai.golongan`.
+Mengembalikan **null kalau tidak terbaca, TIDAK menebak** - pemanggil wajib
+melewati pegawainya dengan alasan eksplisit, karena salah golongan = salah
+tarif = salah bayar.
+
+**Uang makan - siapa yang BERHAK** (aturan user): WFO dan WFH/WFA berhak;
+**Diklat & Dinas Keluar TIDAK** (konsumsinya sudah ditanggung kegiatan/
+perjalanan dinas). Jadi dasar bayarnya BUKAN lagi "jumlah hari hadir" -
+`UangMakanInput` sekarang minta `jumlahHariWfo` + `jumlahHariWfhWfa`
+terpisah, dan hasilnya membawa `jumlahHariDibayar` supaya selisih antara
+"hadir" dan "dibayar" bisa dijelaskan, bukan hilang diam-diam. Contoh: hadir
+22 hari (15 WFO + 3 WFH + 2 diklat + 2 dinas luar) gol III dibayar 18 hari =
+Rp 666.000, bukan 22 hari = Rp 814.000.
+TODO(confirm): perlakuan IZIN/SAKIT/CUTI/TUGAS BELAJAR belum ditegaskan -
+sekarang semuanya tidak dihitung (bukan WFO/WFH/WFA).
+
+**Uang lembur - DUA komponen, satuan beda**: uang lembur per JAM (item 23.1)
++ uang makan lembur per HARI (item 23.2), syarat lembur hari itu **minimal
+2 jam**. Karena satuannya beda, total jam sebulan TIDAK cukup buat
+menurunkan uang makan lemburnya - `UangLemburInput` minta
+`jumlahHariMakanLembur` terpisah, dan ada helper murni
+`hitungHariBerhakMakanLembur(rincianJamPerHari[])` buat pemanggil yang punya
+rincian harian. Contoh gol III lembur 1+2+3+4+1,5 jam (5 hari): uang lembur
+11,5 x Rp 30.000 = Rp 345.000, uang makan lembur cuma **3 hari** (yang 1 jam
+& 1,5 jam tidak memenuhi) x Rp 37.000 = Rp 111.000, total Rp 456.000.
+Engine juga menandai anomali kalau jumlah hari makan lembur mustahil dari
+total jamnya (n hari x 2 jam > total jam).
+
+**Migrasi `20260729140000_uang_makan_lembur_sbm`** (semua ADD COLUMN dengan
+default, non-destruktif):
+- `RekapPresensiPeriode` + kolom hari per status (WFO/WFH-WFA/Diklat/Dinas
+  Luar) dan dua kolom lembur. Kolom diklat & dinas luar tetap disimpan walau
+  tidak dibayar - supaya selisihnya bisa dijelaskan.
+- `UangMakan.jumlahHariDibayar`; `UangLembur` + `uangLembur`,
+  `uangMakanLembur`, `jumlahHariMakanLembur`, `tarifMakanLemburPerHari`.
+- `StatusKehadiran` bertambah WFO/WFH/DIKLAT/DINAS_LUAR (`HADIR` lama tetap
+  diperlakukan sebagai WFO supaya data lama tidak berubah artinya).
+
+**Kalkulasi massal Kasubag TU sekarang ikut menghitung Uang Lembur** (dulu
+sengaja dilewati karena tidak ada sumber data jam lembur) - datanya sekarang
+datang dari rekap presensi yang di-upload. Kalau jam lemburnya nol, barisnya
+tidak dibuat supaya tidak ada baris Rp 0 yang ikut antre approval. Tarif
+uang makan/lembur tidak lagi satu angka untuk semua orang - diturunkan dari
+golongan tiap pegawai.
+
+**Template rekap presensi** (`/tukin/presensi/template`) bertambah 6 kolom:
+Hari WFO, Hari WFH/WFA, Hari Diklat, Hari Dinas Luar, Jam Lembur, Hari Makan
+Lembur.
+
 ### Kalkulasi Tukin satu pintu + perbaikan logika potongan (Permenaker 15/2024)
 
 Dipicu permintaan user: satukan kalkulasi Tukin di Dashboard Tukin (upload
@@ -1360,9 +1427,14 @@ kode action.
    window verifikasi dan aturan "hold pembayaran vs koreksi siklus
    berikutnya" masih jadi keputusan kebijakan terbuka - jangan hardcode
    sampai ada keputusan resmi.
-8. **Tarif uang makan & uang lembur, batas maksimal jam lembur** - ini
-   mengikuti Standar Biaya Masukan (SBM) PMK yang terbit tahunan, perlu
-   dikonfirmasi ke Biro Keuangan/DJA sebelum dipakai di data production.
+8. ~~**Tarif uang makan & uang lembur**~~ **RESOLVED sebagian** - user
+   memberi PDF SBM 2026, tarif resminya sekarang ada di
+   `src/business-logic/tarifSbm.ts` (halaman -13-, item 22.1/23.1/23.2).
+   Yang MASIH terbuka: **batas maksimal jam lembur per bulan TIDAK diatur
+   di SBM** - angka 40 jam di `uangLembur.ts` tetap asumsi yang belum
+   dikonfirmasi ke Biro Keuangan/DJA. Juga belum ditangani: tarif kelompok
+   Non-ASN/Satpam/Pengemudi (SBM item 24) - skema `Pegawai` belum
+   membedakan kelompok itu.
 
 ## Konvensi kode
 
