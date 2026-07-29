@@ -20,7 +20,8 @@
 //   NIP | Hari Alpha | Tidak Presensi | Menit Terlambat | Menit Pulang Cepat |
 //   Menit Meninggalkan Kantor | Tidak Ikut Upacara | Hari Kerja | Hari Hadir |
 //   Hari WFO | Hari WFH/WFA | Hari Diklat | Hari Dinas Luar |
-//   Jam Lembur | Hari Makan Lembur
+//   Jam Lembur | Hari Makan Lembur |
+//   Jam Lembur Hari Libur | Hari Makan Lembur Hari Libur
 //
 // Enam kolom pertama memetakan langsung ke tabel potongan Pasal 13 (lihat
 // hitungPotonganKehadiranPersen di tukin.ts). Kolom WFO/WFH/Diklat/Dinas
@@ -51,7 +52,9 @@ export interface BarisRekapPresensi {
   // Dua angka karena dua komponennya beda satuan: uang lembur per JAM, uang
   // makan lembur per HARI (syarat lembur >= 2 jam pada hari itu).
   totalJamLembur: number;
+  totalJamLemburHariLibur: number;
   jumlahHariMakanLembur: number;
+  jumlahHariMakanLemburHariLibur: number;
 }
 
 export interface BarisPresensiDilewati {
@@ -79,8 +82,13 @@ const PETA_KOLOM: { field: keyof Omit<BarisRekapPresensi, "nip">; kandidat: stri
   { field: "jumlahHariWfhWfa", kandidat: ["wfh", "wfa"] },
   { field: "jumlahHariDiklat", kandidat: ["diklat"] },
   { field: "jumlahHariDinasLuar", kandidat: ["dinas luar", "dinas keluar"] },
-  { field: "totalJamLembur", kandidat: ["jam lembur"] },
-  { field: "jumlahHariMakanLembur", kandidat: ["hari makan lembur", "makan lembur"] },
+  // Kandidat "hari libur" dicek DULUAN supaya tidak diserobot kolom hari
+  // kerja yang namanya lebih pendek ("jam lembur" cocok juga ke "jam lembur
+  // hari libur").
+  { field: "totalJamLemburHariLibur", kandidat: ["jam lembur hari libur", "lembur hari libur", "lembur libur"] },
+  { field: "jumlahHariMakanLemburHariLibur", kandidat: ["makan lembur hari libur", "makan lembur libur"] },
+  { field: "totalJamLembur", kandidat: ["jam lembur hari kerja", "jam lembur"] },
+  { field: "jumlahHariMakanLembur", kandidat: ["hari makan lembur hari kerja", "hari makan lembur", "makan lembur"] },
   // Ditaruh PALING BAWAH dengan sengaja: kandidat "hadir" cocok juga ke
   // "Hari Hadir", jadi kalau dicek duluan dia bisa menyerobot kolom lain.
   { field: "jumlahHariHadir", kandidat: ["hari hadir"] },
@@ -175,7 +183,9 @@ export function parseRekapPresensi(matriks: unknown[][]): HasilParseRekapPresens
       jumlahHariDiklat: nilai.jumlahHariDiklat,
       jumlahHariDinasLuar: nilai.jumlahHariDinasLuar,
       totalJamLembur: nilai.totalJamLembur,
+      totalJamLemburHariLibur: nilai.totalJamLemburHariLibur,
       jumlahHariMakanLembur: nilai.jumlahHariMakanLembur,
+      jumlahHariMakanLemburHariLibur: nilai.jumlahHariMakanLemburHariLibur,
       jumlahHariAlpha: nilai.jumlahHariAlpha,
       jumlahTidakPresensi: nilai.jumlahTidakPresensi,
       totalMenitTerlambat: nilai.totalMenitTerlambat,

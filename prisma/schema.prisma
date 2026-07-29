@@ -194,8 +194,10 @@ model UangLembur {
   // Pendapatan lembur = uang lembur (per JAM) + uang makan lembur (per HARI).
   // Disimpan terpisah supaya slip gaji & ADK bisa merincinya, dan supaya
   // jelas bahwa keduanya tarif & satuannya beda (SBM item 23.1 vs 23.2).
-  jumlahHariMakanLembur Int   @default(0) @map("jumlah_hari_makan_lembur") // hari dengan lembur >= 2 jam
+  jumlahHariMakanLembur Int   @default(0) @map("jumlah_hari_makan_lembur") // hari dengan lembur >= 2 jam berturut-turut
   tarifMakanLemburPerHari Float @default(0) @map("tarif_makan_lembur_per_hari") // SBM item 23.2
+  jamLemburHariKerja  Float @default(0) @map("jam_lembur_hari_kerja")
+  jamLemburHariLibur  Float @default(0) @map("jam_lembur_hari_libur") // dibayar 2x tarif
   uangLembur      Float @default(0) @map("uang_lembur")
   uangMakanLembur Float @default(0) @map("uang_makan_lembur")
   totalUangLembur Float @map("total_uang_lembur") // uangLembur + uangMakanLembur
@@ -866,8 +868,16 @@ model RekapPresensiPeriode {
   // Dua angka, karena dua komponennya beda satuan: uang lembur per JAM,
   // uang makan lembur per HARI (syarat lembur >= 2 jam pada hari itu).
   // Total jam saja TIDAK cukup buat menurunkan jumlah harinya.
-  totalJamLembur         Float @default(0) @map("total_jam_lembur")
-  jumlahHariMakanLembur  Int   @default(0) @map("jumlah_hari_makan_lembur")
+  // Dipisah hari kerja vs hari libur/tanggal merah: tarif per jam di hari
+  // libur dikali PENGALI_LEMBUR_HARI_LIBUR (lihat tarifSbm.ts - pengali itu
+  // BUKAN dari SBM, belum ada rujukan pasalnya).
+  // CATATAN PENGISIAN: jam lembur di sini HARUS sudah mengecualikan hari
+  // WFH/WFA - pegawai yang bekerja dari rumah tidak dihitung lembur walau
+  // jam absen keluarnya melewati jam kerja.
+  totalJamLembur                 Float @default(0) @map("total_jam_lembur")
+  totalJamLemburHariLibur        Float @default(0) @map("total_jam_lembur_hari_libur")
+  jumlahHariMakanLembur          Int   @default(0) @map("jumlah_hari_makan_lembur")
+  jumlahHariMakanLemburHariLibur Int   @default(0) @map("jumlah_hari_makan_lembur_hari_libur")
 
   sourceSystem   String   @default("UPLOAD_MANUAL") @map("source_system")
   sourceFileName String?  @map("source_file_name")

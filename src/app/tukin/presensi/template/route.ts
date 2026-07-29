@@ -32,6 +32,8 @@ const KOLOM = [
   "Hari Dinas Luar",
   "Jam Lembur",
   "Hari Makan Lembur",
+  "Jam Lembur Hari Libur",
+  "Hari Makan Lembur Hari Libur",
 ];
 
 function sel(nilai: string): string {
@@ -60,7 +62,7 @@ export async function GET(request: Request) {
 
   const baris = [
     KOLOM.join(","),
-    ...pegawaiList.map((p) => [sel(p.nip), sel(p.nama), "0", "0", "0", "0", "0", "0", "", "", "", "", "0", "0", "0", "0"].join(",")),
+    ...pegawaiList.map((p) => [sel(p.nip), sel(p.nama), "0", "0", "0", "0", "0", "0", "", "", "", "", "0", "0", "0", "0", "0", "0"].join(",")),
   ];
 
   const namaFile = `template-rekap-presensi${satker ? `-${satker.replace(/[^a-zA-Z0-9]+/g, "-")}` : ""}.csv`;

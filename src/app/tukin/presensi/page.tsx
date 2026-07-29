@@ -80,6 +80,25 @@ export default async function PresensiTukinPage({
 
       <UploadPresensiForm defaultBulan={periodeBulan} defaultTahun={periodeTahun} />
 
+      <div className="card mt-4 border-l-4 border-l-gold p-4">
+        <p className="text-sm font-bold text-ink">Aturan pengisian kolom lembur</p>
+        <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-muted">
+          <li>
+            <strong>Hari WFH/WFA tidak dihitung lembur</strong> - walau jam absen keluarnya melewati jam kerja. Jam
+            lembur yang diisi harus sudah mengecualikan hari-hari itu.
+          </li>
+          <li>
+            <strong>Jam lembur hari libur / tanggal merah diisi di kolom terpisah</strong> - tarifnya dibayar 2x tarif
+            per jam biasa.
+          </li>
+          <li>
+            <strong>Hari makan lembur</strong> = jumlah hari yang lemburnya mencapai 2 jam{" "}
+            <em>berturut-turut</em> (SBM 2026 hal. 51, penjelasan item 23.2), paling banyak 1 kali per hari. Lembur 1
+            jam pagi + 1 jam sore TIDAK memenuhi syarat walau totalnya 2 jam.
+          </li>
+        </ul>
+      </div>
+
       <form method="get" className="card mt-6 flex flex-wrap items-end gap-3 p-4">
         <div>
           <label className="field-label">Bulan</label>
@@ -157,8 +176,15 @@ export default async function PresensiTukinPage({
                 </td>
                 <td className="px-3 py-2.5 font-mono text-ink-2">
                   {r.totalJamLembur} jam
-                  {r.jumlahHariMakanLembur > 0 && (
-                    <span className="block text-xs text-muted">{r.jumlahHariMakanLembur} hari makan lembur</span>
+                  {r.totalJamLemburHariLibur > 0 && (
+                    <span className="block text-xs font-semibold text-gold-deep">
+                      + {r.totalJamLemburHariLibur} jam hari libur (2x)
+                    </span>
+                  )}
+                  {r.jumlahHariMakanLembur + r.jumlahHariMakanLemburHariLibur > 0 && (
+                    <span className="block text-xs text-muted">
+                      {r.jumlahHariMakanLembur + r.jumlahHariMakanLemburHariLibur} hari makan lembur
+                    </span>
                   )}
                 </td>
               </tr>

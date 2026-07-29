@@ -200,3 +200,92 @@ describe("hitungHariBerhakMakanLembur", () => {
     expect(hitungHariBerhakMakanLembur([])).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Lembur hari libur & pengecualian WFH/WFA
+// ---------------------------------------------------------------------------
+describe("hitungUangLembur - hari libur / tanggal merah", () => {
+  const gol3 = { tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM.III, tarifMakanLemburPerHari: TARIF_UANG_MAKAN_LEMBUR_PER_HARI.III };
+
+  it("jam lembur hari libur dibayar 2x tarif per jam", () => {
+    const hasil = hitungUangLembur({
+      ...dasar, ...gol3,
+      totalJamLembur: 0,
+      totalJamLemburHariLibur: 5,
+      jumlahHariMakanLemburHariLibur: 1,
+      jumlahHariWfo: 20,
+    });
+    expect(hasil.uangLembur).toBe(5 * 30_000 * 2); // 300.000, bukan 150.000
+    expect(hasil.jamLemburHariLibur).toBe(5);
+    expect(hasil.jamLemburHariKerja).toBe(0);
+  });
+
+  it("jam hari kerja & hari libur dihitung dengan tarif masing-masing", () => {
+    const hasil = hitungUangLembur({
+      ...dasar, ...gol3,
+      totalJamLembur: 4, // hari kerja
+      totalJamLemburHariLibur: 3, // tanggal merah
+      jumlahHariMakanLembur: 1,
+      jumlahHariMakanLemburHariLibur: 1,
+      jumlahHariWfo: 20,
+    });
+    expect(hasil.uangLembur).toBe(4 * 30_000 + 3 * 30_000 * 2); // 120.000 + 180.000
+    expect(hasil.jamLemburDihitung).toBe(7);
+  });
+
+  it("uang makan lembur TIDAK ikut dikali 2 di hari libur (penggantian konsumsi)", () => {
+    const hasil = hitungUangLembur({
+      ...dasar, ...gol3,
+      totalJamLembur: 0,
+      totalJamLemburHariLibur: 4,
+      jumlahHariMakanLemburHariLibur: 2,
+      jumlahHariWfo: 20,
+    });
+    expect(hasil.uangMakanLembur).toBe(2 * 37_000); // bukan 2 x 37.000 x 2
+  });
+
+  it("kalau kena batas maksimal, jam hari libur diprioritaskan (tarifnya lebih tinggi)", () => {
+    const hasil = hitungUangLembur({
+      ...dasar, ...gol3,
+      totalJamLembur: 35,
+      totalJamLemburHariLibur: 10, // total 45 > batas 40
+      jumlahHariWfo: 20,
+    });
+    expect(hasil.jamLemburHariLibur).toBe(10);
+    expect(hasil.jamLemburHariKerja).toBe(30);
+    expect(hasil.jamLemburDihitung).toBe(40);
+    expect(hasil.anomali.some((a) => a.includes("melebihi batas maksimal"))).toBe(true);
+  });
+});
+
+describe("hitungUangLembur - WFH/WFA tidak dapat lembur", () => {
+  it("klaim jam lembur tanpa satu pun hari WFO ditandai janggal", () => {
+    const hasil = hitungUangLembur({
+      ...dasar,
+      totalJamLembur: 8,
+      tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM.III,
+      jumlahHariWfo: 0, // seluruhnya WFH/WFA
+    });
+    expect(hasil.anomali.some((a) => a.includes("tidak punya hari WFO"))).toBe(true);
+  });
+
+  it("pegawai dengan hari WFO wajar TIDAK ditandai", () => {
+    const hasil = hitungUangLembur({
+      ...dasar,
+      totalJamLembur: 8,
+      tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM.III,
+      jumlahHariWfo: 18,
+    });
+    expect(hasil.anomali.some((a) => a.includes("tidak punya hari WFO"))).toBe(false);
+  });
+
+  it("tanpa jam lembur sama sekali, pegawai full WFH tidak ditandai apa-apa", () => {
+    const hasil = hitungUangLembur({
+      ...dasar,
+      totalJamLembur: 0,
+      tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM.III,
+      jumlahHariWfo: 0,
+    });
+    expect(hasil.anomali).toHaveLength(0);
+  });
+});
