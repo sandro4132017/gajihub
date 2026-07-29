@@ -54,6 +54,7 @@ model Pegawai {
   skKgb             SkKgb[]
   skHukumanDisiplin SkHukumanDisiplin[]
   buktiPotongPajak  BuktiPotongPajak[]
+  gajiInduk         GajiInduk[]
 
   @@index([satuanKerja])
   @@index([statusPegawai])
@@ -393,6 +394,7 @@ model User {
   skHukdisDiajukan         SkHukumanDisiplin[]   @relation("SkHukdisDiajukanOleh")
   anggaranDiunggah         AnggaranRealisasi[]
   buktiPotongPajakDiunggah BuktiPotongPajak[]
+  gajiIndukDiunggah        GajiInduk[]
   usulanRoleDiajukan       UsulanPerubahanRole[] @relation("UsulanRoleDiajukanOleh")
   usulanRoleDiputuskan     UsulanPerubahanRole[] @relation("UsulanRoleDiputuskanOleh")
   UsulanPerubahanRole      UsulanPerubahanRole[]
@@ -683,4 +685,94 @@ model UsulanPerubahanRole {
   @@index([userId])
   @@index([status])
   @@map("usulan_perubahan_role")
+}
+
+// ---------------------------------------------------------------------------
+// GAJI INDUK - komponen gaji pokok & tunjangan melekat, hasil UPLOAD MANUAL
+// oleh PPABP dari file ADK "Gaji_Bank_<kdsatker><...>.xlsx" yang di-generate
+// aplikasi GPP/Web Gaji Kemenkeu. BUKAN hasil kalkulasi Gajihub - sistem ini
+// TIDAK menghitung gaji pokok/tunjangan keluarga (itu domain Web Gaji, sesuai
+// prinsip "don't replace, integrate" di CLAUDE.md). Gajihub cuma MENAMPUNG
+// hasilnya supaya slip gaji pegawai bisa utuh (gaji induk + tukin + uang
+// makan + uang lembur), persis format "PERINCIAN PEMBAYARAN GAJI" yang
+// sekarang dicetak manual oleh PPABP Setjen.
+//
+// Nama kolom di sini SENGAJA pakai istilah slip gaji (bahasa Indonesia),
+// BUKAN nama kolom mentah GPP (gjpokok/tjistri/potpfk10/dst) - pemetaannya
+// ada di src/business-logic/gajiInduk.ts, satu tempat, biar gampang dicek
+// ulang kalau format file GPP berubah.
+//
+// TODO(confirm):
+// - Kolom yang SENGAJA TIDAK diimpor dari file GPP: npwp, nmrek, nm_bank,
+//   rekening, kdbankspan, nmbankspan, kdpos. Itu PII finansial yang tidak
+//   dibutuhkan slip gaji - konsisten dengan keputusan yang sama di
+//   src/jobs/importPegawaiXlsx.ts. Kalau nanti kolom rekening di export ADK
+//   Tukin (src/app/ppabp/adk/tukin/route.ts) mau diisi, itu keputusan
+//   TERPISAH soal menyimpan data rekening, bukan efek samping fitur ini.
+// - Baru mendukung gaji INDUK (kdjns = 1 di file GPP). Gaji susulan/
+//   kekurangan/terusan (jenis lain) belum ditangani - unique constraint di
+//   bawah menganggap satu pegawai cuma punya SATU baris gaji per periode.
+//   Kalau nanti perlu, `jenisGaji` harus ikut masuk unique key (migrasi baru).
+// - `honorarium` TIDAK ADA di file GPP (di slip contoh nilainya Rp 11,4 jt).
+//   Sengaja dibiarkan 0 setelah upload dan diisi/di-edit manual oleh PPABP
+//   lewat /ppabp/gaji-induk. Sumber resminya belum jelas (kemungkinan dari
+//   SPJ kegiatan, bukan dari GPP) - jangan diasumsikan bisa ditarik otomatis.
+// ---------------------------------------------------------------------------
+model GajiInduk {
+  id        String  @id @default(uuid())
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  periodeBulan Int @map("periode_bulan")
+  periodeTahun Int @map("periode_tahun")
+
+  // Jejak asal data - dipakai buat menjelaskan ke pegawai/auditor baris ini
+  // datang dari file GPP yang mana. `kodeSatker` juga satu-satunya sumber
+  // kode satker resmi (mis. 450938) yang dipunya sistem ini sekarang.
+  kodeSatker String? @map("kode_satker")
+  nomorGaji  String? @map("nomor_gaji") // kolom `nogaji`, mis. "000964"
+  jenisGaji  String  @default("1") @map("jenis_gaji") // kolom `kdjns`, 1 = gaji induk
+
+  // --- PENGHASILAN (urutan sama dengan slip) ---
+  gajiPokok            Float @map("gaji_pokok")
+  tunjanganIstri       Float @default(0) @map("tunjangan_istri")
+  tunjanganAnak        Float @default(0) @map("tunjangan_anak")
+  tunjanganUmum        Float @default(0) @map("tunjangan_umum") // `tjupns`
+  tunjanganStruktural  Float @default(0) @map("tunjangan_struktural") // `tjstruk`
+  tunjanganFungsional  Float @default(0) @map("tunjangan_fungsional")
+  tunjanganBeras       Float @default(0) @map("tunjangan_beras")
+  tunjanganPph         Float @default(0) @map("tunjangan_pph")
+  pembulatan           Float @default(0)
+  // Gabungan tjdaerah + tjpencil + tjlain + tjkompen. Di file contoh Setjen
+  // keempatnya nol semua, tapi tetap ditampung supaya tidak diam-diam hilang
+  // kalau satker lain punya isinya.
+  tunjanganLain        Float @default(0) @map("tunjangan_lain")
+
+  // --- POTONGAN ---
+  potonganIuranPegawai Float @default(0) @map("potongan_iuran_pegawai") // `potpfk10`, 8% x (gapok + tj istri + tj anak)
+  potonganPph          Float @default(0) @map("potongan_pph")
+  potonganBpjs         Float @default(0) @map("potongan_bpjs") // `bpjs` + `bpjs2`
+  potonganLain         Float @default(0) @map("potongan_lain") // potswrum + potkelbtj + potlain + pottabrum + potpfkbul + potpfk2
+
+  // --- TOTAL ---
+  // Disimpan (bukan cuma dihitung on-the-fly) supaya angka di slip bisa
+  // ditelusuri persis ke nilai yang di-upload, walau nanti rumus tampilannya
+  // berubah. `gajiBersih` diambil APA ADANYA dari kolom `bersih` file GPP -
+  // bukan hasil hitungan sendiri, biar tetap otoritatif ke sumbernya.
+  totalPenghasilan Float @map("total_penghasilan")
+  totalPotongan    Float @map("total_potongan")
+  gajiBersih       Float @map("gaji_bersih")
+
+  // BUKAN dari file GPP - diisi manual PPABP (lihat TODO(confirm) di atas).
+  honorarium Float @default(0)
+
+  sourceFileName String?  @map("source_file_name")
+  diunggahOlehId String   @map("diunggah_oleh_id")
+  diunggahOleh   User     @relation(fields: [diunggahOlehId], references: [id])
+  diunggahPada   DateTime @default(now()) @map("diunggah_pada")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([pegawaiId, periodeBulan, periodeTahun])
+  @@index([periodeBulan, periodeTahun])
+  @@map("gaji_induk")
 }

@@ -296,6 +296,24 @@ export function canUploadAnggaranRealisasi(user: AuthUser): boolean {
   return cekRoleAtauAdmin(user, "PPABP");
 }
 
+/**
+ * Upload riwayat GAJI INDUK (file ADK dari GPP/Web Gaji) dan mengedit
+ * honorarium per pegawai - bahan slip gaji pegawai.
+ *
+ * PPABP saja (+ ADMIN lewat bypass), BUKAN Kasubag TU: yang memegang file
+ * ADK gaji dari Kemenkeu dan yang menandatangani slip "Perincian Pembayaran
+ * Gaji" memang PPABP (lihat blok tanda tangan di slip contoh Setjen). Ini
+ * BEDA dari BuktiPotongPajak yang di role matrix boleh diunggah Kasubag TU
+ * ATAU PPABP.
+ *
+ * TODO(confirm): kalau nanti PPABP di-scale jadi per satker (lihat "PPABP per
+ * satker" di CLAUDE.md), fungsi ini perlu ikut menerima targetSatuanKerja
+ * supaya PPABP satker A tidak bisa menimpa data gaji satker B.
+ */
+export function canKelolaGajiInduk(user: AuthUser): boolean {
+  return cekRoleAtauAdmin(user, "PPABP");
+}
+
 /** Monitoring status belanja pegawai lintas unit, DAN ubah status pengajuan/approval/validasi. */
 export function canMonitorUbahStatusLintasUnit(user: AuthUser, targetSatuanKerja?: string): boolean {
   return cekPpabpAtauAdmin(user, targetSatuanKerja);

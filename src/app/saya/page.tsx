@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "../../lib/prisma";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewDataSendiri } from "../../auth/permissions";
+import { hitungTotalPenghasilanSlip } from "../../business-logic/gajiInduk";
 import { AksesDitolak } from "../AksesDitolak";
 import { BandingForm } from "./BandingForm";
 
@@ -132,6 +133,7 @@ export default async function DataSayaPage() {
       uangLembur: { orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }] },
       banding: { orderBy: { createdAt: "desc" }, include: { buktiDukung: true } },
       buktiPotongPajak: { orderBy: { tahunPajak: "desc" } },
+      gajiInduk: { orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }] },
     },
   });
 
@@ -147,7 +149,7 @@ export default async function DataSayaPage() {
   // Tukin paling baru yang ada datanya (fallback ke Uang Makan/Lembur kalau
   // Tukin kosong).
   const periodeTerbaru =
-    pegawai.tukinCalc[0] ?? pegawai.uangMakan[0] ?? pegawai.uangLembur[0] ?? null;
+    pegawai.tukinCalc[0] ?? pegawai.uangMakan[0] ?? pegawai.uangLembur[0] ?? pegawai.gajiInduk[0] ?? null;
   const tukinTerbaru = periodeTerbaru
     ? pegawai.tukinCalc.find(
         (t) => t.periodeBulan === periodeTerbaru.periodeBulan && t.periodeTahun === periodeTerbaru.periodeTahun
@@ -163,13 +165,25 @@ export default async function DataSayaPage() {
         (l) => l.periodeBulan === periodeTerbaru.periodeBulan && l.periodeTahun === periodeTerbaru.periodeTahun
       )
     : undefined;
-  const totalTerbaru =
-    (tukinTerbaru?.tukinBersih ?? 0) + (umTerbaru?.totalUangMakan ?? 0) + (lemburTerbaru?.totalUangLembur ?? 0);
+  const gajiTerbaru = periodeTerbaru
+    ? pegawai.gajiInduk.find(
+        (g) => g.periodeBulan === periodeTerbaru.periodeBulan && g.periodeTahun === periodeTerbaru.periodeTahun
+      )
+    : undefined;
+  // Pakai rumus yang SAMA dengan slip gaji supaya angka "Total" di sini tidak
+  // berbeda dari "Total Penghasilan" di slip yang dicetak.
+  const totalTerbaru = hitungTotalPenghasilanSlip({
+    gajiBersih: gajiTerbaru?.gajiBersih ?? 0,
+    tunjanganKinerja: tukinTerbaru?.tukinBersih ?? 0,
+    uangMakan: umTerbaru?.totalUangMakan ?? 0,
+    uangLembur: lemburTerbaru?.totalUangLembur ?? 0,
+    honorarium: gajiTerbaru?.honorarium ?? 0,
+  });
 
-  // Daftar periode buat link "Slip Gaji" - union dari 3 domain, unik &
-  // diurutkan terbaru dulu.
+  // Daftar periode buat link "Slip Gaji" - union dari 4 domain (3 kalkulasi
+  // Gajihub + gaji induk hasil upload PPABP), unik & diurutkan terbaru dulu.
   const periodeMap = new Map<string, { bulan: number; tahun: number }>();
-  for (const r of [...pegawai.tukinCalc, ...pegawai.uangMakan, ...pegawai.uangLembur]) {
+  for (const r of [...pegawai.tukinCalc, ...pegawai.uangMakan, ...pegawai.uangLembur, ...pegawai.gajiInduk]) {
     const key = `${r.periodeTahun}-${r.periodeBulan}`;
     if (!periodeMap.has(key)) periodeMap.set(key, { bulan: r.periodeBulan, tahun: r.periodeTahun });
   }
@@ -223,12 +237,21 @@ export default async function DataSayaPage() {
               Lihat slip gaji
             </Link>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <StatTile label="Gaji bersih" nilai={gajiTerbaru?.gajiBersih ?? 0} />
             <StatTile label="Tukin" nilai={tukinTerbaru?.tukinBersih ?? 0} />
             <StatTile label="Uang Makan" nilai={umTerbaru?.totalUangMakan ?? 0} />
             <StatTile label="Uang Lembur" nilai={lemburTerbaru?.totalUangLembur ?? 0} />
             <StatTile label="Total" nilai={totalTerbaru} />
           </div>
+          {!gajiTerbaru && (
+            <p className="mt-2 text-xs text-muted">
+              Gaji bersih masih kosong karena data gaji induk periode ini belum diunggah PPABP.
+            </p>
+          )}
+          {gajiTerbaru && gajiTerbaru.honorarium > 0 && (
+            <p className="mt-2 text-xs text-muted">Total sudah termasuk honorarium periode ini.</p>
+          )}
         </section>
       )}
 
@@ -297,7 +320,7 @@ export default async function DataSayaPage() {
         <section className="card p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Slip gaji</h2>
-            <span className="text-xs font-medium text-muted">Format placeholder, belum final</span>
+            <span className="text-xs font-medium text-muted">Perincian Pembayaran Gaji</span>
           </div>
           {daftarPeriode.length === 0 && <p className="mt-2 text-sm text-muted">Belum ada periode yang bisa dicetak.</p>}
           <div className="mt-2 space-y-2">

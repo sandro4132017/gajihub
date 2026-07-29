@@ -31,6 +31,7 @@ import {
   canHandleSelisih,
   canGenerateAdk,
   canUploadAnggaranRealisasi,
+  canKelolaGajiInduk,
   canMonitorUbahStatusLintasUnit,
   canViewRekonsiliasiLintasSatker,
   canUsulkanPerubahanRole,
@@ -222,6 +223,22 @@ describe("PPABP - approval jenjang final, lintas satker", () => {
     expect(canUploadAnggaranRealisasi(pimpinan)).toBe(false);
     expect(canUsulkanPerubahanRole(pimpinan)).toBe(false);
     expect(canTarikAtauUploadPresensiFallback(pimpinan)).toBe(false);
+  });
+
+  it("canKelolaGajiInduk: PPABP (+ ADMIN), DITOLAK buat KASUBAG_TU - beda dari upload bukti potong pajak", () => {
+    expect(canKelolaGajiInduk(buatUser({ role: "PPABP", satuanKerja: null }))).toBe(true);
+    expect(canKelolaGajiInduk(buatUser({ role: "ADMIN" }))).toBe(true);
+
+    // Kasubag TU sengaja TIDAK diberi izin - file ADK gaji dari Kemenkeu dan
+    // tanda tangan slip "Perincian Pembayaran Gaji" ada di PPABP.
+    expect(canKelolaGajiInduk(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }))).toBe(false);
+    expect(canKelolaGajiInduk(buatUser({ role: "OSDMA" }))).toBe(false);
+    expect(canKelolaGajiInduk(buatUser({ role: "PIMPINAN" }))).toBe(false);
+    expect(canKelolaGajiInduk(buatUser({ role: "PEGAWAI" }))).toBe(false);
+  });
+
+  it("canKelolaGajiInduk: DITOLAK buat akun nonaktif walau rolenya PPABP", () => {
+    expect(canKelolaGajiInduk(buatUser({ role: "PPABP", aktif: false }))).toBe(false);
   });
 
   it("canViewDashboardLintasUnit: diizinkan buat PPABP & PIMPINAN, ditolak buat KASUBAG_TU/OSDMA/PEGAWAI", () => {
