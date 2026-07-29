@@ -202,18 +202,34 @@ export interface UangLemburInput {
   pegawaiId: string;
   periodeBulan: number;
   periodeTahun: number;
+  /** Jam lembur pada HARI KERJA biasa - tarif normal. */
   totalJamLembur: number;
+  /**
+   * Jam lembur pada HARI LIBUR / tanggal merah - tarifnya dikali
+   * PENGALI_LEMBUR_HARI_LIBUR (lihat tarifSbm.ts; pengali ini BUKAN dari
+   * SBM). Dipisah dari totalJamLembur supaya keduanya bisa ditelusuri.
+   */
+  totalJamLemburHariLibur?: number;
   /** SBM 2026 item 23.1 per golongan (OJ) - lihat tarifSbm.ts. */
   tarifPerJam: number;
   /**
-   * Jumlah HARI yang lemburnya mencapai minimal 2 jam - satu-satunya dasar
-   * uang makan lembur, yang satuannya per hari (OH), bukan per jam. Tidak
-   * bisa diturunkan dari totalJamLembur saja. Pemanggil yang punya rincian
-   * harian bisa memakai hitungHariBerhakMakanLembur().
+   * Jumlah HARI KERJA yang lemburnya mencapai minimal 2 jam BERTURUT-TURUT -
+   * satu-satunya dasar uang makan lembur, yang satuannya per hari (OH),
+   * bukan per jam. Tidak bisa diturunkan dari totalJamLembur saja. Pemanggil
+   * yang punya rincian harian bisa memakai hitungHariBerhakMakanLembur().
    */
   jumlahHariMakanLembur?: number;
+  /** Sama, tapi untuk hari libur. */
+  jumlahHariMakanLemburHariLibur?: number;
   /** SBM 2026 item 23.2 per golongan (OH) - lihat tarifSbm.ts. */
   tarifMakanLemburPerHari?: number;
+  /**
+   * Jumlah hari WFO pegawai pada periode ini. Dipakai HANYA buat
+   * pengecekan silang: lembur cuma diakui buat pegawai yang bekerja di
+   * kantor, jadi klaim jam lembur tanpa satu pun hari WFO itu janggal.
+   * Lihat catatan WFH/WFA di uangLembur.ts.
+   */
+  jumlahHariWfo?: number;
   batasMaksimalJamLembur?: number;
 }
 
@@ -222,10 +238,13 @@ export interface UangLemburResult {
   periodeBulan: number;
   periodeTahun: number;
   jamLemburDihitung: number;
+  /** Rincian jam yang dibayar, dipisah hari kerja vs hari libur. */
+  jamLemburHariKerja: number;
+  jamLemburHariLibur: number;
   jumlahHariMakanLembur: number;
-  /** Komponen 1 - jam x tarif per jam (SBM item 23.1). */
+  /** Komponen 1 - jam x tarif per jam (SBM item 23.1), hari libur dikali pengali. */
   uangLembur: number;
-  /** Komponen 2 - hari (>=2 jam) x tarif per hari (SBM item 23.2). */
+  /** Komponen 2 - hari (>=2 jam berturut-turut) x tarif per hari (SBM item 23.2). */
   uangMakanLembur: number;
   /** uangLembur + uangMakanLembur - inilah yang dibayarkan. */
   totalUangLembur: number;

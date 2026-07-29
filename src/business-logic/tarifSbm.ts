@@ -33,6 +33,39 @@
 
 export type GolonganRomawi = "I" | "II" | "III" | "IV";
 
+/**
+ * Pengali tarif uang lembur pada HARI LIBUR / tanggal merah.
+ *
+ * PERHATIAN - INI TIDAK BERASAL DARI SBM. Seluruh dokumen SBM 2026 sudah
+ * dicek: kata "libur" TIDAK muncul sama sekali, dan tidak ada ketentuan
+ * 200%/dua kali untuk lembur. SBM cuma menetapkan besaran per jam (item
+ * 23.1) dan per hari (item 23.2), tanpa membedakan hari kerja/hari libur.
+ *
+ * Angka 2x di bawah dipakai atas instruksi user (2026-07-29). Aturannya
+ * memang lazim dipakai di lingkungan pemerintah, TAPI dasar hukumnya ada di
+ * peraturan TATA CARA pembayaran lembur (PMK/Perdirjen Perbendaharaan),
+ * BUKAN di SBM.
+ *
+ * TODO(confirm): minta salinan peraturan tata cara pembayaran uang lembur
+ * yang berlaku, lalu ganti komentar ini dengan kutipan pasalnya - jangan
+ * dibiarkan tanpa rujukan seperti sekarang.
+ */
+export const PENGALI_LEMBUR_HARI_LIBUR = 2;
+
+/**
+ * Pengali UANG MAKAN LEMBUR pada hari libur.
+ *
+ * Sengaja dibedakan dari PENGALI_LEMBUR_HARI_LIBUR dan default-nya 1 (TIDAK
+ * dilipatgandakan): instruksi user menyebut "tarif dikali 2" untuk lembur,
+ * dan uang makan lembur sifatnya penggantian konsumsi yang SBM sendiri batasi
+ * "paling banyak 1 (satu) kali per hari" - melipatgandakannya berarti
+ * membayar dua kali makan untuk satu hari.
+ *
+ * TODO(confirm): kalau ternyata di peraturan tata cara uang makan lembur
+ * hari libur juga naik, cukup ubah konstanta ini - logikanya sudah siap.
+ */
+export const PENGALI_MAKAN_LEMBUR_HARI_LIBUR = 1;
+
 /** SBM 2026 item 22.1 - uang makan ASN, satuan OH (orang/hari). */
 export const TARIF_UANG_MAKAN_PER_HARI: Record<GolonganRomawi, number> = {
   I: 35_000,

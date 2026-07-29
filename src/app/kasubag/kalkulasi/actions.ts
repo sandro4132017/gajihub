@@ -241,19 +241,26 @@ export async function kalkulasiMassalTukinUangMakanAction(
       // kalau nol, tidak dibuatkan baris supaya tidak ada baris Rp 0 yang
       // ikut mengantre approval.
       const totalJamLembur = rekapManual?.totalJamLembur ?? 0;
-      if (totalJamLembur > 0) {
+      const totalJamLemburHariLibur = rekapManual?.totalJamLemburHariLibur ?? 0;
+      if (totalJamLembur + totalJamLemburHariLibur > 0) {
         const hasilLembur = hitungUangLembur({
           pegawaiId: pegawai.nip,
           periodeBulan,
           periodeTahun,
           totalJamLembur,
+          totalJamLemburHariLibur,
           tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM[gol],
           jumlahHariMakanLembur: rekapManual?.jumlahHariMakanLembur ?? 0,
+          jumlahHariMakanLemburHariLibur: rekapManual?.jumlahHariMakanLemburHariLibur ?? 0,
           tarifMakanLemburPerHari: TARIF_UANG_MAKAN_LEMBUR_PER_HARI[gol],
+          // Pengecekan silang WFH/WFA - lihat uangLembur.ts.
+          jumlahHariWfo,
         });
         const validasiLemburHasil = validasiUangLembur(hasilLembur);
         const isiLembur = {
           totalJamLembur: hasilLembur.jamLemburDihitung,
+          jamLemburHariKerja: hasilLembur.jamLemburHariKerja,
+          jamLemburHariLibur: hasilLembur.jamLemburHariLibur,
           tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM[gol],
           jumlahHariMakanLembur: hasilLembur.jumlahHariMakanLembur,
           tarifMakanLemburPerHari: TARIF_UANG_MAKAN_LEMBUR_PER_HARI[gol],

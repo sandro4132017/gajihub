@@ -66,7 +66,7 @@ akses resmi tersedia - tanpa refactor besar.
   Penilaian" e-Kinerja BKN ke `PredikatKinerja` (bobot 70% Tukin), PURE -
   lihat "Upload rekap predikat kinerja e-Kinerja BKN" di bawah
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
-  session login di atas (`npm test` - 195 test)
+  session login di atas (`npm test` - 202 test)
 - Fitur "user & role" versi AWAL (skema `User`/`Role`/`Banding`/
   `BuktiDukung` - dulu namanya `Sanggahan`/`BuktiPendukungUpload`,
   authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
@@ -988,6 +988,46 @@ golongan tiap pegawai.
 **Template rekap presensi** (`/tukin/presensi/template`) bertambah 6 kolom:
 Hari WFO, Hari WFH/WFA, Hari Diklat, Hari Dinas Luar, Jam Lembur, Hari Makan
 Lembur.
+
+**Lembur hari libur & pengecualian WFH/WFA** (permintaan susulan user):
+- Jam lembur dipisah **hari kerja vs hari libur/tanggal merah**; yang hari
+  libur dibayar `PENGALI_LEMBUR_HARI_LIBUR` = **2x** tarif per jam.
+  **PERINGATAN PENTING: pengali 2x ini BUKAN dari SBM.** Seluruh dokumen SBM
+  2026 sudah dicek dengan `pdftotext` + grep: kata **"libur" tidak muncul
+  sama sekali**, dan tidak ada ketentuan 200%/dua kali untuk lembur (satu-
+  satunya "200%" di dokumen itu soal PDU, item lain). SBM cuma menetapkan
+  besaran per jam & per hari tanpa membedakan hari kerja/libur. Aturan 2x
+  memang lazim dipakai, tapi dasar hukumnya ada di peraturan **TATA CARA**
+  pembayaran lembur (PMK/Perdirjen Perbendaharaan) yang belum ada
+  salinannya. TODO(confirm): minta dokumennya, lalu ganti komentar di
+  `PENGALI_LEMBUR_HARI_LIBUR` dengan kutipan pasalnya.
+- **Uang MAKAN lembur TIDAK ikut dikali 2** (`PENGALI_MAKAN_LEMBUR_HARI_LIBUR`
+  = 1): sifatnya penggantian konsumsi yang SBM sendiri batasi "paling banyak
+  1 kali per hari", jadi melipatgandakannya berarti membayar dua kali makan
+  untuk satu hari. Dibuat konstanta terpisah supaya gampang diubah kalau
+  ternyata keliru. TODO(confirm).
+- Kalau total jam kena batas maksimal, **jam hari libur diprioritaskan tidak
+  dipotong** (tarifnya lebih tinggi, jadi lebih menguntungkan pegawai).
+- **WFH/WFA TIDAK dapat lembur** walau jam absen keluarnya melewati jam
+  kerja. Engine tidak melihat data harian, jadi penyaringannya di sisi
+  pengisian rekap - ditegaskan di template & panel aturan di
+  `/tukin/presensi`. Yang bisa dicek engine cuma **silang**: klaim jam
+  lembur padahal hari WFO-nya NOL ditandai anomali.
+
+**Temuan dari penjelasan SBM hal. -51- (item 23.2)** - syarat 2 jam itu
+ternyata ADA di SBM, dan lebih ketat dari yang semula diimplementasi:
+*"...setelah bekerja lembur paling kurang 2 (dua) jam **secara
+berturut-turut** dan diberikan paling banyak 1 (satu) kali per hari."*
+Jadi 2 jam harus BERTURUT-TURUT, bukan akumulasi sehari - lembur 1 jam pagi
++ 1 jam sore TIDAK memenuhi syarat. Engine tidak bisa memverifikasinya
+sendiri (inputnya sudah berupa jumlah hari yang memenuhi syarat), jadi ini
+ditegaskan di template & halaman upload. Batasan "1 kali per hari" otomatis
+terpenuhi karena satuannya memang per hari.
+
+**Template rekap presensi** bertambah 2 kolom lagi: Jam Lembur Hari Libur,
+Hari Makan Lembur Hari Libur. Pencocokan header kolom hari libur sengaja
+dicek DULUAN supaya tidak diserobot kolom hari kerja yang namanya lebih
+pendek ("jam lembur" cocok juga ke "jam lembur hari libur").
 
 ### Kalkulasi Tukin satu pintu + perbaikan logika potongan (Permenaker 15/2024)
 
