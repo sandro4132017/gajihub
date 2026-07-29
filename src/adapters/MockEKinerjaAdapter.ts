@@ -1,5 +1,10 @@
+// Default import (bukan named) - file ini jalan lewat tsx/CJS (skrip & test),
+// BUKAN lewat bundler Next. Di kode app (Server Action) justru kebalikannya,
+// lihat catatan di src/app/ppabp/gaji-induk/actions.ts.
+import XLSX from "xlsx";
 import type { EKinerjaAdapter } from "./DataSourceAdapter";
 import type { CapaianKinerjaInput } from "../types/index";
+import { parseRekapPredikatKinerja } from "../business-logic/rekapPredikatKinerja";
 
 /**
  * Mock implementation yang mensimulasikan workaround saat ini: satker
@@ -25,16 +30,35 @@ export class MockEKinerjaAdapter implements EKinerjaAdapter {
   }
 
   /**
-   * Simulasi parsing file upload manual (format asli file e-Kinerja BKN
-   * perlu dikonfirmasi - CSV/Excel dengan kolom NIP, Predikat, Periode).
-   * Untuk sekarang, terima array langsung sebagai stand-in.
+   * Parsing file "Rekap Penilaian" hasil export portal e-Kinerja BKN.
+   *
+   * Dulu melempar error karena contoh filenya belum ada; sekarang formatnya
+   * sudah diketahui dan pemetaannya ada di
+   * src/business-logic/rekapPredikatKinerja.ts (PURE - dipakai bareng
+   * Server Action upload di /predikat-kinerja, jadi CLI dan UI tidak punya
+   * dua parser yang bisa berbeda perilaku).
+   *
+   * CATATAN: `pegawaiId` di hasil diisi NIP, konsisten dengan pemakaian
+   * CapaianKinerjaInput di kalkulasi Tukin yang sudah ada
+   * (src/app/kasubag/kalkulasi/actions.ts juga mengoper `pegawai.nip`).
+   * Baris yang predikatnya tidak dikenali TIDAK ikut dikembalikan - lihat
+   * `dilewati` kalau perlu tahu alasannya per baris.
    */
-  async importFromUploadedFile(
-    _filePath: string
-  ): Promise<CapaianKinerjaInput[]> {
-    throw new Error(
-      "Belum diimplementasi - tunggu contoh format file rekap predikat dari e-Kinerja BKN untuk menentukan parser yang sesuai."
-    );
+  async importFromUploadedFile(filePath: string): Promise<CapaianKinerjaInput[]> {
+    const wb = XLSX.readFile(filePath);
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    if (!sheet) throw new Error(`File ${filePath} tidak punya sheet yang bisa dibaca.`);
+
+    const matriks = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: null });
+    const hasil = parseRekapPredikatKinerja(matriks);
+    if (hasil.error) throw new Error(hasil.error);
+
+    return hasil.baris.map((b) => ({
+      pegawaiId: b.nip,
+      periodeBulan: hasil.periodeBulan,
+      periodeTahun: hasil.periodeTahun,
+      nilaiCapaianKinerjaPersen: b.nilaiAngka,
+    }));
   }
 
   /** Helper khusus testing/demo untuk seed data tanpa file asli */

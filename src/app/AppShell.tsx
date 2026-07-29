@@ -46,6 +46,11 @@ const MENU_KASUBAG = [
     icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M12 20h9" /></>,
   },
   {
+    href: "/predikat-kinerja",
+    label: "Predikat Kinerja",
+    icon: <><path d="m12 3 2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.4l6-.9z" /></>,
+  },
+  {
     href: "/kasubag/kalkulasi",
     label: "Kalkulasi",
     icon: <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />,
@@ -142,6 +147,11 @@ const MENU_PPABP = [
     href: "/pegawai",
     label: "Data Pegawai",
     icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M12 20h9" /></>,
+  },
+  {
+    href: "/predikat-kinerja",
+    label: "Predikat Kinerja",
+    icon: <><path d="m12 3 2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.4l6-.9z" /></>,
   },
   {
     href: "/ppabp/rekonsiliasi",

@@ -184,6 +184,40 @@ export function canUploadKoreksiPredikatKinerjaUnit(user: AuthUser, targetSatuan
   return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
 }
 
+/**
+ * Upload file "Rekap Penilaian" dari e-Kinerja BKN buat SATU satuan kerja.
+ *
+ * Sengaja KOMPOSISI dari dua izin yang sudah ada, bukan aturan baru:
+ * - KASUBAG_TU: cuma unitnya sendiri (canUploadKoreksiPredikatKinerjaUnit)
+ * - PPABP/ADMIN: lintas unit, sejalan dengan perannya sebagai fallback
+ *   kalau unit tidak bisa (bandingkan canTarikAtauUploadPresensiFallback
+ *   yang polanya sama untuk presensi)
+ *
+ * Dicek PER SATUAN KERJA, bukan sekali per file: satu file rekap bisa saja
+ * memuat pegawai lintas unit, dan Kasubag TU tidak boleh ikut menulis
+ * predikat pegawai unit lain cuma karena namanya kebetulan ada di file yang
+ * dia upload. Satuan kerja yang dipakai WAJIB dari `Pegawai.satuanKerja`
+ * hasil lookup NIP - JANGAN dari baris unit di kepala file (isinya nama
+ * sub-unit penilaian, lihat catatan di rekapPredikatKinerja.ts).
+ */
+export function canUploadRekapPredikatKinerja(user: AuthUser, targetSatuanKerja: string): boolean {
+  return (
+    canUploadKoreksiPredikatKinerjaUnit(user, targetSatuanKerja) ||
+    cekPpabpAtauAdmin(user, targetSatuanKerja)
+  );
+}
+
+/**
+ * Buka HALAMAN upload rekap predikat kinerja. Cek "boleh menulis predikat
+ * pegawai unit MANA" dilakukan terpisah per baris lewat
+ * canUploadRekapPredikatKinerja - pola yang sama dengan canKelolaDataPegawai
+ * vs canEditDataPegawai.
+ */
+export function canBukaHalamanPredikatKinerja(user: AuthUser): boolean {
+  if (!user.aktif) return false;
+  return user.role === "ADMIN" || user.role === "PPABP" || user.role === "KASUBAG_TU";
+}
+
 /** Tombol "ajukan semua pegawai unit" - kalkulasi Tukin 30/70 massal + preview nominal sebelum diajukan. */
 export function canAjukanKalkulasiTukinMassalUnit(user: AuthUser, targetSatuanKerja: string): boolean {
   return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
