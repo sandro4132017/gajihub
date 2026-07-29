@@ -34,9 +34,10 @@ akses resmi tersedia - tanpa refactor besar.
 - `prisma/schema.prisma` - skema database inti (pegawai, presensi, predikat
   kinerja, tukin, uang makan/lembur, approval log, audit trail, rekonsiliasi,
   akun approver, user/role, banding, bukti dukung, SK KGB, SK hukuman
-  disiplin, anggaran realisasi, bukti potong pajak, usulan perubahan role -
-  lihat "Simulasi role matrix lengkap" di bawah untuk konteks penambahan
-  model-model terakhir)
+  disiplin, anggaran realisasi, bukti potong pajak, usulan perubahan role,
+  gaji induk - lihat "Simulasi role matrix lengkap" dan "Riwayat gaji
+  pegawai (gaji induk) & slip gaji format asli" di bawah untuk konteks
+  penambahan model-model terakhir)
 - `src/business-logic/tukin.ts` - kalkulasi tukin 30/70 sesuai Pasal 5, 11-15
   Permenaker 15/2024 (bukan asumsi generik - sudah dicek ke pasal aslinya)
 - `src/business-logic/tarifTukinPokok.ts` - tabel RESMI tukin pokok per kelas
@@ -58,8 +59,11 @@ akses resmi tersedia - tanpa refactor besar.
   periode/satuan kerja
 - `src/auth/` - login SEMENTARA khusus approver (lihat model `AkunApprover`
   di schema untuk catatan kenapa ini bukan solusi final)
+- `src/business-logic/gajiInduk.ts` - pemetaan file ADK gaji GPP/Web Gaji ke
+  komponen slip gaji (PURE, tidak baca file sendiri) - lihat "Riwayat gaji
+  pegawai (gaji induk) & slip gaji format asli" di bawah
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
-  session login di atas (`npm test`)
+  session login di atas (`npm test` - 139 test)
 - Fitur "user & role" versi AWAL (skema `User`/`Role`/`Banding`/
   `BuktiDukung` - dulu namanya `Sanggahan`/`BuktiPendukungUpload`,
   authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
@@ -596,7 +600,7 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
 | `PEGAWAI` (semua role lain otomatis punya privilege ini juga) | Lihat total pendapatan per komponen (Tukin/Uang Makan/Uang Lembur) periode berjalan & sebelumnya. Profil: status kepegawaian, presensi, kinerja terkini. Ajukan banding + upload bukti dukung. Lihat status banding sendiri (diajukan → verifikasi Kasubag TU → approval final OSDMA). Cetak/download slip gaji (placeholder, BELUM final - lihat item di bawah). Download bukti potong pajak (hasil UPLOAD MANUAL Kasubag TU/PPABP, pegawai cuma lihat/download, TIDAK BISA upload sendiri). |
 | `KASUBAG_TU` | Privilege Pegawai + scope unit kerjanya: lihat semua pegawai unit, approval tahap 1 banding, tarik/upload manual data presensi (dasar bobot 30% Tukin), upload/koreksi predikat kinerja (bobot 70% Tukin), tombol "tarik ulang data" presensi (BUKAN auto-sync - koreksi sebenarnya terjadi di e-Presensi eksternal), "ajukan semua pegawai unit" buat kalkulasi Tukin massal + preview nominal, telaah & ajukan Uang Makan unit, telaah/koreksi/ajukan Uang Lembur unit, dashboard unit (total pegawai, total nominal, status siklus, jumlah tertolak/belum diajukan - filter periode), ajukan SK KGB (approval OSDMA), input SK Hukuman Disiplin (approval OSDMA - TODO(confirm) besar, lihat di bawah). |
 | `OSDMA` | Privilege Pegawai + approval final banding & SK KGB, update SK pegawai baru dilantik/naik pangkat. |
-| `PPABP` (Tim PPABP Rokeu) | Privilege Pegawai + tarik/upload manual presensi (fallback kalau Kasubag TU tidak bisa), telaah & validasi pengajuan Tukin/Uang Makan/Uang Lembur SEMUA unit, export ADK (3 jenis terpisah), upload Anggaran & Realisasi Belanja Pegawai, monitoring lintas unit + ubah status pengajuan, LIHAT & USULKAN perubahan role (eksekusi final di Admin), dashboard lintas unit (+ total Anggaran vs Realisasi). |
+| `PPABP` (Tim PPABP Rokeu) | Privilege Pegawai + tarik/upload manual presensi (fallback kalau Kasubag TU tidak bisa), telaah & validasi pengajuan Tukin/Uang Makan/Uang Lembur SEMUA unit, export ADK (3 jenis terpisah), upload Anggaran & Realisasi Belanja Pegawai, monitoring lintas unit + ubah status pengajuan, LIHAT & USULKAN perubahan role (eksekusi final di Admin), dashboard lintas unit (+ total Anggaran vs Realisasi), upload riwayat gaji induk dari ADK GPP + input honorarium (bahan slip gaji pegawai - lihat "Riwayat gaji pegawai (gaji induk) & slip gaji format asli"). |
 | `PIMPINAN` | Privilege Pegawai + dashboard lintas unit SAMA seperti PPABP, read-only (tanpa approval/ubah data apapun). |
 | `ADMIN` | Privilege Pegawai + dashboard lintas unit (sama PPABP/Pimpinan) + konfigurasi sistem + **privilege SEMUA role di atas** + eksekusi final perubahan role. **BUKAN DESAIN FINAL production** - lihat TODO(confirm) besar di bawah. |
 
@@ -634,12 +638,14 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
   `appliedAt`/`appliedBy` disiapkan tapi service layer yang benar-benar
   meng-update `Pegawai.golongan` SETELAH disetujui OSDMA **belum
   diimplementasikan** - baru schema.
-- **Slip gaji** - PEGAWAI TIDAK PUNYA sengaja model baru untuk ini,
-  karena user eksplisit bilang formatnya "placeholder dulu, jangan
-  didesain sebagai final" - akan dihitung on-the-fly dari
-  TukinCalculation/UangMakan/UangLembur yang sudah ada begitu UI dibangun,
-  BUKAN data tersimpan terpisah. Tunggu format detail dari user sebelum
-  desain final (termasuk apakah perlu PDF generation, dst).
+- ~~**Slip gaji** - formatnya "placeholder dulu, jangan didesain sebagai
+  final", tunggu format detail dari user.~~ **RESOLVED** - user memberi
+  contoh slip ASLI cetakan PPABP Setjen, dan formatnya sekarang diikuti
+  persis. Slip TETAP tidak punya model tersimpan sendiri (dihitung
+  on-the-fly), TAPI sekarang ada model `GajiInduk` buat komponen gaji
+  pokok/tunjangan yang memang datang dari luar - lihat bagian "Riwayat gaji
+  pegawai (gaji induk) & slip gaji format asli" di bawah. PDF generation
+  masih BELUM ada (tetap `window.print()`).
 - **AnggaranRealisasi belum dipecah per jenis belanja** (Tukin/Uang
   Makan/Uang Lembur) - satu baris = total pagu/realisasi per satuan
   kerja+periode, karena kebutuhan dashboard saat ini cuma minta total.
@@ -910,6 +916,125 @@ Admin"), sekarang ditutup dari empat sisi:
 4. `ubahAssignmentRoleAction` sudah menolak simpan kalau KASUBAG_TU dipilih
    tanpa satuan kerja (ditambahkan bareng fitur multi-role).
 
+### Riwayat gaji pegawai (gaji induk) & slip gaji format asli
+
+Dipicu 2 file dari user: contoh slip gaji ASLI cetakan PPABP Setjen
+("i'mal SLIP GAJI SETJEN cetak februari.pdf") dan file ADK gaji asli dari
+GPP/Web Gaji ("Gaji_Bank_45093800_1_000964.xlsx" - satker 450938 Setjen,
+periode 07/2026, 350 pegawai). Intinya: slip gaji butuh komponen GAJI INDUK
+(gaji pokok + tunjangan keluarga/fungsional/beras + potongan IWP/PPh/BPJS)
+yang TIDAK dihitung Gajihub sama sekali - itu domain Web Gaji Kemenkeu -
+jadi PPABP meng-UPLOAD-nya.
+
+**Model `GajiInduk`** (migrasi `20260729000000_tambah_gaji_induk`, satu
+`CREATE TABLE`, non-destruktif):
+- Nama kolom pakai istilah SLIP (gajiPokok/tunjanganIstri/potonganIuran
+  Pegawai/dst), BUKAN nama kolom mentah GPP (gjpokok/tjistri/potpfk10) -
+  pemetaannya terkumpul di satu tempat, `src/business-logic/gajiInduk.ts`.
+- **PII finansial SENGAJA dibuang saat parsing**: kolom `npwp`, `nmrek`,
+  `nm_bank`, `rekening`, `kdbankspan`, `nmbankspan`, `kdpos` TIDAK pernah
+  masuk database (keputusan eksplisit user). Konsekuensinya: kolom rekening
+  di export ADK Tukin TETAP kosong - kalau nanti mau diisi, itu keputusan
+  TERPISAH soal menyimpan data rekening, bukan efek samping fitur ini.
+- Kolom `kodeSatker` (mis. "450938") adalah SATU-SATUNYA sumber kode satker
+  resmi yang dipunya sistem ini sekarang - relevan buat kolom "Kode Satker"
+  di export ADK Tukin yang selama ini kosong, TAPI belum disambungkan.
+- Baru mendukung gaji INDUK (`kdjns` = "1"). Jenis lain (susulan/kekurangan/
+  terusan) DILEWATI dengan alasan eksplisit - unique key
+  (pegawai+bulan+tahun) menganggap satu pegawai cuma punya satu baris gaji
+  per periode. Kalau nanti perlu, `jenisGaji` harus ikut masuk unique key.
+- **`honorarium` TIDAK ada di file GPP** (di slip contoh nilainya Rp 11,4
+  jt). Sesuai keputusan user: setelah upload nilainya selalu 0, lalu
+  di-edit manual PPABP per pegawai. Upload ulang file GPP TIDAK menimpa
+  honorarium yang sudah diketik (kolom itu sengaja tidak ikut di `update`
+  upsert). TODO(confirm): sumber resminya belum jelas (kemungkinan SPJ
+  kegiatan), jangan diasumsikan bisa ditarik otomatis.
+
+**`src/business-logic/gajiInduk.ts`** (pure, 15 unit test) - pemetaan baris
+GPP, penjumlahan total, dan `hitungTotalPenghasilanSlip`. Test-nya memakai
+angka ASLI dari slip contoh (5.421.032 / 408.268 / 5.012.764 / 24.048.964)
+DAN dua baris asli file GPP, jadi kalau pemetaan kolom bergeser test ini
+yang jatuh duluan. Pengecekan `selisihAritmatika` (bruto - potongan vs
+kolom `bersih`) adalah deteksi SALAH-BACA file, BUKAN "koreksi" atas angka
+resmi - baris tetap disimpan apa adanya dan selisihnya dilaporkan ke UI.
+
+**UI PPABP `/ppabp/gaji-induk`** (izin baru `canKelolaGajiInduk` - PPABP +
+ADMIN; KASUBAG_TU SENGAJA DITOLAK, beda dari BuktiPotongPajak, karena yang
+memegang ADK gaji Kemenkeu & menandatangani slip memang PPABP):
+- Upload file .xlsx, periode diambil DARI ISI FILE (kolom bulan/tahun),
+  bukan dipilih manual. **File-nya sendiri TIDAK disimpan** ke disk/object
+  storage - cuma dibaca di memori, yang masuk database angkanya saja. Ini
+  sengaja menghindari TODO(confirm) storage/retensi dokumen yang masih
+  terbuka (sama alasannya dengan upload bukti dukung banding yang sampai
+  sekarang belum dibangun).
+- Hasil upload dilaporkan eksplisit: jumlah tersimpan per periode, baris
+  yang dilewati beserta alasannya (dikelompokkan, bukan 300 baris pesan),
+  dan daftar baris yang selisih aritmatikanya bukan nol.
+- Upsert ditulis per batch 50 (`prisma.$transaction`) supaya satu file 350+
+  baris tidak jadi satu transaksi raksasa.
+- Tabel per periode + filter satker + pencarian nama/NIP, maksimal 200
+  baris ditampilkan.
+- `next.config.mjs` diberi `serverActions.bodySizeLimit: "10mb"` (default
+  Next cuma 1 MB, file contoh saja sudah ~600 KB). Action-nya sendiri
+  menolak file > 8 MB duluan supaya pesannya jelas.
+- **Gotcha penting**: di sini `xlsx` di-import NAMED (`import { read, utils }
+  from "xlsx"`), BUKAN default seperti `src/jobs/importPegawaiXlsx.ts`.
+  Bundler Next resolve paket itu ke build ESM `xlsx.mjs` yang TIDAK punya
+  default export, jadi `import XLSX from "xlsx"` bikin `next build` GAGAL
+  (tidak ketahuan waktu `npm run dev`/tsc). Skrip di `src/jobs/` aman karena
+  jalan lewat tsx/CJS.
+
+**Slip gaji `/saya/slip-gaji/[bulan]/[tahun]` - badge PLACEHOLDER DICABUT**,
+sekarang mengikuti format slip asli: kop "KEMENTERIAN KETENAGAKERJAAN RI" +
+unit Eselon I, judul "PERINCIAN PEMBAYARAN GAJI", blok identitas, daftar
+PENGHASILAN bernomor, POTONGAN, Jumlah Gaji Bersih, lalu Tunjangan Kinerja/
+Uang Makan/Uang Lembur/Honorarium, Total Penghasilan, dan blok tanda tangan
+PPABP.
+- **`src/business-logic/strukturEselon.ts` AKHIRNYA DIPAKAI** (sebelumnya
+  "BELUM dipakai di UI manapun") - `getEselon1()` mengisi baris kedua kop.
+  Fallback ke `satuanKerja` kalau unitnya tidak ketemu persis di lookup
+  (TODO(confirm) mapping yang sudah ada tetap berlaku).
+- Baris "Tunjangan Umum/Jabatan" di slip = `tunjanganUmum` +
+  `tunjanganStruktural` (di GPP dua kolom terpisah, di slip satu baris).
+  Disimpan tetap terpisah di database supaya tidak ada informasi hilang.
+- Nilai nol ditulis "-" persis seperti contoh. Baris "Tunjangan Lain-lain"/
+  "Potongan Lain-lain" CUMA muncul kalau isinya > 0 (tidak ada di slip
+  contoh, ditambahkan supaya nilai dari satker lain tidak hilang diam-diam).
+- Penanda "estimasi" cuma muncul kalau ada komponen yang BELUM approved -
+  slip yang sudah final tercetak bersih seperti contoh.
+- Kalau gaji induk periode itu belum diupload, slip TIDAK error: tampil
+  penjelasan + hanya komponen yang dihitung Gajihub.
+- Penanda tangan diambil dari `GajiInduk.diunggahOleh` (PPABP yang upload),
+  bukan nama yang dihardcode. Kalau belum ada gaji induk, jadi garis kosong.
+- Alamat kantor masih SATU alamat konstan (kantor pusat, sesuai contoh) -
+  TODO(confirm) kalau pilot melebar ke satker luar Gatot Subroto.
+- Logo Kemnaker di contoh SENGAJA tidak ditiru - yang ada di repo cuma logo
+  Gajihub, dan memakainya di dokumen berformat dokumen resmi kementerian
+  jelas keliru.
+- `/saya` ikut menyesuaikan: tile "Gaji bersih" ditambahkan, "Total" sekarang
+  pakai `hitungTotalPenghasilanSlip` yang SAMA dengan slip (biar tidak beda
+  angka), dan daftar periode slip ikut memperhitungkan periode yang cuma
+  punya gaji induk.
+
+**Diverifikasi manual end-to-end** (production build, PPABP Irwan Syafril):
+upload file ADK asli -> 350 baris tersimpan, 1 baris dilewati (baris kosong
+di akhir file), total gaji bersih Rp 1.498.538.900 - dicek ulang lewat
+script terhadap file ASLI: jumlah baris, total penghasilan, total potongan,
+dan total bersih SAMA PERSIS dengan isi database, dan 0 dari 350 baris punya
+selisih aritmatika. Edit honorarium tersimpan + tercatat di `AuditTrail`.
+Slip gaji Juli 2026 tampil sesuai format contoh dengan aritmatika benar
+(6.797.409 - 545.809 = 6.251.600; total 28.467.600). Slip Juni 2026 (belum
+ada gaji induk) menampilkan fallback dengan benar. Akun KASUBAG_TU (Ayu
+Puspita Sari) dapat "Akses ditolak" di `/ppabp/gaji-induk` dan menunya tidak
+muncul di sidebar.
+
+**Data hasil verifikasi SENGAJA TIDAK di-revert** (beda dari verifikasi
+OSDMA/PPABP/Admin sebelumnya): 350 baris gaji induk periode 7/2026 justru
+data yang dibutuhkan supaya slip gaji bisa didemokan. Yang perlu diingat:
+honorarium Rp 11.400.000 pada Irwan Syafril adalah ANGKA UJI (disalin dari
+slip contoh milik orang lain), kosongkan lewat `/ppabp/gaji-induk` kalau
+tidak mau ikut tampil waktu demo.
+
 ### Dropdown searchable (`src/app/SearchableSelect.tsx`)
 
 SEMUA `<select>` di aplikasi diganti komponen ini (grep `<select` sekarang
@@ -1020,8 +1145,10 @@ user: 3 contoh/template ADK asli (`templatelemburPPPK202606.xlsx`,
   Eselon II (== `Pegawai.satuanKerja`) ke Unit Eselon I-nya, sumber file
   "Struktur unit kemnaker sd eselon II.xlsx" dari user. Disiapkan supaya
   dashboard Pimpinan/PPABP NANTI gampang dikelompokkan per Eselon I -
-  **BELUM dipakai di UI manapun**, murni data referensi dulu (user minta
-  "biar nanti gampang", bukan "kelompokkan sekarang"). TODO(confirm)
+  ~~BELUM dipakai di UI manapun~~ SEKARANG dipakai di kop slip gaji
+  (`/saya/slip-gaji`, baris kedua kop = unit Eselon I, fallback ke
+  `satuanKerja` kalau tidak ketemu). Pengelompokan dashboard per Eselon I
+  tetap BELUM dibangun. TODO(confirm)
   PENTING: mapping ini TIDAK 100% cocok dengan `satuanKerja` hasil
   `importPegawaiXlsx.ts` (basis data ±Januari 2026) - beberapa nama unit
   beda (kemungkinan reorganisasi/rename), dan file referensi tidak
@@ -1125,6 +1252,16 @@ pegawai yang lebih baru buat diimpor ulang via `importPegawaiXlsx.ts`.
 OWNER TO gajihub_app` semua supaya user aplikasi punya privilege yang
 benar. Kalau deploy ke server baru lagi dan migrasi butuh dijalankan manual
 lagi (lihat alasan di atas), jangan lupa langkah re-owner ini.
+
+**Deploy fitur riwayat gaji/gaji induk ke VPS**: sama seperti multi-role di
+bawah, butuh migrasi (`20260729000000_tambah_gaji_induk`, satu `CREATE
+TABLE` + 2 foreign key, non-destruktif - tidak menyentuh tabel yang sudah
+ada): `git pull origin main && npx prisma migrate deploy && npm run build &&
+pm2 restart gajihub`. Data gaji induk-nya sendiri TIDAK ikut deploy (bukan
+seed) - PPABP tinggal upload file ADK GPP lewat `/ppabp/gaji-induk` di
+server itu. Kalau migrasi terpaksa dijalankan manual lewat `sudo -u postgres
+psql`, jangan lupa `ALTER TABLE gaji_induk OWNER TO gajihub_app` (masalah
+owner yang sama seperti tabel-tabel role matrix).
 
 **Deploy fitur multi-role ke VPS**: butuh migrasi database, jadi urutannya
 `git pull origin main && npx prisma migrate deploy && npm run build && pm2
