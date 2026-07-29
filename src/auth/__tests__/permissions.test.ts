@@ -32,6 +32,8 @@ import {
   canGenerateAdk,
   canUploadAnggaranRealisasi,
   canKelolaGajiInduk,
+  canUploadRekapPredikatKinerja,
+  canBukaHalamanPredikatKinerja,
   canMonitorUbahStatusLintasUnit,
   canViewRekonsiliasiLintasSatker,
   canUsulkanPerubahanRole,
@@ -411,5 +413,49 @@ describe("canViewPegawai - gabungan aturan lintas role", () => {
 
   it("akun nonaktif: DITOLAK apapun role-nya", () => {
     expect(canViewPegawai(buatUser({ role: "PIMPINAN", aktif: false }), target)).toBe(false);
+  });
+});
+
+describe("Upload rekap predikat kinerja e-Kinerja BKN (Kasubag TU + PPABP)", () => {
+  it("canBukaHalamanPredikatKinerja: KASUBAG_TU/PPABP/ADMIN boleh, sisanya ditolak", () => {
+    expect(canBukaHalamanPredikatKinerja(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }))).toBe(true);
+    expect(canBukaHalamanPredikatKinerja(buatUser({ role: "PPABP", satuanKerja: null }))).toBe(true);
+    expect(canBukaHalamanPredikatKinerja(buatUser({ role: "ADMIN" }))).toBe(true);
+
+    expect(canBukaHalamanPredikatKinerja(buatUser({ role: "OSDMA" }))).toBe(false);
+    expect(canBukaHalamanPredikatKinerja(buatUser({ role: "PIMPINAN" }))).toBe(false);
+    expect(canBukaHalamanPredikatKinerja(buatUser({ role: "PEGAWAI" }))).toBe(false);
+    expect(canBukaHalamanPredikatKinerja(buatUser({ role: "PPABP", aktif: false }))).toBe(false);
+  });
+
+  it("canUploadRekapPredikatKinerja: KASUBAG_TU CUMA unitnya sendiri", () => {
+    const kasubag = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
+    expect(canUploadRekapPredikatKinerja(kasubag, SETJEN)).toBe(true);
+    // Inti pengamanannya: satu file rekap bisa memuat pegawai lintas unit,
+    // dan baris di luar unitnya TIDAK boleh ikut tertulis.
+    expect(canUploadRekapPredikatKinerja(kasubag, BIRO_UMUM)).toBe(false);
+  });
+
+  it("canUploadRekapPredikatKinerja: PPABP & ADMIN lintas unit", () => {
+    const ppabp = buatUser({ role: "PPABP", satuanKerja: null });
+    expect(canUploadRekapPredikatKinerja(ppabp, SETJEN)).toBe(true);
+    expect(canUploadRekapPredikatKinerja(ppabp, BIRO_UMUM)).toBe(true);
+
+    const admin = buatUser({ role: "ADMIN" });
+    expect(canUploadRekapPredikatKinerja(admin, SETJEN)).toBe(true);
+    expect(canUploadRekapPredikatKinerja(admin, BIRO_UMUM)).toBe(true);
+  });
+
+  it("canUploadRekapPredikatKinerja: DITOLAK buat OSDMA/PIMPINAN/PEGAWAI & akun nonaktif", () => {
+    expect(canUploadRekapPredikatKinerja(buatUser({ role: "OSDMA" }), SETJEN)).toBe(false);
+    expect(canUploadRekapPredikatKinerja(buatUser({ role: "PIMPINAN" }), SETJEN)).toBe(false);
+    expect(canUploadRekapPredikatKinerja(buatUser({ role: "PEGAWAI" }), SETJEN)).toBe(false);
+    expect(canUploadRekapPredikatKinerja(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN, aktif: false }), SETJEN)).toBe(false);
+  });
+
+  it("canEditPresensiKinerjaLangsung TETAP false - upload rekap bukan pintu belakang buat edit bebas", () => {
+    for (const role of SEMUA_ROLE) {
+      expect(canEditPresensiKinerjaLangsung(buatUser({ role, satuanKerja: SETJEN }))).toBe(false);
+    }
   });
 });

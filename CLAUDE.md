@@ -62,8 +62,11 @@ akses resmi tersedia - tanpa refactor besar.
 - `src/business-logic/gajiInduk.ts` - pemetaan file ADK gaji GPP/Web Gaji ke
   komponen slip gaji (PURE, tidak baca file sendiri) - lihat "Riwayat gaji
   pegawai (gaji induk) & slip gaji format asli" di bawah
+- `src/business-logic/rekapPredikatKinerja.ts` - pemetaan file "Rekap
+  Penilaian" e-Kinerja BKN ke `PredikatKinerja` (bobot 70% Tukin), PURE -
+  lihat "Upload rekap predikat kinerja e-Kinerja BKN" di bawah
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
-  session login di atas (`npm test` - 139 test)
+  session login di atas (`npm test` - 158 test)
 - Fitur "user & role" versi AWAL (skema `User`/`Role`/`Banding`/
   `BuktiDukung` - dulu namanya `Sanggahan`/`BuktiPendukungUpload`,
   authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
@@ -598,9 +601,9 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
 | Role | Cakupan fitur |
 |---|---|
 | `PEGAWAI` (semua role lain otomatis punya privilege ini juga) | Lihat total pendapatan per komponen (Tukin/Uang Makan/Uang Lembur) periode berjalan & sebelumnya. Profil: status kepegawaian, presensi, kinerja terkini. Ajukan banding + upload bukti dukung. Lihat status banding sendiri (diajukan → verifikasi Kasubag TU → approval final OSDMA). Cetak/download slip gaji (placeholder, BELUM final - lihat item di bawah). Download bukti potong pajak (hasil UPLOAD MANUAL Kasubag TU/PPABP, pegawai cuma lihat/download, TIDAK BISA upload sendiri). |
-| `KASUBAG_TU` | Privilege Pegawai + scope unit kerjanya: lihat semua pegawai unit, approval tahap 1 banding, tarik/upload manual data presensi (dasar bobot 30% Tukin), upload/koreksi predikat kinerja (bobot 70% Tukin), tombol "tarik ulang data" presensi (BUKAN auto-sync - koreksi sebenarnya terjadi di e-Presensi eksternal), "ajukan semua pegawai unit" buat kalkulasi Tukin massal + preview nominal, telaah & ajukan Uang Makan unit, telaah/koreksi/ajukan Uang Lembur unit, dashboard unit (total pegawai, total nominal, status siklus, jumlah tertolak/belum diajukan - filter periode), ajukan SK KGB (approval OSDMA), input SK Hukuman Disiplin (approval OSDMA - TODO(confirm) besar, lihat di bawah). |
+| `KASUBAG_TU` | Privilege Pegawai + scope unit kerjanya: lihat semua pegawai unit, approval tahap 1 banding, tarik/upload manual data presensi (dasar bobot 30% Tukin), upload/koreksi predikat kinerja (bobot 70% Tukin - lewat `/predikat-kinerja`, upload file Rekap Penilaian e-Kinerja BKN, di-scope ke unitnya), tombol "tarik ulang data" presensi (BUKAN auto-sync - koreksi sebenarnya terjadi di e-Presensi eksternal), "ajukan semua pegawai unit" buat kalkulasi Tukin massal + preview nominal, telaah & ajukan Uang Makan unit, telaah/koreksi/ajukan Uang Lembur unit, dashboard unit (total pegawai, total nominal, status siklus, jumlah tertolak/belum diajukan - filter periode), ajukan SK KGB (approval OSDMA), input SK Hukuman Disiplin (approval OSDMA - TODO(confirm) besar, lihat di bawah). |
 | `OSDMA` | Privilege Pegawai + approval final banding & SK KGB, update SK pegawai baru dilantik/naik pangkat. |
-| `PPABP` (Tim PPABP Rokeu) | Privilege Pegawai + tarik/upload manual presensi (fallback kalau Kasubag TU tidak bisa), telaah & validasi pengajuan Tukin/Uang Makan/Uang Lembur SEMUA unit, export ADK (3 jenis terpisah), upload Anggaran & Realisasi Belanja Pegawai, monitoring lintas unit + ubah status pengajuan, LIHAT & USULKAN perubahan role (eksekusi final di Admin), dashboard lintas unit (+ total Anggaran vs Realisasi), upload riwayat gaji induk dari ADK GPP + input honorarium (bahan slip gaji pegawai - lihat "Riwayat gaji pegawai (gaji induk) & slip gaji format asli"). |
+| `PPABP` (Tim PPABP Rokeu) | Privilege Pegawai + tarik/upload manual presensi (fallback kalau Kasubag TU tidak bisa), upload rekap predikat kinerja e-Kinerja BKN lintas unit (`/predikat-kinerja`, fallback yang sama pola dengan presensi), telaah & validasi pengajuan Tukin/Uang Makan/Uang Lembur SEMUA unit, export ADK (3 jenis terpisah), upload Anggaran & Realisasi Belanja Pegawai, monitoring lintas unit + ubah status pengajuan, LIHAT & USULKAN perubahan role (eksekusi final di Admin), dashboard lintas unit (+ total Anggaran vs Realisasi), upload riwayat gaji induk dari ADK GPP + input honorarium (bahan slip gaji pegawai - lihat "Riwayat gaji pegawai (gaji induk) & slip gaji format asli"). |
 | `PIMPINAN` | Privilege Pegawai + dashboard lintas unit SAMA seperti PPABP, read-only (tanpa approval/ubah data apapun). |
 | `ADMIN` | Privilege Pegawai + dashboard lintas unit (sama PPABP/Pimpinan) + konfigurasi sistem + **privilege SEMUA role di atas** + eksekusi final perubahan role. **BUKAN DESAIN FINAL production** - lihat TODO(confirm) besar di bawah. |
 
@@ -916,6 +919,91 @@ Admin"), sekarang ditutup dari empat sisi:
 4. `ubahAssignmentRoleAction` sudah menolak simpan kalau KASUBAG_TU dipilih
    tanpa satuan kerja (ditambahkan bareng fitur multi-role).
 
+### Upload rekap predikat kinerja e-Kinerja BKN (`/predikat-kinerja`)
+
+Dipicu file asli dari user: "Rekap Penilaian (45).xlsx" - export portal
+e-Kinerja BKN, 28 pegawai Biro Keuangan dan BMN periode 6/2026. **Menutup
+open item #6** (format file rekap BKN yang selama ini belum ada contohnya).
+Ini sumber bobot **70% Tukin**, jadi salah baca = salah bayar.
+
+**Bentuk file** (didokumentasikan lengkap di kepala
+`src/business-logic/rekapPredikatKinerja.ts`): 3 baris kepala (instansi /
+unit penilaian / "Periode Bulanan 6 Tahun 2026"), baris kosong, lalu header
+`No | NIP | Nama | Jabatan | Rating Hasil Kinerja | Rating Perilaku Kerja |
+Predikat Kinerja Periodik` dan datanya.
+
+- **Periode diambil dari isi file**, tidak dipilih manual - konsisten dengan
+  upload gaji induk. Rekap TAHUNAN DITOLAK dengan pesan yang menyuruh
+  mengunduh yang bulanan (skema `PredikatKinerja` memang per bulan).
+- **Baris "unit" di kepala file (mis. "Subbagian Tata Usaha") BUKAN
+  `Pegawai.satuanKerja`** - itu nama sub-unit penilaian. Dipakai CUMA buat
+  ditampilkan. Scoping kewenangan WAJIB dari `Pegawai.satuanKerja` hasil
+  lookup NIP. Ini bukan detail kosmetik: kalau tertukar, Kasubag TU bisa
+  menulis predikat unit lain.
+- **Predikat dicocokkan EXACT, tidak pernah ditebak.** Label yang tidak ada
+  di daftar resmi (Sangat Baik / Baik / Perlu Perbaikan / Butuh Perbaikan /
+  Kurang / Sangat Kurang) DILEWATI dan dilaporkan per baris. Pencocokan
+  sengaja bukan `includes()` - "Sangat Baik" tidak boleh kesangkut jadi
+  "Baik". Ada test khusus buat jebakan ini.
+- Kolom "Rating Hasil Kinerja" & "Rating Perilaku Kerja" DIBACA tapi TIDAK
+  disimpan - skema cuma punya satu predikat akhir, dan yang dipakai
+  Kepsekjen 82/2025 buat konversi ke persen memang "Predikat Kinerja
+  Periodik". Kalau perlu diarsipkan, butuh kolom tambahan (migrasi terpisah).
+
+**Izin** (di `src/auth/permissions.ts`, +5 unit test):
+`canBukaHalamanPredikatKinerja` (gate halaman: KASUBAG_TU/PPABP/ADMIN) dan
+`canUploadRekapPredikatKinerja(user, satker)` - KOMPOSISI dari izin yang
+sudah ada (`canUploadKoreksiPredikatKinerjaUnit` buat Kasubag TU unitnya
+sendiri + `cekPpabpAtauAdmin` buat PPABP lintas unit), bukan aturan baru.
+**Dicek PER BARIS, bukan sekali per file** - satu file bisa memuat pegawai
+lintas unit. `canEditPresensiKinerjaLangsung` TETAP `false` buat semua role:
+upload ini bukan pintu belakang buat edit bebas, tidak ada form ketik-manual
+predikat di manapun, dan tiap upload menulis `AuditTrail`.
+
+**UI**: SATU halaman `/predikat-kinerja` dipakai KASUBAG_TU dan PPABP (pola
+yang sama dengan `/pegawai` - bukan dua salinan). KASUBAG_TU dipaksa ke
+unitnya di level QUERY dan filter satker-nya disembunyikan; PPABP/ADMIN
+lintas satker. Halaman menampilkan sebaran predikat, tabel per periode, dan
+**peringatan "Kalkulasi Tukin perlu dihitung ulang"**: pegawai yang
+kalkulasi Tukin-nya sudah terlanjur dibuat SEBELUM predikat baru masuk.
+Sengaja TIDAK menghitung ulang otomatis - recalculation mereset siklus
+approval ke DRAFT (lihat catatan kalkulasi massal Kasubag TU di atas), jadi
+keputusannya diserahkan ke user. File-nya sendiri TIDAK disimpan.
+
+**Riwayat predikat di `/pegawai`**: halaman detail Data Pegawai sekarang
+punya panel "Riwayat predikat kinerja" (periode, predikat, nilai persen,
+sumber, cara input) - READ-ONLY, dengan link ke `/predikat-kinerja` buat
+yang berwenang. Tujuannya supaya pertanyaan "kenapa tukin dia segitu" bisa
+dijawab tanpa pindah halaman.
+
+**`MockEKinerjaAdapter.importFromUploadedFile` SUDAH DIIMPLEMENTASI** -
+dulu `throw new Error("Belum diimplementasi...")`. Sekarang mendelegasikan
+ke parser yang SAMA dengan Server Action upload, jadi CLI dan UI tidak
+punya dua parser yang bisa beda perilaku. Perhatikan file adapter itu pakai
+`import XLSX from "xlsx"` (default) karena jalan lewat tsx/CJS, sementara
+Server Action pakai named import - lihat gotcha di bagian gaji induk.
+
+**Diverifikasi manual end-to-end** (production build):
+- **KASUBAG_TU Ayu Puspita Sari (Pusdatik)** upload file berisi 28 pegawai
+  Biro Keuangan -> **SEMUA 28 baris ditolak** dengan alasan "di luar
+  kewenangan kamu (pegawai Biro Keuangan dan Barang Milik Negara)", tidak
+  ada satu baris pun tertulis. Dicek ulang lewat query: 3 baris predikat
+  Pusdatik masih bertanggal sync seed lama (25 Juli), dan TIDAK ada
+  `AuditTrail` dari percobaan itu.
+- **PPABP Irwan Syafril** upload file yang sama -> 28 tersimpan, periode
+  6/2026 terbaca dari file, dikelompokkan ke "Biro Keuangan dan Barang Milik
+  Negara" (satuan kerja ASLI pegawai, bukan "Subbagian Tata Usaha" dari
+  header file), sebaran Baik 25 / Sangat Baik 3, peringatan 2 pegawai perlu
+  hitung ulang Tukin muncul benar, `AuditTrail` tercatat.
+- Riwayat predikat muncul di `/pegawai` (Wanti Lena Sari: Juni 2026, Sangat
+  Baik, 100%, "e-Kinerja BKN (upload manual)").
+- Adapter diuji langsung terhadap file asli: 28 baris, semua periode 6/2026,
+  semua nilai 100%.
+
+**Data hasil verifikasi SENGAJA TIDAK di-revert** - 28 predikat periode
+6/2026 itu data nyata yang berguna buat demo. Upsert-nya idempoten, jadi
+upload ulang file yang sama aman.
+
 ### Riwayat gaji pegawai (gaji induk) & slip gaji format asli
 
 Dipicu 2 file dari user: contoh slip gaji ASLI cetakan PPABP Setjen
@@ -1093,9 +1181,14 @@ kode action.
 5. **Akses API e-Kinerja BKN dan SAKTI** - masih informal (belum ada
    PKS/MoU). `MockEKinerjaAdapter` mensimulasikan alur upload manual file
    rekap dari portal BKN sesuai workaround yang sudah disepakati.
-6. **Format file rekap predikat dari e-Kinerja BKN** - belum ada contoh
+6. ~~**Format file rekap predikat dari e-Kinerja BKN** - belum ada contoh
    filenya, jadi `importFromUploadedFile` di MockEKinerjaAdapter masih
-   melempar error, belum ada parser.
+   melempar error, belum ada parser.~~ **RESOLVED** - user memberi file
+   asli "Rekap Penilaian (45).xlsx". Parser ada di
+   `src/business-logic/rekapPredikatKinerja.ts` dan `importFromUploadedFile`
+   SUDAH jalan (tidak melempar error lagi). Lihat bagian "Upload rekap
+   predikat kinerja e-Kinerja BKN" di bawah. Yang MASIH terbuka: akses API
+   BKN-nya sendiri (item 5) - ini baru menutup soal FORMAT FILE-nya.
 7. **Reconciliation window & kebijakan DRAFT→COCOK/SELISIH/SANGGAH** -
    field-nya sudah disiapkan di schema (`ReconciliationStatus`), tapi durasi
    window verifikasi dan aturan "hold pembayaran vs koreksi siklus

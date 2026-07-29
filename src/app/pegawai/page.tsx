@@ -6,14 +6,24 @@ import {
   canKelolaDataPegawai,
   canEditDataPegawai,
   canPindahSatuanKerjaPegawai,
+  canBukaHalamanPredikatKinerja,
   type AuthUser,
 } from "../../auth/permissions";
 import { daftarRoleTersedia } from "../../auth/roleAktif";
 import { LABEL_ROLE } from "../../auth/roleLabel";
 import { AksesDitolak } from "../AksesDitolak";
+import { NAMA_BULAN } from "../bulan";
 import { PegawaiEditForm } from "./PegawaiEditForm";
 
 export const dynamic = "force-dynamic";
+
+const LABEL_PREDIKAT: Record<string, string> = {
+  SANGAT_BAIK: "Sangat Baik",
+  BAIK: "Baik",
+  PERLU_PERBAIKAN: "Perlu Perbaikan",
+  KURANG: "Kurang",
+  SANGAT_KURANG: "Sangat Kurang",
+};
 
 /**
  * DATA PEGAWAI - perbaikan data pokok pegawai buat ADMIN / PPABP /
@@ -81,6 +91,18 @@ export default async function DataPegawaiPage({
     ? await prisma.user.findUnique({ where: { nip: pegawaiTerpilih.nip } })
     : null;
 
+  // Riwayat predikat kinerja (bobot 70% Tukin) - ditampilkan di halaman yang
+  // sama supaya pertanyaan "kenapa tukin dia segitu" bisa dijawab tanpa
+  // pindah halaman. READ-ONLY di sini: satu-satunya cara mengubahnya adalah
+  // upload rekap resmi e-Kinerja di /predikat-kinerja.
+  const riwayatPredikat = pegawaiTerpilih
+    ? await prisma.predikatKinerja.findMany({
+        where: { pegawaiId: pegawaiTerpilih.id },
+        orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }],
+        take: 24,
+      })
+    : [];
+
   const hrefDaftar = q ? `/pegawai?q=${encodeURIComponent(q)}` : "/pegawai";
 
   return (
@@ -138,6 +160,11 @@ export default async function DataPegawaiPage({
               golonganList={golonganList}
               statusList={statusList}
               bolehPindahSatker={canPindahSatuanKerjaPegawai(authUser, pegawaiTerpilih.satuanKerja)}
+            />
+
+            <RiwayatPredikatKinerja
+              riwayat={riwayatPredikat}
+              bolehUpload={canBukaHalamanPredikatKinerja(authUser)}
             />
           </>
         )
@@ -244,6 +271,72 @@ async function HasilPencarian({ q, satkerWajib }: { q?: string; satkerWajib: str
       ))}
       {hasil.length === 50 && (
         <p className="p-3 text-xs text-muted">Menampilkan 50 hasil teratas - persempit pencarian kalau perlu.</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Riwayat predikat kinerja pegawai - dasar bobot 70% Tunjangan Kinerja.
+ * READ-ONLY: tidak ada form ubah di sini, karena satu-satunya sumber yang
+ * sah adalah file Rekap Penilaian e-Kinerja BKN yang di-upload di
+ * /predikat-kinerja (lihat canEditPresensiKinerjaLangsung di
+ * src/auth/permissions.ts yang tetap `false` buat semua role).
+ */
+function RiwayatPredikatKinerja({
+  riwayat,
+  bolehUpload,
+}: {
+  riwayat: { id: string; periodeBulan: number; periodeTahun: number; predikat: string; nilaiAngka: number; sourceSystem: string; inputMethod: string; sourceSyncedAt: Date }[];
+  bolehUpload: boolean;
+}) {
+  return (
+    <div className="card mt-4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Riwayat predikat kinerja</p>
+        {bolehUpload && (
+          <Link href="/predikat-kinerja" className="text-xs font-semibold text-teal-deep underline">
+            Upload rekap e-Kinerja
+          </Link>
+        )}
+      </div>
+
+      {riwayat.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">
+          Belum ada predikat kinerja yang tercatat. Selama kosong, kalkulasi Tukin akan melewati pegawai ini.
+        </p>
+      ) : (
+        <>
+          <table className="mt-2 w-full text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-xs font-bold uppercase tracking-wide text-muted">
+                <th className="py-1.5 pr-3">Periode</th>
+                <th className="py-1.5 pr-3">Predikat</th>
+                <th className="py-1.5 pr-3">Nilai kinerja</th>
+                <th className="py-1.5">Sumber</th>
+              </tr>
+            </thead>
+            <tbody>
+              {riwayat.map((r) => (
+                <tr key={r.id} className="border-b border-line-2">
+                  <td className="py-1.5 pr-3 text-ink-2">
+                    {NAMA_BULAN[r.periodeBulan - 1] ?? r.periodeBulan} {r.periodeTahun}
+                  </td>
+                  <td className="py-1.5 pr-3 font-semibold text-ink">{LABEL_PREDIKAT[r.predikat] ?? r.predikat}</td>
+                  <td className="py-1.5 pr-3 font-mono text-ink-2">{r.nilaiAngka}%</td>
+                  <td className="py-1.5 text-xs text-muted">
+                    {r.sourceSystem} ({r.inputMethod === "MANUAL_UPLOAD" ? "upload manual" : "API"}) -{" "}
+                    {r.sourceSyncedAt.toLocaleDateString("id-ID")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs text-muted">
+            Nilai kinerja = konversi predikat sesuai Lampiran Kepsekjen 82 Tahun 2025 (Sangat Baik/Baik 100%, Perlu
+            Perbaikan 85%, Kurang/Sangat Kurang 60%), dipakai sebagai komponen 70% Tunjangan Kinerja.
+          </p>
+        </>
       )}
     </div>
   );
