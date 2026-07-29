@@ -225,10 +225,24 @@ export function canUploadRekapPredikatKinerja(user: AuthUser, targetSatuanKerja:
 }
 
 /**
- * Buka HALAMAN upload rekap predikat kinerja. Cek "boleh menulis predikat
- * pegawai unit MANA" dilakukan terpisah per baris lewat
- * canUploadRekapPredikatKinerja - pola yang sama dengan canKelolaDataPegawai
- * vs canEditDataPegawai.
+ * Upload rekap PRESENSI (komponen 30% Tukin) untuk SATU satuan kerja.
+ * Pola & alasannya identik dengan canUploadRekapPredikatKinerja di atas:
+ * KASUBAG_TU unitnya sendiri (canTarikAtauUploadPresensiUnit), PPABP/ADMIN
+ * lintas unit (perannya sebagai fallback - lihat
+ * canTarikAtauUploadPresensiFallback). Dicek PER BARIS, bukan per file.
+ */
+export function canUploadRekapPresensi(user: AuthUser, targetSatuanKerja: string): boolean {
+  return (
+    canTarikAtauUploadPresensiUnit(user, targetSatuanKerja) ||
+    cekPpabpAtauAdmin(user, targetSatuanKerja)
+  );
+}
+
+/**
+ * Buka HALAMAN upload rekap predikat kinerja / presensi. Cek "boleh menulis
+ * data pegawai unit MANA" dilakukan terpisah per baris lewat
+ * canUploadRekapPredikatKinerja / canUploadRekapPresensi - pola yang sama
+ * dengan canKelolaDataPegawai vs canEditDataPegawai.
  */
 export function canBukaHalamanPredikatKinerja(user: AuthUser): boolean {
   if (!user.aktif) return false;

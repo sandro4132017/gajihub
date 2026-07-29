@@ -1,0 +1,160 @@
+import Link from "next/link";
+import type { Prisma } from "@prisma/client";
+import { prisma } from "../../../lib/prisma";
+import { getSessionAccount } from "../../../auth/getSessionAccount";
+import { canBukaHalamanPredikatKinerja, type AuthUser } from "../../../auth/permissions";
+import { AksesDitolak } from "../../AksesDitolak";
+import { NAMA_BULAN } from "../../bulan";
+import { UploadPresensiForm } from "./UploadPresensiForm";
+import { SinkronisasiPresensi } from "./SinkronisasiPresensi";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * PRESENSI - sumber komponen 30% Tukin (Permenaker 15/2024 Pasal 5 & 13).
+ * Dua jalur: sinkronisasi e-Presensi (belum tersambung) dan upload manual
+ * (dipakai sekarang, sah menurut Pasal 23 selama sistem informasi belum
+ * berjalan).
+ */
+
+const MAKS_BARIS_TAMPIL = 200;
+
+export default async function PresensiTukinPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ bulan?: string; tahun?: string; q?: string }>;
+}) {
+  const { bulan, tahun, q } = await searchParams;
+
+  const akun = await getSessionAccount();
+  const authUser: AuthUser | null =
+    akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
+  if (!authUser || !canBukaHalamanPredikatKinerja(authUser)) {
+    return <AksesDitolak pesan="Role kamu tidak berwenang mengelola data presensi." />;
+  }
+
+  const satkerWajib = authUser.role === "KASUBAG_TU" ? authUser.satuanKerja : null;
+  const sekarang = new Date();
+  const periodeBulan = bulan ? Number(bulan) : sekarang.getMonth() + 1;
+  const periodeTahun = tahun ? Number(tahun) : sekarang.getFullYear();
+
+  const filterPegawai: Prisma.PegawaiWhereInput = {};
+  if (satkerWajib) filterPegawai.satuanKerja = satkerWajib;
+  if (q?.trim()) {
+    filterPegawai.OR = [{ nama: { contains: q.trim(), mode: "insensitive" } }, { nip: { contains: q.trim() } }];
+  }
+
+  const where: Prisma.RekapPresensiPeriodeWhereInput = {
+    periodeBulan,
+    periodeTahun,
+    ...(Object.keys(filterPegawai).length > 0 ? { pegawai: filterPegawai } : {}),
+  };
+
+  const [jumlahBaris, rekapList] = await Promise.all([
+    prisma.rekapPresensiPeriode.count({ where }),
+    prisma.rekapPresensiPeriode.findMany({
+      where,
+      take: MAKS_BARIS_TAMPIL,
+      orderBy: { pegawai: { nama: "asc" } },
+      include: { pegawai: { select: { nip: true, nama: true, satuanKerja: true } } },
+    }),
+  ]);
+
+  return (
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <Link href="/tukin" className="text-sm font-semibold text-teal-deep underline">
+        &larr; Kembali ke Dashboard Tukin
+      </Link>
+      <h1 className="mt-2 text-xl font-extrabold tracking-tight text-ink">Presensi (komponen 30% Tukin)</h1>
+      <p className="mt-1 text-sm text-muted">
+        Dasar potongan kehadiran Pasal 13 Permenaker 15/2024.
+        {satkerWajib && (
+          <>
+            {" "}
+            Kamu hanya melihat pegawai di <strong>{satkerWajib}</strong>.
+          </>
+        )}
+      </p>
+
+      <SinkronisasiPresensi />
+
+      <UploadPresensiForm defaultBulan={periodeBulan} defaultTahun={periodeTahun} />
+
+      <form method="get" className="card mt-6 flex flex-wrap items-end gap-3 p-4">
+        <div>
+          <label className="field-label">Bulan</label>
+          <input type="number" name="bulan" min="1" max="12" defaultValue={periodeBulan} className="field-input w-24 py-1.5" />
+        </div>
+        <div>
+          <label className="field-label">Tahun</label>
+          <input type="number" name="tahun" defaultValue={periodeTahun} className="field-input w-28 py-1.5" />
+        </div>
+        <div className="min-w-[200px] flex-1">
+          <label className="field-label">Cari nama atau NIP</label>
+          <input type="text" name="q" defaultValue={q ?? ""} className="field-input" placeholder="Cari pegawai..." />
+        </div>
+        <button type="submit" className="btn btn-primary">
+          Terapkan
+        </button>
+      </form>
+
+      <p className="mt-3 text-sm text-muted">
+        Rekap presensi periode{" "}
+        <strong className="text-ink">
+          {NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} {periodeTahun}
+        </strong>
+        : {jumlahBaris} pegawai.
+      </p>
+
+      <div className="card mt-2 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
+              <th className="px-3 py-2.5">Pegawai</th>
+              <th className="px-3 py-2.5">Alpha</th>
+              <th className="px-3 py-2.5">Tdk presensi</th>
+              <th className="px-3 py-2.5">Telat</th>
+              <th className="px-3 py-2.5">Plg cepat</th>
+              <th className="px-3 py-2.5">Tinggal kantor</th>
+              <th className="px-3 py-2.5">Bolos upacara</th>
+              <th className="px-3 py-2.5">Hadir/Kerja</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rekapList.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-3 py-6 text-center text-muted">
+                  Belum ada rekap presensi untuk periode ini. Upload dulu di atas - tanpa presensi, kalkulasi Tukin
+                  akan melewati pegawai yang bersangkutan.
+                </td>
+              </tr>
+            )}
+            {rekapList.map((r) => (
+              <tr key={r.id} className="border-b border-line-2">
+                <td className="px-3 py-2.5">
+                  <span className="font-semibold text-ink">{r.pegawai.nama}</span>
+                  <span className="block font-mono text-xs text-muted">{r.pegawai.nip}</span>
+                </td>
+                <td className="px-3 py-2.5 font-mono text-ink-2">{r.jumlahHariAlpha} hari</td>
+                <td className="px-3 py-2.5 font-mono text-ink-2">{r.jumlahTidakPresensi}x</td>
+                <td className="px-3 py-2.5 font-mono text-ink-2">{r.totalMenitTerlambat} mnt</td>
+                <td className="px-3 py-2.5 font-mono text-ink-2">{r.totalMenitPulangCepat} mnt</td>
+                <td className="px-3 py-2.5 font-mono text-ink-2">{r.totalMenitMeninggalkanKantor} mnt</td>
+                <td className="px-3 py-2.5 font-mono text-ink-2">{r.jumlahTidakIkutUpacara}x</td>
+                <td className="px-3 py-2.5 font-mono text-ink-2">
+                  {r.jumlahHariHadir}/{r.jumlahHariKerja}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {jumlahBaris > rekapList.length && (
+        <p className="mt-2 text-xs text-muted">
+          Menampilkan {rekapList.length} dari {jumlahBaris} baris - persempit dengan pencarian nama/NIP.
+        </p>
+      )}
+    </main>
+  );
+}

@@ -87,21 +87,41 @@ export async function kalkulasiMassalTukinUangMakanAction(
         continue;
       }
 
-      const presensi = await prisma.presensiHarian.findMany({
-        where: { pegawaiId: pegawai.id, tanggal: { gte: new Date(periodeTahun, periodeBulan - 1, 1), lt: new Date(periodeTahun, periodeBulan, 1) } },
+      // Dua jalur sumber presensi (lihat model RekapPresensiPeriode di
+      // schema.prisma): rekap bulanan hasil upload manual DIUTAMAKAN, kalau
+      // tidak ada baru dihitung dari PresensiHarian (jalur sinkronisasi
+      // e-Presensi). Selama e-Presensi belum tersambung, praktis yang dipakai
+      // adalah rekap manual.
+      const rekapManual = await prisma.rekapPresensiPeriode.findUnique({
+        where: { pegawaiId_periodeBulan_periodeTahun: { pegawaiId: pegawai.id, periodeBulan, periodeTahun } },
       });
-      if (presensi.length === 0) {
+      const presensi = rekapManual
+        ? []
+        : await prisma.presensiHarian.findMany({
+            where: { pegawaiId: pegawai.id, tanggal: { gte: new Date(periodeTahun, periodeBulan - 1, 1), lt: new Date(periodeTahun, periodeBulan, 1) } },
+          });
+      if (!rekapManual && presensi.length === 0) {
         detailDilewati.push(`${pegawai.nama}: data presensi periode ini belum tersedia.`);
         continue;
       }
 
-      const jumlahHariAlpha = presensi.filter((p) => p.statusKehadiran === "ALPHA").length;
-      const jumlahTidakPresensi = presensi.filter((p) => p.statusKehadiran === "TIDAK_PRESENSI").length;
-      const totalMenitTerlambat = presensi.reduce((a, p) => a + p.menitTerlambat, 0);
-      const jumlahHariHadir = presensi.filter((p) =>
-        ["HADIR", "TERLAMBAT", "TIDAK_PRESENSI", "WFA"].includes(p.statusKehadiran)
-      ).length;
-      const jumlahHariKerja = Math.max(presensi.length, HARI_KERJA_DEFAULT);
+      const jumlahHariAlpha = rekapManual?.jumlahHariAlpha ?? presensi.filter((p) => p.statusKehadiran === "ALPHA").length;
+      const jumlahTidakPresensi =
+        rekapManual?.jumlahTidakPresensi ?? presensi.filter((p) => p.statusKehadiran === "TIDAK_PRESENSI").length;
+      const totalMenitTerlambat =
+        rekapManual?.totalMenitTerlambat ?? presensi.reduce((a, p) => a + p.menitTerlambat, 0);
+      const totalMenitPulangCepat =
+        rekapManual?.totalMenitPulangCepat ?? presensi.reduce((a, p) => a + p.menitPulangCepat, 0);
+      const totalMenitMeninggalkanKantor =
+        rekapManual?.totalMenitMeninggalkanKantor ?? presensi.reduce((a, p) => a + p.menitMeninggalkanKantor, 0);
+      const jumlahTidakIkutUpacara =
+        rekapManual?.jumlahTidakIkutUpacara ?? presensi.filter((p) => p.tidakIkutUpacara).length;
+      const jumlahHariHadir =
+        rekapManual?.jumlahHariHadir ??
+        presensi.filter((p) => ["HADIR", "TERLAMBAT", "TIDAK_PRESENSI", "WFA"].includes(p.statusKehadiran)).length;
+      const jumlahHariKerja = rekapManual?.jumlahHariKerja
+        ? Math.max(rekapManual.jumlahHariKerja, 1)
+        : Math.max(presensi.length, HARI_KERJA_DEFAULT);
 
       const rekapKehadiran = {
         pegawaiId: pegawai.nip,
@@ -110,7 +130,9 @@ export async function kalkulasiMassalTukinUangMakanAction(
         jumlahHariAlpha,
         jumlahTidakPresensi,
         totalMenitTerlambat,
-        ikutUpacaraBendera: true,
+        totalMenitPulangCepat,
+        totalMenitMeninggalkanKantor,
+        jumlahTidakIkutUpacara,
         jumlahHariKerja,
         jumlahHariHadir,
         totalJamLembur: 0,
