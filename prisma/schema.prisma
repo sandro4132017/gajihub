@@ -345,11 +345,18 @@ model User {
   // pegawai & banding di satuan kerja ini). Untuk role lain:
   // - PEGAWAI: scoping akses ke data sendiri dilakukan lewat relasi NIP ke
   //   Pegawai, BUKAN lewat field ini - biarkan NULL.
-  // - PPABP: NULL berarti berwenang LINTAS SEMUA satuan kerja (asumsi pilot:
-  //   tim PPABP pusat). TODO(confirm): kalau nanti di-scale ke PPABP per
-  //   satker, tinggal isi field ini per user PPABP yang baru - SENGAJA
-  //   didesain begini supaya tidak perlu migrasi skema waktu itu terjadi,
-  //   cuma perlu keputusan kebijakan + update data.
+  // - PPABP: TIDAK DIPAKAI sama sekali. PPABP selalu berwenang LINTAS SEMUA
+  //   satuan kerja (asumsi pilot: tim PPABP pusat).
+  //   DULU field ini juga dipakai buat men-scope PPABP kalau kebetulan
+  //   terisi, dengan niat "tidak perlu migrasi kalau nanti di-scale per
+  //   satker". Itu SUDAH DICABUT (lihat cekPpabp di src/auth/permissions.ts):
+  //   sejak ada multi-role, satu akun bisa memegang KASUBAG_TU + PPABP
+  //   sekaligus, dan kolom ini WAJIB terisi demi KASUBAG_TU - akibatnya akun
+  //   itu diam-diam kehilangan jangkauan lintas unit begitu dia berperan
+  //   sebagai PPABP.
+  //   TODO(confirm): kalau "PPABP per satker" jadi diputuskan, JANGAN numpang
+  //   kolom ini lagi - butuh kolom sendiri (mis. satuan_kerja_ppabp) atau
+  //   tabel penugasan terpisah, dan itu memang perlu migrasi.
   // - OSDMA, PIMPINAN, ADMIN: kewenangan lintas satker, biarkan NULL.
   satuanKerja String? @map("satuan_kerja")
 

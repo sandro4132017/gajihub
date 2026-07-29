@@ -66,7 +66,7 @@ akses resmi tersedia - tanpa refactor besar.
   Penilaian" e-Kinerja BKN ke `PredikatKinerja` (bobot 70% Tukin), PURE -
   lihat "Upload rekap predikat kinerja e-Kinerja BKN" di bawah
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
-  session login di atas (`npm test` - 158 test)
+  session login di atas (`npm test` - 163 test)
 - Fitur "user & role" versi AWAL (skema `User`/`Role`/`Banding`/
   `BuktiDukung` - dulu namanya `Sanggahan`/`BuktiPendukungUpload`,
   authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
@@ -110,10 +110,13 @@ Sisa yang masih relevan dari langkah awal:
   referensi string generik (placeholder `https://placeholder.local/...` di
   seed), belum ada implementasi storage (local disk vs object storage)
   ataupun kebijakan retensi dokumen.
-- **PPABP per satker** - skema sudah siap (`User.satuanKerja` nullable),
-  tapi keputusan buat benar-benar scale dari tim PPABP pusat ke PPABP per
-  satker adalah keputusan kebijakan terpisah, jangan diasumsikan bakal
-  terjadi otomatis.
+- **PPABP per satker** - masih keputusan kebijakan terbuka, jangan
+  diasumsikan bakal terjadi otomatis. **CATATAN PENTING**: dulu di sini
+  tertulis "skema sudah siap (`User.satuanKerja` nullable)" - itu SUDAH
+  TIDAK BERLAKU. Rencana numpang kolom `satuanKerja` buat men-scope PPABP
+  sudah DICABUT karena bentrok dengan multi-role (lihat "Bug akun
+  multi-role kehilangan jangkauan PPABP" di bawah). Kalau nanti jadi
+  di-scale, itu BUTUH kolom sendiri + migrasi.
 
 ## Simulasi role matrix lengkap (in progress - demo stakeholder)
 
@@ -918,6 +921,65 @@ Admin"), sekarang ditutup dari empat sisi:
    keluarnya.
 4. `ubahAssignmentRoleAction` sudah menolak simpan kalau KASUBAG_TU dipilih
    tanpa satuan kerja (ditambahkan bareng fitur multi-role).
+
+### Bug "akun multi-role kehilangan jangkauan PPABP" (FIXED)
+
+Diminta user: akun ADMIN yang sedang memakai role PPABP harus bisa upload
+untuk unit MANA SAJA dan edit pegawai MANA SAJA, "biar gak cuma PPABP yang
+bisa tindak lanjut".
+
+**Ternyata memang tidak bisa**, dan penyebabnya bukan di halaman-halaman
+baru: `cekPpabp()` (`src/auth/permissions.ts`) menurunkan cakupan PPABP dari
+`User.satuanKerja` - kalau kolom itu terisi, PPABP dianggap "PPABP per
+satker" dan dikunci ke unit itu. Padahal kolom itu milik KASUBAG_TU dan
+**WAJIB terisi** kalau akunnya punya role Kasubag TU (`ubahAssignmentRoleAction`
+menolak simpan tanpa unit). Akun ADMIN demo memegang SEMUA role sekaligus,
+jadi `satuanKerja`-nya = Pusdatik - dan begitu dia ganti sudut pandang ke
+PPABP, jangkauannya menciut ke Pusdatik saja.
+
+**Gagalnya diam-diam, dan itu bagian terburuknya**: halaman-halamannya TETAP
+menampilkan semua unit (`dashboardScope.ts` dan `/pegawai` cuma memaksa
+scope buat KASUBAG_TU), jadi datanya kelihatan tapi setiap aksi ditolak.
+Yang ikut kena bukan cuma upload & edit pegawai yang disebut user, tapi juga
+`canApproveJenjangFinal`, `canHandleSelisih`, `canViewRekonsiliasiLintasSatker`,
+`canTelaahValidasiPengajuanLintasUnit`, `canMonitorUbahStatusLintasUnit`, dan
+`canPindahSatuanKerjaPegawai`.
+
+**Perbaikan**: `cekPpabp()` TIDAK LAGI membaca `satuanKerja` - PPABP selalu
+lintas satker (sesuai asumsi pilot "tim PPABP pusat" yang memang berlaku
+sekarang). Parameter `targetSatuanKerja` sengaja DIPERTAHANKAN di
+signature-nya supaya kalau nanti scoping per-satker jadi diputuskan, cukup
+fungsi itu yang diubah.
+- **Ini TIDAK melebarkan kewenangan PPABP yang asli**: semua akun PPABP
+  sungguhan punya `satuanKerja` NULL, jadi perilakunya persis sama seperti
+  sebelumnya. Satu-satunya akun yang berubah adalah akun ADMIN demo - yang
+  memang sudah punya privilege penuh lewat role utamanya.
+- **Ganti role TETAP berarti**: sebagai PPABP, akun admin tetap KEHILANGAN
+  `canKelolaAssignmentRole`/`canEksekusiPerubahanRole`/
+  `canMonitorKesehatanSistem`/`canKonfigurasiAdapter`. Ada test khusus buat
+  ini supaya tidak ada yang "memperbaiki" bug ini dengan cara meng-OR-kan
+  seluruh role yang dimiliki - itu akan membatalkan seluruh gunanya ganti
+  role.
+- **Kolom `satuanKerja` tetap berfungsi penuh buat KASUBAG_TU** - akun yang
+  sama, waktu berperan sebagai Kasubag TU, TETAP terkunci ke unitnya.
+- Komentar `User.satuanKerja` di `schema.prisma` ikut diperbarui (perubahan
+  KOMENTAR saja - `prisma migrate diff` menghasilkan migrasi KOSONG, tidak
+  ada perubahan database).
+
+**Test**: 1 test lama diganti (dulu mengunci "PPABP per-satker cuma
+diizinkan buat satkernya"), 5 test baru khusus skenario akun multi-role -
+termasuk yang memastikan hak khusus ADMIN TIDAK ikut terbawa, dan yang
+memastikan role KASUBAG_TU-nya tetap terkunci unit.
+
+**Diverifikasi manual** (production build, akun Alpha Sandro): login ->
+`/admin`; ganti role ke PPABP lewat menu akun -> menu Admin hilang (bukti
+bypass ADMIN tidak berlaku); upload rekap e-Kinerja berisi 28 pegawai **Biro
+Keuangan** (bukan Pusdatik) -> 28 tersimpan, filter satuan kerja tetap
+muncul; buka `/pegawai` untuk pegawai **Biro Umum** -> form edit tampil
+(bukan "di luar kewenangan kamu"), field satuan kerja aktif; submit form ->
+diterima, `AuditTrail` mencatat `"sumber":"Edit data pegawai (PPABP)"`.
+Submit dilakukan TANPA mengubah nilai apa pun (data Herry Susanto sebelum &
+sesudah identik) dan baris AuditTrail uji itu sudah dihapus.
 
 ### Upload rekap predikat kinerja e-Kinerja BKN (`/predikat-kinerja`)
 

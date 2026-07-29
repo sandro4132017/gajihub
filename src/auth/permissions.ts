@@ -63,14 +63,31 @@ function cekScopeSatkerAtauAdmin(user: AuthUser, role: Role, targetSatuanKerja: 
 }
 
 /**
- * PPABP di-scope ke satuanKerja SETELAH di-scale per-satker (TODO(confirm)
- * di schema.prisma model User) - untuk sekarang (pilot: tim PPABP pusat)
- * satuanKerja = NULL berarti berwenang lintas SEMUA satker.
+ * PPABP berwenang LINTAS SEMUA satuan kerja (pilot: tim PPABP pusat).
+ *
+ * `targetSatuanKerja` sengaja tetap ada di signature-nya walau tidak dipakai:
+ * pemanggilnya sudah terlanjur banyak, dan begitu keputusan "PPABP per satker"
+ * diambil (lihat TODO(confirm) di bawah) tinggal fungsi INI yang diubah.
+ *
+ * DULU fungsi ini men-scope PPABP ke `User.satuanKerja` kalau kolom itu
+ * terisi, dengan niat "tidak perlu migrasi kalau nanti di-scale per satker".
+ * Itu DICABUT karena bentrok dengan fitur multi-role: satu akun cuma punya
+ * SATU `satuanKerja`, dan kolom itu WAJIB diisi kalau akunnya punya role
+ * KASUBAG_TU (lihat ubahAssignmentRoleAction). Akibatnya akun yang memegang
+ * KASUBAG_TU + PPABP sekaligus - persis akun ADMIN demo - diam-diam
+ * kehilangan jangkauan lintas unit begitu dia ganti ke role PPABP, PADAHAL
+ * halaman-halamannya tetap MENAMPILKAN semua unit (dashboardScope dan
+ * /pegawai cuma memaksa scope buat KASUBAG_TU). Jadi datanya kelihatan tapi
+ * aksinya ditolak - gagal diam-diam, bentuk kegagalan yang paling
+ * membingungkan.
+ *
+ * TODO(confirm): kalau "PPABP per satker" benar-benar diputuskan (masih
+ * terbuka, lihat CLAUDE.md), scoping-nya TIDAK BOLEH numpang `satuanKerja`
+ * lagi - kolom itu punya KASUBAG_TU. Butuh kolom sendiri (mis.
+ * `satuanKerjaPpabp`) atau tabel penugasan terpisah, plus migrasi.
  */
-function cekPpabp(user: AuthUser, targetSatuanKerja?: string): boolean {
-  if (!cekRole(user, "PPABP")) return false;
-  if (user.satuanKerja === null) return true; // PPABP pusat, lintas satker
-  return user.satuanKerja === targetSatuanKerja;
+function cekPpabp(user: AuthUser, _targetSatuanKerja?: string): boolean {
+  return cekRole(user, "PPABP");
 }
 
 function cekPpabpAtauAdmin(user: AuthUser, targetSatuanKerja?: string): boolean {
