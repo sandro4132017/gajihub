@@ -9,13 +9,14 @@ import { hitungUangMakan } from "../../../business-logic/uangMakan";
 import { hitungUangLembur } from "../../../business-logic/uangLembur";
 import { validasiTukin, validasiUangMakan, validasiUangLembur } from "../../../validation/validationGate";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../business-logic/tarifTukinPokok";
+import {
+  TARIF_UANG_MAKAN_PER_HARI,
+  TARIF_UANG_LEMBUR_PER_JAM,
+  TARIF_UANG_MAKAN_LEMBUR_PER_HARI,
+  golonganRomawi,
+} from "../../../business-logic/tarifSbm";
 
 const HARI_KERJA_DEFAULT = 21;
-// TODO(confirm): angka contoh, sama dengan src/db/seedSimulasi.ts - BUKAN
-// tarif SBM resmi. Jangan import konstanta ini dari seedSimulasi.ts (file
-// itu punya main() tanpa guard require.main, jadi import apapun darinya
-// bakal re-run seluruh seed script). Lihat CLAUDE.md item open #8.
-const TARIF_UANG_MAKAN = 35_000;
 
 export interface KalkulasiMassalFormState {
   error?: string;
@@ -40,10 +41,10 @@ async function ambilAuthUser(): Promise<AuthUser | null> {
  * Reuse pure function hitungTukin/hitungUangMakan + validasiTukin/validasiUangMakan
  * yang sama dipakai job scheduler, cuma orchestration-nya beda.
  *
- * Uang Lembur SENGAJA tidak diikutkan di sini - tidak ada sumber data jam
- * lembur harian yang tersimpan di skema manapun (lihat TODO(confirm) di
- * RekapKehadiranPeriode, src/types/index.ts), jadi koreksi jam lembur
- * dilakukan manual per pegawai lewat koreksiUangLemburAction di bawah.
+ * Uang Lembur SEKARANG ikut dihitung, memakai `totalJamLembur` dan
+ * `jumlahHariMakanLembur` dari rekap presensi yang di-upload (SBM 2026 item
+ * 23.1 + 23.2). Kalau jam lemburnya nol, barisnya tidak dibuat. Koreksi
+ * manual per pegawai tetap tersedia lewat koreksiUangLemburAction di bawah.
  */
 export async function kalkulasiMassalTukinUangMakanAction(
   _state: KalkulasiMassalFormState,
@@ -116,6 +117,15 @@ export async function kalkulasiMassalTukinUangMakanAction(
         rekapManual?.totalMenitMeninggalkanKantor ?? presensi.reduce((a, p) => a + p.menitMeninggalkanKantor, 0);
       const jumlahTidakIkutUpacara =
         rekapManual?.jumlahTidakIkutUpacara ?? presensi.filter((p) => p.tidakIkutUpacara).length;
+      // Hari per status buat uang makan. Kalau sumbernya PresensiHarian
+      // (jalur sinkronisasi), status DIKLAT/DINAS_LUAR dikeluarkan dari
+      // hitungan WFO - mereka hadir tapi tidak berhak uang makan.
+      const jumlahHariWfo =
+        rekapManual?.jumlahHariWfo ??
+        presensi.filter((p) => ["HADIR", "WFO", "TERLAMBAT", "TIDAK_PRESENSI"].includes(p.statusKehadiran)).length;
+      const jumlahHariWfhWfa =
+        rekapManual?.jumlahHariWfhWfa ??
+        presensi.filter((p) => ["WFH", "WFA"].includes(p.statusKehadiran)).length;
       const jumlahHariHadir =
         rekapManual?.jumlahHariHadir ??
         presensi.filter((p) => ["HADIR", "TERLAMBAT", "TIDAK_PRESENSI", "WFA"].includes(p.statusKehadiran)).length;
@@ -176,13 +186,25 @@ export async function kalkulasiMassalTukinUangMakanAction(
         },
       });
 
+      // Tarif uang makan mengikuti GOLONGAN pegawai (SBM 2026 item 22.1),
+      // bukan satu angka untuk semua orang seperti sebelumnya.
+      const gol = golonganRomawi(pegawai.golongan);
+      if (!gol) {
+        detailDilewati.push(
+          `${pegawai.nama}: golongan "${pegawai.golongan ?? "(kosong)"}" tidak bisa dibaca, tarif uang makan/lembur SBM tidak bisa ditentukan.`
+        );
+        continue;
+      }
+      const tarifUangMakan = TARIF_UANG_MAKAN_PER_HARI[gol];
+
       const hasilUm = hitungUangMakan({
         pegawaiId: pegawai.nip,
         periodeBulan,
         periodeTahun,
         jumlahHariKerja,
-        jumlahHariHadir,
-        tarifHarianUangMakan: TARIF_UANG_MAKAN,
+        jumlahHariWfo,
+        jumlahHariWfhWfa,
+        tarifHarianUangMakan: tarifUangMakan,
       });
       const validasiUmHasil = validasiUangMakan(hasilUm);
 
@@ -194,7 +216,8 @@ export async function kalkulasiMassalTukinUangMakanAction(
           periodeTahun,
           jumlahHariKerja,
           jumlahHariHadir,
-          tarifHarian: TARIF_UANG_MAKAN,
+          jumlahHariDibayar: hasilUm.jumlahHariDibayar,
+          tarifHarian: tarifUangMakan,
           totalUangMakan: hasilUm.totalUangMakan,
           status: "DRAFT",
           catatanAnomali: validasiUmHasil.anomali.length ? validasiUmHasil.anomali.join("; ") : null,
@@ -202,7 +225,8 @@ export async function kalkulasiMassalTukinUangMakanAction(
         update: {
           jumlahHariKerja,
           jumlahHariHadir,
-          tarifHarian: TARIF_UANG_MAKAN,
+          jumlahHariDibayar: hasilUm.jumlahHariDibayar,
+          tarifHarian: tarifUangMakan,
           totalUangMakan: hasilUm.totalUangMakan,
           status: "DRAFT",
           calculatedAt: new Date(),
@@ -211,6 +235,40 @@ export async function kalkulasiMassalTukinUangMakanAction(
           catatanAnomali: validasiUmHasil.anomali.length ? validasiUmHasil.anomali.join("; ") : null,
         },
       });
+
+      // --- Uang Lembur (SBM 2026 item 23.1 + 23.2) ---
+      // Cuma dihitung kalau rekap presensinya memang memuat jam lembur -
+      // kalau nol, tidak dibuatkan baris supaya tidak ada baris Rp 0 yang
+      // ikut mengantre approval.
+      const totalJamLembur = rekapManual?.totalJamLembur ?? 0;
+      if (totalJamLembur > 0) {
+        const hasilLembur = hitungUangLembur({
+          pegawaiId: pegawai.nip,
+          periodeBulan,
+          periodeTahun,
+          totalJamLembur,
+          tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM[gol],
+          jumlahHariMakanLembur: rekapManual?.jumlahHariMakanLembur ?? 0,
+          tarifMakanLemburPerHari: TARIF_UANG_MAKAN_LEMBUR_PER_HARI[gol],
+        });
+        const validasiLemburHasil = validasiUangLembur(hasilLembur);
+        const isiLembur = {
+          totalJamLembur: hasilLembur.jamLemburDihitung,
+          tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM[gol],
+          jumlahHariMakanLembur: hasilLembur.jumlahHariMakanLembur,
+          tarifMakanLemburPerHari: TARIF_UANG_MAKAN_LEMBUR_PER_HARI[gol],
+          uangLembur: hasilLembur.uangLembur,
+          uangMakanLembur: hasilLembur.uangMakanLembur,
+          totalUangLembur: hasilLembur.totalUangLembur,
+          status: "DRAFT",
+          catatanAnomali: validasiLemburHasil.anomali.length ? validasiLemburHasil.anomali.join("; ") : null,
+        };
+        await prisma.uangLembur.upsert({
+          where: { pegawaiId_periodeBulan_periodeTahun: { pegawaiId: pegawai.id, periodeBulan, periodeTahun } },
+          create: { pegawaiId: pegawai.id, periodeBulan, periodeTahun, ...isiLembur },
+          update: { ...isiLembur, calculatedAt: new Date(), approvedAt: null, approvedBy: null },
+        });
+      }
 
       dihitung++;
     }

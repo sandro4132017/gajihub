@@ -72,7 +72,11 @@ export async function jalankanUangMakanPeriodeJob(
       periodeBulan: config.periodeBulan,
       periodeTahun: config.periodeTahun,
       jumlahHariKerja: rekapKehadiran.jumlahHariKerja,
-      jumlahHariHadir: rekapKehadiran.jumlahHariHadir,
+      // Adapter lama belum memecah hari per status (WFO/WFH/diklat/dinas
+      // luar), jadi seluruh hari hadir dianggap WFO. Begitu adapter
+      // e-Presensi tersambung dan mengirim statusnya, ganti di sini.
+      jumlahHariWfo: rekapKehadiran.jumlahHariHadir,
+      jumlahHariWfhWfa: 0,
       tarifHarianUangMakan: config.tarifHarianUangMakan,
     });
 
