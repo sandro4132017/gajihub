@@ -17,10 +17,10 @@ Terakhir diperbarui: **2026-07-30** (upload PDF presensi e-Presensi).
 
 | | |
 |---|---|
-| Commit terakhir di `main` | lihat `git log -1` |
+| Commit terakhir di `main` | `cae0212` |
 | Test | 256 lolos (`npm test`) |
 | Migrasi | 13, semua sudah `deploy` di lokal & VPS |
-| Deploy | VPS kantor `192.168.221.44:3002` via pm2 (`gajihub`, restart ke-16), nginx -> `gajihub.rokeubmn.id` (HTTP) |
+| Deploy | VPS kantor `192.168.221.44:3002` via pm2 (`gajihub`, restart ke-17), nginx -> `gajihub.rokeubmn.id` (HTTP) |
 | Repo | https://github.com/sandro4132017/gajihub |
 
 **Kebiasaan kerja yang berlaku**: tiap selesai edit, langsung commit + push ke
