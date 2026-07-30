@@ -1,5 +1,16 @@
 # Gajihub - Integration Layer Sentralisasi Belanja Pegawai
 
+## Baca ini dulu: PROGRESS.md
+
+`PROGRESS.md` di root repo adalah catatan status ringkas buat orientasi cepat
+di awal chat: posisi terakhir (commit/test/deploy), daftar **keputusan yang
+masih menunggu user**, dokumen/akses yang ditunggu dari pihak luar, alur data
+siapa-upload-apa, akun demo, dan jebakan teknis yang sudah pernah menggigit.
+
+CLAUDE.md (file ini) tetap sumber utama soal keputusan desain & detail per
+fitur - PROGRESS.md cuma pintu masuknya. **Perbarui PROGRESS.md tiap selesai
+satu batch pekerjaan, sebelum ganti chat.**
+
 ## Konteks proyek
 
 Sistem ini dibangun untuk Kementerian Ketenagakerjaan RI, sebagai bagian dari
