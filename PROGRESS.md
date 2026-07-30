@@ -9,7 +9,7 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-07-29** (commit `b9e38a1`).
+Terakhir diperbarui: **2026-07-30** (upload PDF presensi e-Presensi).
 
 ---
 
@@ -17,8 +17,8 @@ Terakhir diperbarui: **2026-07-29** (commit `b9e38a1`).
 
 | | |
 |---|---|
-| Commit terakhir di `main` | `b9e38a1` |
-| Test | 222 lolos (`npm test`) |
+| Commit terakhir di `main` | lihat `git log -1` |
+| Test | 256 lolos (`npm test`) |
 | Migrasi | 13, semua sudah `deploy` di lokal & VPS |
 | Deploy | VPS kantor `192.168.221.44:3002` via pm2 (`gajihub`, restart ke-16), nginx -> `gajihub.rokeubmn.id` (HTTP) |
 | Repo | https://github.com/sandro4132017/gajihub |
@@ -38,6 +38,7 @@ Server itu SHARED - jangan ganggu `bot-siska` (port 3000) dan
 | Kalkulasi Tukin 30/70 + potongan Pasal 13/14 | "Kalkulasi Tukin satu pintu + perbaikan logika potongan" |
 | Dashboard Tukin satu pintu (presensi + kinerja + kalkulasi) | idem |
 | Upload rekap presensi manual + tombol sinkronisasi e-Presensi | idem |
+| **Upload PDF presensi e-Presensi (1 file / 1 folder)** | "Upload PDF presensi e-Presensi" |
 | Upload rekap predikat kinerja e-Kinerja BKN | "Upload rekap predikat kinerja e-Kinerja BKN" |
 | Uang makan & uang lembur per SBM 2026 | "Uang makan & uang lembur mengikuti SBM 2026" |
 | Lembur hari libur 2x + WFH/WFA tidak dapat lembur | idem |
@@ -79,9 +80,41 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
    (2) yang eksplisit). Sekarang dibuat per-kejadian mengikuti tabel yang
    diberikan user. **Perlu ditegaskan ke Biro Hukum.**
 
+### Baru - dari upload PDF presensi e-Presensi
+
+5. **Potongan hasil Gajihub akan LEBIH BESAR dari yang tertera di PDF.**
+   Bukan bug, tapi angkanya perlu disadari sebelum dipakai bayar. Dari 3 file
+   presensi asli ada **238 kedatangan lewat 07:30 yang tidak diberi catatan
+   keterlambatan sama sekali** oleh e-Presensi (termasuk yang telat 84 menit),
+   sementara yang telat 1 menit justru dicatat. Gajihub menghitung semuanya
+   sesuai Pasal 13 ayat (3), tanpa toleransi. Kalau ternyata ada kebijakan
+   toleransi resmi, ubah `toleransiTerlambatMenit` di
+   `src/business-logic/presensiPdfKeRekap.ts`.
+
+6. **WFH/WFA kena potongan terlambat & pulang cepat - benar?** Sekarang IYA,
+   alasannya Permenaker tidak membedakan tempat kerja. Dinas Keluar, Diklat,
+   dan Lembur dikecualikan. Data uji tidak bisa memutuskan (e-Presensi sendiri
+   tidak konsisten). Kalau WFH/WFA mau dikecualikan, hapus dari
+   `KATEGORI_WAJIB_JAM_KERJA`.
+
+7. **Hari berstatus "Upacara Bendera" dapat uang makan atau tidak?** Sekarang
+   TIDAK dihitung hari kerja WFO, alasannya upacara kenegaraan sering jatuh di
+   libur nasional (contoh 1 Juni 2026 di file uji). Kalau upacara di hari kerja
+   biasa juga muncul dengan status itu, pegawainya kehilangan hak uang makan
+   sehari - dan sistem tidak bisa membedakannya sendiri.
+
+8. **Lembur dibayar per jam desimal atau dibulatkan?** Sekarang desimal apa
+   adanya dari selisih jam presensi (mis. 6,57 jam x tarif). Praktik lain:
+   dibulatkan ke bawah jadi jam penuh. SBM cuma menyebut satuan "OJ".
+
+9. **Dinas Keluar di HARI KERJA yang lupa presensi pulang: kena 1% atau
+   tidak?** Sekarang KENA (Pasal 13 ayat (2) tidak mengecualikan dinas). Di
+   akhir pekan sudah dibebaskan. Kasus nyata di file uji: dinas ke luar kota
+   di hari libur nasional - tapi libur nasional tidak bisa dikenali sistem.
+
 ### Kewenangan
 
-5. **PPABP tidak boleh menjalankan kalkulasi massal Tukin** - padahal boleh
+10. **PPABP tidak boleh menjalankan kalkulasi massal Tukin** - padahal boleh
    meng-upload KEDUA komponennya (presensi & predikat). Kalkulasi massal cuma
    KASUBAG_TU + ADMIN. Tombol "Hitung Tukin" sekarang disembunyikan dari yang
    tidak berwenang supaya tidak ada tombol yang pasti gagal. Mengingat
@@ -90,7 +123,7 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
 
 ### Keamanan - naik prioritas
 
-6. **HTTPS + login sungguhan.** Sejak fitur rekening masuk, database ini
+11. **HTTPS + login sungguhan.** Sejak fitur rekening masuk, database ini
    menyimpan **nomor rekening bank ribuan pegawai**, sementara aplikasinya
    masih jalan di **HTTP dengan password = NIP**. Sebelumnya kalau bocor yang
    bocor nama & NIP; sekarang rekening bank. Ini bukan alasan menghentikan
@@ -100,17 +133,17 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
    Lihat `TODO(legal-confirm)` di `src/auth/session.ts` dan model
    `RekeningPegawai`.
 
-7. **`rolesTambahan` (multi-role) bertentangan dengan pemisahan kewenangan** -
+12. **`rolesTambahan` (multi-role) bertentangan dengan pemisahan kewenangan** -
    pengaju SK KGB tidak seharusnya juga jadi approver-nya. Sebelum production:
    hapus kolomnya, atau batasi ke lingkungan non-production.
 
-8. **Role `ADMIN` punya privilege SEMUA role + seluruh data payroll** - khusus
+13. **Role `ADMIN` punya privilege SEMUA role + seluruh data payroll** - khusus
    kebutuhan demo. Sebelum production WAJIB dipecah jadi System Admin (teknis)
    + role bisnis terpisah.
 
 ### Data uji yang masih menempel
 
-9. **Honorarium Rp 11.400.000 pada Irwan Syafril** (periode 7/2026) adalah
+14. **Honorarium Rp 11.400.000 pada Irwan Syafril** (periode 7/2026) adalah
    ANGKA UJI, disalin dari slip contoh milik orang lain. Cuma ada di database
    LOKAL, tidak ikut ke VPS. Kosongkan lewat `/ppabp/gaji-induk` kalau tidak
    mau ikut tampil waktu demo.
@@ -127,7 +160,9 @@ ditandai `TODO(confirm)` / `TODO(legal-confirm)` di kode.
 | **PMK/Perdirjen tata cara pembayaran lembur** | Dasar hukum pengali lembur hari libur 2x. Sudah dicek: kata "libur" TIDAK ADA di seluruh SBM 2026 | Dipakai 2x atas instruksi user, konstantanya diberi peringatan + TODO |
 | **Batas maksimal jam lembur per bulan** | SBM tidak mengaturnya | Dipakai 40 jam (asumsi lama, belum dikonfirmasi) |
 | **Contoh ADK Uang Makan & Uang Lembur resmi** | Format kolomnya | Dipakai kolom ringkas buatan sendiri |
-| **Format & akses e-Presensi** | Sinkronisasi otomatis presensi | Upload manual pakai template Gajihub ber-NIP. Tombol sinkronisasi ada tapi nonaktif. Contoh tarikan e-Presensi yang ada di-key NAMA (tidak konsisten), butuh rekonsiliasi nama->NIP dulu |
+| **Akses API e-Presensi** | Sinkronisasi otomatis presensi | Sudah TIDAK memblokir: PDF export "Laporan Detail Presensi Harian" bisa diupload langsung (per file atau per folder), di-key NIP. Tombol sinkronisasi tetap ada tapi nonaktif sampai API-nya tersedia. Contoh tarikan XLSX lama yang di-key NAMA tetap tidak dipakai (butuh rekonsiliasi nama->NIP) |
+| **Dokumen resmi jam kerja Kemnaker** | Membenarkan acuan masuk 07:30, pulang 16:00 (Sen-Kam) / 16:30 (Jumat), 7,5 jam/hari | Dipakai angka itu - sudah dicocokkan ke 3 file presensi asli (101/101 catatan keterlambatan cocok), tapi belum ada dokumen resminya. Ada di `JADWAL_KERJA_DEFAULT` |
+| **Kalender hari libur nasional** | Membedakan lembur hari libur (2x) & membebaskan potongan di tanggal merah | Yang dikenali baru Sabtu & Minggu. Libur nasional di hari kerja tetap terbaca sebagai hari kerja - dilaporkan sebagai catatan, tidak didiamkan |
 | **Akses API e-Kinerja BKN** | Tarik predikat otomatis | Upload manual file Rekap Penilaian (format sudah didukung) |
 | **Akses API SAKTI & Web Gaji** | Kirim SPP/SP2D otomatis | Export ADK manual (Excel/TXT) |
 | **Pasal 15 - potongan hukuman disiplin** | Belum diimplementasi sama sekali | Butuh feed status disiplin dari OSDMA |
@@ -141,7 +176,9 @@ ditandai `TODO(confirm)` / `TODO(legal-confirm)` di kode.
 ## 5. Alur data sekarang (siapa upload apa)
 
 ```
-KASUBAG_TU / PPABP  ->  /tukin/presensi          -> RekapPresensiPeriode  (30% kehadiran)
+KASUBAG_TU / PPABP  ->  /tukin/presensi  (PDF e-Presensi, 1 file / 1 folder)
+                                          -> RekapPresensiPeriode  (30% kehadiran)
+                                          +  PresensiHarian        (rincian per tanggal)
 KASUBAG_TU / PPABP  ->  /tukin/predikat-kinerja   -> PredikatKinerja       (70% kinerja)
 KASUBAG_TU + ADMIN  ->  /kasubag/kalkulasi        -> TukinCalculation, UangMakan, UangLembur
 PPABP               ->  /ppabp/gaji-induk         -> GajiInduk             (gaji pokok & tunjangan)
@@ -153,6 +190,13 @@ PEGAWAI             ->  /saya/slip-gaji           -> slip "Perincian Pembayaran 
 **Tidak ada** form ketik-manual untuk presensi & predikat kinerja di manapun -
 satu-satunya jalur masuk adalah upload file resmi, dan tiap upload menulis
 `AuditTrail`. `canEditPresensiKinerjaLangsung` tetap `false` untuk semua role.
+
+Presensi punya DUA jalur upload di halaman yang sama: **PDF export e-Presensi**
+(jalur utama sekarang - boleh banyak file atau satu folder, periode dibaca dari
+isi file) dan **template Excel Gajihub** (dilipat di bawah, buat koreksi manual
+& mengisi yang tidak ada di PDF: menit meninggalkan kantor, tidak ikut upacara).
+Rincian harian per tanggal ada di `/tukin/presensi/<nip>` - hanya untuk periode
+yang masuk lewat PDF.
 
 ---
 
@@ -181,21 +225,26 @@ di `CLAUDE.md` bagian "Seed data simulasi". Yang paling sering dipakai:
 
 Ditulis di sini supaya tidak terulang di chat baru:
 
-1. **`import XLSX from "xlsx"` GAGAL di `next build`** (tapi lolos di `npm run
+1. **Deploy yang menambah dependency WAJIB `npm install` dulu** - urutan
+   pull-build-restart yang biasa TIDAK cukup. Terakhir kena: `unpdf` (pembaca
+   PDF presensi). Catatan Node: pdfjs memanggil `Math.sumPrecise` yang baru ada
+   di Node 22+; VPS jalan di Node 20, jadi fungsinya ditambal di
+   `src/lib/pdfTeks.ts` - tanpa itu log server dibanjiri warning tiap halaman.
+2. **`import XLSX from "xlsx"` GAGAL di `next build`** (tapi lolos di `npm run
    dev` dan `tsc`). Bundler Next resolve ke build ESM yang tidak punya default
    export. Di kode app pakai **named import** (`import { read, utils } from
    "xlsx"`); skrip di `src/jobs/` aman karena jalan lewat tsx/CJS.
-2. **Prisma tidak menerima komentar `/** */` di dalam model** - pakai `//`.
-3. **Dev server Next 16 + Turbopack pernah HANG** setelah POST Server Action.
+3. **Prisma tidak menerima komentar `/** */` di dalam model** - pakai `//`.
+4. **Dev server Next 16 + Turbopack pernah HANG** setelah POST Server Action.
    Request yang sama normal di production build. Kalau ketemu, restart dev
    server - jangan cari bug di action-nya.
-4. **Jangan import apa pun dari `src/db/seedSimulasi.ts`** - file itu punya
+5. **Jangan import apa pun dari `src/db/seedSimulasi.ts`** - file itu punya
    `main()` di top-level tanpa guard `require.main`, jadi meng-import-nya
    me-re-run seluruh seed.
-5. **Menghitung ulang kalkulasi MERESET siklus approval ke DRAFT** - itu
+6. **Menghitung ulang kalkulasi MERESET siklus approval ke DRAFT** - itu
    konvensi yang memang dipegang, tapi berarti tombol "Hitung sekarang" tidak
    boleh diklik sembarangan untuk pegawai yang sudah APPROVED.
-6. **Verifikasi lewat UI itu MUTASI NYATA** - approval, edit role, dan
+7. **Verifikasi lewat UI itu MUTASI NYATA** - approval, edit role, dan
    keputusan rekonsiliasi tersimpan permanen. Kalau dipakai buat verifikasi,
    revert setelahnya (kecuali datanya memang dibutuhkan buat demo).
 
