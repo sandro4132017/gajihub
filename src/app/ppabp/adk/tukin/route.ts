@@ -23,6 +23,11 @@ import { responseAdk } from "../responseAdk";
  * Barisnya disusun SEKALI di src/business-logic/adk.ts, jadi kedua format
  * mustahil berbeda isi.
  *
+ * PEMISAHAN PER BANK lewat query `?bank=<kode bank SPAN>`: SAKTI SPP hanya
+ * bisa memproses SPP per bank, jadi satu file berisi campuran bank tidak
+ * terpakai. Tanpa parameter `bank`, semua bank ikut dalam satu file (masih
+ * berguna buat pengecekan/rekonsiliasi internal).
+ *
  * Tetap Route Handler (bukan Server Action) supaya bisa jadi `<a href>` biasa
  * yang langsung mengunduh tanpa JavaScript.
  */
@@ -52,16 +57,37 @@ export async function GET(req: NextRequest) {
   });
   const petaKodeSatker = new Map(gajiInduk.map((g) => [g.pegawaiId, g.kodeSatker]));
 
+  // Rekening penerima TUKIN - jenis "TUKIN", BUKAN dari gaji induk. Tukin &
+  // gaji memakai bank berbeda dan tidak ada satupun rekening yang sama.
+  const rekening = await prisma.rekeningPegawai.findMany({
+    where: { jenisPembayaran: "TUKIN", pegawaiId: { in: rows.map((r) => r.pegawaiId) } },
+  });
+  const petaRekening = new Map(rekening.map((r) => [r.pegawaiId, r]));
+
+  // SAKTI SPP memproses per bank, jadi file bisa dipisah lewat ?bank=<kode>.
+  // Tanpa parameter itu, semua bank ikut dalam satu file.
+  const bankDiminta = req.nextUrl.searchParams.get("bank");
+  const rowsTerpakai = bankDiminta
+    ? rows.filter((r) => petaRekening.get(r.pegawaiId)?.kodeBankSpan === bankDiminta)
+    : rows;
+
   const baris = susunBarisAdkTukin(
-    rows.map((r) => ({
-      nip: r.pegawai.nip,
-      nama: r.pegawai.nama,
-      kelasJabatan: r.pegawai.kelasJabatan,
-      tukinPokok: r.tukinPokok,
-      potonganPph: r.potonganPph,
-      tukinBersih: r.tukinBersih,
-      kodeSatker: petaKodeSatker.get(r.pegawaiId) ?? null,
-    })),
+    rowsTerpakai.map((r) => {
+      const rek = petaRekening.get(r.pegawaiId);
+      return {
+        nip: r.pegawai.nip,
+        nama: r.pegawai.nama,
+        kelasJabatan: r.pegawai.kelasJabatan,
+        tukinPokok: r.tukinPokok,
+        potonganPph: r.potonganPph,
+        tukinBersih: r.tukinBersih,
+        kodeSatker: petaKodeSatker.get(r.pegawaiId) ?? null,
+        kodeBankSpan: rek?.kodeBankSpan ?? null,
+        namaBank: rek?.namaBank ?? null,
+        nomorRekening: rek?.nomorRekening ?? null,
+        namaRekening: rek?.namaRekening ?? null,
+      };
+    }),
     bulan,
     tahun
   );
@@ -73,6 +99,8 @@ export async function GET(req: NextRequest) {
     baris,
     total,
     namaSheet: "daftar bayar",
-    namaFile: `adk-tukin-${String(bulan).padStart(2, "0")}-${tahun}`,
+    namaFile: `adk-tukin-${String(bulan).padStart(2, "0")}-${tahun}${
+      bankDiminta ? `-bank-${bankDiminta}` : ""
+    }`,
   });
 }

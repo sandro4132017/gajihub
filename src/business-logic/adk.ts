@@ -64,6 +64,16 @@ export interface SumberBarisAdkTukin {
    * periode itu belum diupload, dikosongkan (JANGAN ditebak).
    */
   kodeSatker: string | null;
+  /**
+   * Rekening penerima TUKIN - dari RekeningPegawai jenis "TUKIN", BUKAN dari
+   * file gaji induk. Sudah dibuktikan tukin & gaji memakai bank berbeda dan
+   * TIDAK ADA satupun rekening yang sama, jadi mengambilnya dari gaji induk
+   * akan mengirim uang ke rekening yang salah.
+   */
+  kodeBankSpan: string | null;
+  namaBank: string | null;
+  nomorRekening: string | null;
+  namaRekening: string | null;
 }
 
 /**
@@ -73,15 +83,19 @@ export interface SumberBarisAdkTukin {
  * manapun, dan mengarangnya berarti mengirim data salah ke Web Gaji:
  *   - Nomor SK, Nomor Tukin Lama/Baru: TukinCalculation tidak menyimpan
  *     referensi nomor SK sama sekali.
- *   - Kode Bank SPAN/Nama Bank/Nomor Rekening/Nama Rekening: Pegawai TIDAK
- *     punya data rekening bank. Ini PII finansial - jangan pernah diisi
- *     tebakan/dummy. Catatan: file gaji induk GPP SEBENARNYA memuat kolom
- *     rekening, tapi kolom itu SENGAJA dibuang saat parsing atas keputusan
- *     eksplisit user (lihat model GajiInduk di schema.prisma). Mengisinya di
- *     sini berarti membatalkan keputusan itu - kalau memang mau, itu
- *     keputusan tersendiri, bukan efek samping fitur export.
  *   - Bulan/Tahun Awal & Akhir: di contoh asli nilainya beda dengan bulan
  *     pembayaran (kemungkinan periode cakupan SK), artinya belum jelas.
+ *
+ * KOLOM REKENING SEKARANG TERISI (sebelumnya dikosongkan) - Web Gaji butuh
+ * nomor rekening untuk memproses pembayaran. Sumbernya `RekeningPegawai`
+ * jenis "TUKIN", BUKAN file gaji induk: tukin & gaji memakai bank yang
+ * berbeda dan tidak ada satupun rekening yang sama, jadi mengambilnya dari
+ * gaji induk berarti mengirim uang ke rekening yang salah. Pegawai yang
+ * rekening tukinnya belum terdaftar tetap dikosongkan - JANGAN ditebak.
+ *
+ * "Nama Rekening" jatuh ke `nama` pegawai kalau nama pemilik rekeningnya
+ * tidak tercatat - di file contoh keduanya memang sering sama, cuma beda
+ * penulisan.
  *
  * "Tukin Kali" diisi 1 - SEMUA baris contoh asli nilainya 1, jadi ini pola
  * yang konsisten di data referensi, bukan tebakan.
@@ -120,10 +134,10 @@ export function susunBarisAdkTukin(
     Math.round(r.tukinPokok),
     Math.round(r.potonganPph),
     Math.round(r.tukinBersih),
-    "", // Kode Bank SPAN
-    "", // Nama Bank
-    "", // Nomor Rekening
-    "", // Nama Rekening
+    r.kodeBankSpan ?? "",
+    r.namaBank ?? "",
+    r.nomorRekening ?? "",
+    r.namaRekening ?? r.nama,
     "", // Bulan Awal
     "", // Tahun Awal
     "", // Bulan Akhir

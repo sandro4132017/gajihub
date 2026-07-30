@@ -159,6 +159,11 @@ const MENU_PPABP = [
     icon: <><path d="M3 3v18h18" /><path d="M22 7 13.5 15.5 8.5 10.5 2 17" /></>,
   },
   {
+    href: "/ppabp/rekening",
+    label: "Rekening Pegawai",
+    icon: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><circle cx="17" cy="15" r="1.5" /></>,
+  },
+  {
     href: "/ppabp/gaji-induk",
     label: "Riwayat Gaji Pegawai",
     icon: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>,

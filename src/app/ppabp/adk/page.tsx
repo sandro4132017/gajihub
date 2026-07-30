@@ -1,8 +1,11 @@
+import Link from "next/link";
+import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { SearchableSelect } from "../../SearchableSelect";
 import { canGenerateAdk, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { NAMA_BULAN } from "../../bulan";
+import { kelompokkanPerBank } from "../../../business-logic/rekeningPegawai";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +24,23 @@ export default async function ExportAdkPage({
   const periodeBulan = bulan ?? String(new Date().getMonth() + 1);
   const periodeTahun = tahun ?? String(new Date().getFullYear());
   const query = `bulan=${periodeBulan}&tahun=${periodeTahun}`;
+
+  // Bank yang BENAR-BENAR ada di data periode ini - tombol per bank
+  // diturunkan dari sini, BUKAN dari daftar bank yang dihardcode. Kalau
+  // banknya berubah/nambah, UI ikut sendiri dan tidak ada tombol mati.
+  //
+  // SAKTI SPP cuma bisa memproses SPP per bank, jadi pemisahan ini bukan
+  // kenyamanan - tanpa itu filenya tidak terpakai.
+  const tukinPeriode = await prisma.tukinCalculation.findMany({
+    where: { periodeBulan: Number(periodeBulan), periodeTahun: Number(periodeTahun), status: "APPROVED" },
+    select: { pegawaiId: true },
+  });
+  const rekeningTukin = await prisma.rekeningPegawai.findMany({
+    where: { jenisPembayaran: "TUKIN", pegawaiId: { in: tukinPeriode.map((t) => t.pegawaiId) } },
+    select: { pegawaiId: true, kodeBankSpan: true, namaBank: true },
+  });
+  const bankTukin = kelompokkanPerBank(rekeningTukin);
+  const tanpaRekening = tukinPeriode.length - rekeningTukin.length;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -50,12 +70,57 @@ export default async function ExportAdkPage({
         </button>
       </form>
 
+      {bankTukin.length === 0 ? (
+        <div className="card mt-4 border-l-4 border-l-gold p-4">
+          <p className="text-sm font-bold text-ink">Belum ada rekening tukin untuk periode ini</p>
+          <p className="mt-1 text-sm text-muted">
+            Tanpa data rekening, kolom rekening di ADK akan kosong dan Web Gaji tidak bisa memproses pembayarannya -
+            dan file tidak bisa dipisah per bank, padahal SAKTI SPP hanya memproses per bank. Upload dulu di{" "}
+            <Link href="/ppabp/rekening" className="font-semibold text-teal-deep underline">
+              Rekening Pegawai
+            </Link>
+            .
+          </p>
+        </div>
+      ) : (
+        <div className="card mt-4 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-muted">Bank penerima tukin periode ini</p>
+          <ul className="mt-2 space-y-1 text-sm text-ink-2">
+            {bankTukin.map((b) => (
+              <li key={b.kodeBankSpan}>
+                {b.namaBank} <span className="font-mono text-xs text-muted">({b.kodeBankSpan})</span>:{" "}
+                <span className="font-semibold text-ink">{b.jumlah} pegawai</span>
+              </li>
+            ))}
+          </ul>
+          {tanpaRekening > 0 && (
+            <p className="mt-2 rounded-lg bg-gold-tint px-3 py-2 text-sm text-ink-2">
+              <span className="font-semibold">{tanpaRekening} pegawai</span> berstatus APPROVED tapi rekening tukinnya
+              belum terdaftar - mereka TIDAK masuk file per bank manapun, dan kolom rekeningnya kosong di file
+              &quot;semua bank&quot;. Lengkapi di{" "}
+              <Link href="/ppabp/rekening" className="font-semibold text-teal-deep underline">
+                Rekening Pegawai
+              </Link>
+              .
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="card mt-4 divide-y divide-line-2">
         <BarisAdk
-          judul="ADK Tunjangan Kinerja"
-          keterangan="Format daftar bayar 22 kolom, sama dengan ADK Tukin resmi."
+          judul="ADK Tunjangan Kinerja - semua bank"
+          keterangan="Format daftar bayar 22 kolom. Berisi semua bank sekaligus - untuk pengecekan internal, BUKAN untuk diproses di SAKTI."
           href={`/ppabp/adk/tukin?${query}`}
         />
+        {bankTukin.map((b) => (
+          <BarisAdk
+            key={b.kodeBankSpan}
+            judul={`ADK Tukin - ${b.namaBank}`}
+            keterangan={`${b.jumlah} pegawai - kode bank SPAN ${b.kodeBankSpan}. Inilah yang dipakai untuk SPP di SAKTI.`}
+            href={`/ppabp/adk/tukin?${query}&bank=${encodeURIComponent(b.kodeBankSpan)}`}
+          />
+        ))}
         <BarisAdk
           judul="ADK Uang Makan"
           keterangan="Hari kerja, hari dibayar, tarif per golongan, dan totalnya."

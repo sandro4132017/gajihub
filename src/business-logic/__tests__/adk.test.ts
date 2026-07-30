@@ -23,6 +23,10 @@ const SUMBER: SumberBarisAdkTukin[] = [
     potonganPph: 2_892_000,
     tukinBersih: 16_388_000,
     kodeSatker: "450938",
+    kodeBankSpan: "520002000990",
+    namaBank: "Bank Rakyat Indonesia",
+    nomorRekening: "076301015957537",
+    namaRekening: "TUTI HARYANTI",
   },
   {
     nip: "197904302011011012",
@@ -32,6 +36,10 @@ const SUMBER: SumberBarisAdkTukin[] = [
     potonganPph: 29_688,
     tukinBersih: 9_866_312,
     kodeSatker: "450938",
+    kodeBankSpan: "520002000990",
+    namaBank: "Bank Rakyat Indonesia",
+    nomorRekening: "223301002832507",
+    namaRekening: "LUTHFI FIRDAUS",
   },
 ];
 
@@ -61,7 +69,8 @@ describe("susunBarisAdkTukin", () => {
     expect(baris[0]).toEqual([
       1, "450938", "06", "2026", "197509082006042003", "TUTI HARYANTI, ST.",
       "", "15", 19_280_000, 2_892_000, 16_388_000,
-      "", "", "", "", "", "", "", "", 1, "", "",
+      "520002000990", "Bank Rakyat Indonesia", "076301015957537", "TUTI HARYANTI",
+      "", "", "", "", 1, "", "",
     ]);
   });
 
@@ -86,9 +95,30 @@ describe("susunBarisAdkTukin", () => {
     expect(b[1]).toBe("");
   });
 
-  it("kolom rekening & nomor SK TETAP kosong - PII finansial / data tidak ada", () => {
+  it("kolom rekening TERISI - Web Gaji butuh nomor rekening buat memproses", () => {
     const b = baris[0];
-    for (const idx of [6, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21]) {
+    expect(b[11]).toBe("520002000990"); // Kode Bank SPAN
+    expect(b[12]).toBe("Bank Rakyat Indonesia");
+    expect(b[13]).toBe("076301015957537");
+    expect(b[14]).toBe("TUTI HARYANTI");
+  });
+
+  it("rekening pegawai yang belum terdaftar TETAP kosong - jangan ditebak", () => {
+    const b = susunBarisAdkTukin(
+      [{ ...SUMBER[0], kodeBankSpan: null, namaBank: null, nomorRekening: null, namaRekening: null }],
+      6,
+      2026
+    )[0];
+    expect(b[11]).toBe("");
+    expect(b[12]).toBe("");
+    expect(b[13]).toBe("");
+    // Nama Rekening jatuh ke nama pegawai - itu yang paling mungkin benar.
+    expect(b[14]).toBe("TUTI HARYANTI, ST.");
+  });
+
+  it("nomor SK & bulan/tahun awal-akhir TETAP kosong - datanya tidak ada", () => {
+    const b = baris[0];
+    for (const idx of [6, 15, 16, 17, 18, 20, 21]) {
       expect(b[idx]).toBe("");
     }
   });
