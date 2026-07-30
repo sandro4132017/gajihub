@@ -66,7 +66,7 @@ akses resmi tersedia - tanpa refactor besar.
   Penilaian" e-Kinerja BKN ke `PredikatKinerja` (bobot 70% Tukin), PURE -
   lihat "Upload rekap predikat kinerja e-Kinerja BKN" di bawah
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
-  session login di atas (`npm test` - 202 test)
+  session login di atas (`npm test` - 220 test)
 - Fitur "user & role" versi AWAL (skema `User`/`Role`/`Banding`/
   `BuktiDukung` - dulu namanya `Sanggahan`/`BuktiPendukungUpload`,
   authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
@@ -921,6 +921,73 @@ Admin"), sekarang ditutup dari empat sisi:
    keluarnya.
 4. `ubahAssignmentRoleAction` sudah menolak simpan kalau KASUBAG_TU dipilih
    tanpa satuan kerja (ditambahkan bareng fitur multi-role).
+
+### Export ADK dua format: Excel (.xlsx) & TXT
+
+Dipicu 2 file contoh dari user: `export txt adk_tunkin-PNS_ROMUM_JUni__2026.xlsx`
+dan versi `.txt`-nya (satker 450938 Biro Umum, periode 06/2026, 96 baris + 1
+baris total). Diminta: tiap jenis ADK punya DUA tombol download.
+
+**`src/business-logic/adk.ts`** (BARU, pure, 18 unit test) - header, penyusun
+baris, baris total, dan perakit teks tab-separated. **Barisnya disusun SEKALI
+di sini**; kedua format cuma beda bungkusnya. Kalau baris datanya disusun dua
+kali di dua tempat, cepat atau lambat keduanya berbeda - dan bedanya baru
+ketahuan setelah file salah terkirim ke Web Gaji.
+
+**`src/app/ppabp/adk/responseAdk.ts`** (BARU) - membungkus baris jadi response
+`.xlsx` (via `xlsx`, sheet "daftar bayar" seperti contoh) atau `.txt`. Dipakai
+bareng ketiga route ADK. Perhatikan `xlsx` di-import NAMED di sini (gotcha
+bundler Next yang sama dengan gaji-induk).
+
+**Perubahan perilaku**: ketiga route ADK dulu mengeluarkan **CSV** (walau
+label tombolnya "Download"). Sekarang `?format=xlsx` (default) menghasilkan
+Excel SUNGGUHAN dan `?format=txt` teks tab-separated. Halaman `/ppabp/adk`
+punya 6 tombol (2 x 3 jenis ADK).
+
+**Detail format TXT** yang ditiru dari contoh: tab-separated, akhir baris
+CRLF, dan **baris TOTAL** di akhir yang hanya mengisi kolom nilai uang.
+Angka di baris data ditulis apa adanya, tapi di baris total pakai pemisah
+ribuan + spasi pengapit (` 461.029.358 `) - itu memang yang muncul di file
+contoh, karena file itu hasil "save as text" dari spreadsheet yang baris
+totalnya diberi format angka.
+
+**Kolom "Kode Satker" AKHIRNYA TERISI** - diambil dari `GajiInduk.kodeSatker`
+periode yang sama (satu-satunya sumber kode satker resmi di sistem ini, hasil
+upload ADK gaji GPP). Kalau periode itu belum diupload gaji induknya, kolomnya
+tetap kosong - TIDAK ditebak. Ini menutup salah satu kolom yang sebelumnya
+sengaja dikosongkan.
+
+**Nilai uang DIBULATKAN ke rupiah bulat di lapisan export.** Kalkulasi tukin
+menghasilkan pecahan (perkalian persentase) - verifikasi sempat memunculkan
+total `Rp 95.443.018,725` - sementara SELURUH nilai di file ADK contoh berupa
+bilangan bulat. Pembulatan dilakukan PER BARIS lalu baris total menjumlahkan
+yang sudah dibulatkan, supaya total di file benar-benar sama dengan hasil
+menjumlah kolomnya secara manual. TODO(confirm) PENTING: idealnya pembulatan
+terjadi saat KALKULASI supaya angka di database, slip gaji, dan ADK persis
+sama - sekarang `TukinCalculation.tukinBersih` masih menyimpan pecahan. Perlu
+diputuskan apakah kalkulasinya ikut dibulatkan (berarti mengubah angka yang
+sudah di-approve).
+
+**Kolom rekening TETAP kosong** walau file gaji induk GPP sebenarnya memuatnya
+- kolom itu sengaja dibuang saat parsing atas keputusan eksplisit user (lihat
+model `GajiInduk`). Mengisinya di sini berarti membatalkan keputusan itu.
+
+**ADK Uang Makan & Uang Lembur** ikut dapat dua tombol, TAPI kolomnya BUKAN
+format resmi - belum ada contoh file ADK-nya. Uang lembur tetap ringkas (bukan
+per-hari JHARI1..31 seperti contoh lembur lawas) karena skema menyimpan total
+jam per bulan, bukan rincian per tanggal; sekarang jam hari kerja & hari libur
+ditampilkan terpisah supaya angkanya bisa ditelusuri. TODO(confirm): minta
+contoh ADK uang makan/lembur asli kalau formatnya sudah baku di Web Gaji.
+
+**Diverifikasi** (production build, PPABP Irwan Syafril): keenam tombol
+mengarah ke URL yang benar; unduhan TXT bertipe `text/plain` dengan 22 kolom
+dan baris total ` 126.621.498 `; unduhan XLSX bertipe MIME Excel yang benar,
+26 KB, magic bytes `PK` (zip sah). Isi kedua format dibandingkan baris-per-
+baris lewat script terhadap data DB nyata: **13/13 baris (periode 6/2026) dan
+9/9 baris (7/2026) cocok** pada NIP + ketiga kolom uang, baris total sama
+dengan hasil penjumlahan ulang, dan aritmatika bruto - potongan = bersih
+konsisten. Kode Satker terisi `450938` untuk 7/2026 dan kosong untuk 6/2026
+(gaji induknya belum diupload) - persis perilaku yang diinginkan.
 
 ### Uang makan & uang lembur mengikuti SBM 2026
 

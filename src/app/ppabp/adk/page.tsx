@@ -26,7 +26,9 @@ export default async function ExportAdkPage({
     <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Export ADK</h1>
       <p className="mt-1 text-sm text-muted">
-        Export CSV kalkulasi yang sudah APPROVED untuk diunggah manual ke Web Gaji (belum ada koneksi API resmi).
+        Kalkulasi yang sudah <strong>APPROVED</strong> untuk diunggah manual ke Web Gaji (belum ada koneksi API
+        resmi). Tersedia dua format: <strong>Excel</strong> (.xlsx) dan <strong>TXT</strong> (tab-separated, dengan
+        baris total di akhir) - isinya identik, cuma bungkusnya beda.
       </p>
 
       <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
@@ -49,34 +51,49 @@ export default async function ExportAdkPage({
       </form>
 
       <div className="card mt-4 divide-y divide-line-2">
-        <div className="flex items-center justify-between p-4">
-          <div>
-            <p className="font-bold text-ink">ADK Tunjangan Kinerja</p>
-            <p className="text-xs text-muted">CSV baris Tukin berstatus APPROVED periode ini.</p>
-          </div>
-          <a href={`/ppabp/adk/tukin?${query}`} className="btn btn-primary btn-sm">
-            Download
-          </a>
-        </div>
-        <div className="flex items-center justify-between p-4">
-          <div>
-            <p className="font-bold text-ink">ADK Uang Makan</p>
-            <p className="text-xs text-muted">CSV baris Uang Makan berstatus APPROVED periode ini.</p>
-          </div>
-          <a href={`/ppabp/adk/uang-makan?${query}`} className="btn btn-primary btn-sm">
-            Download
-          </a>
-        </div>
-        <div className="flex items-center justify-between p-4">
-          <div>
-            <p className="font-bold text-ink">ADK Uang Lembur</p>
-            <p className="text-xs text-muted">CSV baris Uang Lembur berstatus APPROVED periode ini.</p>
-          </div>
-          <a href={`/ppabp/adk/uang-lembur?${query}`} className="btn btn-primary btn-sm">
-            Download
-          </a>
-        </div>
+        <BarisAdk
+          judul="ADK Tunjangan Kinerja"
+          keterangan="Format daftar bayar 22 kolom, sama dengan ADK Tukin resmi."
+          href={`/ppabp/adk/tukin?${query}`}
+        />
+        <BarisAdk
+          judul="ADK Uang Makan"
+          keterangan="Hari kerja, hari dibayar, tarif per golongan, dan totalnya."
+          href={`/ppabp/adk/uang-makan?${query}`}
+        />
+        <BarisAdk
+          judul="ADK Uang Lembur"
+          keterangan="Jam hari kerja & hari libur dipisah, plus uang makan lemburnya."
+          href={`/ppabp/adk/uang-lembur?${query}`}
+        />
       </div>
     </main>
+  );
+}
+
+/**
+ * Satu baris jenis ADK dengan DUA tombol format. Keduanya menunjuk ke Route
+ * Handler yang sama, cuma beda `?format=` - jadi isinya dijamin identik
+ * (barisnya disusun sekali di src/business-logic/adk.ts).
+ *
+ * Tetap `<a href>` biasa, bukan tombol ber-JavaScript, supaya download tetap
+ * jalan tanpa JS - konsisten dengan halaman lain di proyek ini.
+ */
+function BarisAdk({ judul, keterangan, href }: { judul: string; keterangan: string; href: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+      <div className="min-w-0">
+        <p className="font-bold text-ink">{judul}</p>
+        <p className="text-xs text-muted">{keterangan}</p>
+      </div>
+      <div className="flex flex-none items-center gap-2">
+        <a href={`${href}&format=xlsx`} className="btn btn-primary btn-sm">
+          Excel (.xlsx)
+        </a>
+        <a href={`${href}&format=txt`} className="btn btn-ghost btn-sm">
+          TXT
+        </a>
+      </div>
+    </div>
   );
 }
