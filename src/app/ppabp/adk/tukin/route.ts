@@ -2,35 +2,29 @@ import { NextRequest } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canGenerateAdk } from "../../../../auth/permissions";
+import {
+  KOLOM_ADK_TUKIN,
+  KOLOM_TOTAL_ADK_TUKIN,
+  susunBarisAdkTukin,
+  susunBarisTotalAdk,
+} from "../../../../business-logic/adk";
+import { responseAdk } from "../responseAdk";
 
 /**
- * Export ADK Tunjangan Kinerja - CSV berisi baris TukinCalculation yang
- * SUDAH APPROVED untuk periode tertentu, siap diunggah manual ke Web Gaji
- * (belum ada API resmi Web Gaji, lihat CLAUDE.md). Route Handler (bukan
- * Server Action) supaya bisa jadi link `<a href>` biasa (GET, trigger
- * download langsung tanpa JS) - konsisten dengan pola halaman lain yang
- * menghindari client-side JS kalau tidak perlu.
+ * Export ADK Tunjangan Kinerja - baris TukinCalculation yang SUDAH APPROVED
+ * untuk periode tertentu, siap diunggah manual ke Web Gaji (belum ada API
+ * resmi, lihat CLAUDE.md).
  *
- * Kolom disamakan dengan format ADK "daftar bayar" ASLI (contoh dari user:
- * adk_tunkin-PNS_ROMUM_JUni__2026.xlsx) - Nilai Bruto/Potongan/Bersih persis
- * sama artinya dengan tukinPokok/potonganPph/tukinBersih (tukinBersih =
- * tukinPokok - potonganPph, sudah dicek cocok sama contoh aslinya).
+ * DUA FORMAT lewat query `?format=`:
+ *   - `xlsx` (default) - Excel sungguhan, sheet "daftar bayar" seperti file
+ *     contoh. Dulu route ini mengeluarkan CSV, bukan Excel.
+ *   - `txt` - teks tab-separated, sama seperti hasil "save as text" dari file
+ *     contoh, lengkap dengan baris TOTAL di akhir.
+ * Barisnya disusun SEKALI di src/business-logic/adk.ts, jadi kedua format
+ * mustahil berbeda isi.
  *
- * KOLOM YANG SENGAJA DIKOSONGKAN (bukan lupa) - datanya TIDAK ADA di skema
- * manapun, jangan diisi asal-asalan:
- *   - Kode Satker: belum ada mapping satuanKerja -> kode satker resmi
- *   - Nomor SK, Nomor Tukin Lama/Baru: TukinCalculation tidak menyimpan
- *     referensi nomor SK sama sekali
- *   - Kode Bank SPAN/Nama Bank/Nomor Rekening/Nama Rekening: Pegawai TIDAK
- *     punya data rekening bank - ini PII finansial, jangan pernah diisi
- *     tebakan/dummy. Kalau nanti ada sumber datanya, tambahkan field baru
- *     ke model Pegawai (migrasi terpisah), JANGAN taruh di sini dulu.
- *   - Bulan Awal/Tahun Awal/Bulan Akhir/Tahun Akhir: di contoh asli
- *     nilainya beda dengan bulan pembayaran (kemungkinan periode cakupan
- *     SK, bukan periode kalkulasi) - artinya belum jelas, dikosongkan
- *     daripada menebak.
- * "Tukin Kali" default 1 (SEMUA baris contoh asli nilainya 1 - bukan
- * ditebak, itu pola yang konsisten di data referensi).
+ * Tetap Route Handler (bukan Server Action) supaya bisa jadi `<a href>` biasa
+ * yang langsung mengunduh tanpa JavaScript.
  */
 export async function GET(req: NextRequest) {
   const akun = await getSessionAccount();
@@ -48,31 +42,37 @@ export async function GET(req: NextRequest) {
     orderBy: { pegawai: { nama: "asc" } },
   });
 
-  const bulanPad = String(bulan).padStart(2, "0");
-  const header = [
-    "NO", "Kode Satker", "Bulan", "Tahun", "NIP", "Nama Pegawai", "Nomor SK", "Kode Grade",
-    "Nilai Bruto", "Nilai Potongan", "Nilai Bersih",
-    "Kode Bank SPAN", "Nama Bank", "Nomor Rekening", "Nama Rekening",
-    "Bulan Awal", "Tahun Awal", "Bulan Akhir", "Tahun Akhir", "Tukin Kali",
-    "Nomor Tukin Lama", "Nomor Tukin Baru",
-  ].join(",");
-  const csvRows = rows.map((r, i) =>
-    [
-      i + 1, "", bulanPad, tahun, r.pegawai.nip, r.pegawai.nama, "", r.pegawai.kelasJabatan ?? "",
-      r.tukinPokok, r.potonganPph, r.tukinBersih,
-      "", "", "", "",
-      "", "", "", "", 1,
-      "", "",
-    ]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(",")
-  );
-  const csv = [header, ...csvRows].join("\n");
+  // Kode satker resmi diambil dari gaji induk periode yang sama - itu
+  // satu-satunya sumbernya di sistem ini (hasil upload ADK gaji GPP, lihat
+  // GajiInduk.kodeSatker). Kalau periode itu belum diupload, kolomnya
+  // dikosongkan, TIDAK ditebak.
+  const gajiInduk = await prisma.gajiInduk.findMany({
+    where: { periodeBulan: bulan, periodeTahun: tahun, pegawaiId: { in: rows.map((r) => r.pegawaiId) } },
+    select: { pegawaiId: true, kodeSatker: true },
+  });
+  const petaKodeSatker = new Map(gajiInduk.map((g) => [g.pegawaiId, g.kodeSatker]));
 
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="adk-tukin-${bulan}-${tahun}.csv"`,
-    },
+  const baris = susunBarisAdkTukin(
+    rows.map((r) => ({
+      nip: r.pegawai.nip,
+      nama: r.pegawai.nama,
+      kelasJabatan: r.pegawai.kelasJabatan,
+      tukinPokok: r.tukinPokok,
+      potonganPph: r.potonganPph,
+      tukinBersih: r.tukinBersih,
+      kodeSatker: petaKodeSatker.get(r.pegawaiId) ?? null,
+    })),
+    bulan,
+    tahun
+  );
+  const total = susunBarisTotalAdk(baris, KOLOM_TOTAL_ADK_TUKIN, KOLOM_ADK_TUKIN.length);
+
+  return responseAdk({
+    format: req.nextUrl.searchParams.get("format"),
+    header: KOLOM_ADK_TUKIN,
+    baris,
+    total,
+    namaSheet: "daftar bayar",
+    namaFile: `adk-tukin-${String(bulan).padStart(2, "0")}-${tahun}`,
   });
 }

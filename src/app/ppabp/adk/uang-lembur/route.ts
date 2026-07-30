@@ -2,20 +2,30 @@ import { NextRequest } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canGenerateAdk } from "../../../../auth/permissions";
+import { susunBarisTotalAdk, type SelAdk } from "../../../../business-logic/adk";
+import { responseAdk } from "../responseAdk";
 
 /**
- * Export ADK Uang Lembur - lihat catatan lengkap di ../tukin/route.ts.
+ * Export ADK Uang Lembur - dua format (xlsx & txt), lihat catatan lengkap di
+ * ../tukin/route.ts.
  *
- * TIDAK disamakan dengan format ADK lembur ASLI (contoh dari user:
+ * TETAP TIDAK disamakan dengan format ADK lembur ASLI (contoh dari user:
  * templatelemburPPPK202606.xlsx, ADK-U.Lembur-PNS-Romum_JUni.2026.xlsm) -
  * format asli itu per-HARI (kolom NIP + JHARI1..JHARI31 + total), sementara
- * UangLembur di skema Gajihub cuma simpan totalJamLembur SATU ANGKA per
- * bulan (tidak ada rincian jam lembur per tanggal di skema manapun - lihat
- * TODO(confirm) di RekapKehadiranPeriode, src/types/index.ts). Bikin
- * kolom JHARI1..31 dari data yang ada berarti mengarang rincian per hari
- * yang sebenarnya tidak tercatat - CSV di bawah tetap format ringkas
- * (total per pegawai) sampai ada sumber data jam lembur harian yang jelas.
+ * UangLembur di skema Gajihub menyimpan TOTAL jam per bulan, bukan rincian
+ * per tanggal. Membuat kolom JHARI1..31 dari data yang ada berarti mengarang
+ * rincian harian yang tidak tercatat. Yang ditampilkan di bawah adalah kolom
+ * ringkas berisi dasar perhitungannya, termasuk pemisahan hari kerja vs hari
+ * libur (yang dibayar 2x) supaya angkanya bisa ditelusuri.
  */
+const KOLOM = [
+  "NO", "Bulan", "Tahun", "NIP", "Nama Pegawai", "Satuan Kerja",
+  "Jam Lembur Hari Kerja", "Jam Lembur Hari Libur", "Tarif Per Jam",
+  "Hari Makan Lembur", "Tarif Makan Lembur", "Uang Lembur", "Uang Makan Lembur",
+  "Total Uang Lembur",
+] as const;
+const KOLOM_TOTAL = [11, 12, 13];
+
 export async function GET(req: NextRequest) {
   const akun = await getSessionAccount();
   if (!akun) return new Response("Belum login.", { status: 401 });
@@ -32,18 +42,21 @@ export async function GET(req: NextRequest) {
     orderBy: { pegawai: { nama: "asc" } },
   });
 
-  const header = "NIP,Nama,Satuan Kerja,Total Jam Lembur,Tarif Per Jam,Total Uang Lembur";
-  const csvRows = rows.map((r) =>
-    [r.pegawai.nip, r.pegawai.nama, r.pegawai.satuanKerja, r.totalJamLembur, r.tarifPerJam, r.totalUangLembur]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(",")
-  );
-  const csv = [header, ...csvRows].join("\n");
+  const bulanPad = String(bulan).padStart(2, "0");
+  const baris: SelAdk[][] = rows.map((r, i) => [
+    i + 1, bulanPad, String(tahun), r.pegawai.nip, r.pegawai.nama, r.pegawai.satuanKerja,
+    r.jamLemburHariKerja, r.jamLemburHariLibur, r.tarifPerJam,
+    r.jumlahHariMakanLembur, r.tarifMakanLemburPerHari, r.uangLembur, r.uangMakanLembur,
+    r.totalUangLembur,
+  ]);
+  const total = susunBarisTotalAdk(baris, KOLOM_TOTAL, KOLOM.length);
 
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="adk-uang-lembur-${bulan}-${tahun}.csv"`,
-    },
+  return responseAdk({
+    format: req.nextUrl.searchParams.get("format"),
+    header: KOLOM,
+    baris,
+    total,
+    namaSheet: "uang lembur",
+    namaFile: `adk-uang-lembur-${bulanPad}-${tahun}`,
   });
 }
