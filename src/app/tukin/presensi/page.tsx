@@ -6,6 +6,7 @@ import { canBukaHalamanPredikatKinerja, type AuthUser } from "../../../auth/perm
 import { AksesDitolak } from "../../AksesDitolak";
 import { NAMA_BULAN } from "../../bulan";
 import { UploadPresensiForm } from "./UploadPresensiForm";
+import { UploadPresensiPdfForm } from "./UploadPresensiPdfForm";
 import { SinkronisasiPresensi } from "./SinkronisasiPresensi";
 
 export const dynamic = "force-dynamic";
@@ -76,28 +77,35 @@ export default async function PresensiTukinPage({
         )}
       </p>
 
+      <UploadPresensiPdfForm />
+
       <SinkronisasiPresensi />
 
-      <UploadPresensiForm defaultBulan={periodeBulan} defaultTahun={periodeTahun} />
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-semibold text-teal-deep">
+          Cara lama: isi template Excel sendiri (masih bisa dipakai untuk koreksi)
+        </summary>
+        <UploadPresensiForm defaultBulan={periodeBulan} defaultTahun={periodeTahun} />
 
-      <div className="card mt-4 border-l-4 border-l-gold p-4">
-        <p className="text-sm font-bold text-ink">Aturan pengisian kolom lembur</p>
-        <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-muted">
-          <li>
-            <strong>Hari WFH/WFA tidak dihitung lembur</strong> - walau jam absen keluarnya melewati jam kerja. Jam
-            lembur yang diisi harus sudah mengecualikan hari-hari itu.
-          </li>
-          <li>
-            <strong>Jam lembur hari libur / tanggal merah diisi di kolom terpisah</strong> - tarifnya dibayar 2x tarif
-            per jam biasa.
-          </li>
-          <li>
-            <strong>Hari makan lembur</strong> = jumlah hari yang lemburnya mencapai 2 jam{" "}
-            <em>berturut-turut</em> (SBM 2026 hal. 51, penjelasan item 23.2), paling banyak 1 kali per hari. Lembur 1
-            jam pagi + 1 jam sore TIDAK memenuhi syarat walau totalnya 2 jam.
-          </li>
-        </ul>
-      </div>
+        <div className="card mt-4 border-l-4 border-l-gold p-4">
+          <p className="text-sm font-bold text-ink">Aturan pengisian kolom lembur</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-muted">
+            <li>
+              <strong>Hari WFH/WFA tidak dihitung lembur</strong> - walau jam absen keluarnya melewati jam kerja. Jam
+              lembur yang diisi harus sudah mengecualikan hari-hari itu.
+            </li>
+            <li>
+              <strong>Jam lembur hari libur / tanggal merah diisi di kolom terpisah</strong> - tarifnya dibayar 2x
+              tarif per jam biasa.
+            </li>
+            <li>
+              <strong>Hari makan lembur</strong> = jumlah hari yang lemburnya mencapai 2 jam{" "}
+              <em>berturut-turut</em> (SBM 2026 hal. 51, penjelasan item 23.2), paling banyak 1 kali per hari. Lembur 1
+              jam pagi + 1 jam sore TIDAK memenuhi syarat walau totalnya 2 jam.
+            </li>
+          </ul>
+        </div>
+      </details>
 
       <form method="get" className="card mt-6 flex flex-wrap items-end gap-3 p-4">
         <div>
@@ -154,8 +162,14 @@ export default async function PresensiTukinPage({
             {rekapList.map((r) => (
               <tr key={r.id} className="border-b border-line-2">
                 <td className="px-3 py-2.5">
-                  <span className="font-semibold text-ink">{r.pegawai.nama}</span>
+                  <Link
+                    href={`/tukin/presensi/${r.pegawai.nip}?bulan=${periodeBulan}&tahun=${periodeTahun}`}
+                    className="font-semibold text-teal-deep underline"
+                  >
+                    {r.pegawai.nama}
+                  </Link>
                   <span className="block font-mono text-xs text-muted">{r.pegawai.nip}</span>
+                  <span className="block text-xs text-muted">{r.sourceSystem}</span>
                 </td>
                 <td className="px-3 py-2.5 font-mono text-ink-2">{r.jumlahHariAlpha} hari</td>
                 <td className="px-3 py-2.5 font-mono text-ink-2">{r.jumlahTidakPresensi}x</td>

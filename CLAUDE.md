@@ -76,8 +76,13 @@ akses resmi tersedia - tanpa refactor besar.
 - `src/business-logic/rekapPredikatKinerja.ts` - pemetaan file "Rekap
   Penilaian" e-Kinerja BKN ke `PredikatKinerja` (bobot 70% Tukin), PURE -
   lihat "Upload rekap predikat kinerja e-Kinerja BKN" di bawah
+- `src/business-logic/presensiPdf.ts` + `presensiPdfKeRekap.ts` - pembacaan
+  PDF "Laporan Detail Presensi Harian" e-Presensi jadi rekap presensi bulanan
+  (bobot 30% Tukin + uang makan + uang lembur), keduanya PURE; lapisan I/O
+  PDF-nya terpisah di `src/lib/pdfTeks.ts` - lihat "Upload PDF presensi
+  e-Presensi" di bawah
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
-  session login di atas (`npm test` - 222 test)
+  session login di atas (`npm test` - 256 test)
 - Fitur "user & role" versi AWAL (skema `User`/`Role`/`Banding`/
   `BuktiDukung` - dulu namanya `Sanggahan`/`BuktiPendukungUpload`,
   authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
@@ -1275,6 +1280,165 @@ tabel Pasal 13 secara independen: ketiganya **COCOK persis**. Contoh Ayu
 Puspita Sari (kelas 10): 1 alpha + 2x tidak presensi + 30/20/10 menit + 1x
 bolos upacara = potongan 8,60% dari bobot kehadiran, komponen kehadiran
 Rp 1.639.497 (harapan = aplikasi).
+
+### Upload PDF presensi e-Presensi (1 file / 1 folder sekaligus)
+
+Dipicu 2 file asli dari user: export **"Laporan Detail Presensi Harian"**
+e-Presensi dalam bentuk **PDF** (`rekap-presensi-000000008740-6-2026.pdf`,
+`gadis rekap-presensi-000000008740-5-2026.pdf`). Permintaannya: bisa dipakai
+langsung sebagai presensi bulanan tanpa mengetik ulang ke template Excel,
+bisa memproses satu folder PDF sekaligus, kolom "Potongan" bawaan file
+diabaikan (dihitung sendiri sesuai Permenaker 15/2024), dan entri ganda
+ditangani.
+
+Ini **melengkapi**, bukan mengganti, upload template Excel yang sudah ada -
+template itu masih di halaman yang sama (dilipat di bawah) buat koreksi
+manual, dan formatnya tidak diubah sama sekali.
+
+**Tiga modul baru, batas tanggung jawabnya tegas:**
+- `src/lib/pdfTeks.ts` - SATU-SATUNYA tempat yang menyentuh library PDF
+  (`unpdf`, bundel pdfjs untuk server). Keluarannya item teks + koordinat.
+- `src/business-logic/presensiPdf.ts` (PURE) - koordinat -> laporan
+  terstruktur (identitas, Summary Presensi, tabel harian).
+- `src/business-logic/presensiPdfKeRekap.ts` (PURE) - laporan -> rekap
+  bulanan berbentuk `BarisRekapPresensi`, **tipe yang sama persis** dengan
+  hasil template Excel. Karena itu jalur simpan, validasi, dan kalkulasi
+  Tukin/uang makan/uang lembur yang sudah ada TIDAK diubah satu baris pun.
+
+**KENAPA HARUS PAKAI KOORDINAT, bukan teks polos.** Sel yang kosong tidak
+menghasilkan teks apa pun. Di file uji ada baris (14-05-2026) yang presensi
+masuk 06:05 tapi TIDAK presensi pulang - kolom Jam Keluar kosong. Kalau
+barisnya dibaca sebagai deretan teks, "06:05" bergeser jadi jam keluar dan
+pelanggaran Pasal 13 ayat (2) hilang tanpa jejak. Batas kolom **dibaca ulang
+di tiap halaman**, tidak di-hardcode: di file Mei kolom Status ada di x=353,
+di file Juni x=362 (user memang bilang "kadang layout kagak konsisten").
+
+**JAM KERJA ACUAN - ANGKANYA DIBUKTIKAN KE DATA, BUKAN DIASUMSIKAN:**
+- Masuk **07:30**: dicek ke 101 baris yang punya catatan "Keterlambatan N
+  menit" di 3 file asli. **101 dari 101 cocok persis** dengan
+  (jam masuk - 07:30). Nol selisih.
+- Pulang **16:00** (Senin-Kamis) / **16:30** (Jumat): dicek ke sebaran jam
+  presensi pulang WFO. Puncaknya tepat di 16:00 untuk Senin-Kamis dan tepat
+  di 16:30 untuk Jumat, dan hampir tidak ada yang pulang sebelum itu (Jumat:
+  2 dari 29) - pola khas menunggu gerbang presensi terbuka.
+- **7,5 jam/hari**: "Kewajiban Jam Kerja" di PDF selalu kelipatan 7,5
+  (172,5 = 23 hari, 150 = 20 hari, 112,5 = 15 hari). Dari situ
+  `jumlahHariKerja` diturunkan - dan itu **angka yang membatasi hari uang
+  makan** (`Math.min` di `uangMakan.ts`), bukan sekadar hiasan.
+- Ketiganya di `JADWAL_KERJA_DEFAULT`. TODO(confirm): cocok dengan praktik 5
+  hari kerja 37,5 jam/minggu, tapi belum ada dokumen resmi jam kerja Kemnaker.
+
+**KOLOM "POTONGAN" DIABAIKAN SEBAGAI NOMINAL - dan memang layak diabaikan.**
+Dari 3 file asli (46 laporan, 1.145 baris) ada **238 kedatangan lewat 07:30
+yang TIDAK diberi catatan keterlambatan** oleh e-Presensi - termasuk yang
+telat 84 menit - sementara yang telat 1 menit justru dicatat.
+**KONSEKUENSI YANG HARUS DISAMPAIKAN: potongan hasil hitungan Gajihub akan
+LEBIH BESAR dari yang tertera di PDF untuk sebagian pegawai.** Itu memang
+yang diminta, tapi jangan sampai kaget waktu diadu ke pegawai.
+Satu-satunya yang diambil dari kolom itu adalah **penanda "lupa presensi"** -
+itu FAKTA, bukan nominal, dan tidak ada di kolom lain mana pun (jam pulang
+diisi 23:59, atau jam masuk & pulang selisih satu menit di sore hari, jadi
+tidak bisa disimpulkan dari jamnya saja).
+
+**ENTRI GANDA - tiga pola, semua nyata di file uji:**
+- `Cuti + Tidak Hadir` di tanggal sama (23 kasus) -> baris Tidak Hadir dibuang,
+  kalau tidak pegawai kena 3% untuk hari yang sebenarnya cuti.
+- `Tidak Hadir + Tidak Hadir` persis sama (17 kasus) -> jadi SATU hari alpha,
+  kalau tidak potongannya 6% padahal Pasal 13 ayat (1) cuma 3% per HARI.
+- `Dinas Keluar + Tidak Hadir` (2 kasus) -> Dinas Keluar yang menang.
+Dua status BERBEDA di tanggal sama (bukan Tidak Hadir) dipakai yang pertama
+DAN dilaporkan sebagai catatan - tidak diputuskan diam-diam.
+
+**Aturan turunan lain (semua bisa dilihat user di panel halaman upload):**
+- **Sabtu & Minggu tidak kena potongan apa pun** - Pasal 13 memotong
+  pelanggaran terhadap KEWAJIBAN jam kerja; kalau tidak ada kewajibannya,
+  tidak ada yang dilanggar. Terbukti perlu: SEMUA baris tanpa presensi pulang
+  di file uji adalah Dinas Keluar hari Sabtu. WFO di akhir pekan juga tidak
+  dapat uang makan.
+- **Terlambat/pulang cepat cuma untuk WFO & WFH/WFA.** Dinas Keluar, Diklat,
+  dan Lembur dikecualikan - jam presensinya mengikuti kegiatan, bukan jam
+  kantor (e-Presensi sendiri juga tidak pernah menandainya terlambat).
+  TODO(confirm): WFH/WFA DIMASUKKAN karena Permenaker tidak membedakan tempat
+  kerja; belum ada penegasan resmi.
+- **Ketukan sore tidak dibaca sebagai jam masuk.** Ada baris WFO dengan jam
+  masuk 19:46 & pulang 19:47 (satu ketukan disalin ke dua kolom). Dibaca
+  mentah = "terlambat 736 menit". Kalau barisnya bertanda "lupa presensi" dan
+  jam masuknya sudah lewat jam pulang wajib, ketukan itu tidak dipercaya
+  sebagai presensi pagi - yang dihitung kejadian Pasal 13 ayat (2).
+- **Lembur HANYA dari baris berstatus "Lembur"** - itu penanda lemburnya
+  diperintahkan. Pulang malam di baris WFO biasa bukan lembur. Di hari kerja
+  lembur dihitung setelah jam pulang wajib; di akhir pekan penuh dari masuk
+  sampai pulang, masuk kolom hari libur (tarif 2x). Uang makan lembur cuma
+  kalau bloknya >= 2 jam (SBM 2026 item 23.2). Di file uji 14 dari 14 baris
+  Lembur jatuh di Sabtu/Minggu.
+- **`jumlahTidakIkutUpacara` SELALU 0** dari jalur ini. Status "Upacara
+  Bendera" di PDF artinya pegawai IKUT; yang tidak ikut tidak punya baris,
+  dan tanggal upacaranya juga tidak ada di file. Hari berstatus Upacara juga
+  tidak dihitung hari kerja WFO (1 Juni 2026 = libur nasional) - dicatat
+  eksplisit supaya bisa dikoreksi kalau ternyata hari kerja.
+- **`totalMenitMeninggalkanKantor` SELALU 0** - PDF cuma punya satu pasang
+  jam masuk & pulang per hari. Isi lewat template Excel kalau satker punya
+  catatannya.
+- **Libur nasional yang jatuh di hari kerja TIDAK bisa dikenali** (tidak ada
+  kalender libur di sistem ini). Yang bisa: Sabtu & Minggu. Kalau jumlah hari
+  hadir melebihi hari kerja, itu dijelaskan sebagai kemungkinan dinas di hari
+  libur - bukan ditolak seperti jalur template Excel (di sana hadir > hari
+  kerja memang berarti salah ketik).
+
+**Cek silang Summary Presensi = INFORMASI SAJA.** Yang dipakai selalu tabel
+detail. Blok summary di export lama tidak sinkron dengan tabelnya sendiri:
+di file Juli 2025 ada pegawai dengan 16 baris "Tidak Hadir" + 12 baris "WFO"
+di tabel, tapi summary-nya menulis "Tidak Hadir : 1" dan "WFO : 1", dan
+"Kekurangan Jam Kerja"-nya bahkan negatif (-97,5). Di export 2026 summary-nya
+sudah cocok. Kalau total summary jauh di bawah jumlah baris, halaman memberi
+tahu eksplisit supaya daftar "selisih" tidak bikin ragu pada angka yang benar.
+
+**UI** - semua di `/tukin/presensi` (halaman yang sudah ada, sekarang punya
+entri sidebar sendiri "Presensi" di MENU_KASUBAG & MENU_PPABP):
+- `UploadPresensiPdfForm.tsx` - input `multiple`, plus checkbox "Pilih satu
+  folder sekaligus" yang memasang atribut `webkitdirectory` lewat ref (atribut
+  itu tidak ada di tipe JSX React). File non-PDF dibuang di sisi klien pakai
+  `DataTransfer` supaya tidak ikut terkirim dan tidak memakan jatah ukuran.
+  Tanpa JavaScript, input-nya tetap berfungsi sebagai pilih-banyak-file biasa.
+- Periode diambil DARI ISI FILE, jadi satu batch boleh berisi periode campuran
+  (dilaporkan per periode). Otorisasi dicek **per pegawai**, bukan per file -
+  satu PDF gabungan bisa memuat pegawai lintas unit.
+- Hasilnya ditampilkan per pegawai + blok "Catatan yang perlu dicek manusia".
+- `/tukin/presensi/[nip]` (BARU) - rincian HARIAN satu pegawai satu periode
+  (tanggal, status, jam masuk/pulang, telat, pulang cepat, berhak uang makan
+  atau tidak). Ini yang menjawab "kenapa potongan saya segini" per tanggal.
+  Rincian harian hanya ada untuk periode yang diupload lewat PDF - rekap dari
+  template Excel cuma menyimpan angka bulanan, dan itu dikatakan apa adanya.
+
+**Menulis ke DUA tabel**: `RekapPresensiPeriode` (upsert, dipakai kalkulasi)
+dan `PresensiHarian` (dihapus sebulan penuh lalu ditulis ulang - kalau cuma
+upsert per tanggal, hari yang HILANG dari file baru akan tertinggal sebagai
+data basi). Tanggal disimpan tengah malam UTC supaya tidak bergeser hari.
+File PDF-nya sendiri TIDAK disimpan. **Tidak ada migrasi** - semua kolom yang
+dipakai sudah ada.
+
+**Dependency baru `unpdf`** - deploy WAJIB `npm install` dulu, tidak cukup
+pull-build-restart. Catatan Node: pdfjs memanggil `Math.sumPrecise` (Node 22+);
+di Node 20 fungsi itu ditambal di `pdfTeks.ts` supaya log server tidak
+dibanjiri warning.
+
+**Diverifikasi end-to-end** (production build, bukan dev):
+- Upload 2 PDF sekaligus sebagai PPABP -> 2 pegawai tersimpan, periode 5/2026
+  & 6/2026 terbaca dari isi file. Angkanya dicocokkan dengan hitungan manual
+  dari tabel PDF: Juni telat 340 menit (95+96+110+10+29), 8 hari berhak uang
+  makan, 11 dinas, 1 kejadian tidak presensi, alpha 0 (baris ganda dibuang);
+  Mei telat 450 menit, lembur hari libur 9 jam + 1 hari makan lembur. Semua
+  **cocok persis**. 21 baris `PresensiHarian` Juni tersimpan dengan jam yang
+  sama persis dengan PDF.
+- Upload PDF gabungan 44 pegawai (243 halaman) sebagai **KASUBAG_TU Pusdatik**
+  -> **44 dari 44 DITOLAK** dengan alasan per unit ("di luar kewenangan kamu
+  (pegawai Biro Keuangan dan Barang Milik Negara)" dst), **nol baris ditulis**.
+- File yang sama sebagai **PPABP** -> 44 pegawai tersimpan, 1.042 baris harian.
+  Kecepatan: 243 halaman diekstrak 347 ms.
+- Data uji Juli 2025 (44 pegawai) **SUDAH DI-REVERT**. Yang SENGAJA DITINGGAL:
+  presensi GADIS SUKMA DEWA periode 5/2026 & 6/2026 - itu data nyata dari file
+  yang user kirim dan berguna buat demo. Upsert-nya idempoten, aman diupload
+  ulang.
 
 ### Bug "akun multi-role kehilangan jangkauan PPABP" (FIXED)
 
