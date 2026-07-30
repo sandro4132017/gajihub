@@ -56,6 +56,7 @@ model Pegawai {
   buktiPotongPajak  BuktiPotongPajak[]
   gajiInduk         GajiInduk[]
   rekapPresensi     RekapPresensiPeriode[]
+  rekening          RekeningPegawai[]
 
   @@index([satuanKerja])
   @@index([statusPegawai])
@@ -433,6 +434,7 @@ model User {
   buktiPotongPajakDiunggah BuktiPotongPajak[]
   gajiIndukDiunggah        GajiInduk[]
   rekapPresensiDiunggah    RekapPresensiPeriode[]
+  rekeningDiunggah         RekeningPegawai[]
   usulanRoleDiajukan       UsulanPerubahanRole[] @relation("UsulanRoleDiajukanOleh")
   usulanRoleDiputuskan     UsulanPerubahanRole[] @relation("UsulanRoleDiputuskanOleh")
   UsulanPerubahanRole      UsulanPerubahanRole[]
@@ -889,4 +891,50 @@ model RekapPresensiPeriode {
   @@unique([pegawaiId, periodeBulan, periodeTahun])
   @@index([periodeBulan, periodeTahun])
   @@map("rekap_presensi_periode")
+}
+
+// ---------------------------------------------------------------------------
+// REKENING PEGAWAI - data rekening bank penerima pembayaran.
+//
+// KENAPA per JENIS PEMBAYARAN, bukan satu rekening per pegawai: sudah
+// dibuktikan dari dua file asli satker 450938 periode 06/2026 bahwa tukin dan
+// gaji dibayarkan lewat BANK YANG BERBEDA -
+//   gaji  : BNI, kode bank SPAN 520009000990
+//   tukin : BRI, kode bank SPAN 520002000990
+// dan dari 96 NIP yang ada di kedua file, TIDAK ADA SATUPUN yang nomor
+// rekeningnya sama. Jadi rekening tukin TIDAK BISA diturunkan dari file gaji
+// induk GPP, dan sebaliknya.
+//
+// CATATAN PII: ini data rekening bank - PII finansial. Sebelumnya kolom
+// rekening SENGAJA dibuang saat parsing file gaji GPP. Keputusan itu DICABUT
+// atas permintaan user (2026-07-29) karena Web Gaji Kemenkeu memang butuh
+// nomor rekening untuk memproses pembayaran, dan SAKTI SPP memprosesnya per
+// bank. Konsekuensinya: database ini sekarang menyimpan rekening bank ±ribuan
+// pegawai, sementara aplikasinya masih jalan di HTTP dengan password = NIP
+// (lihat TODO(legal-confirm) di src/auth/session.ts). WAJIB diamankan sebelum
+// dibuka ke jaringan yang lebih luas - ini menaikkan taruhannya secara nyata.
+// ---------------------------------------------------------------------------
+model RekeningPegawai {
+  id        String  @id @default(uuid())
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  // TUKIN atau GAJI - jenis pembayaran yang memakai rekening ini.| GAJI - jenis pembayaran yang memakai rekening ini. */
+  jenisPembayaran String @map("jenis_pembayaran")
+
+  kodeBankSpan   String  @map("kode_bank_span") // mis. "520002000990"
+  namaBank       String  @map("nama_bank")
+  nomorRekening  String  @map("nomor_rekening")
+  // Nama pemilik rekening - sering beda penulisan dari Pegawai.nama.
+  namaRekening   String? @map("nama_rekening")
+
+  sourceFileName String?  @map("source_file_name")
+  diunggahOlehId String   @map("diunggah_oleh_id")
+  diunggahOleh   User     @relation(fields: [diunggahOlehId], references: [id])
+  diunggahPada   DateTime @default(now()) @map("diunggah_pada")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([pegawaiId, jenisPembayaran])
+  @@index([jenisPembayaran, kodeBankSpan])
+  @@map("rekening_pegawai")
 }

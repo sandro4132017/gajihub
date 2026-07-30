@@ -66,7 +66,7 @@ akses resmi tersedia - tanpa refactor besar.
   Penilaian" e-Kinerja BKN ke `PredikatKinerja` (bobot 70% Tukin), PURE -
   lihat "Upload rekap predikat kinerja e-Kinerja BKN" di bawah
 - Unit test lengkap untuk semua kalkulasi, job scheduler, approval, dan
-  session login di atas (`npm test` - 220 test)
+  session login di atas (`npm test` - 222 test)
 - Fitur "user & role" versi AWAL (skema `User`/`Role`/`Banding`/
   `BuktiDukung` - dulu namanya `Sanggahan`/`BuktiPendukungUpload`,
   authorization layer `src/auth/permissions.ts`, guard di semua dashboard +
@@ -921,6 +921,75 @@ Admin"), sekarang ditutup dari empat sisi:
    keluarnya.
 4. `ubahAssignmentRoleAction` sudah menolak simpan kalau KASUBAG_TU dipilih
    tanpa satuan kerja (ditambahkan bareng fitur multi-role).
+
+### Rekening pegawai & pemisahan ADK per bank
+
+Diminta user: rekening HARUS ada (Web Gaji butuh buat memproses pembayaran),
+dan output ADK harus DIPISAH PER BANK karena SAKTI SPP cuma bisa memproses
+SPP per bank. User menyebut "untuk tukin dan gaji beda bank".
+
+**TEMUAN yang mengubah desainnya - dibuktikan dulu sebelum ditulis.** Dua
+file asli satker 450938 periode 06/2026 dibandingkan per NIP:
+
+| | Bank | Kode Bank SPAN | Contoh rekening |
+|---|---|---|---|
+| Gaji (file GPP) | BNI | 520009000990 | 0447729376 |
+| Tukin (file ADK) | BRI | 520002000990 | 223301002832507 |
+
+Dari **96 NIP yang ada di KEDUA file, TIDAK SATUPUN nomor rekeningnya sama**
+(0 sama / 96 beda). Jadi rekening tukin **TIDAK BISA** diturunkan dari file
+gaji induk GPP - mengambilnya dari situ berarti mengirim uang ke rekening yang
+salah. Masing-masing butuh sumbernya sendiri.
+
+**Model `RekeningPegawai`** (migrasi `20260729160000_rekening_pegawai`, satu
+`CREATE TABLE`): unique `(pegawaiId, jenisPembayaran)` - satu pegawai punya
+rekening TUKIN dan GAJI yang terpisah. Upload TUKIN tidak menimpa GAJI.
+
+**`src/business-logic/rekeningPegawai.ts`** (pure) - parser yang mengenali DUA
+gaya penamaan kolom sekaligus: gaya ADK tukin ("Kode Bank SPAN", "Nomor
+Rekening") dan gaya mentah GPP ("kdbankspan", "rekening"). Jadi satu parser
+cukup untuk kedua sumber. Plus `kelompokkanPerBank()` yang dipakai UI.
+Pengelompokan by KODE bank, bukan nama - nama bank di file asli tidak
+konsisten kapitalisasinya ("Bank Rakyat Indonesia" vs "BANK RAKYAT INDONESIA").
+
+**Sumber rekening TUKIN = file ADK tukin yang PPABP sudah punya.** Tidak perlu
+file baru: file itu memang sudah memuat NIP + Kode Bank SPAN + Nama Bank +
+Nomor Rekening + Nama Rekening. Baris TOTAL di akhir file dilewati otomatis
+(tidak punya NIP).
+
+**UI baru `/ppabp/rekening`** (izin `canKelolaGajiInduk` - PPABP + ADMIN):
+upload per jenis pembayaran, sebaran bank, tabel rekening, pencarian nama/NIP.
+File-nya tidak disimpan.
+
+**Kolom rekening di ADK Tukin SEKARANG TERISI** - dari `RekeningPegawai` jenis
+TUKIN, BUKAN dari gaji induk. Pegawai yang rekening tukinnya belum terdaftar
+tetap dikosongkan, TIDAK ditebak.
+
+**Pemisahan per bank**: route menerima `?bank=<kode bank SPAN>`. Halaman
+`/ppabp/adk` **membaca bank apa saja yang benar-benar ada di data periode itu**
+lalu membuat satu baris tombol (Excel + TXT) per bank - BUKAN daftar bank yang
+dihardcode. Kalau banknya berubah/nambah, UI ikut sendiri dan tidak ada tombol
+mati untuk bank yang tidak dipakai. Tetap ada opsi "semua bank" yang
+ditandai eksplisit **untuk pengecekan internal, BUKAN untuk SAKTI**.
+Halaman juga memperingatkan berapa pegawai APPROVED yang rekeningnya belum
+terdaftar - mereka tidak masuk file per bank manapun.
+
+**CATATAN KEAMANAN yang naik taruhannya.** Keputusan lama "kolom rekening
+SENGAJA dibuang saat parsing" DICABUT. Konsekuensinya database ini sekarang
+menyimpan rekening bank ribuan pegawai, sementara aplikasinya masih jalan di
+**HTTP dengan password = NIP** (lihat TODO(legal-confirm) di
+`src/auth/session.ts`). Ini bukan lagi soal nama & NIP - ini data rekening
+bank. WAJIB diamankan (HTTPS + SSO/password sungguhan) sebelum dibuka ke
+jaringan yang lebih luas. Peringatan ini juga ditampilkan di halaman
+`/ppabp/rekening` supaya tidak cuma hidup di komentar kode.
+
+**Diverifikasi** dengan file ADK tukin ASLI sebagai sumber: parser membaca
+**96 rekening**, 96/96 NIP cocok dengan tabel Pegawai, semuanya BRI
+520002000990. Export periode 6/2026: file "semua bank" 13 baris (3 terisi
+rekening), file **filter BRI 3 baris dengan rekening TERISI SEMUA**, total
+bruto - potongan = bersih konsisten, dan TXT-nya 22 kolom konsisten di semua
+baris. Nama Rekening ikut terbaca terpisah dari nama pegawai (mis. pegawai
+"IRVAN GANEVA, M.M. , S.Ds" -> rekening "IRVAN GANEVA, S.DS").
 
 ### Export ADK dua format: Excel (.xlsx) & TXT
 
