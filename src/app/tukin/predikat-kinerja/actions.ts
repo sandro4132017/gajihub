@@ -17,28 +17,53 @@ import { parseRekapPredikatKinerja, type BarisRekapPredikat } from "../../../bus
  * satu-satunya sumber angka adalah file resmi dari portal BKN, dan tiap
  * penulisan dicatat di AuditTrail. Lihat canEditPresensiKinerjaLangsung di
  * permissions.ts yang tetap `false` buat semua role.
+ *
+ * ---------------------------------------------------------------------------
+ * SEMUA SHEET DIBACA, bukan cuma yang pertama
+ * ---------------------------------------------------------------------------
+ * File asli dari Biro Keuangan ("Rekap Penilaian SKP ROKEU_MEI 2026.xlsx")
+ * ternyata berisi 6 sheet: Januari, Februari, Maret, April, Mei, dan satu
+ * "Sheet1" berisi rekap FINAL tahunan. Tiap sheet punya baris periodenya
+ * sendiri.
+ *
+ * Dulu hanya `SheetNames[0]` yang dibaca, dan itu GAGAL DIAM-DIAM dengan cara
+ * yang berbahaya: pengguna membuka file di Excel pada sheet "Mei", menekan
+ * upload, lalu sistem menyimpan data JANUARI dengan label Januari. Tidak ada
+ * error, tidak ada peringatan - empat bulan lainnya hilang begitu saja, dan
+ * yang tersimpan bukan bulan yang dimaksud.
+ *
+ * Sekarang tiap sheet diproses sendiri dan dilaporkan per periode. Sheet yang
+ * baris periodenya tidak terbaca (mis. rekap FINAL tahunan) dilewati dengan
+ * alasan eksplisit, bukan membatalkan seluruh file.
  */
 
 const MAKS_UKURAN_FILE = 8 * 1024 * 1024;
 const UKURAN_BATCH = 50;
 
+export interface RingkasanPeriodePredikat {
+  namaSheet: string;
+  periodeBulan: number;
+  periodeTahun: number;
+  unitPenilaian: string | null;
+  jumlahTersimpan: number;
+  perSatuanKerja: { satuanKerja: string; jumlah: number }[];
+  perPredikat: { predikat: string; jumlah: number }[];
+}
+
 export interface UploadRekapPredikatFormState {
   error?: string;
   success?: string;
-  ringkasan?: {
-    periodeBulan: number;
-    periodeTahun: number;
-    unitPenilaian: string | null;
-    jumlahTersimpan: number;
-    perSatuanKerja: { satuanKerja: string; jumlah: number }[];
-    perPredikat: { predikat: string; jumlah: number }[];
-  };
+  /** Satu entri per sheet yang berhasil diproses. */
+  ringkasanPerPeriode?: RingkasanPeriodePredikat[];
+  /** Sheet yang tidak bisa diproses sama sekali beserta alasannya. */
+  sheetDilewati?: { namaSheet: string; alasan: string }[];
+  /** Baris yang dilewati, digabung dari seluruh sheet. */
   dilewati?: { alasan: string; jumlah: number; contohNip: string[] }[];
   /**
    * Pegawai yang predikatnya baru masuk TAPI kalkulasi Tukin periode itu
    * sudah terlanjur dibuat - nilainya jadi basi sampai dihitung ulang.
    */
-  perluHitungUlang?: { satuanKerja: string; jumlah: number }[];
+  perluHitungUlang?: { periode: string; satuanKerja: string; jumlah: number }[];
 }
 
 function kelompokkanAlasan(items: { nip: string | null; alasan: string }[]) {
@@ -69,6 +94,14 @@ function hitungPer<T>(items: T[], kunci: (item: T) => string) {
     .sort((a, b) => b.jumlah - a.jumlah);
 }
 
+type BarisSiapSimpan = BarisRekapPredikat & {
+  pegawaiId: string;
+  satuanKerja: string;
+  periodeBulan: number;
+  periodeTahun: number;
+  namaSheet: string;
+};
+
 export async function uploadRekapPredikatAction(
   _state: UploadRekapPredikatFormState,
   formData: FormData
@@ -90,65 +123,92 @@ export async function uploadRekapPredikatAction(
     }
 
     // --- Baca file (I/O di sini, pemetaannya di business-logic) ---
-    let matriks: unknown[][];
+    let workbook: ReturnType<typeof read>;
     try {
-      const wb = read(Buffer.from(await file.arrayBuffer()), { type: "buffer" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      if (!sheet) return { error: "File tidak punya sheet yang bisa dibaca." };
-      matriks = utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: null });
+      workbook = read(Buffer.from(await file.arrayBuffer()), { type: "buffer" });
     } catch {
       return { error: "File tidak bisa dibaca sebagai Excel. Pastikan formatnya .xlsx/.xls hasil export e-Kinerja." };
     }
+    if (workbook.SheetNames.length === 0) return { error: "File tidak punya sheet yang bisa dibaca." };
 
-    const hasil = parseRekapPredikatKinerja(matriks);
-    if (hasil.error) return { error: hasil.error };
-    if (hasil.baris.length === 0) {
+    // --- Parse TIAP sheet, masing-masing punya periodenya sendiri ---
+    const sheetDilewati: { namaSheet: string; alasan: string }[] = [];
+    const hasilPerSheet: { namaSheet: string; hasil: ReturnType<typeof parseRekapPredikatKinerja> }[] = [];
+
+    for (const namaSheet of workbook.SheetNames) {
+      const sheet = workbook.Sheets[namaSheet];
+      if (!sheet) {
+        sheetDilewati.push({ namaSheet, alasan: "sheet kosong" });
+        continue;
+      }
+      const matriks = utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: null });
+      const hasil = parseRekapPredikatKinerja(matriks);
+      if (hasil.error) {
+        sheetDilewati.push({ namaSheet, alasan: hasil.error });
+        continue;
+      }
+      if (hasil.baris.length === 0) {
+        sheetDilewati.push({ namaSheet, alasan: "tidak ada baris predikat yang bisa diproses" });
+        continue;
+      }
+      hasilPerSheet.push({ namaSheet, hasil });
+    }
+
+    if (hasilPerSheet.length === 0) {
       return {
-        error: "Tidak ada baris predikat yang bisa diproses dari file ini.",
-        dilewati: kelompokkanAlasan(hasil.dilewati),
+        error: "Tidak ada sheet yang bisa diproses dari file ini.",
+        sheetDilewati: sheetDilewati.length > 0 ? sheetDilewati : undefined,
       };
     }
 
-    const { periodeBulan, periodeTahun } = hasil;
-
     // --- Cocokkan NIP ke data Pegawai (sumber satuan kerja yang sah) ---
-    const nipUnik = [...new Set(hasil.baris.map((b) => b.nip))];
+    // Satu query untuk SEMUA sheet sekaligus, bukan per sheet.
+    const nipUnik = [...new Set(hasilPerSheet.flatMap((s) => s.hasil.baris.map((b) => b.nip)))];
     const pegawaiList = await prisma.pegawai.findMany({
       where: { nip: { in: nipUnik } },
-      select: { id: true, nip: true, nama: true, satuanKerja: true },
+      select: { id: true, nip: true, satuanKerja: true },
     });
     const petaPegawai = new Map(pegawaiList.map((p) => [p.nip, p]));
 
-    const dilewati: { nip: string | null; alasan: string }[] = hasil.dilewati.map((d) => ({
-      nip: d.nip,
-      alasan: d.alasan,
-    }));
-    const siapSimpan: (BarisRekapPredikat & { pegawaiId: string; satuanKerja: string })[] = [];
+    const dilewati: { nip: string | null; alasan: string }[] = [];
+    const siapSimpan: BarisSiapSimpan[] = [];
 
-    for (const baris of hasil.baris) {
-      const pegawai = petaPegawai.get(baris.nip);
-      if (!pegawai) {
-        dilewati.push({ nip: baris.nip, alasan: "NIP tidak ditemukan di data Pegawai Gajihub" });
-        continue;
-      }
-      // Otorisasi dicek PER BARIS terhadap satuan kerja PEGAWAI-nya, bukan
-      // sekali per file dan bukan dari nama unit di kepala file - supaya
-      // Kasubag TU tidak bisa menulis predikat pegawai unit lain hanya
-      // karena namanya ikut ada di file yang dia upload.
-      if (!canUploadRekapPredikatKinerja(authUser, pegawai.satuanKerja)) {
-        dilewati.push({
-          nip: baris.nip,
-          alasan: `di luar kewenangan kamu (pegawai ${pegawai.satuanKerja})`,
+    for (const { namaSheet, hasil } of hasilPerSheet) {
+      for (const d of hasil.dilewati) dilewati.push({ nip: d.nip, alasan: d.alasan });
+
+      for (const baris of hasil.baris) {
+        const pegawai = petaPegawai.get(baris.nip);
+        if (!pegawai) {
+          dilewati.push({ nip: baris.nip, alasan: "NIP tidak ditemukan di data Pegawai Gajihub" });
+          continue;
+        }
+        // Otorisasi dicek PER BARIS terhadap satuan kerja PEGAWAI-nya, bukan
+        // sekali per file dan bukan dari nama unit di kepala file - supaya
+        // Kasubag TU tidak bisa menulis predikat pegawai unit lain hanya
+        // karena namanya ikut ada di file yang dia upload.
+        if (!canUploadRekapPredikatKinerja(authUser, pegawai.satuanKerja)) {
+          dilewati.push({
+            nip: baris.nip,
+            alasan: `di luar kewenangan kamu (pegawai ${pegawai.satuanKerja})`,
+          });
+          continue;
+        }
+        siapSimpan.push({
+          ...baris,
+          pegawaiId: pegawai.id,
+          satuanKerja: pegawai.satuanKerja,
+          periodeBulan: hasil.periodeBulan,
+          periodeTahun: hasil.periodeTahun,
+          namaSheet,
         });
-        continue;
       }
-      siapSimpan.push({ ...baris, pegawaiId: pegawai.id, satuanKerja: pegawai.satuanKerja });
     }
 
     if (siapSimpan.length === 0) {
       return {
         error: "Tidak ada baris yang bisa disimpan - semua dilewati, lihat alasannya di bawah.",
         dilewati: kelompokkanAlasan(dilewati),
+        sheetDilewati: sheetDilewati.length > 0 ? sheetDilewati : undefined,
       };
     }
 
@@ -157,12 +217,16 @@ export async function uploadRekapPredikatAction(
     const operasi = siapSimpan.map((b) =>
       prisma.predikatKinerja.upsert({
         where: {
-          pegawaiId_periodeBulan_periodeTahun: { pegawaiId: b.pegawaiId, periodeBulan, periodeTahun },
+          pegawaiId_periodeBulan_periodeTahun: {
+            pegawaiId: b.pegawaiId,
+            periodeBulan: b.periodeBulan,
+            periodeTahun: b.periodeTahun,
+          },
         },
         create: {
           pegawaiId: b.pegawaiId,
-          periodeBulan,
-          periodeTahun,
+          periodeBulan: b.periodeBulan,
+          periodeTahun: b.periodeTahun,
           predikat: b.predikat,
           nilaiAngka: b.nilaiAngka,
           sourceSystem: "e-Kinerja BKN",
@@ -182,53 +246,76 @@ export async function uploadRekapPredikatAction(
       await prisma.$transaction(operasi.slice(i, i + UKURAN_BATCH));
     }
 
-    // --- Kalkulasi Tukin yang jadi basi karena predikatnya baru berubah ---
-    // Bukan dihitung ulang otomatis di sini: recalculation punya efek samping
-    // mereset siklus approval (lihat catatan di CLAUDE.md soal kalkulasi
-    // massal Kasubag TU), jadi keputusannya diserahkan ke user.
-    const tukinTerdampak = await prisma.tukinCalculation.findMany({
-      where: { periodeBulan, periodeTahun, pegawaiId: { in: siapSimpan.map((b) => b.pegawaiId) } },
-      select: { pegawaiId: true },
-    });
-    const petaSatker = new Map(siapSimpan.map((b) => [b.pegawaiId, b.satuanKerja]));
-    const perluHitungUlang = hitungPer(tukinTerdampak, (t) => petaSatker.get(t.pegawaiId) ?? "(tidak diketahui)").map(
-      (x) => ({ satuanKerja: x.nama, jumlah: x.jumlah })
-    );
+    // --- Ringkasan per periode + kalkulasi Tukin yang jadi basi ---
+    // Kalkulasi TIDAK dihitung ulang otomatis: recalculation mereset siklus
+    // approval (lihat catatan kalkulasi massal di CLAUDE.md), jadi
+    // keputusannya diserahkan ke user.
+    const ringkasanPerPeriode: RingkasanPeriodePredikat[] = [];
+    const perluHitungUlang: { periode: string; satuanKerja: string; jumlah: number }[] = [];
 
-    await prisma.auditTrail.create({
-      data: {
-        entitas: "predikat_kinerja",
-        entitasId: `${periodeBulan}/${periodeTahun}`,
-        aksi: "CREATE",
-        aktor: user.nip,
-        dataSesudah: {
-          namaFile: file.name,
-          periode: `${periodeBulan}/${periodeTahun}`,
-          unitPenilaian: hasil.unitPenilaian,
-          jumlahBarisTersimpan: siapSimpan.length,
-          jumlahBarisDilewati: dilewati.length,
-          sumber: "e-Kinerja BKN (upload manual)",
-        },
-      },
-    });
+    for (const { namaSheet, hasil } of hasilPerSheet) {
+      const barisPeriode = siapSimpan.filter((b) => b.namaSheet === namaSheet);
+      if (barisPeriode.length === 0) continue;
 
-    revalidatePath("/tukin/predikat-kinerja");
-    return {
-      success: `${siapSimpan.length} predikat kinerja tersimpan dari "${file.name}".`,
-      ringkasan: {
-        periodeBulan,
-        periodeTahun,
+      ringkasanPerPeriode.push({
+        namaSheet,
+        periodeBulan: hasil.periodeBulan,
+        periodeTahun: hasil.periodeTahun,
         unitPenilaian: hasil.unitPenilaian,
-        jumlahTersimpan: siapSimpan.length,
-        perSatuanKerja: hitungPer(siapSimpan, (b) => b.satuanKerja).map((x) => ({
+        jumlahTersimpan: barisPeriode.length,
+        perSatuanKerja: hitungPer(barisPeriode, (b) => b.satuanKerja).map((x) => ({
           satuanKerja: x.nama,
           jumlah: x.jumlah,
         })),
-        perPredikat: hitungPer(siapSimpan, (b) => b.predikatLabel).map((x) => ({
+        perPredikat: hitungPer(barisPeriode, (b) => b.predikatLabel).map((x) => ({
           predikat: x.nama,
           jumlah: x.jumlah,
         })),
-      },
+      });
+
+      const terdampak = await prisma.tukinCalculation.findMany({
+        where: {
+          periodeBulan: hasil.periodeBulan,
+          periodeTahun: hasil.periodeTahun,
+          pegawaiId: { in: barisPeriode.map((b) => b.pegawaiId) },
+        },
+        select: { pegawaiId: true },
+      });
+      const petaSatker = new Map(barisPeriode.map((b) => [b.pegawaiId, b.satuanKerja]));
+      for (const x of hitungPer(terdampak, (t) => petaSatker.get(t.pegawaiId) ?? "(tidak diketahui)")) {
+        perluHitungUlang.push({
+          periode: `${hasil.periodeBulan}/${hasil.periodeTahun}`,
+          satuanKerja: x.nama,
+          jumlah: x.jumlah,
+        });
+      }
+
+      await prisma.auditTrail.create({
+        data: {
+          entitas: "predikat_kinerja",
+          entitasId: `${hasil.periodeBulan}/${hasil.periodeTahun}`,
+          aksi: "CREATE",
+          aktor: user.nip,
+          dataSesudah: {
+            namaFile: file.name,
+            namaSheet,
+            periode: `${hasil.periodeBulan}/${hasil.periodeTahun}`,
+            unitPenilaian: hasil.unitPenilaian,
+            jumlahBarisTersimpan: barisPeriode.length,
+            sumber: "e-Kinerja BKN (upload manual)",
+          },
+        },
+      });
+    }
+
+    revalidatePath("/tukin/predikat-kinerja");
+    const jumlahPeriode = ringkasanPerPeriode.length;
+    return {
+      success:
+        `${siapSimpan.length} predikat kinerja tersimpan dari "${file.name}"` +
+        (jumlahPeriode > 1 ? ` - ${jumlahPeriode} periode sekaligus.` : "."),
+      ringkasanPerPeriode,
+      sheetDilewati: sheetDilewati.length > 0 ? sheetDilewati : undefined,
       dilewati: dilewati.length > 0 ? kelompokkanAlasan(dilewati) : undefined,
       perluHitungUlang: perluHitungUlang.length > 0 ? perluHitungUlang : undefined,
     };

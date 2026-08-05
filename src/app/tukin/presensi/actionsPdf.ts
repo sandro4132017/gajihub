@@ -7,6 +7,7 @@ import { canUploadRekapPresensi, type AuthUser } from "../../../auth/permissions
 import { ekstrakTeksPdf } from "../../../lib/pdfTeks";
 import { parsePdfPresensi } from "../../../business-logic/presensiPdf";
 import { rekapDariLaporanPdf, type HasilRekapDariPdf } from "../../../business-logic/presensiPdfKeRekap";
+import { STATUS_HARIAN, tanggalUtc, menitKeWaktu } from "../../../business-logic/presensiKeDb";
 
 /**
  * Upload PDF "Laporan Detail Presensi Harian" (export e-Presensi) - bisa
@@ -85,33 +86,10 @@ function kelompokkanAlasan(items: { label: string; alasan: string }[]) {
  * schema.prisma) supaya jalur kalkulasi lama yang membaca PresensiHarian
  * tetap mengerti artinya.
  */
-const STATUS_HARIAN: Record<string, string> = {
-  WFO: "WFO",
-  WFH_WFA: "WFH",
-  DINAS_LUAR: "DINAS_LUAR",
-  DIKLAT: "DIKLAT",
-  LEMBUR: "LEMBUR",
-  UPACARA: "UPACARA",
-  CUTI: "CUTI",
-  IZIN: "IZIN",
-  SAKIT: "SAKIT",
-  TUGAS_BELAJAR: "TUGAS_BELAJAR",
-  TIDAK_HADIR: "ALPHA",
-  TIDAK_PRESENSI: "TIDAK_PRESENSI",
-  TIDAK_DIKENALI: "TIDAK_DIKENALI",
-};
-
-/** Tanggal disimpan sebagai tengah malam UTC supaya tidak bergeser hari. */
-function tanggalUtc(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
-function menitKeWaktu(iso: string, menit: number | null): Date | null {
-  if (menit === null) return null;
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d, Math.floor(menit / 60), menit % 60));
-}
+// STATUS_HARIAN / tanggalUtc / menitKeWaktu DIPINDAH ke
+// src/business-logic/presensiKeDb.ts supaya dipakai bareng dengan jalur tarik
+// langsung dari database e-Presensi (src/jobs/importPresensiEpresensi.ts) -
+// lihat impor di kepala file ini. Perilakunya TIDAK berubah.
 
 export async function uploadPresensiPdfAction(
   _state: UploadPresensiPdfFormState,

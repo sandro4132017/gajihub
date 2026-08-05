@@ -9,7 +9,6 @@ const INITIAL_STATE: UploadRekapPredikatFormState = {};
 
 export function UploadRekapForm() {
   const [state, formAction, pending] = useActionState(uploadRekapPredikatAction, INITIAL_STATE);
-  const r = state.ringkasan;
 
   return (
     <div className="card mt-4 p-4">
@@ -17,7 +16,8 @@ export function UploadRekapForm() {
       <p className="mt-1 text-sm text-muted">
         Unduh <span className="font-semibold">Rekap Penilaian</span> periode <span className="font-semibold">Bulanan</span>{" "}
         dari portal e-Kinerja BKN, lalu upload filenya di sini. Periode diambil dari isi file, jadi tidak perlu dipilih
-        manual.
+        manual. Kalau satu file berisi beberapa sheet bulan (Januari, Februari, dst),{" "}
+        <span className="font-semibold">semuanya diproses sekaligus</span> - tidak perlu dipisah per bulan.
       </p>
 
       <form action={formAction} className="mt-3 flex flex-wrap items-center gap-3">
@@ -41,26 +41,45 @@ export function UploadRekapForm() {
       {state.error && <p className="mt-3 text-sm font-medium text-red">{state.error}</p>}
       {state.success && <p className="mt-3 text-sm font-semibold text-green">{state.success}</p>}
 
-      {r && (
-        <div className="mt-3 rounded-lg border border-line bg-surface-2 p-3 text-sm">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted">Ringkasan</p>
-          <p className="mt-1.5 text-ink-2">
-            Periode{" "}
-            <span className="font-semibold text-ink">
-              {NAMA_BULAN[r.periodeBulan - 1] ?? r.periodeBulan} {r.periodeTahun}
-            </span>
-            {r.unitPenilaian && <> - unit penilaian di file: {r.unitPenilaian}</>}
-          </p>
-          <ul className="mt-1.5 space-y-1 text-ink-2">
-            {r.perSatuanKerja.map((s) => (
-              <li key={s.satuanKerja}>
-                {s.satuanKerja}: <span className="font-semibold">{s.jumlah} pegawai</span>
+      {state.ringkasanPerPeriode && state.ringkasanPerPeriode.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {state.ringkasanPerPeriode.map((r) => (
+            <div
+              key={`${r.namaSheet}-${r.periodeBulan}-${r.periodeTahun}`}
+              className="rounded-lg border border-line bg-surface-2 p-3 text-sm"
+            >
+              <p className="text-ink-2">
+                <span className="font-semibold text-ink">
+                  {NAMA_BULAN[r.periodeBulan - 1] ?? r.periodeBulan} {r.periodeTahun}
+                </span>
+                <span className="text-muted"> - dari sheet "{r.namaSheet}"</span>
+                {r.unitPenilaian && <span className="text-muted"> - unit penilaian di file: {r.unitPenilaian}</span>}
+              </p>
+              <ul className="mt-1.5 space-y-1 text-ink-2">
+                {r.perSatuanKerja.map((s) => (
+                  <li key={s.satuanKerja}>
+                    {s.satuanKerja}: <span className="font-semibold">{s.jumlah} pegawai</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-ink-2">
+                Sebaran predikat: {r.perPredikat.map((p) => `${p.predikat} (${p.jumlah})`).join(", ")}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {state.sheetDilewati && state.sheetDilewati.length > 0 && (
+        <div className="mt-3 rounded-lg bg-gold-tint px-3 py-2">
+          <p className="text-xs font-bold uppercase tracking-wide text-gold-deep">Sheet yang dilewati</p>
+          <ul className="mt-1.5 space-y-1 text-sm text-ink-2">
+            {state.sheetDilewati.map((s) => (
+              <li key={s.namaSheet}>
+                <span className="font-semibold">{s.namaSheet}</span> - {s.alasan}
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-ink-2">
-            Sebaran predikat: {r.perPredikat.map((p) => `${p.predikat} (${p.jumlah})`).join(", ")}
-          </p>
         </div>
       )}
 
@@ -87,8 +106,9 @@ export function UploadRekapForm() {
           </p>
           <ul className="mt-1.5 space-y-1 text-sm text-ink-2">
             {state.perluHitungUlang.map((s) => (
-              <li key={s.satuanKerja}>
-                {s.satuanKerja}: <span className="font-semibold">{s.jumlah} pegawai</span>
+              <li key={`${s.periode}-${s.satuanKerja}`}>
+                <span className="font-semibold">{s.periode}</span> - {s.satuanKerja}:{" "}
+                <span className="font-semibold">{s.jumlah} pegawai</span>
               </li>
             ))}
           </ul>

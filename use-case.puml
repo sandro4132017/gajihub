@@ -1,0 +1,137 @@
+@startuml Diagram_UseCase_GajiHub
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle hollow
+
+' ==========================================
+' AKTOR & HIRARKI
+' ==========================================
+actor "Pegawai" as P
+actor "Kasubag TU / Kepegawaian Unit" as TU
+actor "Biro OSDMA" as OSDMA
+actor "PPABP / Tim Rokeu" as PPABP
+actor "Pimpinan" as Pimp
+actor "Admin" as Admin
+
+' Generalization (Inheritance)
+P <|-- TU
+P <|-- OSDMA
+P <|-- PPABP
+P <|-- Pimp
+P <|-- Admin
+
+TU <|-- Admin
+OSDMA <|-- Admin
+PPABP <|-- Admin
+
+' ==========================================
+' BOUNDARY SISTEM GAJIHUB
+' ==========================================
+rectangle "Sistem Gajihub" {
+
+  ' --- Self-Service Pegawai ---
+  package "Modul Self-Service Pegawai" {
+    usecase "UC01 - Melihat Total Pendapatan" as UC01
+    usecase "UC02 - Melihat Profil Pegawai" as UC02
+    usecase "UC03 - Mengajukan Banding Data" as UC03
+    usecase "UC04 - Tracing Status Approval Banding" as UC04
+    usecase "UC05 - Cetak / Download Slip Gaji" as UC05
+    usecase "UC06 - Download Bukti Potong Pajak (SPT)" as UC06
+  }
+
+  ' --- Unit Kerja (Kasubag TU) ---
+  package "Modul Unit Kerja (Kasubag TU)" {
+    usecase "UC07 - Melihat Data Pegawai Unit" as UC07
+    usecase "UC08 - Approval Banding Data (Lvl 1)" as UC08
+    usecase "UC09 - Tarik / Upload Presensi Manual (30%)" as UC09
+    usecase "UC10 - Upload & Edit Predikat Kinerja (70%)" as UC10
+    usecase "UC11 - Monitoring Presensi Rekon" as UC11
+    usecase "UC12 - Pengajuan Kolektif Tukin Unit" as UC12
+    usecase "UC13 - Penelaahan & Pengajuan Uang Makan" as UC13
+    usecase "UC14 - Penelaahan, Edit & Pengajuan Lembur" as UC14
+    usecase "UC15 - Melihat Dashboard Unit Kerja" as UC15
+    usecase "UC16 - Mengajukan SK KGB" as UC16
+    usecase "UC17 - Input SK Hukuman Disiplin" as UC17
+  }
+
+  ' --- Central HR (OSDMA) ---
+  package "Modul Biro OSDMA" {
+    usecase "UC18 - Approval Final Banding Data" as UC18
+    usecase "UC19 - Approval SK KGB Unit" as UC19
+    usecase "UC20 - Update SK Pelantikan / Kenaikan Pangkat" as UC20
+  }
+
+  ' --- Keuangan (PPABP / Rokeu) ---
+  package "Modul Keuangan (PPABP Rokeu)" {
+    usecase "UC21 - Validasi Pengajuan (Tukin, Uang Makan, Lembur)" as UC21
+    usecase "UC22 - Export ADK (Tukin, Uang Makan, Lembur)" as UC22
+    usecase "UC23 - Upload Anggaran & Realisasi Belanja Pegawai" as UC23
+    usecase "UC24 - Monitoring & Update Status Belanja Pegawai" as UC24
+    usecase "UC25 - Kelola & Ubah Role User" as UC25
+  }
+
+  ' --- Executive & System Admin ---
+  package "Modul Executive & Admin" {
+    usecase "UC26 - Melihat Dashboard Global / Seluruh Unit" as UC26
+    usecase "UC27 - Pengaturan / Konfigurasi Sistem Gajihub" as UC27
+  }
+}
+
+' ==========================================
+' RELASI AKTOR KE USE CASE
+' ==========================================
+
+' Pegawai
+P --> UC01
+P --> UC02
+P --> UC03
+P --> UC04
+P --> UC05
+P --> UC06
+
+' Kasubag TU
+TU --> UC07
+TU --> UC08
+TU --> UC09
+TU --> UC10
+TU --> UC11
+TU --> UC12
+TU --> UC13
+TU --> UC14
+TU --> UC15
+TU --> UC16
+TU --> UC17
+
+' OSDMA
+OSDMA --> UC18
+OSDMA --> UC19
+OSDMA --> UC20
+
+' PPABP Rokeu
+PPABP --> UC09
+PPABP --> UC21
+PPABP --> UC22
+PPABP --> UC23
+PPABP --> UC24
+PPABP --> UC25
+PPABP --> UC26
+
+' Pimpinan
+Pimp --> UC26
+
+' Admin
+Admin --> UC26
+Admin --> UC27
+
+' ==========================================
+' INCLUDE / EXTEND RELATIONSHIPS
+' ==========================================
+UC03 .> UC04 : <<include>>
+UC08 .> UC18 : <<triggers>>
+UC16 .> UC19 : <<triggers>>
+UC12 .> UC21 : <<triggers>>
+UC13 .> UC21 : <<triggers>>
+UC14 .> UC21 : <<triggers>>
+UC21 .> UC22 : <<include>>
+
+@enduml

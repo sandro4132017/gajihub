@@ -69,6 +69,28 @@ export default async function AdminDashboardPage() {
           <Link href="/kasubag" className="btn btn-ghost btn-sm">
             Dashboard Unit (Kasubag TU)
           </Link>
+          {/*
+            Kalkulasi & Data Pegawai SENGAJA didaftarkan terpisah, bukan cuma
+            mengandalkan link "Dashboard Unit" di atas: sidebar ADMIN memakai
+            MENU_ADMIN, jadi begitu mendarat di /kasubag dia TIDAK punya menu
+            apa pun menuju sub-halamannya. Tanpa dua tombol ini, satu-satunya
+            jalan ke kalkulasi massal adalah mengetik URL dari hafalan.
+          */}
+          <Link href="/kasubag/kalkulasi" className="btn btn-ghost btn-sm">
+            Kalkulasi Massal (Kasubag TU)
+          </Link>
+          <Link href="/tukin" className="btn btn-ghost btn-sm">
+            Dashboard Tukin
+          </Link>
+          <Link href="/tukin/presensi" className="btn btn-ghost btn-sm">
+            Presensi
+          </Link>
+          <Link href="/tukin/predikat-kinerja" className="btn btn-ghost btn-sm">
+            Predikat Kinerja
+          </Link>
+          <Link href="/pegawai" className="btn btn-ghost btn-sm">
+            Data Pegawai
+          </Link>
           <Link href="/osdma" className="btn btn-ghost btn-sm">
             Dashboard OSDMA
           </Link>

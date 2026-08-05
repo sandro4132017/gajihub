@@ -82,7 +82,12 @@ export default async function TukinPage({
 
   const [jumlahPegawai, jumlahPresensi, jumlahPredikat] = periodeAktif
     ? await Promise.all([
-        prisma.pegawai.count({ where: satkerEfektif ? { satuanKerja: satkerEfektif } : {} }),
+        // Penyebut "X / Y pegawai" pada panel sumber data: hanya yang AKTIF,
+        // supaya cakupannya tidak terlihat lebih buruk dari kenyataan gara-gara
+        // pensiunan yang memang tidak akan pernah punya presensi/predikat baru.
+        prisma.pegawai.count({
+          where: { statusPegawai: "AKTIF", ...(satkerEfektif ? { satuanKerja: satkerEfektif } : {}) },
+        }),
         prisma.rekapPresensiPeriode.count({ where: { ...periodeAktif, ...filterPegawaiSatker } }),
         prisma.predikatKinerja.count({ where: { ...periodeAktif, ...filterPegawaiSatker } }),
       ])

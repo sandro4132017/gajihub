@@ -60,7 +60,13 @@ akses resmi tersedia - tanpa refactor besar.
   tarif diterima sebagai parameter (BUKAN hardcoded, karena tarif SBM berubah
   tiap tahun anggaran - masih open item, lihat item 8)
 - `src/adapters/` - interface + mock implementation untuk SIAP, e-Presensi,
-  e-Kinerja
+  e-Kinerja, PLUS `EpresensiAdapter.ts` yang sudah membaca database
+  e-Presensi ASLI (lihat "Sambungan langsung ke SIAP & e-Presensi")
+- `src/jobs/importPegawaiSiap.ts` - import pegawai LANGSUNG dari database
+  SIAP (SQL Server), menggantikan `importPegawaiXlsx.ts` sebagai jalur utama
+- `src/jobs/importPresensiEpresensi.ts` + `simpanRekapPresensi.ts` - tarikan
+  presensi massal dari database e-Presensi (dipakai bareng tombol
+  sinkronisasi di `/tukin/presensi`)
 - `src/validation/` - validation gate (Tukin, Uang Makan, Uang Lembur)
 - `src/jobs/` - job scheduler (Tukin, Uang Makan, Uang Lembur), sudah
   ditest jalan terhadap Postgres asli
@@ -1281,6 +1287,281 @@ Puspita Sari (kelas 10): 1 alpha + 2x tidak presensi + 30/20/10 menit + 1x
 bolos upacara = potongan 8,60% dari bobot kehadiran, komponen kehadiran
 Rp 1.639.497 (harapan = aplikasi).
 
+### Sambungan langsung ke SIAP & e-Presensi (database, bukan API)
+
+Akses database ke DUA sistem sumber akhirnya didapat dari user, dan keduanya
+sekarang tersambung sungguhan - bukan mock, bukan upload manual. Ini menutup
+sebagian open item #5 (akses sistem eksternal) dan **mencabut** catatan lama
+"tombol sinkronisasi sengaja nonaktif".
+
+| Sumber | Alamat | Engine | Kredensial di `.env` |
+|---|---|---|---|
+| SIAP | `192.168.212.108\MSSQLDEV`, db `simpeg_kemnaker_24102018` | SQL Server 2014 SP3 | `SIAP_HOST/INSTANCE/DB/USER/PASSWORD/ENCRYPT` |
+| e-Presensi | `192.168.221.96:4020`, db `presensi_kemnaker` | PostgreSQL | `EPRESENSI_HOST/PORT/DB/USER/PASSWORD` |
+
+**PERHATIAN - ada DUA instance SQL Server di mesin yang sama** (`WIN-7NU35GEFU25`),
+dan keduanya punya database bernama SAMA PERSIS. Lihat "Instance SIAP yang
+benar" di bawah sebelum menyentuh konfigurasi ini.
+
+**KEDUANYA READ-ONLY, tanpa kecuali.** Semua query hanya `SELECT`. Keduanya
+sistem produksi yang sedang dipakai pegawai - SIAP adalah source of truth
+kepegawaian, e-Presensi melayani absensi harian. Prinsip proyek ini tetap
+"don't replace, integrate": Gajihub cuma mirror.
+
+**JANGAN pernah menaruh alamat sumber ini di `DATABASE_URL`.** `DATABASE_URL`
+adalah database MILIK Gajihub (PostgreSQL) tempat Prisma MEMBUAT tabel.
+Mengarahkannya ke SIAP berarti `prisma migrate deploy` akan membuat 21 tabel
+Gajihub di dalam database SIAP. Selain itu skema ini postgres-only (`enum
+Role`, `rolesTambahan Role[]`), jadi provider `sqlserver` tidak akan jalan
+tanpa menulis ulang seluruh skema & 13 migrasi.
+
+**Catatan Node**: SIAP jalan di SQL Server 2014 yang cuma bicara TLS 1.0,
+sementara Node 22+ (OpenSSL 3) menolak apa pun di bawah TLS 1.2. Tanpa
+`cryptoCredentialsDetails: { minVersion: "TLSv1", ciphers:
+"DEFAULT@SECLEVEL=0" }` koneksinya gagal `ERR_SSL_UNSUPPORTED_PROTOCOL`.
+Dependency baru: `mssql` + `pg` - **deploy WAJIB `npm install` dulu**.
+
+#### Instance SIAP yang benar (MSSQLDEV) - salah pilih TIDAK memberi error
+
+Server `192.168.212.108` menjalankan **dua** instance SQL Server di satu mesin,
+dan **keduanya punya database bernama `simpeg_kemnaker_24102018`**:
+
+| Instance | Akses | Baris PEGAWAI | Update terakhir | Kohort TMT tertinggi |
+|---|---|---|---|---|
+| `SQLEXPRESS2014` (default, port 1433) | `biro_keu_2` | 5.088 | Agustus 2025 | **2024** |
+| **`MSSQLDEV`** (named instance) | `sa` | **6.797** | **Agustus 2026** | **2026** |
+
+Selama beberapa waktu proyek ini memakai yang **salah** tanpa ada satu pun
+tanda. Tidak ada error, tidak ada peringatan - datanya cuma "lama" dan terlihat
+wajar. Ketahuannya lewat jalan memutar: 18 NIP di file Rekap Penilaian
+e-Kinerja tidak ketemu di tabel Pegawai, lalu terungkap bahwa **1.578 pegawai
+TMT 2025 tidak ada satu pun** di instance default.
+
+**Akibat pindah instance**: pegawai aktif 3.607 -> **5.077**, cakupan kelas
+jabatan 99,4% -> **99,8%**, dan pemetaan presensi membaik drastis - ID
+e-Presensi yang tidak ketemu di SIAP turun dari **1.689 (33%) jadi ~118 (2%)**.
+
+`src/lib/siapConfig.ts` (BARU) - **satu-satunya** tempat konfigurasi koneksi
+SIAP dibentuk, dipakai bareng `importPegawaiSiap.ts` dan `EpresensiAdapter.ts`.
+Sebelumnya konfigurasinya disalin di dua tempat, dan itu berbahaya bukan karena
+duplikasinya tapi karena cara gagalnya: kalau salah satu menunjuk instance
+berbeda, importer menarik daftar pegawai dari satu database sementara pemetaan
+`id_pegawai -> NIP` mengambil dari database lain. Yang muncul cuma "sekian
+pegawai dilewati", dan penyebabnya nyaris mustahil ditebak.
+
+Dua variabel `.env` baru:
+- **`SIAP_INSTANCE`** - kalau diisi, `SIAP_PORT` SENGAJA DIABAIKAN. Named
+  instance portnya dinamis (ditemukan lewat SQL Server Browser, UDP 1434);
+  mengirim port bersama instanceName membuat driver memakai port dan diam-diam
+  menyambung ke instance yang salah.
+- **`SIAP_ENCRYPT="false"`** - WAJIB untuk MSSQLDEV. Instance itu memutus
+  koneksi (`ECONNRESET`) begitu hasil query cukup besar selama enkripsi
+  menyala; query kecil ke instance yang sama normal. Dibuktikan berdampingan
+  dengan query importer yang sama: `encrypt: true` -> ECONNRESET,
+  `encrypt: false` -> 5.078 baris dalam 8 detik. Penyebabnya TLS 1.0 yang
+  memang sudah usang. **Konsekuensinya: nama/NIP/jabatan lewat TANPA enkripsi
+  di jaringan kantor** (paket login tetap dienkripsi SQL Server sendiri, jadi
+  password tidak terbuka). Default tetap `true` supaya tidak ada yang kehilangan
+  enkripsi karena lupa mengisi variabel.
+
+**TODO(confirm) - `sa` adalah akun SYSADMIN.** `biro_keu_2` DITOLAK di
+MSSQLDEV, jadi satu-satunya yang bisa masuk sekarang adalah `sa` - punya hak
+tulis & hapus atas SELURUH database di server itu. Kode Gajihub hanya
+menjalankan SELECT, tapi akun ini tidak menahan apa pun kalau ada kekeliruan.
+**Minta akun read-only untuk instance MSSQLDEV**, dan kalau bisa minta SIAP
+dinaikkan ke TLS 1.2 supaya `SIAP_ENCRYPT` bisa dicabut.
+
+#### Pegawai yang pensiun/berhenti: DITANDAI, tidak pernah dihapus
+
+Dulu `importPegawaiSiap.ts` membiarkan pegawai yang hilang dari daftar aktif
+SIAP tetap bertanda `AKTIF` selamanya - ikut terhitung di dashboard seolah
+masih bekerja. Sekarang ada langkah **"Rekonsiliasi status"** di akhir
+`main()`: NIP yang ada di Gajihub tapi tidak ada di daftar aktif ditanyakan
+statusnya ke SIAP, lalu `Pegawai.statusPegawai` diisi `PENSIUN` (kode 3),
+`BERHENTI` (kode 8), `USULAN_CPNS` (kode 0), `NONAKTIF` (kode lain), atau
+`TIDAK_DI_SIAP` (tidak ketemu sama sekali).
+
+**TIDAK ADA yang dihapus, dan ini keputusan yang disengaja.** Orang yang
+pensiun di tengah tahun tetap berhak atas tukin bulan-bulan yang sudah dia
+kerjakan - datanya hilang kalau barisnya dibuang. Terbukti relevan: dari 267
+pegawai non-aktif, **28 orang tanggal pensiunnya jatuh di tahun 2026** (Januari
+sampai Mei), jadi mereka memang bekerja sebagian tahun ini dan punya presensi.
+Penandaan ini juga **bisa berbalik** - `statusPegawai` ikut di-set `"AKTIF"`
+pada `update`, jadi kalau status di SIAP dikoreksi, sync berikutnya
+mengembalikannya sendiri.
+
+**Kalkulasi tukin SENGAJA TIDAK menyaring `statusPegawai`.** Penyaringnya
+adalah ada/tidaknya **presensi di periode itu** - orang yang pensiun Maret
+otomatis tidak punya presensi April, jadi April terlewat sendiri tanpa aturan
+tambahan, sementara Januari-Maret tetap bisa dihitung. Kalau kalkulasi ikut
+menyaring status, justru itu yang menutup kemungkinan membayar hak mereka.
+
+**JANGAN membuat kolom "tanggal berhenti" + aturan "boleh dihitung sampai bulan
+X".** Terdengar rapi tapi bersandar pada `TGLPENSIUN` yang sudah terbukti tidak
+konsisten: ada baris berstatus Pensiun yang tanggalnya di 2040-an sampai 2055
+(itu tanggal BUP terjadwal, bukan tanggal berhenti), dan 52 orang tidak punya
+tanggal sama sekali. Aturan itu juga cuma menduplikasi penyaring presensi yang
+sudah benar.
+
+**`statusPegawai` akhirnya benar-benar dipakai menyaring** - sebelumnya kolom
+itu cuma hiasan (disimpan & ditampilkan sebagai chip, tidak dipakai di satu
+query pun). Sekarang di empat tempat, dan pilihannya beda-beda dengan sengaja:
+
+| Tempat | Perilaku |
+|---|---|
+| Dashboard unit & lintas unit, panel sumber data `/tukin` | hitungan pegawai hanya `AKTIF` |
+| `/tukin/predikat-kinerja` (daftar "belum punya predikat") | hanya `AKTIF` - pensiunan tidak akan pernah punya predikat baru |
+| `/kasubag/pegawai` | default `AKTIF`, ada tautan "Tampilkan" + jumlahnya, supaya tidak ada yang lenyap tanpa jejak |
+| `/pegawai` | **TIDAK disaring** - ini halaman perbaikan data, pensiunan justru termasuk yang datanya mungkin perlu dibetulkan. Yang ditambahkan cuma chip status |
+
+#### Import pegawai dari SIAP (`src/jobs/importPegawaiSiap.ts`)
+
+Menggantikan `importPegawaiXlsx.ts` sebagai jalur utama (file XLSX-nya memang
+tidak ada di repo - data pribadi). Snapshot manual, BUKAN live sync.
+
+```bash
+npx tsx src/jobs/importPegawaiSiap.ts               # semua pegawai aktif
+npx tsx src/jobs/importPegawaiSiap.ts --satker=0101 # Sekretariat Jenderal saja
+npx tsx src/jobs/importPegawaiSiap.ts --dry-run
+```
+
+Pemetaan kolomnya (hasil penelusuran ke database, bukan tebakan) ada di kepala
+file itu. Yang perlu diingat di sini:
+
+- **`nip` dari `NIPBARU`** (18 digit), bukan kolom `NIP` (9 digit, format lama).
+- **`satuanKerja` dari `LEFT(SATKERID,6)`** = Eselon II. `SATKERID` di SIAP
+  hirarkis: 4 digit Eselon I, 6 digit Eselon II. Nama unitnya cocok persis
+  dengan konvensi Gajihub ("Biro Keuangan dan Barang Milik Negara", "Biro
+  Umum"). Ini yang dipakai SELURUH scoping kewenangan.
+- **`golongan` dari `VWPANGKATTERAKHIR` + `PANGKAT.KODEPANGKAT`**, BUKAN dari
+  `PEGAWAI.GOL_AKHIR` - kolom itu kosong total.
+- **Data pribadi TIDAK diimpor** (alamat, NPWP, NIK, telepon, HP, email,
+  rekening, foto) - konvensi yang sama dengan importer XLSX.
+- Filter aktif: `STATUSPEGAWAIID IN ('1','2','23')` = CPNS/PNS/PPPK. Pensiun,
+  pemberhentian, dan status '9' (tidak ada di tabel lookup) tidak diimpor.
+
+**KELAS JABATAN - ada di SIAP, tapi menempel pada JABATAN, bukan pada orangnya.**
+Ini sempat dikira tidak ada sama sekali. `PEGAWAI.JOBGRADE` memang kosong total
+(0 dari 5.088), begitu juga `MANJAB_GRADE` & `MANJAB_MAPJABATAN` (0 baris).
+Yang TERISI:
+
+| Jenis jabatan | Sumber kelas jabatan | Terisi |
+|---|---|---|
+| Fungsional & pelaksana (`JENISJABATAN` 3 & 2) | `MASTERFUNGSIONAL.JOBGRADE` | 2.056 / 2.147 |
+| Struktural (`JENISJABATAN` 1) | `SATKER.JOBGRADE` | 175 |
+
+Disambungkan lewat `RIWAYATJABATAN` TERBARU per pegawai (`FUNGSIONALID` untuk
+fungsional/pelaksana, `SATKERID` untuk struktural). Cakupan terukur: **3.586
+dari 3.609 (99,4%)** - sisanya 23 pegawai yang `FUNGSIONALID`-nya kosong di
+`RIWAYATJABATAN`. Nilai di luar 1-17 dibuang jadi null, bukan dipaksa masuk.
+
+Diadu ke kenyataan dan cocok: Sekretaris Jenderal & Dirjen 17, Staf Ahli 16,
+Kepala Biro 15, Kepala Bagian 12, Kepala Subbagian 10. Sebaran terbanyak di
+kelas 8 (1.168), 10 (798), 7 (619).
+
+**TODO(confirm) YANG TERSISA**: belum ada penegasan resmi bahwa `JOBGRADE` di
+kedua tabel itu adalah kelas jabatan versi TERKINI yang dipakai membayar tukin
+(bisa saja tertinggal dari SK terbaru). Angka ini LANGSUNG menentukan tarif
+tukin pokok - minta sampel beberapa pegawai ke Biro OSDMA dan bandingkan
+sebelum dipakai membayar sungguhan.
+
+#### Tarik presensi dari e-Presensi (tombol SUDAH aktif)
+
+Panel "Sinkronisasi e-Presensi" di `/tukin/presensi` **sekarang berfungsi** -
+`TERSAMBUNG` sudah true dan tombolnya dipasangi Server Action. Upload PDF
+TIDAK dihapus: tetap jalur cadangan kalau jaringan ke server e-Presensi tidak
+terjangkau, dan template Excel tetap satu-satunya cara mengisi yang tidak ada
+di database (menit meninggalkan kantor, tidak ikut upacara).
+
+Tiga file, batas tanggung jawabnya tegas - dan **dipakai bareng** oleh tombol
+UI dan CLI, supaya angkanya tidak bisa berbeda:
+- `src/adapters/EpresensiAdapter.ts` - menarik & menganalisis satu periode.
+  TIDAK menulis apa pun.
+- `src/jobs/simpanRekapPresensi.ts` - menulis ke `RekapPresensiPeriode` +
+  `PresensiHarian`.
+- `src/app/tukin/presensi/actionsSync.ts` (tombol) dan
+  `src/jobs/importPresensiEpresensi.ts` (CLI) - dua pemanggil.
+
+```bash
+npx tsx src/jobs/importPresensiEpresensi.ts --bulan=6 --tahun=2026 --dry-run
+npx tsx src/jobs/importPresensiEpresensi.ts --bulan=6 --tahun=2026 --oleh=<NIP>
+```
+
+**Logika Pasal 13 TIDAK ditulis ulang.** Baris database dibentuk jadi
+`LaporanPresensiPdf` - tipe yang sama persis dengan hasil parsing PDF - lalu
+diserahkan ke `rekapDariLaporanPdf()` yang sudah ada. Jadi penanganan entri
+ganda, aturan akhir pekan, lembur, uang makan lembur, dan seluruh potongan
+Pasal 13 berlaku identik di kedua jalur. Pemetaan status ke enum database
+juga disatukan di `src/business-logic/presensiKeDb.ts` (diekstrak dari
+`actionsPdf.ts`).
+
+**RANTAI PEMETAAN PEGAWAI - bagian paling rawan:**
+
+```
+e-Presensi.presensi.id_pegawai -> SIAP.PEGAWAI.PEGAWAIID -> NIPBARU -> Pegawai.nip
+```
+
+Database e-Presensi **TIDAK menyimpan NIP sama sekali** (sudah dicek ke
+seluruh `information_schema`). Yang ada `id_pegawai`, ID internal.
+
+**PENCOCOKAN HARUS PERSIS - JANGAN menambah/membuang nol di depan.** Waktu
+verifikasi, normalisasi nol sempat mencocokkan `00009600` (Deva Dwi Septian di
+e-Presensi) ke PEGAWAIID `000009600` milik **orang lain** (Afriansyah Noor).
+Dengan pencocokan persis, uji ketat: **150/150 cocok** untuk ID 8 digit, 9
+digit, dan 12 digit (nama diverifikasi silang; yang "beda" cuma penulisan
+gelar, mis. `"Ir ANNA YULIANA M.Si."` vs `"Anna Yuliana"`). Pegawai ber-UUID
+(36 karakter, ~101 orang) TIDAK ada di SIAP dan DILEWATI dengan alasan
+eksplisit - TIDAK dicocokkan lewat nama, karena penulisan nama di e-Presensi
+tidak konsisten.
+
+**Status kehadiran ternyata sudah cocok.** Tabel `sistem_kerja` berisi persis
+12 label yang sama dengan yang muncul di PDF (WFO, WFH, WFA, Cuti, Izin,
+Diklat, Dinas Keluar, Lembur, Upacara Bendera, Tidak Hadir, Tidak Presensi,
+Tugas Belajar), jadi `kategoriDariStatus()` dipakai apa adanya.
+
+**TODO(confirm) - PERBEDAAN ANGKA YANG HARUS DISADARI:**
+
+- **e-Presensi memberi toleransi terlambat 60 MENIT** (`sistem_kerja.toleransi`
+  untuk WFO/WFH/WFA), Gajihub memakai 0 karena Pasal 13 ayat (3) memotong
+  "setiap 1 (satu) menit" tanpa menyebut toleransi. **Ini akhirnya menjelaskan
+  temuan lama** "238 kedatangan lewat 07:30 tanpa catatan keterlambatan".
+  Potongan Gajihub akan LEBIH BESAR dari yang tertera di e-Presensi. Contoh
+  tarikan Juni 2026: 1.433.892 menit terlambat untuk 3.392 pegawai (±422
+  menit/orang/bulan). Kalau toleransi itu punya dasar resmi, ubah
+  `toleransiTerlambatMenit` di `JADWAL_KERJA_DEFAULT` - JANGAN dipatch di
+  adapter.
+- **Kolom `potongan`, `keterangan_potongan`, dan tabel `potongan_tukin`
+  DIABAIKAN sebagai nominal** - Gajihub menghitung sendiri. Yang diambil dari
+  situ HANYA penanda "lupa presensi" (fakta, bukan nominal).
+- **`jumlahHariKerja` dihitung dari kalender** (Senin-Jumat), karena blok
+  "Kewajiban Jam Kerja" hanya ada di PDF. **LIBUR NASIONAL TIDAK DIKENALI** -
+  tabel `libur` di e-Presensi ada tapi KOSONG. Jadi angkanya bisa lebih besar
+  dari hari kerja sebenarnya pada bulan bertanggal merah. **JEBAKAN**: kalau
+  field ini null, `uangMakan.ts` memakainya sebagai batas atas (`Math.min`)
+  dan uang makan SELURUH pegawai jadi Rp 0 tanpa error - ketemu waktu dry-run
+  pertama.
+- **1.689 dari 5.190 pegawai e-Presensi (33%) tidak ada di SIAP** (plus ~101
+  ber-UUID). Presensi mereka tidak masuk Gajihub sama sekali. Perlu
+  ditelusuri - dugaan: non-ASN/honorer/outsourcing.
+- **PPPK golongannya berformat Romawi tunggal** ("IX"), sementara PNS
+  "III/d". `golonganRomawi()` di `tarifSbm.ts` mengembalikan null untuk PPPK,
+  jadi mereka DILEWATI saat kalkulasi uang makan/lembur (bukan dihitung dengan
+  tarif tebakan). Perlu diputuskan tarif SBM mana yang berlaku.
+- Database e-Presensi punya **baris bertanggal rusak** (`252026-01-22`,
+  `0003-02-28`). Filter periode membuangnya, tapi jangan berasumsi kolom
+  tanggalnya selalu waras.
+
+**Kewenangan**: tombol UI mengecek `canUploadRekapPresensi` **per pegawai**
+(satu tarikan berisi pegawai lintas unit, jadi Kasubag TU hanya menyimpan
+pegawai unitnya). Jalur CLI **TIDAK** memfilter per satker - siapa pun yang
+bisa menjalankan skrip itu menarik seluruh kementerian. Jaga aksesnya
+sebagaimana akses administratif.
+
+**Diverifikasi**: `npm test` 256/256 lolos, `npx tsc --noEmit` bersih,
+`npm run build` (production) lolos. Tarikan Juni 2026 tersimpan: 3.392 pegawai,
+71.513 baris `PresensiHarian`, sebaran status masuk akal (WFO 46.698, WFH
+7.846, Dinas Luar 7.325, Cuti 3.867, Upacara 3.012, Alpha 1.113, Lembur 196).
+
 ### Upload PDF presensi e-Presensi (1 file / 1 folder sekaligus)
 
 Dipicu 2 file asli dari user: export **"Laporan Detail Presensi Harian"**
@@ -1537,8 +1818,10 @@ sudah ada (`canUploadKoreksiPredikatKinerjaUnit` buat Kasubag TU unitnya
 sendiri + `cekPpabpAtauAdmin` buat PPABP lintas unit), bukan aturan baru.
 **Dicek PER BARIS, bukan sekali per file** - satu file bisa memuat pegawai
 lintas unit. `canEditPresensiKinerjaLangsung` TETAP `false` buat semua role:
-upload ini bukan pintu belakang buat edit bebas, tidak ada form ketik-manual
-predikat di manapun, dan tiap upload menulis `AuditTrail`.
+upload ini bukan pintu belakang buat edit bebas, dan tiap upload menulis
+`AuditTrail`. (Form ketik-manual per orang SEKARANG ADA, tapi lewat izin
+yang berbeda dan tetap ber-scope unit - lihat "Kelola predikat kinerja per
+orang" di bawah.)
 
 **UI**: SATU halaman `/predikat-kinerja` dipakai KASUBAG_TU dan PPABP (pola
 yang sama dengan `/pegawai` - bukan dua salinan). KASUBAG_TU dipaksa ke
@@ -1583,6 +1866,83 @@ Server Action pakai named import - lihat gotcha di bagian gaji induk.
 **Data hasil verifikasi SENGAJA TIDAK di-revert** - 28 predikat periode
 6/2026 itu data nyata yang berguna buat demo. Upsert-nya idempoten, jadi
 upload ulang file yang sama aman.
+
+### Kelola predikat kinerja per orang (tambah / ubah / hapus)
+
+Diminta user: "buat ruang dan tombol khusus untuk edit, hapus, tambah data,
+karena kedepannya akan panjang" - supaya Kasubag TU bisa mengurus datanya
+sendiri tanpa selalu bergantung file rekap yang utuh.
+
+**TIDAK ADA invarian yang dicabut, dan ini perlu ditegaskan** karena
+sekilas terlihat bertentangan. `canEditPresensiKinerjaLangsung` TETAP
+`false` dan tidak dipakai di mana pun. Izin yang dipakai adalah
+`canUploadRekapPredikatKinerja` - yang komposisinya sudah memuat
+`canUploadKoreksiPredikatKinerjaUnit`, fungsi yang sejak awal dideskripsikan
+sebagai "upload predikat kinerja **+ koreksi langsung di Gajihub kalau ada
+yang salah**", dan disebut eksplisit di komentar
+`canEditPresensiKinerjaLangsung` sebagai salah satu jalur koreksi yang SAH.
+Yang dilarang itu edit BEBAS tanpa scope & tanpa jejak - bukan koreksi
+ber-scope unit yang tercatat. Jadi yang selama ini belum ada cuma UI-nya.
+
+`src/app/tukin/predikat-kinerja/actionsKelola.ts` (BARU) - tiga Server
+Action dengan tiga pengaman yang membuatnya bisa dipertanggungjawabkan:
+
+1. **Otorisasi per baris terhadap `Pegawai.satuanKerja` milik baris yang
+   disentuh**, bukan terhadap filter yang sedang dibuka - `id` dari form
+   tidak dipercaya. Kasubag TU tidak bisa menyentuh unit lain sekalipun
+   id-nya ditebak/diedit di form.
+2. **`nilaiAngka` TIDAK PERNAH diterima dari form** - selalu diturunkan
+   ulang dari predikatnya lewat `konversiPredikatKeNilaiPersen` (Kepsekjen
+   82/2025). Tanpa ini orang bisa mengirim predikat "Kurang" dengan nilai
+   100% dan tukinnya ikut salah.
+3. **Tiap perubahan menulis `AuditTrail` lengkap dengan nilai SEBELUM dan
+   SESUDAH**, dan barisnya ditandai `sourceSystem = "Input manual Gajihub"`
+   + `inputMethod = MANUAL_ENTRY|MANUAL_EDIT`. Angka hasil ketikan manusia
+   TIDAK BISA menyamar sebagai angka resmi dari BKN - di tabel muncul chip
+   merah/kuning "bukan dari BKN". Baris yang dihapus pun jejaknya tetap ada
+   di `dataSebelum`, jadi bisa dipulihkan manual kalau keliru.
+
+Tidak ada migrasi - `sourceSystem`/`inputMethod` sudah `String` bebas.
+
+**UI** (`/tukin/predikat-kinerja`):
+- Panel "Periode yang sudah ada datanya" naik dari satu baris teks jadi
+  panel chip per periode (periode aktif disorot, jumlah pegawai ikut
+  ditampilkan) - jumlah periode bertambah tiap bulan, jadi bentuk lamanya
+  bakal jadi paragraf panjang tak terbaca.
+- Panel konteks 4 tile: **Periode dibuka / Unit kerja / Pegawai
+  berpredikat / Belum punya predikat** - menjawab "ini data bulan & unit
+  apa" yang jadi keluhan awal.
+- Kolom **Aksi** per baris: Ubah (form inline, pilih predikat + alasan) dan
+  Hapus (konfirmasi dua langkah yang menyebut nama & periodenya - BUKAN
+  `confirm()` bawaan browser yang tidak bisa menampilkan konteks). Baris di
+  luar kewenangan menampilkan "Di luar kewenangan", tombolnya tidak
+  dirender - dan action-nya tetap mengecek ulang sendiri.
+- Form **Tambah predikat satuan**, dropdown-nya SENGAJA cuma berisi pegawai
+  yang BELUM punya predikat di periode itu. Kalau semua pegawai ikut masuk,
+  orang gampang memilih yang sudah ada lalu ditolak - lebih baik
+  pilihannya memang tidak ada. Butuh satuan kerja terpilih dulu; tanpa itu
+  daftarnya seluruh kementerian (±5.000) dan tidak praktis.
+
+**Diverifikasi end-to-end** (production build, lewat halaman uji sementara
+yang membungkus ketiga action sebagai form progressive-enhancement, lalu
+dihapus): tambah -> 85% untuk "Perlu Perbaikan"; tambah ulang ditolak
+("sudah punya predikat"); KASUBAG_TU Pusdatik ditolak di ketiga aksi untuk
+pegawai Biro Keuangan; ubah ke predikat yang sama ditolak; predikat asing
+("LUAR_BIASA") ditolak; ubah sah -> `KURANG`/60%/`MANUAL_EDIT`; hapus sah;
+hapus baris yang sudah hilang ditolak dengan pesan jelas. AuditTrail
+CREATE/UPDATE/DELETE tercatat lengkap. Angka di panel konteks diadu ke
+database dan **cocok persis** (27 Biro Keuangan, 8 belum punya predikat).
+**Semua mutasi uji SUDAH DI-REVERT** - `predikat_kinerja` kembali 29 baris,
+nol baris bertanda input manual, 3 baris AuditTrail uji dihapus.
+
+**Temuan sampingan**: ringkasan upload menghitung BARIS, bukan ORANG. File
+"Rekap Penilaian (47).xlsx" melaporkan "Biro Keuangan: 29 pegawai" padahal
+di database cuma **27 orang** - 2 baris di file itu duplikat persis
+(KHARINA OLIVIA & WANTI LENA SARI, isinya identik) yang meng-upsert ke
+kunci unik yang sama. Tidak ada data hilang, TAPI kalau suatu saat NIP yang
+sama muncul dua kali dengan predikat BERBEDA, yang terakhir menang tanpa
+peringatan. TODO(confirm): perlu diputuskan apakah duplikat dalam satu file
+harus ditolak/diperingatkan.
 
 ### Riwayat gaji pegawai (gaji induk) & slip gaji format asli
 
@@ -1916,15 +2276,51 @@ Sudah dihapus baris yang salah itu dari file migrasi - migrasi ini SEKARANG
 aman dijalankan dari database kosong (`prisma migrate deploy` langsung,
 TANPA perlu workaround manual psql lagi seperti sebelumnya).
 
-**Alur seed di server production/VPS BEDA dari lokal**: data Pegawai asli
-(±5.069 baris) TIDAK diimpor ulang dari file XLSX (file itu tidak ada di
-repo, sengaja - data pribadi pegawai) - dipindahkan langsung via
-`pg_dump --data-only --table=pegawai` dari database dev lokal lalu
-di-restore ke database VPS, BARU jalanin `seedUsers.ts` dan
-`seedSimulasi.ts` seperti biasa (keduanya butuh baris Pegawai dengan NIP
-asli sudah ada duluan). Kalau nanti pindah ke server lain lagi, ulangi pola
-yang sama (dump+restore tabel `pegawai`) KECUALI sudah ada sumber data
-pegawai yang lebih baru buat diimpor ulang via `importPegawaiXlsx.ts`.
+**Alur seed di VPS - SUDAH JAUH LEBIH SEDERHANA sejak sambungan langsung ke
+SIAP ada.** Prosedur `pg_dump --data-only --table=pegawai` dari laptop dev ke
+VPS **TIDAK DIPERLUKAN LAGI**; dulu itu satu-satunya cara karena file XLSX
+sumbernya tidak ada di repo (data pribadi, sengaja). Sekarang cukup:
+
+```bash
+npm run sync:pegawai                 # tarik pegawai langsung dari SIAP
+npx tsx src/auth/seedAkunPegawai.ts  # akun login buat NIP baru
+npm run sync:presensi -- --oleh=<NIP>   # presensi bulan berjalan
+```
+
+`seedUsers.ts` & `seedSimulasi.ts` (akun demo + skenario simulasi) tetap butuh
+baris Pegawai ada duluan, jadi jalankan SETELAH `sync:pegawai`.
+
+Buat menjaganya tetap segar, jadwalkan dua perintah sync itu lewat cron
+(harian sudah cukup - mutasi & pelantikan tidak terjadi tiap jam).
+
+**YANG WAJIB DICEK SEBELUM DEPLOY**: VPS Gajihub (`192.168.221.44`) satu
+segmen dengan e-Presensi (`192.168.221.96`) jadi hampir pasti terjangkau,
+TAPI SIAP ada di segmen BERBEDA (`192.168.212.108`). Cek dari VPS:
+
+```bash
+nc -zv 192.168.221.96 4020    # e-Presensi
+nc -zvu 192.168.212.108 1434  # SQL Server Browser - WAJIB buat named instance
+```
+
+**Port 1433 TIDAK cukup lagi.** Sejak pindah ke named instance `MSSQLDEV`,
+portnya dinamis dan ditemukan lewat **SQL Server Browser di UDP 1434**. Kalau
+tim jaringan cuma membuka TCP 1433, yang terjangkau justru instance
+`SQLEXPRESS2014` yang datanya lama - dan itu akan "berhasil" tanpa error.
+Minta dibuka: **UDP 1434** dan rentang port dinamis SQL Server (atau minta
+DBA menetapkan port statis untuk MSSQLDEV, lalu isi `SIAP_PORT` dan kosongkan
+`SIAP_INSTANCE`).
+
+Kalau SIAP tidak terjangkau, minta pembukaan rute/firewall ke tim jaringan -
+JANGAN kembali ke pola dump-restore manual, itu langkah mundur.
+
+**`.env` VPS perlu tiga baris tambahan** yang belum ada di sana:
+`SIAP_INSTANCE="MSSQLDEV"`, `SIAP_ENCRYPT="false"`, dan kredensial instance itu
+(`SIAP_PORT` harus DIKOSONGKAN). Tanpa itu VPS tetap menarik data lama tanpa
+memberi tanda apa pun.
+
+**JANGAN taruh alamat SIAP/e-Presensi di `DATABASE_URL` VPS.** `DATABASE_URL`
+di VPS tetap PostgreSQL milik Gajihub sendiri di server itu; sumber eksternal
+lewat `SIAP_*` dan `EPRESENSI_*`.
 
 **Catatan lain**: tabel-tabel baru dari migrasi role-matrix (`banding`,
 `bukti_dukung`, `sk_kgb`, `sk_hukuman_disiplin`, `anggaran_realisasi`,

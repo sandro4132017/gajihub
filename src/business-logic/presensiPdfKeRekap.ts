@@ -570,8 +570,18 @@ export function rekapDariLaporanPdf(
     (s.wfo ?? 0) + (s.wfh ?? 0) + (s.wfa ?? 0) + (s.dinasKeluar ?? 0) + (s.diklat ?? 0) +
     (s.tidakHadir ?? 0) + (s.cuti ?? 0) + (s.izin ?? 0) + (s.tugasBelajar ?? 0) +
     (s.upacaraBendera ?? 0) + (s.lembur ?? 0);
+  // Kalau SELURUH blok ringkasan kosong, berarti sumbernya memang tidak punya
+  // "Summary Presensi" buat dibandingkan - mis. jalur tarik langsung dari
+  // database e-Presensi (src/jobs/importPresensiEpresensi.ts). Tanpa penjagaan
+  // ini, semua nilai null dibaca sebagai 0 dan peringatan "summary tidak
+  // sinkron" muncul untuk SETIAP pegawai, padahal tidak ada summary yang
+  // dibandingkan.
+  const adaRingkasan = [
+    s.wfo, s.wfh, s.wfa, s.dinasKeluar, s.diklat, s.tidakHadir,
+    s.cuti, s.izin, s.tugasBelajar, s.upacaraBendera, s.lembur,
+  ].some((v) => v !== null);
   const ringkasanTidakDipercaya =
-    laporan.baris.length >= 5 && totalRingkasan * 2 < laporan.baris.length;
+    adaRingkasan && laporan.baris.length >= 5 && totalRingkasan * 2 < laporan.baris.length;
   if (ringkasanTidakDipercaya) {
     catatan.push(
       `Blok "Summary Presensi" di file ini tidak sinkron dengan tabel detailnya sendiri (summary menghitung ${totalRingkasan} hari, tabelnya ${laporan.baris.length} baris) - masalah yang memang ada di export e-Presensi versi lama. Yang dipakai Gajihub adalah TABEL DETAIL, jadi angka di bawah tetap sah.`

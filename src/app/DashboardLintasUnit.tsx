@@ -68,7 +68,11 @@ export async function DashboardLintasUnit({
   }
 
   const filterSatker = satkerEfektif ? { pegawai: { satuanKerja: satkerEfektif } } : {};
-  const totalPegawai = await prisma.pegawai.count({ where: satkerEfektif ? { satuanKerja: satkerEfektif } : {} });
+  // Hanya AKTIF - pensiunan tetap disimpan (berhak atas tukin bulan yang
+  // sudah dikerjakan) tapi tidak boleh ikut menggelembungkan hitungan pegawai.
+  const totalPegawai = await prisma.pegawai.count({
+    where: { statusPegawai: "AKTIF", ...(satkerEfektif ? { satuanKerja: satkerEfektif } : {}) },
+  });
 
   const [tukinRows, umRows, lemburRows] = periodeBulan && periodeTahun
     ? await Promise.all([

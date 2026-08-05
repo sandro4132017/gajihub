@@ -36,9 +36,25 @@ export function KalkulasiMassalForm({
 
       {state.success && <p className="mt-3 text-sm font-semibold text-green">{state.success}</p>}
       {state.error && <p className="mt-3 text-sm font-medium text-red">{state.error}</p>}
+      {state.ringkasan && state.ringkasan.detailSebagian.length > 0 && (
+        <div className="mt-3 rounded-lg bg-gold-tint p-3 text-xs text-ink-2">
+          <p className="font-semibold">
+            {state.ringkasan.detailSebagian.length} pegawai terhitung SEBAGIAN (Tukin tersimpan, uang makan/lembur
+            tidak):
+          </p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {state.ringkasan.detailSebagian.map((d, i) => (
+              <li key={i}>{d}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {state.ringkasan && state.ringkasan.dilewati > 0 && (
         <div className="mt-3 rounded-lg border border-line-2 bg-surface-2 p-3 text-xs text-muted">
-          <p className="font-semibold text-ink-2">{state.ringkasan.dilewati} pegawai dilewati:</p>
+          <p className="font-semibold text-ink-2">
+            {state.ringkasan.dilewati} pegawai dilewati sepenuhnya (tidak ada yang tersimpan):
+          </p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4">
             {state.ringkasan.detailDilewati.map((d, i) => (
               <li key={i}>{d}</li>

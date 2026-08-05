@@ -143,6 +143,25 @@ describe("parsePeriodeRekap", () => {
     const hasil = parsePeriodeRekap("Periode Bulanan 13 Tahun 2026");
     expect(hasil.ok).toBe(false);
   });
+
+  // Portal BKN memakai DUA gaya untuk baris yang sama. File Mei 2026 dari
+  // Biro Keuangan datang dengan angka Romawi dan sempat ditolak parser.
+  it("membaca bulan dalam angka ROMAWI", () => {
+    expect(parsePeriodeRekap("Periode Bulanan V Tahun 2026")).toEqual({ ok: true, bulan: 5, tahun: 2026 });
+    expect(parsePeriodeRekap("Periode Bulanan I Tahun 2026")).toEqual({ ok: true, bulan: 1, tahun: 2026 });
+    expect(parsePeriodeRekap("Periode Bulanan IV Tahun 2026")).toEqual({ ok: true, bulan: 4, tahun: 2026 });
+    expect(parsePeriodeRekap("Periode Bulanan IX Tahun 2026")).toEqual({ ok: true, bulan: 9, tahun: 2026 });
+    expect(parsePeriodeRekap("Periode Bulanan XII Tahun 2026")).toEqual({ ok: true, bulan: 12, tahun: 2026 });
+    expect(parsePeriodeRekap("periode bulanan vii tahun 2025")).toEqual({ ok: true, bulan: 7, tahun: 2025 });
+  });
+
+  // Kalau Romawi ngawur diterjemahkan diam-diam, predikat masuk ke bulan yang
+  // salah dan tukin bulan itu dihitung dari capaian kinerja periode lain.
+  it("menolak angka Romawi yang tidak sah, tidak menebaknya", () => {
+    expect(parsePeriodeRekap("Periode Bulanan IIII Tahun 2026").ok).toBe(false);
+    expect(parsePeriodeRekap("Periode Bulanan VV Tahun 2026").ok).toBe(false);
+    expect(parsePeriodeRekap("Periode Bulanan XIII Tahun 2026").ok).toBe(false);
+  });
 });
 
 describe("normalisasiPredikat", () => {

@@ -9,7 +9,13 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-07-30** (upload PDF presensi e-Presensi).
+Terakhir diperbarui: **2026-08-05** - dua hal besar: (1) ternyata proyek ini
+selama beberapa waktu menarik data dari **instance SIAP yang SALAH** (dua
+instance, database bernama sama, tidak ada error sama sekali) - setelah pindah,
+pegawai aktif 3.607 -> **5.077** dan pemetaan presensi membaik dari 67% jadi
+98%; (2) pegawai pensiun/berhenti sekarang **DITANDAI, tidak dihapus**, dan
+`statusPegawai` akhirnya benar-benar dipakai menyaring. Plus kelola predikat
+kinerja per orang (tambah/ubah/hapus).
 
 ---
 
@@ -18,7 +24,7 @@ Terakhir diperbarui: **2026-07-30** (upload PDF presensi e-Presensi).
 | | |
 |---|---|
 | Commit terakhir di `main` | `cae0212` |
-| Test | 256 lolos (`npm test`) |
+| Test | 258 lolos (`npm test`) |
 | Migrasi | 13, semua sudah `deploy` di lokal & VPS |
 | Deploy | VPS kantor `192.168.221.44:3002` via pm2 (`gajihub`, restart ke-17), nginx -> `gajihub.rokeubmn.id` (HTTP) |
 | Repo | https://github.com/sandro4132017/gajihub |
@@ -35,11 +41,15 @@ Server itu SHARED - jangan ganggu `bot-siska` (port 3000) dan
 
 | Fitur | Bagian di `CLAUDE.md` |
 |---|---|
+| **Import pegawai LANGSUNG dari database SIAP** (instance `MSSQLDEV`) | "Sambungan langsung ke SIAP & e-Presensi", "Instance SIAP yang benar" |
+| **Pegawai pensiun/berhenti ditandai, tidak dihapus** + `statusPegawai` dipakai menyaring | "Pegawai yang pensiun/berhenti: DITANDAI, tidak pernah dihapus" |
+| **Tarik presensi LANGSUNG dari database e-Presensi** (tombol sinkronisasi SUDAH aktif) | idem |
 | Kalkulasi Tukin 30/70 + potongan Pasal 13/14 | "Kalkulasi Tukin satu pintu + perbaikan logika potongan" |
 | Dashboard Tukin satu pintu (presensi + kinerja + kalkulasi) | idem |
 | Upload rekap presensi manual + tombol sinkronisasi e-Presensi | idem |
 | **Upload PDF presensi e-Presensi (1 file / 1 folder)** | "Upload PDF presensi e-Presensi" |
 | Upload rekap predikat kinerja e-Kinerja BKN | "Upload rekap predikat kinerja e-Kinerja BKN" |
+| **Kelola predikat kinerja per orang (tambah/ubah/hapus) + filter periode & unit** | "Kelola predikat kinerja per orang" |
 | Uang makan & uang lembur per SBM 2026 | "Uang makan & uang lembur mengikuti SBM 2026" |
 | Lembur hari libur 2x + WFH/WFA tidak dapat lembur | idem |
 | Gaji induk (upload ADK GPP) + slip gaji format asli | "Riwayat gaji pegawai (gaji induk) & slip gaji format asli" |
@@ -112,6 +122,43 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
    akhir pekan sudah dibebaskan. Kasus nyata di file uji: dinas ke luar kota
    di hari libur nasional - tapi libur nasional tidak bisa dikenali sistem.
 
+### Baru - dari sambungan langsung SIAP & e-Presensi (2026-08-04)
+
+15. **KELAS JABATAN - SUDAH KETEMU, tapi butuh dicek silang ke Biro OSDMA.**
+   Bukan di kolom pegawai (`PEGAWAI.JOBGRADE` kosong total, begitu juga
+   `MANJAB_GRADE`/`MANJAB_MAPJABATAN`), melainkan menempel pada JABATAN-nya:
+   `MASTERFUNGSIONAL.JOBGRADE` (fungsional & pelaksana) dan `SATKER.JOBGRADE`
+   (struktural), disambungkan lewat `RIWAYATJABATAN` terbaru. Sudah dipasang
+   di `importPegawaiSiap.ts` - **3.586 dari 3.609 pegawai (99,4%) terisi**.
+   Diadu ke kenyataan dan cocok (Sekjen/Dirjen 17, Staf Ahli 16, Ka. Biro 15,
+   Ka. Bagian 12, Ka. Subbagian 10).
+   **YANG MASIH PERLU DIPUTUSKAN**: belum ada penegasan bahwa JOBGRADE di
+   kedua tabel itu versi TERKINI yang dipakai membayar (bisa tertinggal dari
+   SK terbaru). Angka ini LANGSUNG menentukan tarif tukin pokok. Minta
+   sampel beberapa pegawai ke Biro OSDMA lalu bandingkan sebelum dipakai
+   membayar sungguhan.
+
+16. **e-Presensi memberi toleransi terlambat 60 MENIT, Gajihub 0 menit.**
+   Angkanya akhirnya pasti: `sistem_kerja.toleransi` = 60 untuk WFO/WFH/WFA.
+   Ini yang menjelaskan butir 5 di atas. Contoh dampaknya pada tarikan Juni
+   2026: total keterlambatan 1.433.892 menit untuk 3.392 pegawai (rata-rata
+   ±422 menit/orang/bulan). Kalau toleransi itu ternyata punya dasar resmi,
+   ubah `toleransiTerlambatMenit` di `JADWAL_KERJA_DEFAULT` - jangan dipatch
+   di adapter.
+
+17. **1.689 dari 5.190 pegawai di e-Presensi (33%) tidak ada di SIAP.**
+   Plus ~101 yang `id_pegawai`-nya berbentuk UUID. Mereka DILEWATI dengan
+   alasan eksplisit, TIDAK dicocokkan lewat nama. Perlu ditelusuri siapa
+   mereka - dugaan: non-ASN/honorer/outsourcing yang absen di e-Presensi
+   tapi tidak tercatat di database kepegawaian. Selama belum jelas, presensi
+   mereka tidak masuk Gajihub sama sekali.
+
+18. **PPPK: golongan berformat angka Romawi tunggal** ("IX", "XI"), sementara
+   PNS "III/d". `golonganRomawi()` di `tarifSbm.ts` hanya mengenali format
+   PNS dan mengembalikan null untuk PPPK - artinya PPPK DILEWATI saat
+   kalkulasi uang makan/lembur (dengan alasan eksplisit, bukan tarif
+   tebakan). Perlu diputuskan tarif SBM mana yang berlaku untuk PPPK.
+
 ### Kewenangan
 
 10. **PPABP tidak boleh menjalankan kalkulasi massal Tukin** - padahal boleh
@@ -148,6 +195,27 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
    LOKAL, tidak ikut ke VPS. Kosongkan lewat `/ppabp/gaji-induk` kalau tidak
    mau ikut tampil waktu demo.
 
+### Baru - dari kelola predikat kinerja per orang (2026-08-05)
+
+19. **NIP duplikat dalam SATU file rekap predikat - ditolak atau dibiarkan?**
+   File "Rekap Penilaian (47).xlsx" punya 49 baris tapi cuma **47 orang**
+   (KHARINA OLIVIA & WANTI LENA SARI masing-masing muncul 2x). Isinya
+   kebetulan identik jadi tidak ada yang rusak - TAPI kalau NIP yang sama
+   muncul dua kali dengan predikat BERBEDA, upsert membuat **yang terakhir
+   menang tanpa peringatan**, dan itu langsung mengubah bobot 70% Tukin orang
+   tersebut. Efek sampingnya juga bikin ringkasan upload membingungkan:
+   dilaporkan "Biro Keuangan: 29 pegawai" padahal di database 27 - ringkasan
+   menghitung BARIS, bukan ORANG.
+   Lihat `src/app/tukin/predikat-kinerja/actions.ts`.
+
+20. **Predikat hasil ketikan manual boleh dipakai membayar?** Fitur
+   tambah/ubah/hapus per orang sudah ada (`/tukin/predikat-kinerja`), dibatasi
+   unit + tercatat di `AuditTrail` + ditandai chip "bukan dari BKN". Yang
+   belum ditegaskan: apakah baris bertanda manual itu sah jadi dasar bayar,
+   atau harus disusul file resmi e-Kinerja sebelum siklus approval jalan.
+   Sekarang sistem TIDAK membedakannya saat kalkulasi.
+   Lihat `src/app/tukin/predikat-kinerja/actionsKelola.ts`.
+
 ---
 
 ## 4. MENUNGGU DOKUMEN / AKSES DARI PIHAK LUAR
@@ -160,7 +228,13 @@ ditandai `TODO(confirm)` / `TODO(legal-confirm)` di kode.
 | **PMK/Perdirjen tata cara pembayaran lembur** | Dasar hukum pengali lembur hari libur 2x. Sudah dicek: kata "libur" TIDAK ADA di seluruh SBM 2026 | Dipakai 2x atas instruksi user, konstantanya diberi peringatan + TODO |
 | **Batas maksimal jam lembur per bulan** | SBM tidak mengaturnya | Dipakai 40 jam (asumsi lama, belum dikonfirmasi) |
 | **Contoh ADK Uang Makan & Uang Lembur resmi** | Format kolomnya | Dipakai kolom ringkas buatan sendiri |
-| **Akses API e-Presensi** | Sinkronisasi otomatis presensi | Sudah TIDAK memblokir: PDF export "Laporan Detail Presensi Harian" bisa diupload langsung (per file atau per folder), di-key NIP. Tombol sinkronisasi tetap ada tapi nonaktif sampai API-nya tersedia. Contoh tarikan XLSX lama yang di-key NAMA tetap tidak dipakai (butuh rekonsiliasi nama->NIP) |
+| ~~**Akses API e-Presensi**~~ **SUDAH DIDAPAT (bukan API, tapi akses DATABASE)** | Sinkronisasi otomatis presensi | **SELESAI** - tombol "Tarik data presensi" di `/tukin/presensi` SUDAH AKTIF, membaca langsung database PostgreSQL e-Presensi (`192.168.221.96:4020`). Upload PDF tetap ada sebagai jalur cadangan. Lihat bagian 9 |
+| ~~**Kelas jabatan (grade 1-17)**~~ **SUDAH KETEMU** | Tarif tukin pokok | Diturunkan dari `MASTERFUNGSIONAL.JOBGRADE` / `SATKER.JOBGRADE` lewat `RIWAYATJABATAN` - 3.586/3.609 terisi. Yang ditunggu tinggal **konfirmasi Biro OSDMA** bahwa angkanya versi terkini - lihat butir 15 |
+| **Identitas 1.689 pegawai e-Presensi yang tidak ada di SIAP** | Presensi mereka tidak bisa masuk Gajihub | Dilewati dengan alasan eksplisit - lihat butir 17 |
+| ~~**SIAP diperbarui untuk pegawai TMT 2025**~~ **SELESAI - ternyata salah INSTANCE, bukan datanya yang belum ada** | Pegawai baru tidak ada di Gajihub | Server `192.168.212.108` punya **DUA instance** dengan database bernama sama. Yang dipakai (`SQLEXPRESS2014`, port 1433) berhenti di Agustus 2025; yang benar (`MSSQLDEV`) terkini. Setelah pindah: pegawai aktif 3.607 -> **5.077**, 18 NIP yang hilang itu **18/18 ketemu**, ID e-Presensi tak terpetakan turun dari **1.689 (33%) jadi ~118 (2%)**. Lihat "Instance SIAP yang benar" di CLAUDE.md |
+| **Akun read-only di instance MSSQLDEV** | `biro_keu_2` DITOLAK di sana, jadi `.env` sekarang memakai **`sa`** - sysadmin dengan hak tulis & hapus atas seluruh database di server SIAP | Kode hanya SELECT, tapi akunnya tidak menahan apa pun kalau ada kekeliruan. **Minta akun terbatas ke pengelola SIAP** |
+| **SIAP dinaikkan ke TLS 1.2** | MSSQLDEV memutus koneksi (`ECONNRESET`) pada hasil query besar selama enkripsi menyala - TLS 1.0 | `SIAP_ENCRYPT="false"`; nama/NIP/jabatan lewat tanpa enkripsi di jaringan kantor (password tetap aman). Begitu TLS 1.2 ada, cabut variabel itu |
+| **Identitas 43 pegawai yang hilang total dari SIAP** | Sempat terhapus dari Gajihub dan **tidak bisa dipulihkan otomatis** - tidak ada sumber datanya | NIP + nama + satuan kerja mereka tersimpan di `AuditTrail` (`entitasId = "hapus-massal-nonaktif"`). Tanyakan ke OSDMA kalau ternyata penting |
 | **Dokumen resmi jam kerja Kemnaker** | Membenarkan acuan masuk 07:30, pulang 16:00 (Sen-Kam) / 16:30 (Jumat), 7,5 jam/hari | Dipakai angka itu - sudah dicocokkan ke 3 file presensi asli (101/101 catatan keterlambatan cocok), tapi belum ada dokumen resminya. Ada di `JADWAL_KERJA_DEFAULT` |
 | **Kalender hari libur nasional** | Membedakan lembur hari libur (2x) & membebaskan potongan di tanggal merah | Yang dikenali baru Sabtu & Minggu. Libur nasional di hari kerja tetap terbaca sebagai hari kerja - dilaporkan sebagai catatan, tidak didiamkan |
 | **Akses API e-Kinerja BKN** | Tarik predikat otomatis | Upload manual file Rekap Penilaian (format sudah didukung) |
@@ -176,7 +250,11 @@ ditandai `TODO(confirm)` / `TODO(legal-confirm)` di kode.
 ## 5. Alur data sekarang (siapa upload apa)
 
 ```
-KASUBAG_TU / PPABP  ->  /tukin/presensi  (PDF e-Presensi, 1 file / 1 folder)
+(otomatis)          ->  src/jobs/importPegawaiSiap.ts     -> Pegawai (dari database SIAP)
+KASUBAG_TU / PPABP  ->  /tukin/presensi  tombol "Tarik data presensi"
+                                          -> RekapPresensiPeriode + PresensiHarian
+                                             (LANGSUNG dari database e-Presensi)
+KASUBAG_TU / PPABP  ->  /tukin/presensi  (PDF e-Presensi, 1 file / 1 folder - cadangan)
                                           -> RekapPresensiPeriode  (30% kehadiran)
                                           +  PresensiHarian        (rincian per tanggal)
 KASUBAG_TU / PPABP  ->  /tukin/predikat-kinerja   -> PredikatKinerja       (70% kinerja)
@@ -247,6 +325,40 @@ Ditulis di sini supaya tidak terulang di chat baru:
 7. **Verifikasi lewat UI itu MUTASI NYATA** - approval, edit role, dan
    keputusan rekonsiliasi tersimpan permanen. Kalau dipakai buat verifikasi,
    revert setelahnya (kecuali datanya memang dibutuhkan buat demo).
+8. **SIAP jalan di SQL Server 2014 yang cuma bicara TLS 1.0**, sementara
+   Node 22+ (OpenSSL 3) menolak apa pun di bawah TLS 1.2. Tanpa
+   `cryptoCredentialsDetails: { minVersion: "TLSv1", ciphers:
+   "DEFAULT@SECLEVEL=0" }` koneksinya gagal dengan
+   `ERR_SSL_UNSUPPORTED_PROTOCOL`. Sudah dipasang di
+   `EpresensiAdapter.ts` & `importPegawaiSiap.ts`.
+9. **JANGAN normalisasi nol depan waktu mencocokkan `id_pegawai` ke
+   `PEGAWAIID`.** Sempat terjadi waktu verifikasi: "00009600" (Deva Dwi
+   Septian) tercocok ke PEGAWAIID "000009600" milik ORANG LAIN (Afriansyah
+   Noor). Pencocokan HARUS persis. Uji ketat: 150/150 cocok untuk ID 8, 9,
+   dan 12 digit.
+10. **`npx prisma generate` gagal `EPERM` di Windows kalau dev server masih
+   jalan** - DLL query engine sedang dikunci. Matikan `npm run dev` dulu.
+11. **Kalau menambah jalur data presensi baru, isi `kewajibanJamKerja`.**
+   `rekapDariLaporanPdf` menurunkan `jumlahHariKerja` dari situ, dan
+   `uangMakan.ts` memakainya sebagai BATAS ATAS hari dibayar (`Math.min`).
+   Kalau null, uang makan SELURUH pegawai jadi Rp 0 tanpa error apa pun -
+   ketemu waktu dry-run pertama jalur database.
+12. **Server SIAP punya DUA instance dengan database bernama SAMA PERSIS.**
+   `SQLEXPRESS2014` (port 1433) datanya berhenti Agustus 2025; `MSSQLDEV`
+   yang terkini. Salah pilih **tidak memberi error apa pun** - datanya cuma
+   "lama" dan terlihat wajar. Proyek ini sempat memakai yang salah tanpa
+   sadar sampai 18 NIP e-Kinerja tidak ketemu. Kalau `SIAP_INSTANCE` diisi,
+   **`SIAP_PORT` harus kosong** - mengirim keduanya membuat driver memakai
+   port dan mengabaikan instance-nya.
+13. **`SIAP_ENCRYPT="false"` itu wajib untuk MSSQLDEV, bukan kemalasan.**
+   Dengan enkripsi menyala, instance itu memutus koneksi (`ECONNRESET`)
+   begitu hasil query cukup besar - query kecil tetap normal, jadi gampang
+   dikira masalah kredensial. Penyebabnya TLS 1.0.
+14. **Password di `.env` yang diawali `#` WAJIB diapit tanda kutip.** Tanpa
+   kutip, `#` dibaca sebagai awal komentar dan passwordnya jadi kosong -
+   errornya muncul sebagai "login failed", bukan "password kosong". Juga:
+   kunci ganda di `.env` membuat yang TERAKHIR menang, jadi baris duplikat
+   tanpa nilai bisa diam-diam mengosongkan kredensial yang sudah benar.
 
 ---
 
@@ -263,3 +375,55 @@ komitmen:
 - Storage file bukti dukung banding (masih placeholder, kebijakan retensi
   dokumen belum ada)
 - Halaman audit log generik (`canMonitorKepatuhanData` belum ada UI-nya)
+
+---
+
+## 9. Sambungan langsung SIAP & e-Presensi (2026-08-04)
+
+Dua sumber data eksternal sekarang **benar-benar tersambung**, tidak lagi mock
+maupun upload manual. Detail lengkap di `CLAUDE.md` bagian "Sambungan langsung
+ke SIAP & e-Presensi".
+
+| Sumber | Alamat | Engine | Dipakai untuk |
+|---|---|---|---|
+| SIAP | `192.168.212.108:1433` | SQL Server 2014 | Data pegawai + pemetaan `id_pegawai` -> NIP |
+| e-Presensi | `192.168.221.96:4020` | PostgreSQL | Presensi harian (30% Tukin, uang makan, uang lembur) |
+
+Kredensial ada di `.env` (`SIAP_*`, `EPRESENSI_*`). **KEDUANYA READ-ONLY** -
+hanya `SELECT`. Jangan pernah menulis ke sana: keduanya sistem produksi yang
+sedang melayani pegawai.
+
+**Rantai pemetaan pegawai** (ini yang paling rawan):
+
+```
+e-Presensi.presensi.id_pegawai -> SIAP.PEGAWAI.PEGAWAIID -> NIPBARU -> Gajihub.Pegawai.nip
+```
+
+e-Presensi TIDAK menyimpan NIP sama sekali. Pencocokan HARUS persis - lihat
+jebakan nomor 9 di bagian 7.
+
+**File baru:**
+- `src/jobs/importPegawaiSiap.ts` - import pegawai dari SIAP
+- `src/adapters/EpresensiAdapter.ts` - penarik presensi (dipakai tombol & CLI)
+- `src/jobs/importPresensiEpresensi.ts` - CLI tarikan massal
+- `src/jobs/simpanRekapPresensi.ts` - penulis DB, dipakai bareng
+- `src/business-logic/presensiKeDb.ts` - pemetaan status, dipakai bareng jalur PDF
+
+**Dependency baru** (deploy WAJIB `npm install` dulu): `mssql`, `pg`.
+
+**Perintah sinkronisasi** (dijadwalkan lewat cron/Task Scheduler, harian):
+
+```bash
+npm run sync:pegawai                     # pegawai dari SIAP
+npm run sync:presensi -- --oleh=<NIP>    # presensi BULAN BERJALAN
+```
+
+**Deploy ke VPS jadi lebih sederhana**: `pg_dump --table=pegawai` dari laptop
+dev **tidak diperlukan lagi**, cukup jalankan `sync:pegawai` di sana. TAPI cek
+dulu jangkauan jaringannya - VPS (`192.168.221.44`) satu segmen dengan
+e-Presensi, sementara SIAP di segmen berbeda (`192.168.212.108`). Detail di
+CLAUDE.md bagian "Deployment testing internal (VPS kantor)".
+
+**Status data lokal saat ini**: 3.607 pegawai aktif dari SIAP, 3.392 rekap
+presensi periode 6/2026 (71.513 baris harian). Belum ada predikat kinerja dan
+belum ada kelas jabatan, jadi **Tukin masih belum bisa dihitung**.
