@@ -21,7 +21,17 @@ const HARI_KERJA_DEFAULT = 21;
 export interface KalkulasiMassalFormState {
   error?: string;
   success?: string;
-  ringkasan?: { dihitung: number; dilewati: number; detailDilewati: string[] };
+  ringkasan?: {
+    dihitung: number;
+    dilewati: number;
+    detailDilewati: string[];
+    /**
+     * Pegawai yang Tukin-nya BERHASIL dihitung tapi Uang Makan/Lembur-nya
+     * tidak. Dipisah dari `detailDilewati` karena artinya beda jauh: yang di
+     * sini datanya TERSIMPAN sebagian, bukan gagal total.
+     */
+    detailSebagian: string[];
+  };
 }
 
 async function ambilAuthUser(): Promise<AuthUser | null> {
@@ -68,6 +78,7 @@ export async function kalkulasiMassalTukinUangMakanAction(
 
     let dihitung = 0;
     const detailDilewati: string[] = [];
+    const detailSebagian: string[] = [];
 
     for (const pegawai of pegawaiList) {
       if (!pegawai.kelasJabatan) {
@@ -190,9 +201,15 @@ export async function kalkulasiMassalTukinUangMakanAction(
       // bukan satu angka untuk semua orang seperti sebelumnya.
       const gol = golonganRomawi(pegawai.golongan);
       if (!gol) {
-        detailDilewati.push(
-          `${pegawai.nama}: golongan "${pegawai.golongan ?? "(kosong)"}" tidak bisa dibaca, tarif uang makan/lembur SBM tidak bisa ditentukan.`
+        // BUKAN "dilewati": Tukin-nya SUDAH tersimpan di atas. Tukin memakai
+        // KELAS JABATAN, bukan golongan - golongan cuma dipakai tarif SBM
+        // uang makan/lembur. Dulu kasus ini masuk detailDilewati dan bikin
+        // laporannya menyesatkan: pegawai PPPK dilaporkan "dilewati" padahal
+        // Tukin-nya terhitung penuh, dan jumlah di pesan sukses jadi kurang.
+        detailSebagian.push(
+          `${pegawai.nama}: Tukin terhitung, TAPI uang makan/lembur dilewati - golongan "${pegawai.golongan ?? "(kosong)"}" tidak dikenali tarif SBM (umumnya PPPK).`
         );
+        dihitung++;
         continue;
       }
       const tarifUangMakan = TARIF_UANG_MAKAN_PER_HARI[gol];
@@ -281,7 +298,14 @@ export async function kalkulasiMassalTukinUangMakanAction(
     }
 
     revalidatePath("/kasubag/kalkulasi");
-    return { success: `Kalkulasi Tukin + Uang Makan selesai untuk ${dihitung} pegawai.`, ringkasan: { dihitung, dilewati: detailDilewati.length, detailDilewati } };
+    return {
+      success:
+        `Tukin terhitung untuk ${dihitung} pegawai` +
+        (detailSebagian.length > 0
+          ? ` (${detailSebagian.length} di antaranya tanpa uang makan/lembur).`
+          : ", lengkap dengan uang makan/lembur."),
+      ringkasan: { dihitung, dilewati: detailDilewati.length, detailDilewati, detailSebagian },
+    };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
   }

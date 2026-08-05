@@ -79,7 +79,7 @@ export default async function PresensiTukinPage({
 
       <UploadPresensiPdfForm />
 
-      <SinkronisasiPresensi />
+      <SinkronisasiPresensi defaultBulan={periodeBulan} defaultTahun={periodeTahun} />
 
       <details className="mt-4">
         <summary className="cursor-pointer text-sm font-semibold text-teal-deep">
@@ -108,6 +108,10 @@ export default async function PresensiTukinPage({
       </details>
 
       <form method="get" className="card mt-6 flex flex-wrap items-end gap-3 p-4">
+        <div className="w-full text-xs text-muted">
+          Filter ini hanya memilih periode yang <strong>ditampilkan</strong> di tabel bawah - tidak menarik data
+          dari e-Presensi. Untuk menarik, pakai panel Sinkronisasi di atas.
+        </div>
         <div>
           <label className="field-label">Bulan</label>
           <input type="number" name="bulan" min="1" max="12" defaultValue={periodeBulan} className="field-input w-24 py-1.5" />

@@ -78,7 +78,13 @@ export default async function KasubagDashboardPage({
     periodeTahun = periodeTahun ?? terbaru?.periodeTahun;
   }
 
-  const totalPegawai = await prisma.pegawai.count({ where: { satuanKerja: satkerEfektif } });
+  // Hanya yang AKTIF. Pegawai yang sudah pensiun/berhenti TIDAK dihapus dari
+  // database (mereka tetap berhak atas tukin bulan yang sudah dikerjakan -
+  // lihat rekonsiliasi status di importPegawaiSiap.ts), tapi memasukkannya ke
+  // hitungan "total pegawai unit" membuat angkanya salah.
+  const totalPegawai = await prisma.pegawai.count({
+    where: { satuanKerja: satkerEfektif, statusPegawai: "AKTIF" },
+  });
 
   const [tukinRows, umRows, lemburRows] = periodeBulan && periodeTahun
     ? await Promise.all([
@@ -139,6 +145,46 @@ export default async function KasubagDashboardPage({
       </p>
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
+
+      {/*
+        Pintasan ke sub-halaman unit. KASUBAG_TU sudah punya semuanya di
+        sidebar (MENU_KASUBAG), TAPI role lain yang berwenang membuka halaman
+        ini - terutama ADMIN - memakai sidebar-nya sendiri dan jadi buntu di
+        sini: tidak ada satu pun jalan ke Kalkulasi tanpa mengetik URL.
+        Periode & satuan kerja ikut dibawa supaya tidak perlu diatur ulang.
+      */}
+      <nav className="mt-4 flex flex-wrap gap-2">
+        <a
+          href={`/kasubag/kalkulasi?bulan=${periodeBulan ?? ""}&tahun=${periodeTahun ?? ""}&satker=${encodeURIComponent(satkerEfektif)}`}
+          className="btn btn-ghost btn-sm"
+        >
+          Kalkulasi
+        </a>
+        <a href={`/kasubag/pegawai?satker=${encodeURIComponent(satkerEfektif)}`} className="btn btn-ghost btn-sm">
+          Pegawai Unit
+        </a>
+        <a
+          href={`/tukin/presensi?bulan=${periodeBulan ?? ""}&tahun=${periodeTahun ?? ""}`}
+          className="btn btn-ghost btn-sm"
+        >
+          Presensi
+        </a>
+        <a href="/tukin/predikat-kinerja" className="btn btn-ghost btn-sm">
+          Predikat Kinerja
+        </a>
+        <a href={`/kasubag/banding?satker=${encodeURIComponent(satkerEfektif)}`} className="btn btn-ghost btn-sm">
+          Verifikasi Banding
+        </a>
+        <a href={`/kasubag/sk-kgb?satker=${encodeURIComponent(satkerEfektif)}`} className="btn btn-ghost btn-sm">
+          SK KGB
+        </a>
+        <a
+          href={`/kasubag/sk-hukuman-disiplin?satker=${encodeURIComponent(satkerEfektif)}`}
+          className="btn btn-ghost btn-sm"
+        >
+          SK Hukuman Disiplin
+        </a>
+      </nav>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile label="Total pegawai" nilai={String(totalPegawai)} />

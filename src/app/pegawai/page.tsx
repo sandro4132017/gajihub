@@ -255,8 +255,19 @@ async function HasilPencarian({ q, satkerWajib }: { q?: string; satkerWajib: str
       {hasil.length === 0 && <p className="p-6 text-sm text-muted">Tidak ada pegawai yang cocok.</p>}
       {hasil.map((p) => (
         <div key={p.id} className="flex items-center justify-between gap-3 p-4">
+          {/*
+            Hasil pencarian SENGAJA tidak menyaring statusPegawai: ini halaman
+            perbaikan data, dan pegawai yang sudah pensiun justru termasuk yang
+            datanya mungkin perlu dibetulkan. Yang perlu ada cuma penandanya,
+            supaya tidak ada yang mengira orangnya masih aktif.
+          */}
           <div className="min-w-0">
-            <p className="font-semibold text-ink">{p.nama}</p>
+            <p className="font-semibold text-ink">
+              {p.nama}
+              {p.statusPegawai !== "AKTIF" && (
+                <span className="chip chip-wait ml-2 align-middle">{p.statusPegawai}</span>
+              )}
+            </p>
             <p className="text-xs text-muted">
               NIP {p.nip} - {p.satuanKerja} - {p.jabatan ?? "-"}
             </p>

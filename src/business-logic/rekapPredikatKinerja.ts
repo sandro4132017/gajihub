@@ -28,6 +28,9 @@
 // `Pegawai.satuanKerja` hasil lookup NIP, jangan dari teks ini.
 //
 // TODO(confirm):
+// - Baris periode ada DUA gaya di portal BKN: angka biasa ("Periode Bulanan 6
+//   Tahun 2026") dan angka ROMAWI ("Periode Bulanan V Tahun 2026"). Keduanya
+//   didukung - lihat BULAN_ROMAWI di bawah.
 // - Baru mendukung rekap BULANAN ("Periode Bulanan N Tahun YYYY"), karena
 //   PredikatKinerja di skema ini memang per bulan. Rekap TAHUNAN ditolak
 //   dengan pesan jelas, bukan dipaksa jadi bulan tertentu.
@@ -109,7 +112,25 @@ export function normalisasiPredikat(label: unknown): PredikatKinerja | null {
 }
 
 /**
- * Baca "Periode Bulanan 6 Tahun 2026" jadi { bulan: 6, tahun: 2026 }.
+ * Bulan dalam angka Romawi. Portal e-Kinerja BKN memakai DUA gaya penulisan
+ * untuk baris periode yang sama:
+ *   "Periode Bulanan 6 Tahun 2026"   (angka biasa - file contoh pertama)
+ *   "Periode Bulanan V Tahun 2026"   (Romawi - ketemu waktu upload file Mei 2026)
+ * Keduanya harus diterima.
+ *
+ * SENGAJA daftar tetap, bukan parser Romawi umum: dengan begini "IIII", "VV",
+ * atau "XIII" ditolak sebagai tidak dikenali, bukan diterjemahkan diam-diam
+ * jadi bulan yang salah. Salah bulan = predikat masuk ke periode yang keliru =
+ * tukin bulan itu dihitung dari capaian kinerja orang di bulan lain.
+ */
+const BULAN_ROMAWI: Record<string, number> = {
+  I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6,
+  VII: 7, VIII: 8, IX: 9, X: 10, XI: 11, XII: 12,
+};
+
+/**
+ * Baca "Periode Bulanan 6 Tahun 2026" atau "Periode Bulanan VI Tahun 2026"
+ * jadi { bulan: 6, tahun: 2026 }.
  * Mengembalikan alasan penolakan (string) kalau bentuknya lain.
  */
 export function parsePeriodeRekap(
@@ -117,11 +138,21 @@ export function parsePeriodeRekap(
 ): { ok: true; bulan: number; tahun: number } | { ok: false; alasan: string } {
   const bersih = baris.replace(/\s+/g, " ").trim();
 
-  const bulanan = bersih.match(/periode\s+bulanan\s+(\d{1,2})\s+tahun\s+(\d{4})/i);
+  const bulanan = bersih.match(/periode\s+bulanan\s+([ivx]{1,4}|\d{1,2})\s+tahun\s+(\d{4})/i);
   if (bulanan) {
-    const bulan = Number(bulanan[1]);
+    const tokenBulan = bulanan[1];
     const tahun = Number(bulanan[2]);
-    if (bulan < 1 || bulan > 12) return { ok: false, alasan: `bulan "${bulanan[1]}" di luar 1-12` };
+
+    if (/^\d+$/.test(tokenBulan)) {
+      const bulan = Number(tokenBulan);
+      if (bulan < 1 || bulan > 12) return { ok: false, alasan: `bulan "${tokenBulan}" di luar 1-12` };
+      return { ok: true, bulan, tahun };
+    }
+
+    const bulan = BULAN_ROMAWI[tokenBulan.toUpperCase()];
+    if (bulan === undefined) {
+      return { ok: false, alasan: `bulan Romawi "${tokenBulan}" tidak dikenali (yang sah: I sampai XII)` };
+    }
     return { ok: true, bulan, tahun };
   }
 

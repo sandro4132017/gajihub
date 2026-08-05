@@ -2,11 +2,18 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
-import { canBukaHalamanPredikatKinerja, type AuthUser } from "../../../auth/permissions";
+import {
+  canBukaHalamanPredikatKinerja,
+  canUploadRekapPredikatKinerja,
+  type AuthUser,
+} from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { NAMA_BULAN } from "../../bulan";
 import { SearchableSelect } from "../../SearchableSelect";
 import { UploadRekapForm } from "./UploadRekapForm";
+import { AksiBarisPredikat } from "./AksiBarisPredikat";
+import { TambahPredikatForm } from "./TambahPredikatForm";
+import { LABEL_PREDIKAT, adalahInputManual, kelasChipPredikat, labelSumber } from "./predikat";
 
 export const dynamic = "force-dynamic";
 
@@ -23,23 +30,15 @@ export const dynamic = "force-dynamic";
 /** Batas baris yang ditampilkan per halaman - satu satker bisa ratusan pegawai. */
 const MAKS_BARIS_TAMPIL = 200;
 
-const LABEL_PREDIKAT: Record<string, string> = {
-  SANGAT_BAIK: "Sangat Baik",
-  BAIK: "Baik",
-  PERLU_PERBAIKAN: "Perlu Perbaikan",
-  KURANG: "Kurang",
-  SANGAT_KURANG: "Sangat Kurang",
-};
+/**
+ * Batas opsi di dropdown "tambah predikat". Satu unit ±80 pegawai, jadi
+ * angka ini longgar - gunanya cuma menjaga halaman tetap ringan kalau
+ * dibuka untuk satker besar yang seluruh predikatnya belum diupload.
+ */
+const MAKS_OPSI_TAMBAH = 300;
 
 function ChipPredikat({ predikat }: { predikat: string }) {
-  // Warna mengikuti dampaknya ke tukin: 100% hijau, 85% kuning, 60% merah.
-  const kelas =
-    predikat === "SANGAT_BAIK" || predikat === "BAIK"
-      ? "chip-ok"
-      : predikat === "PERLU_PERBAIKAN"
-        ? "chip-wait"
-        : "chip-danger";
-  return <span className={`chip ${kelas}`}>{LABEL_PREDIKAT[predikat] ?? predikat}</span>;
+  return <span className={`chip ${kelasChipPredikat(predikat)}`}>{LABEL_PREDIKAT[predikat] ?? predikat}</span>;
 }
 
 export default async function PredikatKinerjaPage({
@@ -86,9 +85,12 @@ export default async function PredikatKinerjaPage({
   const periodeTahun = tahun ? Number(tahun) : periodeDefault?.periodeTahun;
   const adaPeriode = Number.isInteger(periodeBulan) && Number.isInteger(periodeTahun);
 
+  // Satuan kerja yang benar-benar berlaku: Kasubag TU dipaksa ke unitnya,
+  // role lintas satker memakai apa yang dipilih di filter (boleh kosong).
+  const satkerEfektif = satkerWajib ?? (satker?.trim() || null);
+
   const filterPegawai: Prisma.PegawaiWhereInput = {};
-  if (satkerWajib) filterPegawai.satuanKerja = satkerWajib;
-  else if (satker) filterPegawai.satuanKerja = satker;
+  if (satkerEfektif) filterPegawai.satuanKerja = satkerEfektif;
   if (q?.trim()) {
     filterPegawai.OR = [{ nama: { contains: q.trim(), mode: "insensitive" } }, { nip: { contains: q.trim() } }];
   }
@@ -113,13 +115,55 @@ export default async function PredikatKinerjaPage({
     }),
   ]);
 
+  // --- Bahan form "tambah predikat satuan" ---
+  // Cuma pegawai yang BELUM punya predikat di periode ini; kalau semua ikut
+  // masuk daftar, orang gampang memilih yang sudah ada lalu ditolak action.
+  // Butuh satuan kerja yang jelas - tanpa itu daftarnya seluruh kementerian.
+  const perluPilihSatker = !satkerEfektif;
+  // Hanya pegawai AKTIF: yang sudah pensiun/berhenti tidak akan pernah punya
+  // predikat baru, jadi memasukkannya cuma menggelembungkan angka "belum punya
+  // predikat" dan mengotori daftar pilihan form tambah.
+  const filterBelumPunya: Prisma.PegawaiWhereInput | null =
+    adaPeriode && satkerEfektif
+      ? {
+          ...filterPegawai,
+          statusPegawai: "AKTIF",
+          predikatKinerja: { none: { periodeBulan: periodeBulan!, periodeTahun: periodeTahun! } },
+        }
+      : null;
+
+  const [totalBelumPunya, pegawaiBelumPunyaRows] = filterBelumPunya
+    ? await Promise.all([
+        prisma.pegawai.count({ where: filterBelumPunya }),
+        prisma.pegawai.findMany({
+          where: filterBelumPunya,
+          take: MAKS_OPSI_TAMBAH,
+          orderBy: { nama: "asc" },
+          select: { id: true, nip: true, nama: true },
+        }),
+      ])
+    : [0, []];
+
+  // Izin dicek PER BARIS terhadap satuan kerja pegawainya - pola yang sama
+  // dengan upload massal. Tombol yang tidak berwenang tidak dirender, dan
+  // action-nya tetap mengecek ulang sendiri (jangan percaya UI).
+  const izinPerSatker = new Map<string, boolean>();
+  for (const b of barisList) {
+    if (!izinPerSatker.has(b.pegawai.satuanKerja)) {
+      izinPerSatker.set(b.pegawai.satuanKerja, canUploadRekapPredikatKinerja(authUser, b.pegawai.satuanKerja));
+    }
+  }
+
+  const namaPeriode = adaPeriode ? `${NAMA_BULAN[periodeBulan! - 1] ?? periodeBulan} ${periodeTahun}` : "";
+  const jumlahManual = barisList.filter((b) => adalahInputManual(b.inputMethod)).length;
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Predikat Kinerja</h1>
       <p className="mt-1 text-sm text-muted">
-        Sumber bobot <strong>70% Tunjangan Kinerja</strong>. Datanya berasal dari file Rekap Penilaian e-Kinerja BKN yang
-        diupload di sini - tidak ada yang bisa mengetik predikat secara manual, dan setiap upload tercatat di audit
-        trail.
+        Sumber bobot <strong>70% Tunjangan Kinerja</strong>. Sumber utamanya file Rekap Penilaian e-Kinerja BKN yang
+        diupload di sini. Perbaikan per orang (tambah/ubah/hapus) tersedia buat kasus yang tidak tertangani file -
+        semuanya dibatasi ke unit kewenanganmu, ditandai sebagai input manual, dan tercatat di audit trail.
         {satkerWajib && (
           <>
             {" "}
@@ -175,34 +219,97 @@ export default async function PredikatKinerjaPage({
             </button>
           </form>
 
-          <p className="mt-2 text-xs text-muted">
-            Periode yang sudah ada datanya:{" "}
-            {periodeTersedia.map((p, i) => (
-              <span key={`${p.periodeTahun}-${p.periodeBulan}`}>
-                {i > 0 && ", "}
-                <Link
-                  href={`/tukin/predikat-kinerja?bulan=${p.periodeBulan}&tahun=${p.periodeTahun}`}
-                  className="font-semibold text-teal-deep underline"
-                >
-                  {NAMA_BULAN[p.periodeBulan - 1] ?? p.periodeBulan} {p.periodeTahun}
-                </Link>{" "}
-                ({p._count._all})
-              </span>
-            ))}
-          </p>
+          {/*
+            Daftar periode dibuat sebagai panel tersendiri, bukan satu baris
+            teks: jumlah periode bertambah tiap bulan, dan pengelola perlu
+            melihat sekilas periode mana yang sudah terisi & seberapa banyak.
+          */}
+          <div className="card mt-4 p-4">
+            <p className="text-sm font-bold text-ink">Periode yang sudah ada datanya</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Klik salah satu buat berpindah. Angka dalam kurung = jumlah pegawai yang punya predikat di periode itu
+              {satkerWajib ? ` untuk ${satkerWajib}` : " (seluruh satuan kerja)"}.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {periodeTersedia.map((p) => {
+                const aktif = p.periodeBulan === periodeBulan && p.periodeTahun === periodeTahun;
+                const tujuan = new URLSearchParams({
+                  bulan: String(p.periodeBulan),
+                  tahun: String(p.periodeTahun),
+                });
+                if (satker && !satkerWajib) tujuan.set("satker", satker);
+                if (q?.trim()) tujuan.set("q", q.trim());
+                return (
+                  <Link
+                    key={`${p.periodeTahun}-${p.periodeBulan}`}
+                    href={`/tukin/predikat-kinerja?${tujuan.toString()}`}
+                    className={`rounded-lg border px-3 py-1.5 text-sm ${
+                      aktif
+                        ? "border-teal-deep bg-teal-tint font-bold text-teal-deep"
+                        : "border-line bg-surface-2 text-ink-2 hover:border-teal-deep"
+                    }`}
+                  >
+                    {NAMA_BULAN[p.periodeBulan - 1] ?? p.periodeBulan} {p.periodeTahun}
+                    <span className="ml-1 font-mono text-xs text-muted">({p._count._all})</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          {/* Konteks data yang sedang dibuka - menjawab "ini data bulan/unit apa". */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="card px-4 py-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted">Total pegawai</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted">Periode dibuka</p>
+              <p className="mt-1 text-lg font-extrabold text-ink">{namaPeriode || "-"}</p>
+            </div>
+            <div className="card px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted">Unit kerja</p>
+              <p className="mt-1 truncate text-sm font-bold text-ink" title={satkerEfektif ?? "Semua satuan kerja"}>
+                {satkerEfektif ?? "Semua satuan kerja"}
+              </p>
+            </div>
+            <div className="card px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted">Pegawai berpredikat</p>
               <p className="mt-1 text-lg font-extrabold text-ink">{jumlahBaris}</p>
             </div>
+            <div className="card px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted">Belum punya predikat</p>
+              <p className={`mt-1 text-lg font-extrabold ${totalBelumPunya > 0 ? "text-gold-deep" : "text-ink"}`}>
+                {perluPilihSatker ? "-" : totalBelumPunya}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             {sebaran.map((s) => (
               <div key={s.predikat} className="card flex items-center gap-2 px-4 py-3">
                 <ChipPredikat predikat={s.predikat} />
                 <span className="text-lg font-extrabold text-ink">{s._count._all}</span>
               </div>
             ))}
+            {jumlahManual > 0 && (
+              <div className="card flex items-center gap-2 px-4 py-3">
+                <span className="chip chip-wait">Input manual</span>
+                <span className="text-lg font-extrabold text-ink">{jumlahManual}</span>
+              </div>
+            )}
           </div>
+
+          {adaPeriode && (
+            <TambahPredikatForm
+              periodeBulan={periodeBulan!}
+              periodeTahun={periodeTahun!}
+              namaPeriode={namaPeriode}
+              pegawaiBelumPunya={pegawaiBelumPunyaRows.map((p) => ({
+                value: p.id,
+                label: p.nama,
+                keterangan: p.nip,
+              }))}
+              totalBelumPunya={totalBelumPunya}
+              perluPilihSatker={perluPilihSatker}
+            />
+          )}
 
           <div className="card mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -212,12 +319,13 @@ export default async function PredikatKinerjaPage({
                   <th className="px-4 py-2.5">Predikat</th>
                   <th className="px-4 py-2.5">Nilai kinerja</th>
                   <th className="px-4 py-2.5">Sumber</th>
+                  <th className="px-4 py-2.5">Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {barisList.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-muted">
+                    <td colSpan={5} className="px-4 py-6 text-center text-muted">
                       Tidak ada predikat kinerja untuk filter ini.
                     </td>
                   </tr>
@@ -238,9 +346,20 @@ export default async function PredikatKinerjaPage({
                     <td className="px-4 py-2.5 text-xs text-muted">
                       {b.sourceSystem}
                       <span className="block">
-                        {b.inputMethod === "MANUAL_UPLOAD" ? "upload manual" : "API"} -{" "}
-                        {b.sourceSyncedAt.toLocaleDateString("id-ID")}
+                        {labelSumber(b.inputMethod)} - {b.sourceSyncedAt.toLocaleDateString("id-ID")}
                       </span>
+                      {adalahInputManual(b.inputMethod) && (
+                        <span className="chip chip-wait mt-1 inline-block">bukan dari BKN</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <AksiBarisPredikat
+                        id={b.id}
+                        nama={b.pegawai.nama}
+                        periode={`${NAMA_BULAN[b.periodeBulan - 1] ?? b.periodeBulan} ${b.periodeTahun}`}
+                        predikatSekarang={b.predikat}
+                        bolehUbah={izinPerSatker.get(b.pegawai.satuanKerja) ?? false}
+                      />
                     </td>
                   </tr>
                 ))}
