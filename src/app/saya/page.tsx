@@ -4,6 +4,11 @@ import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewDataSendiri } from "../../auth/permissions";
 import { hitungTotalPenghasilanSlip } from "../../business-logic/gajiInduk";
 import { AksesDitolak } from "../AksesDitolak";
+import { RincianPotonganKehadiran } from "../RincianPotonganKehadiran";
+import { RincianUangMakan } from "../RincianUangMakan";
+import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
+import { dikecualikanPotonganKehadiran } from "../../business-logic/pejabatPimpinanTinggi";
+import { BadgePejabatEselon } from "../BadgePejabatEselon";
 import { BandingForm } from "./BandingForm";
 
 export const dynamic = "force-dynamic";
@@ -134,6 +139,7 @@ export default async function DataSayaPage() {
       banding: { orderBy: { createdAt: "desc" }, include: { buktiDukung: true } },
       buktiPotongPajak: { orderBy: { tahunPajak: "desc" } },
       gajiInduk: { orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }] },
+      rekapPresensi: { orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }] },
     },
   });
 
@@ -155,6 +161,17 @@ export default async function DataSayaPage() {
         (t) => t.periodeBulan === periodeTerbaru.periodeBulan && t.periodeTahun === periodeTerbaru.periodeTahun
       )
     : undefined;
+  // Bahan tabel "kenapa tukin saya segini" untuk periode terbaru. Bobot
+  // kehadiran penuh = 30% x tarif kelas jabatan (Pasal 5 ayat (2) huruf b).
+  const rekapTerbaru = periodeTerbaru
+    ? pegawai.rekapPresensi.find(
+        (r) => r.periodeBulan === periodeTerbaru.periodeBulan && r.periodeTahun === periodeTerbaru.periodeTahun
+      )
+    : undefined;
+  const tarifKelasSaya =
+    pegawai.kelasJabatan === null ? null : (TUKIN_POKOK_PER_KELAS_JABATAN[pegawai.kelasJabatan] ?? null);
+  const bobotKehadiranPenuhSaya = tarifKelasSaya === null ? null : tarifKelasSaya * 0.3;
+
   const umTerbaru = periodeTerbaru
     ? pegawai.uangMakan.find(
         (u) => u.periodeBulan === periodeTerbaru.periodeBulan && u.periodeTahun === periodeTerbaru.periodeTahun
@@ -199,7 +216,13 @@ export default async function DataSayaPage() {
         <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
           <div className="flex justify-between border-t border-line-2 py-1.5 sm:border-t-0 sm:py-1">
             <span className="text-muted">Nama</span>
-            <span className="font-semibold text-ink">{pegawai.nama}</span>
+            {/* Nama + badge dibungkus jadi SATU item flex - kalau badge jadi
+                item ketiga, justify-between melemparnya ke ujung kanan,
+                terpisah dari namanya. */}
+            <div className="text-right font-semibold text-ink">
+              {pegawai.nama}
+              <BadgePejabatEselon kelasJabatan={pegawai.kelasJabatan} />
+            </div>
           </div>
           <div className="flex justify-between border-t border-line-2 py-1.5 sm:border-t-0 sm:py-1">
             <span className="text-muted">NIP</span>
@@ -253,6 +276,31 @@ export default async function DataSayaPage() {
             <p className="mt-2 text-xs text-muted">Total sudah termasuk honorarium periode ini.</p>
           )}
         </section>
+      )}
+
+      {/* "Kenapa tukin saya segini" - rincian potongan Pasal 13 per jenis
+          pelanggaran untuk periode terbaru. Pegawai bisa menjawab sendiri
+          tanpa minta rekap ke Kasubag TU, dan angkanya datang dari fungsi
+          yang SAMA dengan yang menghitung pembayarannya. */}
+      {rekapTerbaru && (
+        <RincianPotonganKehadiran
+          rekap={rekapTerbaru}
+          bobotKehadiranPenuh={bobotKehadiranPenuhSaya}
+          nilaiTersimpan={tukinTerbaru?.komponenKehadiran ?? null}
+          dikecualikan={dikecualikanPotonganKehadiran(pegawai.kelasJabatan)}
+        />
+      )}
+
+      {/* "Kenapa uang makan saya segini" - rantai golongan -> tarif -> hari
+          dibayar. Ditampilkan meski baris kalkulasinya belum ada, karena
+          justru itu yang paling sering ditanyakan: hari hadir tidak sama
+          dengan hari dibayar (diklat & dinas keluar tidak berhak). */}
+      {rekapTerbaru && (
+        <RincianUangMakan
+          input={{ golongan: pegawai.golongan, ...rekapTerbaru }}
+          nilaiTersimpan={umTerbaru?.totalUangMakan ?? null}
+          hariDibayarTersimpan={umTerbaru?.jumlahHariDibayar ?? null}
+        />
       )}
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">

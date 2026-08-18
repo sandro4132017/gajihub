@@ -10,10 +10,11 @@ import {
   type AuthUser,
 } from "../../auth/permissions";
 import { daftarRoleTersedia } from "../../auth/roleAktif";
-import { LABEL_ROLE } from "../../auth/roleLabel";
+import { labelRole } from "../../auth/roleLabel";
 import { AksesDitolak } from "../AksesDitolak";
 import { NAMA_BULAN } from "../bulan";
 import { PegawaiEditForm } from "./PegawaiEditForm";
+import { PencarianDebounce } from "../PencarianDebounce";
 
 export const dynamic = "force-dynamic";
 
@@ -123,7 +124,7 @@ export default async function DataPegawaiPage({
       <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
         <div className="min-w-[240px] flex-1">
           <label className="field-label">Cari nama atau NIP</label>
-          <input type="text" name="q" defaultValue={q ?? ""} className="field-input" placeholder="Cari pegawai..." />
+          <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
         </div>
         <button type="submit" className="btn btn-primary">
           Cari
@@ -209,7 +210,7 @@ function AkunTerkait({
     <div className={`card mt-4 p-4 ${unitAkunKosong ? "border-l-4 border-l-gold" : ""}`}>
       <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Akun login pegawai ini</p>
       <p className="mt-1 text-sm text-ink">
-        Role: <strong>{roles.map((r) => LABEL_ROLE[r]).join(" + ")}</strong>
+        Role: <strong>{roles.map((r) => labelRole(r, akun.satuanKerja)).join(" + ")}</strong>
         {" - "}
         unit akun: <strong>{akun.satuanKerja ?? "(kosong)"}</strong>
         {!akun.aktif && " - AKUN NONAKTIF"}

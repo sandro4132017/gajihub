@@ -76,6 +76,19 @@ export interface BarisPresensiPdf {
   /** Apa adanya. TIDAK pernah dipakai sebagai nominal - lihat catatan di atas. */
   potonganTeks: string;
   aktivitas: string | null;
+  /**
+   * Menit kerja hari itu menurut SUMBERNYA (kolom `presensi.menit_kerja` di
+   * database e-Presensi). null = sumbernya tidak punya angka ini.
+   *
+   * SELALU null untuk jalur PDF - kolom ini tidak ada di "Laporan Detail
+   * Presensi Harian". Yang mengisinya cuma tarikan langsung dari database.
+   *
+   * Dipakai sebagai penanda Pasal 13 ayat (2): e-Presensi menolkan kolom ini
+   * ketika tap pulang tidak ada (jam keluar terisi 23:59), dan itu FAKTA
+   * "tidak melakukan presensi kepulangan" yang tidak bisa disimpulkan dari
+   * jamnya saja. Lihat pemakaiannya di presensiPdfKeRekap.ts.
+   */
+  menitKerja?: number | null;
 }
 
 export interface RingkasanSumberPdf {

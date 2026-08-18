@@ -8,6 +8,7 @@ import { NAMA_BULAN } from "../../bulan";
 import { SearchableSelect } from "../../SearchableSelect";
 import { UploadGajiIndukForm } from "./UploadGajiIndukForm";
 import { HonorariumForm } from "./HonorariumForm";
+import { PencarianDebounce } from "../../PencarianDebounce";
 
 export const dynamic = "force-dynamic";
 
@@ -137,7 +138,7 @@ export default async function RiwayatGajiPage({
             </div>
             <div className="min-w-[180px] flex-1">
               <label className="field-label">Cari nama atau NIP</label>
-              <input type="text" name="q" defaultValue={q ?? ""} className="field-input" placeholder="Cari pegawai..." />
+              <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
             </div>
             <button type="submit" className="btn btn-primary">
               Terapkan

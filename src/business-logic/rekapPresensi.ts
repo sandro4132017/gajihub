@@ -1,3 +1,6 @@
+import type { JenisCuti } from "../types/index";
+import { parseJenisCuti, LABEL_JENIS_CUTI } from "./jenisCuti";
+
 // ============================================================================
 // REKAP PRESENSI BULANAN -> PresensiHarian (bobot 30% Tukin)
 //
@@ -18,7 +21,9 @@
 //
 // Kolom template (urutan bebas, header dicocokkan namanya):
 //   NIP | Hari Alpha | Tidak Presensi | Menit Terlambat | Menit Pulang Cepat |
-//   Menit Meninggalkan Kantor | Tidak Ikut Upacara | Hari Kerja | Hari Hadir |
+//   Menit Meninggalkan Kantor | Menit Kekurangan Jam Kerja |
+//   Tidak Ikut Upacara | Jenis Cuti | Bulan Cuti Ke | Hari Cuti |
+//   Hari Kerja | Hari Hadir |
 //   Hari WFO | Hari WFH/WFA | Hari Diklat | Hari Dinas Luar |
 //   Jam Lembur | Hari Makan Lembur |
 //   Jam Lembur Hari Libur | Hari Makan Lembur Hari Libur
@@ -48,6 +53,18 @@ export interface BarisRekapPresensi {
   jumlahHariWfhWfa: number;
   jumlahHariDiklat: number;
   jumlahHariDinasLuar: number;
+  /**
+   * Hari berstatus "Tugas Belajar". Bukan untuk uang makan (mereka tidak
+   * berhak), tapi PENANDA bahwa Tunjangan Kinerja periode ini dibayar 80%
+   * (Permenaker 15/2024) - lihat PERSEN_DIBAYAR_TUGAS_BELAJAR di tukin.ts.
+   */
+  jumlahHariTugasBelajar: number;
+  // --- Cuti (Pasal 14) ---
+  // Tiga field, bukan satu per jenis cuti - lihat catatan di model
+  // RekapPresensiPeriode (schema.prisma). null = tidak sedang cuti.
+  jenisCutiAktif: JenisCuti | null;
+  bulanCutiKeberapa: number | null;
+  jumlahHariCuti: number;
   // --- Uang lembur (SBM 2026 item 23.1 & 23.2) ---
   // Dua angka karena dua komponennya beda satuan: uang lembur per JAM, uang
   // makan lembur per HARI (syarat lembur >= 2 jam pada hari itu).
@@ -69,19 +86,30 @@ export interface HasilParseRekapPresensi {
   dilewati: BarisPresensiDilewati[];
 }
 
+/**
+ * Field yang isinya angka biasa. `jenisCutiAktif` (teks) dan
+ * `bulanCutiKeberapa` (angka TAPI nullable - null berarti tidak diketahui,
+ * bukan nol) ditangani terpisah di bawah.
+ */
+type FieldAngka = Exclude<keyof BarisRekapPresensi, "nip" | "jenisCutiAktif" | "bulanCutiKeberapa">;
+
 /** Nama kolom yang dikenali per field. Dicocokkan case-insensitive & sebagian. */
-const PETA_KOLOM: { field: keyof Omit<BarisRekapPresensi, "nip">; kandidat: string[] }[] = [
+const PETA_KOLOM: { field: FieldAngka; kandidat: string[] }[] = [
   { field: "jumlahHariAlpha", kandidat: ["hari alpha", "alpha", "tidak hadir"] },
   { field: "jumlahTidakPresensi", kandidat: ["tidak presensi", "tanpa presensi"] },
   { field: "totalMenitTerlambat", kandidat: ["menit terlambat", "terlambat"] },
   { field: "totalMenitPulangCepat", kandidat: ["menit pulang cepat", "pulang cepat", "pulang awal"] },
   { field: "totalMenitMeninggalkanKantor", kandidat: ["meninggalkan kantor", "keluar kantor"] },
+  // Dicek sebelum "hari kerja" - kandidatnya memuat kata "jam kerja", bukan
+  // "hari kerja", jadi keduanya tidak saling menyerobot.
   { field: "jumlahTidakIkutUpacara", kandidat: ["upacara"] },
   { field: "jumlahHariKerja", kandidat: ["hari kerja"] },
   { field: "jumlahHariWfo", kandidat: ["hari wfo", "wfo"] },
   { field: "jumlahHariWfhWfa", kandidat: ["wfh", "wfa"] },
   { field: "jumlahHariDiklat", kandidat: ["diklat"] },
   { field: "jumlahHariDinasLuar", kandidat: ["dinas luar", "dinas keluar"] },
+  { field: "jumlahHariTugasBelajar", kandidat: ["tugas belajar", "hari tb"] },
+  { field: "jumlahHariCuti", kandidat: ["hari cuti", "jumlah hari cuti"] },
   // Kandidat "hari libur" dicek DULUAN supaya tidak diserobot kolom hari
   // kerja yang namanya lebih pendek ("jam lembur" cocok juga ke "jam lembur
   // hari libur").
@@ -127,6 +155,11 @@ export function parseRekapPresensi(matriks: unknown[][]): HasilParseRekapPresens
   const header = matriks[idxHeader].map((s) => teks(s));
   const kolNip = header.findIndex((h) => h?.toLowerCase() === "nip");
   const kolom = PETA_KOLOM.map((k) => ({ ...k, idx: cariKolom(header, k.kandidat) }));
+  // Dua kolom cuti yang tidak bisa lewat jalur angka biasa: jenisnya berupa
+  // teks, dan bulan ke-berapa boleh kosong (null = tidak diketahui, beda arti
+  // dengan 0).
+  const kolJenisCuti = cariKolom(header, ["jenis cuti"]);
+  const kolBulanCuti = cariKolom(header, ["bulan cuti ke", "bulan cuti"]);
 
   const tidakKetemu = kolom.filter((k) => k.idx < 0);
   if (tidakKetemu.length === kolom.length) {
@@ -176,8 +209,35 @@ export function parseRekapPresensi(matriks: unknown[][]): HasilParseRekapPresens
       continue;
     }
 
+    // --- Cuti ---
+    // Jenis cuti yang TIDAK DIKENALI membuat barisnya dilewati, bukan
+    // dianggap "tidak cuti": salah jenis = salah tarif potongan, dan
+    // selisihnya besar (cuti besar bulan I dipotong 50%, cuti tahunan 0%).
+    const teksJenisCuti = kolJenisCuti >= 0 ? teks(row[kolJenisCuti]) : null;
+    const jenisCutiAktif = parseJenisCuti(teksJenisCuti);
+    if (teksJenisCuti && teksJenisCuti !== "-" && !jenisCutiAktif) {
+      dilewati.push({
+        nomorBaris,
+        nip,
+        alasan: `jenis cuti "${teksJenisCuti}" tidak dikenali - pakai salah satu: ${Object.values(LABEL_JENIS_CUTI).join(", ")}`,
+      });
+      continue;
+    }
+
+    const bulanCutiMentah = kolBulanCuti >= 0 ? teks(row[kolBulanCuti]) : null;
+    const bulanCutiAngka = bulanCutiMentah === null ? null : angka(bulanCutiMentah);
+    if (bulanCutiMentah !== null && (bulanCutiAngka === null || bulanCutiAngka < 0)) {
+      dilewati.push({ nomorBaris, nip, alasan: `kolom bulan cuti bukan angka wajar ("${bulanCutiMentah}")` });
+      continue;
+    }
+    // 0 diperlakukan sama dengan kosong - "bulan ke-0" tidak ada artinya.
+    const bulanCutiKeberapa = bulanCutiAngka && bulanCutiAngka > 0 ? Math.round(bulanCutiAngka) : null;
+
     baris.push({
       nip,
+      jenisCutiAktif,
+      bulanCutiKeberapa,
+      jumlahHariCuti: nilai.jumlahHariCuti,
       jumlahHariWfo: nilai.jumlahHariWfo,
       jumlahHariWfhWfa: nilai.jumlahHariWfhWfa,
       jumlahHariDiklat: nilai.jumlahHariDiklat,
@@ -186,6 +246,7 @@ export function parseRekapPresensi(matriks: unknown[][]): HasilParseRekapPresens
       totalJamLemburHariLibur: nilai.totalJamLemburHariLibur,
       jumlahHariMakanLembur: nilai.jumlahHariMakanLembur,
       jumlahHariMakanLemburHariLibur: nilai.jumlahHariMakanLemburHariLibur,
+      jumlahHariTugasBelajar: nilai.jumlahHariTugasBelajar,
       jumlahHariAlpha: nilai.jumlahHariAlpha,
       jumlahTidakPresensi: nilai.jumlahTidakPresensi,
       totalMenitTerlambat: nilai.totalMenitTerlambat,

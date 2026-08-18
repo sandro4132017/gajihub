@@ -68,12 +68,13 @@ export function SumberDataTukin({
             Hitung Tukin
           </Link>
         ) : (
-          // Sengaja TIDAK menampilkan tombol yang pasti ditolak. Kalkulasi
-          // massal wewenang KASUBAG_TU (+ADMIN) - PPABP boleh meng-upload
-          // kedua komponennya tapi tidak menjalankan kalkulasinya. Lihat
-          // canAjukanKalkulasiTukinMassalUnit di permissions.ts.
+          // Sengaja TIDAK menampilkan tombol yang pasti ditolak. Yang berwenang
+          // menjalankan kalkulasi: KASUBAG_TU (unitnya sendiri), PPABP (lintas
+          // satker), dan ADMIN - lihat canAjukanKalkulasiTukinMassalUnit di
+          // permissions.ts.
           <span className="text-xs text-muted">
-            Kalkulasi dijalankan Kasubag TU unit masing-masing lewat menu <strong>Kalkulasi</strong>.
+            Kalkulasi dijalankan Kasubag TU unit masing-masing atau tim PPABP, lewat menu{" "}
+            <strong>Kalkulasi</strong>.
           </span>
         )}
         <span className="text-xs text-muted">

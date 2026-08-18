@@ -3,10 +3,11 @@ import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../../auth/permissions";
 import { daftarRoleTersedia } from "../../../auth/roleAktif";
-import { LABEL_ROLE } from "../../../auth/roleLabel";
+import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
 import { AksesDitolak } from "../../AksesDitolak";
 import { AssignmentRow } from "./AssignmentRow";
 import { BuatAkunBaruForm } from "./BuatAkunBaruForm";
+import { PencarianDebounce } from "../../PencarianDebounce";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +103,7 @@ export default async function RoleAssignmentPage({
       <form method="get" className="card mt-3 flex flex-wrap items-end gap-3 p-4">
         <div className="flex-1 min-w-[240px]">
           <label className="field-label">Cari nama atau NIP pegawai</label>
-          <input type="text" name="q" defaultValue={q ?? ""} className="field-input" placeholder="Cari pegawai..." />
+          <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
         </div>
         <button type="submit" className="btn btn-primary">
           Cari
@@ -198,10 +199,10 @@ async function PegawaiHasilPencarian({ q }: { q: string }) {
             </div>
             <div className="flex flex-none items-center gap-2">
               <span className={`chip ${akun && akun.role !== "PEGAWAI" ? "chip-navy" : "chip-draft"}`}>
-                {akun ? LABEL_ROLE[akun.role] : "Belum ada akun"}
+                {akun ? labelRole(akun.role, akun.satuanKerja) : "Belum ada akun"}
               </span>
               {akun && akun.rolesTambahan.length > 0 && (
-                <span className="chip chip-draft" title={akun.rolesTambahan.map((r) => LABEL_ROLE[r]).join(", ")}>
+                <span className="chip chip-draft" title={akun.rolesTambahan.map((r) => labelRole(r, akun.satuanKerja)).join(", ")}>
                   +{akun.rolesTambahan.length} role
                 </span>
               )}

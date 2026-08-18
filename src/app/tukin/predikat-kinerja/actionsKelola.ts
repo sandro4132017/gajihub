@@ -183,6 +183,7 @@ export async function tambahPredikatAction(
         entitasId: baru.id,
         aksi: "CREATE",
         aktor: user.nip,
+        satuanKerja: pegawai.satuanKerja,
         dataSesudah: {
           nip: pegawai.nip,
           nama: pegawai.nama,
@@ -247,6 +248,17 @@ export async function ubahPredikatAction(
       data: {
         predikat,
         nilaiAngka,
+        // Rating Hasil Kerja & Perilaku Kerja DIKOSONGKAN saat dikoreksi
+        // manual. Keduanya berasal dari file e-Kinerja BKN dan menyusun
+        // predikat LAMA - membiarkannya menempel pada predikat yang sudah
+        // diubah membuat barisnya seolah masih didukung penilaian BKN.
+        // Nilai lamanya tetap terekam di AuditTrail di bawah.
+        hasilKerja: null,
+        perilakuKerja: null,
+        // Ikut dikosongkan: setelah dikoreksi manual, predikatnya bukan lagi
+        // yang dikirim unit penilai itu, jadi mencantumkan namanya sebagai
+        // sumber akan keliru.
+        unitPenilaian: null,
         sourceSystem: SUMBER_MANUAL,
         sourceSyncedAt: new Date(),
         inputMethod: METODE_UBAH,
@@ -259,9 +271,12 @@ export async function ubahPredikatAction(
         entitasId: id,
         aksi: "UPDATE",
         aktor: user.nip,
+        satuanKerja: lama.pegawai.satuanKerja,
         dataSebelum: {
           predikat: lama.predikat,
           nilaiAngka: lama.nilaiAngka,
+          hasilKerja: lama.hasilKerja,
+          perilakuKerja: lama.perilakuKerja,
           sourceSystem: lama.sourceSystem,
           inputMethod: lama.inputMethod,
         },
@@ -296,6 +311,130 @@ export async function ubahPredikatAction(
 // ---------------------------------------------------------------------------
 // HAPUS
 // ---------------------------------------------------------------------------
+/**
+ * Hapus SELURUH predikat satu satuan kerja pada satu periode - dipakai waktu
+ * file rekapnya salah dan mau diganti dari nol.
+ *
+ * KAPAN INI SEBENARNYA TIDAK PERLU: upload ulang memakai upsert, jadi kalau
+ * file penggantinya memuat ORANG YANG SAMA, cukup upload ulang - nilainya
+ * tertimpa. Menghapus dulu hanya perlu kalau ada orang yang HILANG dari file
+ * baru; tanpa dihapus, baris lama mereka tetap tinggal dan ikut terhitung.
+ *
+ * EMPAT PENGAMAN:
+ *   1. Satuan kerja WAJIB dipilih - tidak ada mode "hapus semua satker
+ *      sekaligus". Salah klik di situ bisa menghapus ribuan baris lintas unit.
+ *   2. Izin dicek PER BARIS terhadap `Pegawai.satuanKerja`, sama seperti hapus
+ *      satuan. Baris di luar kewenangan tidak ikut terhapus dan dilaporkan.
+ *   3. Jumlah baris yang dilihat user waktu menekan tombol dikirim ulang dan
+ *      dicocokkan - kalau sudah berubah (ada yang upload di saat bersamaan),
+ *      penghapusan DIBATALKAN, bukan dijalankan atas jumlah yang lain.
+ *   4. Seluruh baris yang dihapus disimpan lengkap di AuditTrail, jadi bisa
+ *      dipulihkan manual kalau ternyata keliru.
+ */
+export async function hapusPredikatPeriodeAction(
+  _state: KelolaPredikatFormState,
+  formData: FormData
+): Promise<KelolaPredikatFormState> {
+  try {
+    const aktor = await ambilAktor();
+    if ("error" in aktor) return { error: aktor.error };
+    const { user, authUser } = aktor;
+
+    const satuanKerja = String(formData.get("satuanKerja") ?? "").trim();
+    const periodeBulan = Number(formData.get("periodeBulan"));
+    const periodeTahun = Number(formData.get("periodeTahun"));
+    const jumlahDilihat = Number(formData.get("jumlahDilihat"));
+
+    if (!satuanKerja) {
+      return { error: "Pilih satuan kerja dulu - penghapusan massal tidak bisa lintas unit sekaligus." };
+    }
+    if (!periodeBulan || !periodeTahun) return { error: "Periode tidak dikenali." };
+    if (formData.get("konfirmasi") !== "1") {
+      return { error: "Centang konfirmasi dulu sebelum menghapus." };
+    }
+
+    const barisList = await prisma.predikatKinerja.findMany({
+      where: { periodeBulan, periodeTahun, pegawai: { satuanKerja } },
+      include: { pegawai: { select: { id: true, nip: true, nama: true, satuanKerja: true } } },
+      orderBy: { pegawai: { nama: "asc" } },
+    });
+
+    if (barisList.length === 0) {
+      return { error: `Tidak ada predikat ${satuanKerja} untuk periode ${periodeBulan}/${periodeTahun}.` };
+    }
+    // Pengaman 3 - jumlahnya berubah sejak halaman dirender.
+    if (Number.isFinite(jumlahDilihat) && jumlahDilihat !== barisList.length) {
+      return {
+        error:
+          `Jumlah datanya sudah berubah (waktu halaman dibuka ${jumlahDilihat} baris, sekarang ${barisList.length}) -` +
+          " kemungkinan ada yang mengupload di saat bersamaan. Muat ulang halaman dan periksa lagi sebelum menghapus.",
+      };
+    }
+
+    const boleh = barisList.filter((b) => canUploadRekapPredikatKinerja(authUser, b.pegawai.satuanKerja));
+    const ditolak = barisList.length - boleh.length;
+    if (boleh.length === 0) {
+      return { error: `Seluruh ${barisList.length} baris ada di luar kewenangan kamu - tidak ada yang dihapus.` };
+    }
+
+    await prisma.$transaction([
+      prisma.predikatKinerja.deleteMany({ where: { id: { in: boleh.map((b) => b.id) } } }),
+      prisma.auditTrail.create({
+        data: {
+          entitas: "predikat_kinerja",
+          entitasId: `hapus-periode-${satuanKerja}-${periodeBulan}-${periodeTahun}`,
+          aksi: "DELETE",
+          aktor: user.nip,
+          // Isi lengkap tiap baris disimpan, bukan cuma jumlahnya - inilah yang
+          // membuat penghapusan massal ini bisa dipulihkan manual.
+          dataSebelum: {
+            satuanKerja,
+            periode: `${periodeBulan}/${periodeTahun}`,
+            jumlah: boleh.length,
+            baris: boleh.map((b) => ({
+              nip: b.pegawai.nip,
+              nama: b.pegawai.nama,
+              predikat: b.predikat,
+              nilaiAngka: b.nilaiAngka,
+              hasilKerja: b.hasilKerja,
+              perilakuKerja: b.perilakuKerja,
+              unitPenilaian: b.unitPenilaian,
+              sourceSystem: b.sourceSystem,
+              inputMethod: b.inputMethod,
+            })),
+          },
+          dataSesudah: {
+            sumber: "Hapus predikat satu periode",
+            alasan: String(formData.get("alasan") ?? "").trim() || null,
+            ditolakKarenaKewenangan: ditolak,
+          },
+        },
+      }),
+    ]);
+
+    // Kalkulasi Tukin TIDAK ikut dihapus, dan itu penting disampaikan: baris
+    // tukin yang sudah ada tetap memakai komponen kinerja dari predikat yang
+    // barusan dihapus sampai dihitung ulang.
+    const tukinTerdampak = await prisma.tukinCalculation.count({
+      where: { periodeBulan, periodeTahun, pegawaiId: { in: boleh.map((b) => b.pegawai.id) } },
+    });
+
+    revalidatePath("/tukin/predikat-kinerja");
+    revalidatePath("/kasubag/kalkulasi");
+    return {
+      success:
+        `${boleh.length} predikat ${satuanKerja} periode ${periodeBulan}/${periodeTahun} dihapus.` +
+        (ditolak > 0 ? ` ${ditolak} baris dilewati karena di luar kewenangan kamu.` : "") +
+        " Sekarang bisa upload file penggantinya." +
+        (tukinTerdampak > 0
+          ? ` PERHATIAN: ${tukinTerdampak} kalkulasi Tukin periode ini TIDAK ikut terhapus dan masih memakai predikat yang barusan dihilangkan - hitung ulang setelah file baru diupload.`
+          : ""),
+    };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+  }
+}
+
 export async function hapusPredikatAction(
   _state: KelolaPredikatFormState,
   formData: FormData

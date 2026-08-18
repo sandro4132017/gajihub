@@ -5,12 +5,14 @@ import type { KeputusanApproval } from "../../approval/types";
 import { ApprovalForm } from "../ApprovalForm";
 import { ajukanApprovalTukinAction } from "../actions";
 import { FilterBar } from "../FilterBar";
+import { ApprovalMassalForm } from "../ApprovalMassalForm";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewApproverDashboard, canAjukanKalkulasiTukinMassalUnit } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
 import { AksesDitolak } from "../AksesDitolak";
 import { StatusBadge } from "../StatusBadge";
 import { SumberDataTukin } from "./SumberDataTukin";
+import { BadgePejabatEselon } from "../BadgePejabatEselon";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +106,20 @@ export default async function TukinPage({
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
 
+      {/* Setujui semua - CUMA muncul kalau periodenya sudah dipilih. Tanpa
+          periode, "semua" berarti seluruh riwayat, dan itu bukan sesuatu yang
+          layak dipicu satu klik. PIMPINAN dikecualikan (read-only). */}
+      {bulan && tahun && authUser.role !== "PIMPINAN" && (
+        <ApprovalMassalForm
+          jenis="TUKIN"
+          label="Tukin"
+          bulan={Number(bulan)}
+          tahun={Number(tahun)}
+          satker={satkerEfektif}
+          jumlahBelumApproved={kalkulasiList.filter((k) => k.status !== "APPROVED").length}
+        />
+      )}
+
       <SumberDataTukin
         periodeAktif={periodeAktif}
         jumlahPegawai={jumlahPegawai}
@@ -135,7 +151,14 @@ export default async function TukinPage({
             <div key={kalkulasi.id} className="card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-bold text-ink">{kalkulasi.pegawai.nama}</p>
+                  {/* <div>, BUKAN <p>: badge-nya memakai <details>, dan itu
+                      flow content - browser akan menutup paksa <p> sebelum
+                      elemen itu, sehingga DOM hasil parsing beda dari pohon
+                      React (hydration mismatch). Lihat BadgePejabatEselon. */}
+                  <div className="font-bold text-ink">
+                    {kalkulasi.pegawai.nama}
+                    <BadgePejabatEselon kelasJabatan={kalkulasi.pegawai.kelasJabatan} />
+                  </div>
                   <p className="text-sm text-muted">
                     NIP {kalkulasi.pegawai.nip} - Periode {kalkulasi.periodeBulan}/{kalkulasi.periodeTahun}
                   </p>

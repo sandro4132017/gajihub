@@ -3,13 +3,20 @@
 import { useActionState } from "react";
 import type { Role } from "@prisma/client";
 import { usulkanPerubahanRoleAction, type UsulkanPerubahanRoleFormState } from "./actions";
-import { LABEL_ROLE } from "../../../auth/roleLabel";
+import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
 import { SearchableSelect } from "../../SearchableSelect";
 
 const INITIAL_STATE: UsulkanPerubahanRoleFormState = {};
 const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
 
-export function UsulkanPerubahanRoleForm({ userList }: { userList: { id: string; nama: string; nip: string; role: Role }[] }) {
+export function UsulkanPerubahanRoleForm({
+  userList,
+}: {
+  // `satuanKerja` ikut dibawa supaya keterangan "saat ini: ..." menyebut unit
+  // Kasubag TU-nya - tiap unit punya Kasubag TU sendiri, jadi tanpa unit
+  // keterangannya tidak menunjuk siapa pun.
+  userList: { id: string; nama: string; nip: string; role: Role; satuanKerja: string | null }[];
+}) {
   const [state, formAction, pending] = useActionState(usulkanPerubahanRoleAction, INITIAL_STATE);
 
   return (
@@ -21,7 +28,7 @@ export function UsulkanPerubahanRoleForm({ userList }: { userList: { id: string;
           options={userList.map((u) => ({
             value: u.id,
             label: u.nama,
-            keterangan: `NIP ${u.nip} - saat ini: ${LABEL_ROLE[u.role]}`,
+            keterangan: `NIP ${u.nip} - saat ini: ${labelRole(u.role, u.satuanKerja)}`,
           }))}
           placeholder="Cari nama atau NIP..."
           required

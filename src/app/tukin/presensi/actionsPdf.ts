@@ -5,8 +5,14 @@ import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canUploadRekapPresensi, type AuthUser } from "../../../auth/permissions";
 import { ekstrakTeksPdf } from "../../../lib/pdfTeks";
-import { parsePdfPresensi } from "../../../business-logic/presensiPdf";
-import { rekapDariLaporanPdf, type HasilRekapDariPdf } from "../../../business-logic/presensiPdfKeRekap";
+import { parsePdfPresensi, type LaporanPresensiPdf } from "../../../business-logic/presensiPdf";
+import {
+  rekapDariLaporanPdf,
+  JADWAL_KERJA_DEFAULT,
+  type HasilRekapDariPdf,
+} from "../../../business-logic/presensiPdfKeRekap";
+import { muatKendalaPeriode, muatKoreksiPeriode } from "../../../lib/kendalaPresensi";
+import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 import { STATUS_HARIAN, tanggalUtc, menitKeWaktu } from "../../../business-logic/presensiKeDb";
 
 /**
@@ -118,6 +124,11 @@ export async function uploadPresensiPdfAction(
     // --- 1. Baca semua file --------------------------------------------------
     const dilewati: { label: string; alasan: string }[] = [];
     const hasilPerPegawai: { namaFile: string; hasil: HasilRekapDariPdf }[] = [];
+    // Laporan mentah ditampung dulu, rekapnya dihitung SETELAH penanda kendala
+    // dimuat: periodenya baru diketahui setelah file dibaca, dan penanda itu
+    // harus sudah ada di tangan saat kejadiannya dihitung - bukan dikurangkan
+    // belakangan.
+    const laporanTerbaca: { namaFile: string; laporan: LaporanPresensiPdf }[] = [];
 
     for (const file of files) {
       const namaFile = file.name || "(tanpa nama)";
@@ -149,8 +160,44 @@ export async function uploadPresensiPdfAction(
         if (parsed.laporan.length === 0) continue;
       }
       for (const laporan of parsed.laporan) {
-        hasilPerPegawai.push({ namaFile, hasil: rekapDariLaporanPdf(laporan) });
+        laporanTerbaca.push({ namaFile, laporan });
       }
+    }
+
+    // --- 1b. Penanda kendala e-Presensi (Pasal 10 ayat (2)) ------------------
+    // Satu batch boleh memuat periode campuran, jadi penandanya dimuat per
+    // periode dan di-cache - biasanya cuma satu atau dua.
+    const kendalaPerPeriode = new Map<string, Awaited<ReturnType<typeof muatKendalaPeriode>>>();
+    const koreksiPerPeriode = new Map<string, Awaited<ReturnType<typeof muatKoreksiPeriode>>>();
+    const liburPerPeriode = new Map<string, Awaited<ReturnType<typeof muatHariLiburPeriode>>>();
+    for (const { laporan } of laporanTerbaca) {
+      if (laporan.periodeBulan === null || laporan.periodeTahun === null) continue;
+      const kunci = `${laporan.periodeBulan}-${laporan.periodeTahun}`;
+      if (!kendalaPerPeriode.has(kunci)) {
+        kendalaPerPeriode.set(kunci, await muatKendalaPeriode(prisma, laporan.periodeBulan, laporan.periodeTahun));
+        koreksiPerPeriode.set(kunci, await muatKoreksiPeriode(prisma, laporan.periodeBulan, laporan.periodeTahun));
+        liburPerPeriode.set(kunci, await muatHariLiburPeriode(laporan.periodeBulan, laporan.periodeTahun));
+      }
+    }
+    for (const { namaFile, laporan } of laporanTerbaca) {
+      const kunci =
+        laporan.periodeBulan !== null && laporan.periodeTahun !== null
+          ? `${laporan.periodeBulan}-${laporan.periodeTahun}`
+          : null;
+      const kendala = kunci ? kendalaPerPeriode.get(kunci) : undefined;
+      const koreksi = kunci ? koreksiPerPeriode.get(kunci) : undefined;
+      const tanggalKendala = kendala && laporan.nip ? kendala.untukNip(laporan.nip) : undefined;
+      const koreksiJam = koreksi && laporan.nip ? koreksi.untukNip(laporan.nip) : undefined;
+      hasilPerPegawai.push({
+        namaFile,
+        hasil: rekapDariLaporanPdf(
+          laporan,
+          JADWAL_KERJA_DEFAULT,
+          tanggalKendala,
+          koreksiJam,
+          liburPerPeriode.get(`${laporan.periodeBulan}-${laporan.periodeTahun}`) ?? new Map()
+        ),
+      });
     }
 
     if (hasilPerPegawai.length === 0) {
@@ -261,6 +308,11 @@ export async function uploadPresensiPdfAction(
             totalMenitTerlambat: d.totalMenitTerlambat,
             totalMenitPulangCepat: d.totalMenitPulangCepat,
             totalMenitMeninggalkanKantor: d.totalMenitMeninggalkanKantor,
+            // `totalMenitKekuranganJamKerja` SENGAJA TIDAK ditulis - PDF tidak
+            // punya angkanya secara terpisah, dan dengan menghilangkannya dari
+            // update, nilai yang pernah diisi manual lewat template tidak
+            // ter-reset tiap kali PDF diupload ulang. Lihat catatan yang sama
+            // di simpanRekapPresensi.ts.
             jumlahTidakIkutUpacara: d.jumlahTidakIkutUpacara,
             jumlahHariKerja: d.jumlahHariKerja,
             jumlahHariHadir: d.jumlahHariHadir,
@@ -268,6 +320,11 @@ export async function uploadPresensiPdfAction(
             jumlahHariWfhWfa: d.jumlahHariWfhWfa,
             jumlahHariDiklat: d.jumlahHariDiklat,
             jumlahHariDinasLuar: d.jumlahHariDinasLuar,
+            jumlahHariTugasBelajar: d.jumlahHariTugasBelajar,
+            jenisCutiAktif: d.jenisCutiAktif,
+            jumlahHariCuti: d.jumlahHariCuti,
+            // `bulanCutiKeberapa` sengaja tidak ditulis - lihat catatan yang
+            // sama di simpanRekapPresensi.ts.
             totalJamLembur: d.totalJamLembur,
             totalJamLemburHariLibur: d.totalJamLemburHariLibur,
             jumlahHariMakanLembur: d.jumlahHariMakanLembur,
@@ -311,6 +368,9 @@ export async function uploadPresensiPdfAction(
                 menitPulangCepat: h.menitPulangCepat,
                 menitMeninggalkanKantor: 0,
                 tidakIkutUpacara: false,
+                // Sama dengan jalur sinkronisasi - lihat catatan di
+                // src/jobs/simpanRekapPresensi.ts.
+                jamLembur: h.jamLembur,
                 sourceSystem: "e-Presensi (PDF)",
                 sourceSyncedAt: new Date(),
               })),

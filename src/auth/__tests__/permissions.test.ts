@@ -49,6 +49,8 @@ import {
   canKelolaDataPegawai,
   canEditDataPegawai,
   canPindahSatuanKerjaPegawai,
+  canKelolaKendalaEpresensi,
+  canKelolaHariLibur,
   type AuthUser,
 } from "../permissions";
 
@@ -172,6 +174,28 @@ describe("KASUBAG_TU - verifikator satker", () => {
       expect(fn(user, BIRO_UMUM)).toBe(false);
       expect(fn(lain, SETJEN)).toBe(false);
     }
+  });
+
+  it("canAjukanKalkulasiTukinMassalUnit: PPABP boleh, LINTAS satker", () => {
+    // Ditambahkan atas keputusan user 2026-08-06 - menutup ketimpangan lama:
+    // PPABP boleh mengupload kedua komponen pembentuk Tukin tapi tidak boleh
+    // menjalankan kalkulasi yang memakainya.
+    const ppabp = buatUser({ role: "PPABP", satuanKerja: null });
+    expect(canAjukanKalkulasiTukinMassalUnit(ppabp, SETJEN)).toBe(true);
+    expect(canAjukanKalkulasiTukinMassalUnit(ppabp, BIRO_UMUM)).toBe(true);
+  });
+
+  it("canAjukanKalkulasiTukinMassalUnit: TETAP ditolak buat role yang bukan pengelola data", () => {
+    // Penjaga supaya penambahan PPABP tadi tidak diam-diam melebar. OSDMA
+    // mengurus SK & banding, PIMPINAN read-only, PEGAWAI cuma data sendiri -
+    // tidak satupun berurusan dengan kalkulasi.
+    for (const role of ["PEGAWAI", "OSDMA", "PIMPINAN"] as const) {
+      expect(canAjukanKalkulasiTukinMassalUnit(buatUser({ role, satuanKerja: null }), SETJEN)).toBe(false);
+    }
+    // Akun nonaktif tetap ditolak walau rolenya benar.
+    expect(
+      canAjukanKalkulasiTukinMassalUnit(buatUser({ role: "PPABP", satuanKerja: null, aktif: false }), SETJEN)
+    ).toBe(false);
   });
 });
 
@@ -518,5 +542,58 @@ describe("Akun multi-role sedang memakai role PPABP (satuanKerja terisi buat Kas
     expect(canUploadRekapPredikatKinerja(adminSebagaiKasubag, BIRO_UMUM)).toBe(false);
     expect(canEditDataPegawai(adminSebagaiKasubag, BIRO_UMUM)).toBe(false);
     expect(canPindahSatuanKerjaPegawai(adminSebagaiKasubag, PUSDATIK)).toBe(false);
+  });
+});
+
+describe("canKelolaKendalaEpresensi - menandai tanggal e-Presensi bermasalah", () => {
+  it("PPABP dan ADMIN boleh", () => {
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "PPABP" }))).toBe(true);
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "ADMIN" }))).toBe(true);
+  });
+
+  it("KASUBAG_TU TIDAK boleh - satu penanda bisa berlaku lintas satker", () => {
+    // Beda dari canUploadRekapPresensi yang memang di-scope unit: penanda ini
+    // bisa menghapus potongan ribuan orang di luar unitnya sekaligus.
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }))).toBe(false);
+  });
+
+  it("OSDMA, PIMPINAN, dan PEGAWAI TIDAK boleh", () => {
+    for (const role of ["OSDMA", "PIMPINAN", "PEGAWAI"] as const) {
+      expect(canKelolaKendalaEpresensi(buatUser({ role }))).toBe(false);
+    }
+  });
+
+  it("akun nonaktif ditolak walau role-nya PPABP", () => {
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "PPABP", aktif: false }))).toBe(false);
+  });
+
+  it("PPABP yang kebetulan punya satuanKerja TETAP boleh - PPABP selalu lintas satker", () => {
+    // Kolom satuanKerja milik KASUBAG_TU; akun multi-role bisa punya isinya.
+    // Kalau dipakai men-scope PPABP, bug lama terulang.
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "PPABP", satuanKerja: BIRO_UMUM }))).toBe(true);
+  });
+});
+
+describe("canKelolaHariLibur", () => {
+  it("PPABP dan ADMIN boleh - kalender berlaku se-kementerian", () => {
+    expect(canKelolaHariLibur(buatUser({ role: "PPABP" }))).toBe(true);
+    expect(canKelolaHariLibur(buatUser({ role: "ADMIN" }))).toBe(true);
+  });
+
+  it("KASUBAG_TU TIDAK boleh - satu tanggal libur mengubah angka semua unit", () => {
+    // Alasannya sama dengan canKelolaKendalaEpresensi: akibatnya lintas satker
+    // (pengali lembur 2x, batas hari uang makan, potongan Pasal 13), jadi
+    // bukan keputusan tingkat unit.
+    expect(canKelolaHariLibur(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }))).toBe(false);
+  });
+
+  it("OSDMA, PIMPINAN, dan PEGAWAI TIDAK boleh", () => {
+    for (const role of ["OSDMA", "PIMPINAN", "PEGAWAI"] as const) {
+      expect(canKelolaHariLibur(buatUser({ role }))).toBe(false);
+    }
+  });
+
+  it("akun nonaktif ditolak walau role-nya PPABP", () => {
+    expect(canKelolaHariLibur(buatUser({ role: "PPABP", aktif: false }))).toBe(false);
   });
 });

@@ -1,8 +1,3 @@
-// ============================================================================
-// APPROVAL DIGITAL - types
-// Mirror dari model ApprovalLog di prisma/schema.prisma.
-// ============================================================================
-
 export type KeputusanApproval = "SETUJU" | "TOLAK" | "REVISI";
 
 export interface ApprovalLogEntry {

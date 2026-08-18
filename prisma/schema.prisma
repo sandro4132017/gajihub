@@ -56,7 +56,9 @@ model Pegawai {
   buktiPotongPajak  BuktiPotongPajak[]
   gajiInduk         GajiInduk[]
   rekapPresensi     RekapPresensiPeriode[]
+  koreksiPresensi   KoreksiPresensiHarian[]
   rekening          RekeningPegawai[]
+  identitasWebGaji  IdentitasWebGaji?
 
   @@index([satuanKerja])
   @@index([statusPegawai])
@@ -71,27 +73,37 @@ model PresensiHarian {
   pegawaiId String  @map("pegawai_id")
   pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
 
-  tanggal         DateTime
-  jamMasuk        DateTime? @map("jam_masuk")
-  jamKeluar       DateTime? @map("jam_keluar")
+  tanggal                 DateTime
+  jamMasuk                DateTime? @map("jam_masuk")
+  jamKeluar               DateTime? @map("jam_keluar")
   // HADIR/WFO/WFH/WFA/TERLAMBAT = berhak uang makan (SBM 2026 item 22.1)
   // DIKLAT/DINAS_LUAR = bekerja, TAPI tidak berhak uang makan (konsumsi sudah
   // ditanggung kegiatan/perjalanan dinasnya)
   // ALPHA/TIDAK_PRESENSI/IZIN/SAKIT/CUTI = tidak berhak
-  statusKehadiran String    @map("status_kehadiran")
+  statusKehadiran         String    @map("status_kehadiran")
   // Pasal 13 ayat (3) Permenaker 15/2024 menyebut TIGA pelanggaran dengan
   // tarif sama (0,01%/menit): terlambat hadir, pulang cepat, dan
   // meninggalkan kantor. Disimpan terpisah - bukan karena tarifnya beda,
   // tapi supaya bisa dijelaskan ke pegawai/auditor menitnya dari mana.
   // Sebelumnya cuma ada menit_terlambat, jadi dua jenis lain tidak punya
   // tempat dan terpaksa dititipkan ke keterlambatan.
-  menitTerlambat           Int @default(0) @map("menit_terlambat")
-  menitPulangCepat         Int @default(0) @map("menit_pulang_cepat")
-  menitMeninggalkanKantor  Int @default(0) @map("menit_meninggalkan_kantor")
+  menitTerlambat          Int       @default(0) @map("menit_terlambat")
+  menitPulangCepat        Int       @default(0) @map("menit_pulang_cepat")
+  menitMeninggalkanKantor Int       @default(0) @map("menit_meninggalkan_kantor")
   // Pasal 13 ayat (4) - potongan 3% karena tidak ikut upacara bendera tanpa
   // alasan sah. Ditandai per HARI presensi karena upacara memang terjadi di
   // tanggal tertentu (umumnya tanggal 17).
-  tidakIkutUpacara         Boolean @default(false) @map("tidak_ikut_upacara")
+  tidakIkutUpacara        Boolean   @default(false) @map("tidak_ikut_upacara")
+  // Jam lembur HARI INI. Sudah lama dihitung per hari oleh
+  // rekapDariLaporanPdf(), tapi dulu cuma totalnya yang disimpan (di
+  // RekapPresensiPeriode). Dipakai export ADK Uang Lembur, yang formatnya
+  // memang per tanggal - total sebulan tidak bisa dipecah balik jadi
+  // tanggal-tanggal tanpa mengarang datanya.
+  //
+  // Hari kerja vs hari libur TIDAK disimpan terpisah di sini: tanggalnya
+  // sudah ada di baris ini, jadi klasifikasinya bisa diturunkan ulang kapan
+  // pun. Menyimpannya dua kali cuma menciptakan kemungkinan keduanya beda.
+  jamLembur               Float     @default(0) @map("jam_lembur")
 
   sourceSystem   String   @default("e-Presensi") @map("source_system")
   sourceSyncedAt DateTime @map("source_synced_at")
@@ -115,6 +127,31 @@ model PredikatKinerja {
   periodeTahun Int    @map("periode_tahun")
   predikat     String // SANGAT BAIK, BAIK, CUKUP, KURANG, SANGAT KURANG
   nilaiAngka   Float  @map("nilai_angka") // konversi predikat ke skala 0-100
+
+  // Dua rating penyusun predikat, apa adanya dari kolom "Rating Hasil Kerja"
+  // & "Rating Perilaku Kerja" di file Rekap Penilaian e-Kinerja BKN (mis.
+  // "Diatas Ekspektasi"). Sebelumnya dibaca parser lalu DIBUANG.
+  //
+  // TIDAK dipakai menghitung tukin - yang menentukan cuma `predikat` akhir
+  // (Kepsekjen 82/2025). Ini murni informasi, supaya rincian di aplikasi
+  // sebanding dengan rekap Excel manual yang menampilkan keduanya.
+  //
+  // Nullable: baris lama tidak punya nilainya, dan input manual per orang
+  // (actionsKelola.ts) memang cuma meminta predikat akhir.
+  hasilKerja    String? @map("hasil_kerja")
+  perilakuKerja String? @map("perilaku_kerja")
+
+  // Unit PENILAI, dari baris kedua kepala file Rekap Penilaian e-Kinerja BKN
+  // (mis. "Subbagian Tata Usaha"). Satu satuan kerja bisa dinilai oleh lebih
+  // dari satu penilai, masing-masing mengekspor filenya sendiri berisi orang
+  // yang berbeda - kolom ini yang membuat "file mana saja yang sudah masuk"
+  // bisa dilihat, bukan cuma "berapa orang yang sudah punya predikat".
+  //
+  // PERINGATAN LAMA YANG TETAP BERLAKU: ini BUKAN `Pegawai.satuanKerja` dan
+  // TIDAK BOLEH dipakai untuk scoping kewenangan. Nilainya nama sub-unit
+  // penilaian yang tidak selalu cocok dengan satuan kerja pegawainya.
+  // null = predikat diinput manual, bukan dari file BKN.
+  unitPenilaian String? @map("unit_penilaian")
 
   sourceSystem   String   @default("e-Kinerja BKN") @map("source_system")
   sourceSyncedAt DateTime @map("source_synced_at")
@@ -162,16 +199,16 @@ model UangMakan {
   pegawaiId String  @map("pegawai_id")
   pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
 
-  periodeBulan    Int   @map("periode_bulan")
-  periodeTahun    Int   @map("periode_tahun")
-  jumlahHariKerja Int   @map("jumlah_hari_kerja")
-  jumlahHariHadir Int   @map("jumlah_hari_hadir")
+  periodeBulan      Int   @map("periode_bulan")
+  periodeTahun      Int   @map("periode_tahun")
+  jumlahHariKerja   Int   @map("jumlah_hari_kerja")
+  jumlahHariHadir   Int   @map("jumlah_hari_hadir")
   // Hari yang BENAR-BENAR dibayar (WFO + WFH/WFA). Bisa lebih kecil dari
   // jumlahHariHadir kalau ada hari diklat/dinas luar - keduanya hadir tapi
   // tidak berhak uang makan. Disimpan supaya selisihnya bisa dijelaskan.
-  jumlahHariDibayar Int @default(0) @map("jumlah_hari_dibayar")
-  tarifHarian     Float @map("tarif_harian") // SBM 2026 item 22.1, per golongan
-  totalUangMakan  Float @map("total_uang_makan")
+  jumlahHariDibayar Int   @default(0) @map("jumlah_hari_dibayar")
+  tarifHarian       Float @map("tarif_harian") // SBM 2026 item 22.1, per golongan
+  totalUangMakan    Float @map("total_uang_makan")
 
   status         String    @default("DRAFT")
   catatanAnomali String?   @map("catatan_anomali")
@@ -188,20 +225,20 @@ model UangLembur {
   pegawaiId String  @map("pegawai_id")
   pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
 
-  periodeBulan    Int   @map("periode_bulan")
-  periodeTahun    Int   @map("periode_tahun")
-  totalJamLembur  Float @map("total_jam_lembur")
-  tarifPerJam     Float @map("tarif_per_jam") // SBM 2026 item 23.1, per golongan
+  periodeBulan            Int   @map("periode_bulan")
+  periodeTahun            Int   @map("periode_tahun")
+  totalJamLembur          Float @map("total_jam_lembur")
+  tarifPerJam             Float @map("tarif_per_jam") // SBM 2026 item 23.1, per golongan
   // Pendapatan lembur = uang lembur (per JAM) + uang makan lembur (per HARI).
   // Disimpan terpisah supaya slip gaji & ADK bisa merincinya, dan supaya
   // jelas bahwa keduanya tarif & satuannya beda (SBM item 23.1 vs 23.2).
-  jumlahHariMakanLembur Int   @default(0) @map("jumlah_hari_makan_lembur") // hari dengan lembur >= 2 jam berturut-turut
+  jumlahHariMakanLembur   Int   @default(0) @map("jumlah_hari_makan_lembur") // hari dengan lembur >= 2 jam berturut-turut
   tarifMakanLemburPerHari Float @default(0) @map("tarif_makan_lembur_per_hari") // SBM item 23.2
-  jamLemburHariKerja  Float @default(0) @map("jam_lembur_hari_kerja")
-  jamLemburHariLibur  Float @default(0) @map("jam_lembur_hari_libur") // dibayar 2x tarif
-  uangLembur      Float @default(0) @map("uang_lembur")
-  uangMakanLembur Float @default(0) @map("uang_makan_lembur")
-  totalUangLembur Float @map("total_uang_lembur") // uangLembur + uangMakanLembur
+  jamLemburHariKerja      Float @default(0) @map("jam_lembur_hari_kerja")
+  jamLemburHariLibur      Float @default(0) @map("jam_lembur_hari_libur") // dibayar 2x tarif
+  uangLembur              Float @default(0) @map("uang_lembur")
+  uangMakanLembur         Float @default(0) @map("uang_makan_lembur")
+  totalUangLembur         Float @map("total_uang_lembur") // uangLembur + uangMakanLembur
 
   status         String    @default("DRAFT")
   catatanAnomali String?   @map("catatan_anomali")
@@ -256,12 +293,28 @@ model AuditTrail {
   entitasId   String   @map("entitas_id")
   aksi        String // CREATE, UPDATE, DELETE, SYNC, APPROVE
   aktor       String // NIP atau "SYSTEM" untuk proses otomatis
+
+  /// Satuan kerja yang DIKENAI aksi ini - bukan satuan kerja aktornya.
+  ///
+  /// Dipakai men-scope panel Notifikasi & Aktivitas: orang Biro Keuangan hanya
+  /// melihat yang menyangkut Biro Keuangan. Diisi SAAT MENULIS karena saat itu
+  /// kodenya memang tahu unitnya; menurunkannya saat dibaca MUSTAHIL - format
+  /// `entitasId` beda-beda per jenis entitas (ada yang berisi nama satker, ada
+  /// yang "NIP-tanggal", ada yang UUID), jadi menebaknya berisiko menampilkan
+  /// aktivitas unit lain ke orang yang tidak berhak.
+  ///
+  /// NULL = memang lintas satker / tidak terikat unit (mis. penanda kendala
+  /// e-Presensi se-kementerian, kalender hari libur, perubahan role akun).
+  /// Baris NULL hanya terlihat oleh role lintas unit.
+  satuanKerja String? @map("satuan_kerja")
+
   dataSebelum Json?    @map("data_sebelum")
   dataSesudah Json?    @map("data_sesudah")
   timestamp   DateTime @default(now())
 
   @@index([entitas, entitasId])
   @@index([timestamp])
+  @@index([satuanKerja, timestamp])
   @@map("audit_trail")
 }
 
@@ -428,15 +481,19 @@ model User {
 
   bandingDiajukan          Banding[]
   buktiDiunggah            BuktiDukung[]
-  skKgbDiajukan            SkKgb[]               @relation("SkKgbDiajukanOleh")
-  skHukdisDiajukan         SkHukumanDisiplin[]   @relation("SkHukdisDiajukanOleh")
+  skKgbDiajukan            SkKgb[]                 @relation("SkKgbDiajukanOleh")
+  skHukdisDiajukan         SkHukumanDisiplin[]     @relation("SkHukdisDiajukanOleh")
   anggaranDiunggah         AnggaranRealisasi[]
   buktiPotongPajakDiunggah BuktiPotongPajak[]
   gajiIndukDiunggah        GajiInduk[]
   rekapPresensiDiunggah    RekapPresensiPeriode[]
   rekeningDiunggah         RekeningPegawai[]
-  usulanRoleDiajukan       UsulanPerubahanRole[] @relation("UsulanRoleDiajukanOleh")
-  usulanRoleDiputuskan     UsulanPerubahanRole[] @relation("UsulanRoleDiputuskanOleh")
+  identitasWebGajiDiunggah IdentitasWebGaji[]
+  kendalaEpresensiDitandai KendalaEpresensi[]
+  koreksiPresensiDibuat    KoreksiPresensiHarian[]
+  hariLiburDitetapkan      HariLiburNasional[]
+  usulanRoleDiajukan       UsulanPerubahanRole[]   @relation("UsulanRoleDiajukanOleh")
+  usulanRoleDiputuskan     UsulanPerubahanRole[]   @relation("UsulanRoleDiputuskanOleh")
   UsulanPerubahanRole      UsulanPerubahanRole[]
 
   @@index([role])
@@ -609,10 +666,29 @@ model SkHukumanDisiplin {
   pegawaiId String  @map("pegawai_id")
   pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
 
-  nomorSk      String   @map("nomor_sk")
+  // NULLABLE sejak ada penanda `skBelumTerbit`: kalau SK-nya memang belum
+  // terbit, tidak ada nomor yang bisa diisi - memaksa mengarang sesuatu di
+  // sini justru menghasilkan data yang kelihatan resmi.
+  nomorSk      String?  @map("nomor_sk")
   tanggalSk    DateTime @map("tanggal_sk")
   jenisHukuman String   @map("jenis_hukuman")
   keterangan   String?
+
+  // Keputusan hukuman diproses pimpinan dan nomor SK-nya terbit BELAKANGAN,
+  // sementara unit sudah perlu mencatat orangnya supaya tukin periode berjalan
+  // tidak terlanjur dibayar dengan kelas jabatan lama.
+  //
+  // Sengaja kolom sendiri, BUKAN teks "(belum terbit)" di nomorSk: kolom bisa
+  // di-query, jadi pertanyaan "SK mana saja yang sudah memotong tukin padahal
+  // nomornya belum ada?" bisa dijawab pasti - dan itu pertanyaan yang wajib
+  // bisa dijawab sebelum go-live. Teks bebas juga ikut tercetak apa adanya ke
+  // daftar & laporan, gampang terbaca sebagai nomor yang sebenarnya.
+  //
+  // TIDAK menghalangi perhitungan: baris bertanda ini tetap berpengaruh ke
+  // tarif SETELAH disetujui OSDMA, supaya alurnya bisa diuji utuh. Yang
+  // dijamin cuma satu hal - keadaannya kelihatan di setiap layar tempat
+  // manusia bisa mengambil keputusan atasnya.
+  skBelumTerbit Boolean @default(false) @map("sk_belum_terbit")
 
   // Rentang periode kalkulasi Tukin yang terdampak potongan disiplin ini.
   // periodeSelesaiBulan/Tahun NULL berarti masih berlaku sampai dicabut.
@@ -620,6 +696,23 @@ model SkHukumanDisiplin {
   periodeMulaiTahun   Int  @map("periode_mulai_tahun")
   periodeSelesaiBulan Int? @map("periode_selesai_bulan")
   periodeSelesaiTahun Int? @map("periode_selesai_tahun")
+
+  // Kelas jabatan yang BERLAKU selama masa hukuman (PP 94/2021 - penurunan
+  // jabatan setingkat lebih rendah). Tarif tukin pokok ditentukan kelas
+  // jabatan, jadi ini langsung mengubah yang dibayarkan.
+  //
+  // SIAP TIDAK mencatat penurunan ini sama sekali - dikonfirmasi user lewat
+  // kasus nyata (Galih Febian Azhar, turun kelas 7 -> 6 selama 1 tahun; SIAP
+  // tetap menulis 7). Jadi angka ini memang HARUS diisi manusia, dan itu bukan
+  // kekurangan sementara yang akan hilang begitu integrasinya membaik.
+  //
+  // Disimpan ABSOLUT, bukan "turun berapa tingkat": kalau relatif, kelas dasar
+  // yang keliru di SIAP ikut menggeser hasilnya tanpa ketahuan. Yang dipakai
+  // membayar jadi sama persis dengan yang tertulis di SK.
+  //
+  // null = hukumannya tidak menurunkan kelas jabatan (mis. teguran lisan/
+  // tertulis). Baris lama otomatis null, jadi perilakunya tidak berubah.
+  kelasJabatanSelamaHukuman Int? @map("kelas_jabatan_selama_hukuman")
 
   fileUrl String? @map("file_url")
 
@@ -774,19 +867,19 @@ model GajiInduk {
   jenisGaji  String  @default("1") @map("jenis_gaji") // kolom `kdjns`, 1 = gaji induk
 
   // --- PENGHASILAN (urutan sama dengan slip) ---
-  gajiPokok            Float @map("gaji_pokok")
-  tunjanganIstri       Float @default(0) @map("tunjangan_istri")
-  tunjanganAnak        Float @default(0) @map("tunjangan_anak")
-  tunjanganUmum        Float @default(0) @map("tunjangan_umum") // `tjupns`
-  tunjanganStruktural  Float @default(0) @map("tunjangan_struktural") // `tjstruk`
-  tunjanganFungsional  Float @default(0) @map("tunjangan_fungsional")
-  tunjanganBeras       Float @default(0) @map("tunjangan_beras")
-  tunjanganPph         Float @default(0) @map("tunjangan_pph")
-  pembulatan           Float @default(0)
+  gajiPokok           Float @map("gaji_pokok")
+  tunjanganIstri      Float @default(0) @map("tunjangan_istri")
+  tunjanganAnak       Float @default(0) @map("tunjangan_anak")
+  tunjanganUmum       Float @default(0) @map("tunjangan_umum") // `tjupns`
+  tunjanganStruktural Float @default(0) @map("tunjangan_struktural") // `tjstruk`
+  tunjanganFungsional Float @default(0) @map("tunjangan_fungsional")
+  tunjanganBeras      Float @default(0) @map("tunjangan_beras")
+  tunjanganPph        Float @default(0) @map("tunjangan_pph")
+  pembulatan          Float @default(0)
   // Gabungan tjdaerah + tjpencil + tjlain + tjkompen. Di file contoh Setjen
   // keempatnya nol semua, tapi tetap ditampung supaya tidak diam-diam hilang
   // kalau satker lain punya isinya.
-  tunjanganLain        Float @default(0) @map("tunjangan_lain")
+  tunjanganLain       Float @default(0) @map("tunjangan_lain")
 
   // --- POTONGAN ---
   potonganIuranPegawai Float @default(0) @map("potongan_iuran_pegawai") // `potpfk10`, 8% x (gapok + tj istri + tj anak)
@@ -847,24 +940,34 @@ model RekapPresensiPeriode {
   periodeTahun Int @map("periode_tahun")
 
   // Enam field pertama memetakan LANGSUNG ke tabel potongan Pasal 13.
-  jumlahHariAlpha             Int @default(0) @map("jumlah_hari_alpha") // ayat (1) - 3%/hari
-  jumlahTidakPresensi         Int @default(0) @map("jumlah_tidak_presensi") // ayat (2) - 1%/kejadian
-  totalMenitTerlambat         Int @default(0) @map("total_menit_terlambat") // ayat (3) - 0,01%/menit
-  totalMenitPulangCepat       Int @default(0) @map("total_menit_pulang_cepat") // ayat (3)
+  jumlahHariAlpha              Int @default(0) @map("jumlah_hari_alpha") // ayat (1) - 3%/hari
+  jumlahTidakPresensi          Int @default(0) @map("jumlah_tidak_presensi") // ayat (2) - 1%/kejadian
+  totalMenitTerlambat          Int @default(0) @map("total_menit_terlambat") // ayat (3) - 0,01%/menit
+  totalMenitPulangCepat        Int @default(0) @map("total_menit_pulang_cepat") // ayat (3)
   totalMenitMeninggalkanKantor Int @default(0) @map("total_menit_meninggalkan_kantor") // ayat (3)
-  jumlahTidakIkutUpacara      Int @default(0) @map("jumlah_tidak_ikut_upacara") // ayat (4) - 3%/kejadian
+  // Kolom `total_menit_kekurangan_jam_kerja` DIHAPUS 2026-08-07 (migrasi
+  // 20260807000000_cabut_kekurangan_jam_kerja). Ditambahkan 2026-08-06 sebagai
+  // pelanggaran keempat bertarif per menit, lalu dicabut setelah teks pasalnya
+  // dibaca: Pasal 13 ayat (3) menyebut TEPAT TIGA - "terlambat hadir, pulang
+  // cepat, atau meninggalkan kantor" - dan Pasal 12 huruf c yang dirujuknya
+  // menyebut tiga hal yang sama. Saat dicabut, 0 dari 40.740 baris berisi
+  // nilai bukan 0, jadi tidak ada angka yang pernah dihitung yang berubah.
+  jumlahTidakIkutUpacara       Int @default(0) @map("jumlah_tidak_ikut_upacara") // ayat (4) - 3%/kejadian
 
   // --- Dipakai UANG MAKAN (SBM 2026 item 22.1), BUKAN potongan Tukin ---
   // Dipecah per status karena tidak semua kehadiran berhak uang makan:
   // WFO & WFH/WFA berhak, Diklat & Dinas Keluar TIDAK. Kolom diklat & dinas
   // luar disimpan walau tidak dibayar - supaya selisih antara "hari hadir"
   // dan "hari dibayar" bisa dijelaskan, bukan hilang begitu saja.
-  jumlahHariKerja    Int @default(0) @map("jumlah_hari_kerja")
-  jumlahHariHadir    Int @default(0) @map("jumlah_hari_hadir")
-  jumlahHariWfo      Int @default(0) @map("jumlah_hari_wfo")
-  jumlahHariWfhWfa   Int @default(0) @map("jumlah_hari_wfh_wfa")
-  jumlahHariDiklat   Int @default(0) @map("jumlah_hari_diklat")
-  jumlahHariDinasLuar Int @default(0) @map("jumlah_hari_dinas_luar")
+  jumlahHariKerja        Int @default(0) @map("jumlah_hari_kerja")
+  jumlahHariHadir        Int @default(0) @map("jumlah_hari_hadir")
+  jumlahHariWfo          Int @default(0) @map("jumlah_hari_wfo")
+  jumlahHariWfhWfa       Int @default(0) @map("jumlah_hari_wfh_wfa")
+  jumlahHariDiklat       Int @default(0) @map("jumlah_hari_diklat")
+  jumlahHariDinasLuar    Int @default(0) @map("jumlah_hari_dinas_luar")
+  // Hari berstatus "Tugas Belajar". BUKAN untuk uang makan - ini penanda
+  // bahwa Tunjangan Kinerja periode ini dibayar 80% (Permenaker 15/2024).
+  jumlahHariTugasBelajar Int @default(0) @map("jumlah_hari_tugas_belajar")
 
   // --- Dipakai UANG LEMBUR (SBM 2026 item 23.1 & 23.2) ---
   // Dua angka, karena dua komponennya beda satuan: uang lembur per JAM,
@@ -876,6 +979,28 @@ model RekapPresensiPeriode {
   // CATATAN PENGISIAN: jam lembur di sini HARUS sudah mengecualikan hari
   // WFH/WFA - pegawai yang bekerja dari rumah tidak dihitung lembur walau
   // jam absen keluarnya melewati jam kerja.
+  // --- CUTI (Pasal 14) ---
+  // Disimpan sebagai TIGA kolom, bukan satu kolom per jenis cuti seperti di
+  // rekap Excel manual (yang punya 12 kolom cuti). Alasannya: bentuk inilah
+  // yang dikonsumsi engine (`cutiAktif` di RekapKehadiranPeriode), dan 12
+  // kolom Excel itu bisa diturunkan darinya - sementara sebaliknya tidak bisa,
+  // karena "Cuti Sakit Bulan II" tidak memberi tahu berapa harinya.
+  //
+  // KETERBATASAN YANG DISENGAJA: satu pegawai cuma bisa punya SATU jenis cuti
+  // per periode, mengikuti bentuk `cutiAktif` yang memang tunggal. Kalau nanti
+  // ada kasus dua jenis cuti dalam satu bulan, ini perlu jadi tabel sendiri.
+  //
+  // jenisCutiAktif memakai nilai JenisCuti (src/types/index.ts), mis.
+  // "CUTI_SAKIT". null = tidak sedang cuti.
+  jenisCutiAktif    String? @map("jenis_cuti_aktif")
+  // Bulan KE BERAPA cuti berjalan (1, 2, 3, ...) - penentu tarif potongan
+  // untuk cuti sakit & cuti besar. TIDAK bisa diturunkan dari data presensi
+  // satu bulan, jadi harus diisi manual lewat template.
+  bulanCutiKeberapa Int?    @map("bulan_cuti_keberapa")
+  // Jumlah HARI cuti dalam periode ini. Dipakai KHUSUS oleh cuti sakit gugur
+  // kandungan yang tarifnya 1% per hari (Pasal 14 huruf e).
+  jumlahHariCuti    Int     @default(0) @map("jumlah_hari_cuti")
+
   totalJamLembur                 Float @default(0) @map("total_jam_lembur")
   totalJamLemburHariLibur        Float @default(0) @map("total_jam_lembur_hari_libur")
   jumlahHariMakanLembur          Int   @default(0) @map("jumlah_hari_makan_lembur")
@@ -891,6 +1016,109 @@ model RekapPresensiPeriode {
   @@unique([pegawaiId, periodeBulan, periodeTahun])
   @@index([periodeBulan, periodeTahun])
   @@map("rekap_presensi_periode")
+}
+
+// ---------------------------------------------------------------------------
+// Tanggal e-Presensi bermasalah (Pasal 10 ayat (2) Permenaker 15/2024).
+//
+// "Dalam hal presensi elektronik mengalami kendala atau keadaan kahar,
+//  presensi dilakukan secara manual yang diketahui oleh pimpinan Unit Kerja
+//  masing-masing."
+//
+// KENAPA TABEL SENDIRI, bukan mengoreksi presensi orang per orang: kalau
+// e-Presensi tidak bisa diakses, yang rusak adalah TANGGALNYA, bukan
+// kedisiplinan 960 orang. Dicatat sebagai satu fakta tentang tanggal itu,
+// lalu berlaku ke semua yang terdampak - sekali putus, bukan 960 kali ketik.
+//
+// Kejadian nyata yang melahirkannya: 15 & 16 Juli 2026, angka "jam keluar
+// 23:59" (isian otomatis e-Presensi saat absen pulang tidak pernah masuk)
+// melonjak jadi 13,6% dan 14,1% dari hari kerja, sementara hari biasa cuma
+// 1,3-2,5%. 1.173 kejadian, 960 pegawai, senilai Rp 18.178.588 potongan
+// Pasal 13 ayat (2). Sebelum ada tabel ini, satu-satunya cara memperbaikinya
+// adalah PPABP mengetik ulang jam pulang orang per orang - dan itu hanya
+// terjadi untuk yang kebetulan melapor beserta foto bergeotag. Yang tidak
+// tahu harus melapor tetap dipotong untuk kerusakan yang bukan miliknya.
+//
+// DATA MENTAH TIDAK DITIMPA. Jam 23:59 tetap tersimpan apa adanya di
+// PresensiHarian; pengecualian ini ditumpuk di atasnya saat rekap dihitung,
+// jadi auditor tetap bisa melihat keduanya - apa yang tercatat, dan atas
+// dasar apa dikecualikan.
+model KendalaEpresensi {
+  id String @id @default(uuid())
+
+  /// Tanggal kejadian, disimpan tengah malam UTC (konvensi yang sama dengan
+  /// PresensiHarian.tanggal) supaya tidak bergeser hari.
+  tanggal DateTime
+
+  /// NULL = berlaku seluruh kementerian. Diisi kalau kendalanya cuma menimpa
+  /// satu satuan kerja (mis. jaringan satu balai putus).
+  satuanKerja String? @map("satuan_kerja")
+
+  /// WAJIB. Ini yang dibaca auditor ketika bertanya kenapa potongan sehari
+  /// hilang untuk ratusan orang - jadi tidak boleh kosong.
+  alasan String
+
+  ditandaiOlehId String   @map("ditandai_oleh_id")
+  ditandaiOleh   User     @relation(fields: [ditandaiOlehId], references: [id])
+  ditandaiPada   DateTime @default(now()) @map("ditandai_pada")
+
+  // Satu tanggal cuma boleh punya satu penanda per cakupan. Catatan: Postgres
+  // memperlakukan NULL sebagai tidak-sama-dengan-apa pun di unique index,
+  // jadi penanda se-kementerian (satuanKerja NULL) TIDAK tertangkap constraint
+  // ini - dicek eksplisit di action-nya.
+  @@unique([tanggal, satuanKerja])
+  @@index([tanggal])
+  @@map("kendala_epresensi")
+}
+
+// ---------------------------------------------------------------------------
+// Koreksi jam presensi SATU pegawai SATU hari - lanjutan Pasal 10 ayat (2).
+//
+// ALUR NYATANYA (keterangan user): e-Presensi error -> pegawai memotret
+// dirinya beserta geotag & jam -> dikirim ke WhatsApp petugas absensi ->
+// petugas memperbaiki jamnya di Gajihub. Tabel ini tempat perbaikan itu.
+//
+// KENAPA TABEL SENDIRI, BUKAN MENIMPA `PresensiHarian`:
+// sinkronisasi e-Presensi MENGHAPUS sebulan penuh lalu menulis ulang
+// (`simpanRekapPresensi.ts`). Jam hasil koreksi yang ditulis langsung ke
+// PresensiHarian akan HILANG pada tarikan berikutnya - persis masalah yang
+// dulu memaksa `kelasJabatanSelamaHukuman` punya kolom sendiri daripada
+// mengoreksi `Pegawai.kelasJabatan` yang ditimpa `sync:pegawai`.
+//
+// Konsekuensi yang disengaja: data mentah e-Presensi tetap utuh apa adanya
+// (jam 23:59 tetap tersimpan), koreksinya ditumpuk di atasnya saat rekap
+// dihitung. Auditor bisa melihat keduanya - apa yang dicatat mesin, dan apa
+// yang diperbaiki manusia beserta alasannya.
+//
+// `jamMasuk`/`jamKeluar` NULLABLE dan artinya "tidak dikoreksi": petugas
+// boleh memperbaiki jam pulang saja tanpa menyentuh jam masuk yang sudah
+// benar. Keduanya null = baris tanpa arti, ditolak action-nya.
+model KoreksiPresensiHarian {
+  id String @id @default(uuid())
+
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  /// Tengah malam UTC - konvensi yang sama dengan PresensiHarian.tanggal.
+  tanggal DateTime
+
+  /// null = biarkan jam dari e-Presensi apa adanya.
+  jamMasuk  DateTime? @map("jam_masuk")
+  jamKeluar DateTime? @map("jam_keluar")
+
+  /// WAJIB. Berisi dasar koreksinya - siapa yang melapor, lewat apa, bukti
+  /// apa yang dipegang. Foto & geotag-nya sendiri TIDAK disimpan di sini
+  /// (kebijakan penyimpanan dokumen masih terbuka, lihat TODO(confirm)
+  /// storage di CLAUDE.md); yang dicatat sistem adalah keputusannya.
+  alasan String
+
+  dikoreksiOlehId String   @map("dikoreksi_oleh_id")
+  dikoreksiOleh   User     @relation(fields: [dikoreksiOlehId], references: [id])
+  dikoreksiPada   DateTime @default(now()) @map("dikoreksi_pada")
+
+  @@unique([pegawaiId, tanggal])
+  @@index([tanggal])
+  @@map("koreksi_presensi_harian")
 }
 
 // ---------------------------------------------------------------------------
@@ -922,11 +1150,11 @@ model RekeningPegawai {
   // TUKIN atau GAJI - jenis pembayaran yang memakai rekening ini.| GAJI - jenis pembayaran yang memakai rekening ini. */
   jenisPembayaran String @map("jenis_pembayaran")
 
-  kodeBankSpan   String  @map("kode_bank_span") // mis. "520002000990"
-  namaBank       String  @map("nama_bank")
-  nomorRekening  String  @map("nomor_rekening")
+  kodeBankSpan  String  @map("kode_bank_span") // mis. "520002000990"
+  namaBank      String  @map("nama_bank")
+  nomorRekening String  @map("nomor_rekening")
   // Nama pemilik rekening - sering beda penulisan dari Pegawai.nama.
-  namaRekening   String? @map("nama_rekening")
+  namaRekening  String? @map("nama_rekening")
 
   sourceFileName String?  @map("source_file_name")
   diunggahOlehId String   @map("diunggah_oleh_id")
@@ -937,4 +1165,102 @@ model RekeningPegawai {
   @@unique([pegawaiId, jenisPembayaran])
   @@index([jenisPembayaran, kodeBankSpan])
   @@map("rekening_pegawai")
+}
+
+/// Identitas pembayaran pegawai menurut WEB GAJI KEMENKEU - sumber terpisah
+/// dari `Pegawai` (yang merupakan cermin SIAP).
+///
+/// KENAPA TABEL SENDIRI, bukan kolom tambahan di `Pegawai`:
+///   1. `Pegawai` DITIMPA ULANG tiap `npm run sync:pegawai` (upsert dengan
+///      `nama` ikut di-update). Nama versi Web Gaji akan hilang tiap sync.
+///   2. Sumber & kewenangannya beda. SIAP sah untuk kepegawaian; Web Gaji
+///      Kemenkeu sah untuk pembayaran. Keduanya benar di ranahnya
+///      masing-masing dan tidak boleh saling menimpa - terukur BEDA pada
+///      3.628 dari 4.701 pegawai (77%), umumnya karena gelar.
+///   3. Cakupannya beda. File Web Gaji tidak memuat semua pegawai aktif, dan
+///      memuat NIP yang tidak ada di SIAP. Menyatukannya berarti salah satu
+///      sisi harus dikosongkan paksa.
+///
+/// Rekening bank SENGAJA TIDAK ditaruh di sini - itu tetap di
+/// `RekeningPegawai`, yang sudah dipakai pemisahan berkas ADK per bank. Satu
+/// unggahan mengisi KEDUA tabel. Dua tabel rekening berarti dua kebenaran,
+/// dan cepat atau lambat keduanya berbeda.
+model IdentitasWebGaji {
+  id        String  @id @default(uuid())
+  pegawaiId String  @unique @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  /// Nama sesuai penulisan Web Gaji Kemenkeu. INI yang dipakai di berkas ADK.
+  nama String
+
+  /// "PNS" / "PPPK" apa adanya dari file - TIDAK dipetakan ke enum, karena
+  /// belum ada kebutuhan yang memakainya sebagai kondisi perhitungan.
+  jenisPegawai String? @map("jenis_pegawai")
+
+  /// Kode satker versi Kemenkeu (mis. "259031"). Sumber kedua setelah
+  /// `GajiInduk.kodeSatker` - bedanya yang ini berlaku per PEGAWAI dan tidak
+  /// terikat periode, jadi tetap ada walau gaji induk periode itu belum
+  /// diunggah.
+  kodeSatker      String? @map("kode_satker")
+  namaSatuanKerja String? @map("nama_satuan_kerja")
+
+  sourceFileName String?  @map("source_file_name")
+  diunggahOlehId String   @map("diunggah_oleh_id")
+  diunggahOleh   User     @relation(fields: [diunggahOlehId], references: [id])
+  diunggahPada   DateTime @default(now()) @map("diunggah_pada")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([kodeSatker])
+  @@map("identitas_web_gaji")
+}
+
+// ============================================================================
+// HARI LIBUR NASIONAL - tanggal merah & cuti bersama
+//
+// KENAPA HARUS ADA TABELNYA. Sampai sebelum ini, "hari libur" di mesin rekap
+// diturunkan HANYA dari Sabtu/Minggu (JADWAL_KERJA_DEFAULT.jamPulangWajibMenit
+// bernilai null di kedua hari itu). Tanggal merah yang jatuh di hari kerja
+// terbaca sebagai hari kerja biasa, dan itu salah di TIGA tempat sekaligus:
+//
+//   1. Lembur di tanggal itu dibayar tarif 1x, seharusnya 2x (hari libur).
+//      Terukur di data: Juni 2026 ada 12 baris lembur pada 1 Juni (Hari Lahir
+//      Pancasila) dan 7 baris pada 16 Juni (Tahun Baru Islam) - 19 baris
+//      dibayar setengah dari yang seharusnya.
+//   2. Hari itu ikut terhitung `jumlahHariKerja`, yang jadi BATAS ATAS jumlah
+//      hari uang makan (Math.min di uangMakan.ts).
+//   3. Potongan Pasal 13 tetap berlaku, padahal tidak ada kewajiban jam kerja
+//      yang bisa dilanggar.
+//
+// KENAPA TIDAK DIAMBIL DARI e-PRESENSI: tabel `libur` di sana ADA tapi KOSONG
+// (sudah dicek). Jadi tidak ada sumber yang bisa ditarik otomatis.
+//
+// KENAPA TIDAK DIHARDCODE DI KODE: tanggal merah ditetapkan SKB 3 Menteri tiap
+// tahun dan sering direvisi (cuti bersama tambahan/dibatalkan). Menaruhnya di
+// kode berarti setiap revisi butuh deploy, dan tanggal tahun depan tidak bisa
+// diisi tanpa menyentuh kode.
+//
+// `cutiBersama` dipisah dari libur biasa BUKAN untuk perlakuan pembayaran
+// (keduanya sama-sama hari libur), tapi supaya bisa dilaporkan terpisah -
+// cuti bersama memotong jatah cuti tahunan pegawai, libur nasional tidak.
+// ============================================================================
+model HariLiburNasional {
+  id String @id @default(uuid())
+
+  /// Disimpan tengah malam UTC, konvensi yang sama dengan PresensiHarian
+  /// supaya perbandingan tanggal tidak bergeser hari.
+  tanggal DateTime @unique
+
+  /// WAJIB. Nama harinya ("Hari Raya Idul Fitri", "Cuti Bersama Idul Fitri") -
+  /// ini yang muncul di catatan hasil rekap, jadi harus bisa dibaca manusia.
+  keterangan String
+
+  /// true = cuti bersama (memotong jatah cuti tahunan), false = libur nasional.
+  cutiBersama Boolean @default(false)
+
+  ditetapkanOlehId String   @map("ditetapkan_oleh_id")
+  ditetapkanOleh   User     @relation(fields: [ditetapkanOlehId], references: [id])
+  ditetapkanPada   DateTime @default(now()) @map("ditetapkan_pada")
+
+  @@index([tanggal])
+  @@map("hari_libur_nasional")
 }

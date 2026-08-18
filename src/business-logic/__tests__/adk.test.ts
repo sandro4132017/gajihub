@@ -7,6 +7,7 @@ import {
   selKeTeks,
   rakitTeksAdk,
   type SumberBarisAdkTukin,
+  nilaiUangAdkTukin,
 } from "../adk";
 
 /**
@@ -19,8 +20,7 @@ const SUMBER: SumberBarisAdkTukin[] = [
     nip: "197509082006042003",
     nama: "TUTI HARYANTI, ST.",
     kelasJabatan: 15,
-    tukinPokok: 19_280_000,
-    potonganPph: 2_892_000,
+    tarifPenuhKelasJabatan: 19_280_000,
     tukinBersih: 16_388_000,
     kodeSatker: "450938",
     kodeBankSpan: "520002000990",
@@ -32,8 +32,7 @@ const SUMBER: SumberBarisAdkTukin[] = [
     nip: "197904302011011012",
     nama: "LUTHFI FIRDAUS, S.E.",
     kelasJabatan: 12,
-    tukinPokok: 9_896_000,
-    potonganPph: 29_688,
+    tarifPenuhKelasJabatan: 9_896_000,
     tukinBersih: 9_866_312,
     kodeSatker: "450938",
     kodeBankSpan: "520002000990",
@@ -186,7 +185,7 @@ describe("format teks tab-separated", () => {
 describe("pembulatan nilai uang", () => {
   it("nilai pecahan dibulatkan ke rupiah bulat - file ADK contoh isinya bilangan bulat semua", () => {
     const b = susunBarisAdkTukin(
-      [{ ...SUMBER[0], tukinPokok: 5_824_937.4, potonganPph: 0.3, tukinBersih: 5_824_937.1 }],
+      [{ ...SUMBER[0], tarifPenuhKelasJabatan: 5_824_937.4, tukinBersih: 5_824_937.1 }],
       6,
       2026
     )[0];
@@ -199,8 +198,8 @@ describe("pembulatan nilai uang", () => {
   it("baris total = jumlah baris yang SUDAH dibulatkan, jadi cocok kalau dijumlah manual", () => {
     const baris = susunBarisAdkTukin(
       [
-        { ...SUMBER[0], tukinPokok: 100.5, potonganPph: 0, tukinBersih: 100.5 },
-        { ...SUMBER[1], tukinPokok: 200.5, potonganPph: 0, tukinBersih: 200.5 },
+        { ...SUMBER[0], tarifPenuhKelasJabatan: 100.5, tukinBersih: 100.5 },
+        { ...SUMBER[1], tarifPenuhKelasJabatan: 200.5, tukinBersih: 200.5 },
       ],
       6,
       2026
@@ -209,5 +208,55 @@ describe("pembulatan nilai uang", () => {
     // 101 + 201 = 302 (bukan Math.round(301) = 301 dari penjumlahan pecahan)
     expect(total[8]).toBe((baris[0][8] as number) + (baris[1][8] as number));
     expect(Number.isInteger(total[8] as number)).toBe(true);
+  });
+});
+
+describe("nilaiUangAdkTukin - Nilai Bruto adalah tarif PENUH, bukan hasil setelah potongan", () => {
+  it("bruto = tarif kelas jabatan, potongan = selisih ke bersih", () => {
+    // Angka dari sheet "Masuk ADK" rincian manual Rokeu: Arini Sarkowi,
+    // kelas 12 (tarif 9.896.000), potongan 44.235,12, bersih 9.851.764,88.
+    const u = nilaiUangAdkTukin({ tarifPenuhKelasJabatan: 9_896_000, tukinBersih: 9_851_764.88 });
+    expect(u.bruto).toBe(9_896_000);
+    expect(u.bersih).toBe(9_851_765);
+    expect(u.potongan).toBe(9_896_000 - 9_851_765);
+  });
+
+  it("BUG LAMA: bruto tidak boleh sama dengan bersih waktu ada potongan", () => {
+    // Sebelum diperbaiki, kolom Bruto diisi `tukinPokok` (yang sudah SETELAH
+    // potongan) dan Potongan diisi `potonganPph` (selalu nol) - jadi file ADK
+    // keluar dengan bruto == bersih dan potongan 0, menyembunyikan seluruh
+    // potongan Pasal 13.
+    const u = nilaiUangAdkTukin({ tarifPenuhKelasJabatan: 5_979_200, tukinBersih: 5_943_324.8 });
+    expect(u.bruto).not.toBe(u.bersih);
+    expect(u.potongan).toBeGreaterThan(0);
+  });
+
+  it("aritmatika bruto - potongan = bersih TEPAT pada bilangan bulat", () => {
+    // Kolomnya dibulatkan sendiri-sendiri akan meleset satu rupiah. Diuji
+    // pada angka pecahan yang pembulatannya berlawanan arah.
+    for (const [tarif, bersih] of [
+      [9_896_000, 9_851_764.88],
+      [5_979_200, 5_943_324.51],
+      [4_595_150, 4_564_546.301],
+      [19_280_000, 19_280_000],
+    ] as const) {
+      const u = nilaiUangAdkTukin({ tarifPenuhKelasJabatan: tarif, tukinBersih: bersih });
+      expect(u.bruto - u.potongan).toBe(u.bersih);
+      expect(Number.isInteger(u.potongan)).toBe(true);
+    }
+  });
+
+  it("tarif tidak diketahui: bruto disamakan bersih, potongan nol - bukan angka karangan", () => {
+    const u = nilaiUangAdkTukin({ tarifPenuhKelasJabatan: null, tukinBersih: 4_564_546.3 });
+    expect(u.bruto).toBe(4_564_546);
+    expect(u.bersih).toBe(4_564_546);
+    expect(u.potongan).toBe(0);
+  });
+
+  it("potongan tidak pernah negatif", () => {
+    // Menurut konstruksinya tukinBersih <= tarif penuh. Kalau invarian itu
+    // dilanggar, file ADK tetap tidak boleh memuat potongan negatif.
+    const u = nilaiUangAdkTukin({ tarifPenuhKelasJabatan: 1_000_000, tukinBersih: 1_200_000 });
+    expect(u.potongan).toBe(0);
   });
 });

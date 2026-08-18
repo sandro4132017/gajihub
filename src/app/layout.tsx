@@ -24,6 +24,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   jabatan: akun.jabatan,
                   role: akun.role,
                   rolesTersedia: akun.rolesTersedia,
+                  satuanKerja: akun.satuanKerja,
                 }
               : null
           }

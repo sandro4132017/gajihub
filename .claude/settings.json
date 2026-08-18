@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"LAMPIRAN I$\\\\|LAMPIRAN II\\\\|BATAS TERTINGGI\\\\|DAPAT DILAMPAUI\" pmk32.txt)",
+      "Bash(grep -n \"docs/permenaker-15-2024\\\\|## Teks peraturan\\\\|src/business-logic/tarifSbm.ts\\\\` \\(BARU\\)\" CLAUDE.md)",
+      "Bash(grep -v \"^\\\\s*//\")",
+      "Bash(cd \"d:/Project/gajihub-main\" && sed -n '/^model KendalaEpresensi/,/^}/p' prisma/schema.prisma | tail -20)"
+    ],
+    "additionalDirectories": [
+      "d:\\Project\\gajihub-main\\prisma"
+    ]
+  }
+}

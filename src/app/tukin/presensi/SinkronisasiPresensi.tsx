@@ -1,29 +1,11 @@
 "use client";
 
-/**
- * Panel sinkronisasi e-Presensi.
- *
- * SUDAH TERSAMBUNG (sebelumnya tombolnya sengaja mati karena belum ada akses):
- * menarik langsung dari database e-Presensi lewat
- * src/adapters/EpresensiAdapter.ts. Modul yang dipakai SAMA PERSIS dengan
- * jalur CLI (src/jobs/importPresensiEpresensi.ts), jadi angkanya tidak bisa
- * berbeda antara tombol ini dan tarikan terjadwal.
- *
- * Upload PDF di bawah TIDAK dihapus - tetap jadi jalur cadangan kalau
- * jaringan ke server e-Presensi tidak bisa dijangkau, dan template Excel
- * tetap satu-satunya cara mengisi yang tidak ada di database (menit
- * meninggalkan kantor, tidak ikut upacara).
- */
-
 import { useActionState } from "react";
 import { tarikPresensiEpresensiAction, type SinkronPresensiFormState } from "./actionsSync";
+import { NAMA_BULAN } from "../../bulan";
+import { SearchableSelect } from "../../SearchableSelect";
 
 const INITIAL_STATE: SinkronPresensiFormState = {};
-
-const NAMA_BULAN = [
-  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
-];
 
 export function SinkronisasiPresensi({
   defaultBulan,
@@ -35,30 +17,30 @@ export function SinkronisasiPresensi({
   const [state, formAction, pending] = useActionState(tarikPresensiEpresensiAction, INITIAL_STATE);
 
   return (
-    <div className="card mt-4 p-4">
+    <div className="card mt-6 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-bold text-ink">Sinkronisasi e-Presensi</h2>
+          <h2 className="text-lg font-extrabold tracking-tight text-navy">Sinkronisasi e-Presensi</h2>
           <p className="mt-1 text-sm text-muted">
-            Menarik data kehadiran langsung dari e-Presensi, tanpa upload manual.
+            Menarik data kehadiran langsung dari e-Presensi, tanpa upload manual
           </p>
         </div>
-        <span className="chip chip-ok">Tersambung</span>
+        {/* Pil hijau, bukan chip persegi - penanda status koneksi, sengaja
+            dibedakan bentuknya dari chip status data di tabel. */}
+        <span className="chip chip-ok rounded-full px-3.5 py-1.5 text-[13px]">Tersambung</span>
       </div>
 
-      <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
-        <label className="text-xs text-muted">
-          Periode yang DITARIK - bulan
-          <input
-            type="number"
-            name="bulan"
-            min="1"
-            max="12"
-            defaultValue={defaultBulan}
-            className="field-input mt-1 w-20 py-1.5"
-          />
-        </label>
-        <label className="text-xs text-muted">
+      {/* Satu baris: bulan - "Tahun" <tahun> - tombol. Label di ATAS tiap field
+          sengaja dihapus; bulan sudah jelas dari isinya, dan periodenya
+          dijelaskan kalimat di bawah. */}
+      <form action={formAction} className="mt-4 flex flex-wrap items-center gap-3">
+        <SearchableSelect
+          name="bulan"
+          className="w-40"
+          options={NAMA_BULAN.map((nama, i) => ({ value: String(i + 1), label: nama }))}
+          defaultValue={String(defaultBulan)}
+        />
+        <label className="flex items-center gap-3 text-sm font-semibold text-ink">
           Tahun
           <input
             type="number"
@@ -66,18 +48,20 @@ export function SinkronisasiPresensi({
             min="2000"
             max="2100"
             defaultValue={defaultTahun}
-            className="field-input mt-1 w-24 py-1.5"
+            className="field-input mt-0 w-28 text-center"
           />
         </label>
-        <button type="submit" disabled={pending} className="btn btn-primary">
-          {pending ? "Menarik data..." : "Tarik data presensi"}
+        <button type="submit" disabled={pending} className="btn btn-primary px-4 py-2.5">
+          {pending ? "Menarik data..." : "Tarik Data Presensi"}
         </button>
       </form>
 
-      <p className="mt-2 text-xs text-muted">
-        Menarik data akan MENIMPA rekap periode ini. Satu tarikan hanya menyentuh bulan yang diisi di atas -
-        bulan lain tidak ikut berubah. Filter di bawah halaman ini terpisah: itu cuma memilih periode mana yang
-        ditampilkan di tabel, tidak menarik apa pun.
+      {/* Dua paragraf keterangan digabung jadi satu blok - keduanya menjawab
+          pertanyaan yang sama ("apa yang terjadi kalau tombol ini ditekan"),
+          dan yang soal potongan dulu terdampar di kaki kartu, jauh dari
+          tombolnya. */}
+      <p className="mt-3 text-sm leading-relaxed text-muted">
+        Penarikan data akan menimpa rekap pada bulan yang dipilih. Bulan lain tidak berubah. Potongan dihitung ulang oleh GajiHub sesuai <strong>Permenaker 15/2024</strong>, bukan menggunakan nilai potongan dari e-Presensi.
       </p>
 
       {pending && (
@@ -87,7 +71,7 @@ export function SinkronisasiPresensi({
         </p>
       )}
 
-      {state.error && <p className="mt-3 text-sm text-danger">{state.error}</p>}
+      {state.error && <p className="mt-3 text-sm text-red">{state.error}</p>}
 
       {state.ringkasan && (
         <div className="mt-3 rounded-lg border border-line bg-surface-2 p-3">
@@ -125,12 +109,6 @@ export function SinkronisasiPresensi({
           </p>
         </div>
       )}
-
-      <p className="mt-2 text-xs text-muted">
-        Potongan dihitung ulang oleh Gajihub sesuai Permenaker 15/2024, BUKAN diambil dari kolom potongan
-        e-Presensi. e-Presensi memberi toleransi keterlambatan 60 menit sementara Pasal 13 ayat (3) memotong
-        setiap 1 menit - jadi potongan di sini bisa lebih besar daripada yang tertera di e-Presensi.
-      </p>
     </div>
   );
 }

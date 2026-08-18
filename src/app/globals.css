@@ -1,39 +1,84 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
-/* Palet & tipografi diambil dari Gajihub_Prototype.html - lihat file itu
-   kalau mau bandingkan/adjust warna lebih lanjut. */
+/* ============================================================================
+   PALET GAJIHUB - ditetapkan user 2026-08-13
+     #13416B  navy   - WARNA UTAMA (sama dengan logo Kemnaker): teks, judul,
+                       item menu aktif, tombol utama, tile logo
+     #3F72AF  biru   - aksen KEDUA: hover, tautan, penanda, avatar
+     #DBE2EF  kabut  - garis, permukaan sekunder, chip netral
+     #F9F7F7  putih  - latar halaman
+
+   WARNA STATUS (hijau/merah/amber) SENGAJA TIDAK diganti ke palet ini.
+   Keempat warna di atas semuanya biru-netral, jadi "disetujui" dan "ditolak"
+   akan terlihat sama - padahal justru bedanya yang menentukan orang berhenti
+   atau lanjut. Yang dilakukan: nadanya disetel supaya duduk enak dengan palet
+   baru, artinya tetap.
+   ========================================================================= */
 @theme {
   --font-sans: "Plus Jakarta Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --color-navy: #1b2b4b;
-  --color-navy-deep: #13203a;
-  --color-navy-soft: #24375c;
-  --color-navy-line: #2c4068;
+  --color-navy: #13416b;
+  --color-navy-deep: #0e3255;
+  --color-navy-soft: #1d5285;
+  --color-navy-line: #2a5f93;
 
-  --color-teal: #00b3a4;
-  --color-teal-deep: #009286;
-  --color-teal-tint: #e0f5f2;
+  /* Aksen utama = navy Kemnaker (#13416B), atas permintaan user. Nama token
+     "teal" DIPERTAHANKAN supaya ~200 pemakaian di seluruh aplikasi tidak perlu
+     disentuh satu per satu - yang berubah cuma nilainya. Ganti namanya
+     belakangan kalau memang mau dirapikan.
+     teal-deep dipakai untuk hover, jadi HARUS lebih gelap dari teal. */
+  --color-teal: #13416b;
+  --color-teal-deep: #0e3255;
+  --color-teal-tint: #e8eef7;
 
-  --color-gold: #d4a017;
-  --color-gold-deep: #a87c13;
-  --color-gold-tint: #faf1d9;
+  /* #3F72AF - aksen KEDUA. Dipakai buat yang perlu terbaca "biru" tapi tidak
+     boleh bersaing dengan navy: avatar, ikon penanda, tautan dalam teks. */
+  --color-biru: #3f72af;
+  --color-biru-deep: #315b8c;
 
-  --color-bg: #f4f6f9;
+  --color-gold: #c8871f;
+  --color-gold-deep: #8f5f13;
+  --color-gold-tint: #fbf1de;
+
+  --color-bg: #f9f7f7;
   --color-surface: #ffffff;
-  --color-surface-2: #fbfcfd;
+  --color-surface-2: #fdfcfc;
 
-  --color-ink: #192234;
-  --color-ink-2: #3a465c;
-  --color-muted: #6b7689;
-  --color-line: #e7eaf1;
-  --color-line-2: #eef1f6;
+  --color-ink: #13416b;
+  --color-ink-2: #3a5a7d;
+  --color-muted: #5f7085;
+  --color-line: #dbe2ef;
+  --color-line-2: #e9eef6;
 
   --color-green: #2e7d52;
-  --color-green-tint: #e7f3ec;
+  --color-green-tint: #e6f2ec;
   --color-red: #c0492f;
   --color-red-tint: #fbeae6;
+
+  /* --------------------------------------------------------------------
+     SIDEBAR GELAP - navy #13416B (warna logo Kemnaker), teks putih.
+     --------------------------------------------------------------------
+     Dipisah dari token halaman supaya sidebar bisa disetel sendiri tanpa
+     menyentuh isi halaman - dan supaya AppShell, AccountMenu, dan apa pun
+     yang menempel di sidebar membaca dari SATU sumber.
+
+     Rasio kontras (sudah dihitung, bukan dikira-kira):
+       nav-text #C9D6E8 di navy    -> 7,15:1  (AA & AAA teks normal)
+       putih di navy               -> 10,53:1 (label item aktif dibalik)
+       navy di pil putih           -> 10,53:1 (item aktif)
+     Label sengaja TIDAK dibuat lebih redup dari itu: halaman ini dipakai
+     memeriksa angka gaji di layar kantor apa adanya, jadi label samar bukan
+     pilihan gaya di sini. */
+  --color-nav-bg: #13416b;
+  --color-nav-text: #c9d6e8;
+  --color-nav-hover: #1d5285;
+  --color-nav-line: #2a5f93;
+  /* Item aktif DIBALIK jadi pil putih - di atas navy, penanda yang paling
+     jelas justru kebalikannya. Navy-di-atas-navy-muda cuma 2:1. */
+  --color-nav-active: #ffffff;
+  --color-nav-active-text: #13416b;
 }
 
 body {
@@ -42,9 +87,42 @@ body {
   font-family: var(--font-sans);
 }
 
+/* --------------------------------------------------------------------------
+   SCROLLBAR
+   --------------------------------------------------------------------------
+   Diset SEKALI di `html`, tidak ditempel per elemen: `scrollbar-color` dan
+   `scrollbar-width` adalah properti TURUNAN (inherited), jadi semua kontainer
+   ber-`overflow` di dalamnya ikut - termasuk tabel lebar (rincian tukin, grid
+   ADK 33 kolom), panel Kabar, dan sidebar.
+
+   Track dibuat TRANSPARAN (alpha 0), bukan putih: banyak kontainer di sini
+   berlatar bukan-putih (surface-2, navy sidebar), dan track putih akan
+   tampak sebagai jalur terang yang tidak pernah diminta siapa pun.
+
+   CATATAN DUKUNGAN: dua properti ini standar dan jalan di Chrome 121+ &
+   Firefox. Safari BELUM mendukungnya - di sana scrollbar-nya kembali ke
+   bawaan sistem, dan itu diterima apa adanya. SENGAJA TIDAK memakai
+   `::-webkit-scrollbar` sebagai cadangan: kalau selektor itu ada, Chrome
+   memakai jalur lamanya dan mengabaikan yang standar, jadi justru harus
+   dirawat dua kali. */
+html {
+  scrollbar-width: auto;
+  scrollbar-color: rgb(115 115 115 / 0.55) rgb(255 255 255 / 0);
+}
+
+/* Sidebar navy butuh thumb-nya sendiri. Abu 115 di alpha 0,55 berbaur jadi
+   ~rgb(72 92 111) di atas #13416B - cuma 1,5:1 terhadap latarnya, praktis
+   tidak terlihat. Dipakai nada nav-text supaya tetap satu palet.
+
+   Dikunci ke [data-sidebar], BUKAN ke `aside` polos: panel Kabar juga
+   `<aside>` tapi berlatar putih, dan thumb terang di sana justru hilang. */
+[data-sidebar] {
+  scrollbar-color: rgb(201 214 232 / 0.45) rgb(255 255 255 / 0);
+}
+
 @layer components {
   .card {
-    @apply rounded-2xl border border-line bg-surface shadow-[0_1px_2px_rgba(20,33,58,0.04),0_6px_22px_rgba(20,33,58,0.06)];
+    @apply rounded-2xl border border-line bg-surface shadow-[0_1px_2px_rgba(19,65,107,0.04),0_6px_22px_rgba(19,65,107,0.06)];
   }
 
   .btn {
@@ -61,6 +139,12 @@ body {
   }
   .btn-ghost {
     @apply border border-line bg-surface text-ink-2 hover:border-muted;
+  }
+  /* Aksi sekunder - navy di atas tint navy, bukan warna baru. Kelas ini sempat
+     DIPAKAI di 3 halaman tanpa pernah didefinisikan, jadi tombolnya dirender
+     tanpa warna sama sekali (cuma teks + padding). */
+  .btn-secondary {
+    @apply border border-teal-tint bg-teal-tint text-teal-deep hover:border-teal hover:bg-line;
   }
   .btn-sm {
     @apply px-3 py-1.5 text-xs;
@@ -82,13 +166,13 @@ body {
     @apply bg-red-tint text-red;
   }
   .chip-navy {
-    @apply bg-[#e9eef7] text-navy;
+    @apply bg-line-2 text-navy;
   }
 
   .field-label {
     @apply block text-xs font-semibold text-muted;
   }
   .field-input {
-    @apply mt-1 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none transition focus:border-teal focus:bg-white focus:shadow-[0_0_0_3px_rgba(13,125,106,0.1)];
+    @apply mt-1 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none transition focus:border-teal focus:bg-white focus:shadow-[0_0_0_3px_rgba(63,114,175,0.14)];
   }
 }

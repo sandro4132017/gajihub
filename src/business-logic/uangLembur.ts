@@ -57,6 +57,29 @@ const BATAS_DEFAULT_JAM_LEMBUR_PER_BULAN = 40; // TODO(confirm): tidak diatur di
 const MINIMAL_JAM_LEMBUR_DAPAT_MAKAN = 2; // SBM hal. -51-, penjelasan item 23.2
 
 /**
+ * Uang lembur dibayar per JAM PENUH - sisa menit yang tidak genap satu jam
+ * TIDAK dibayar (aturan user 2026-08-06). Lembur 1 jam 59 menit dibayar 1 jam,
+ * bukan 2 jam dan bukan 1,98 jam.
+ *
+ * PERHATIKAN DI MANA PEMBULATAN INI TERJADI - ini menentukan hasilnya.
+ * Fungsi ini menerima TOTAL jam sebulan, jadi yang dibulatkan adalah totalnya.
+ * Kalau pegawai lembur 1j59m pada dua hari berbeda:
+ *   - dibulatkan per HARI  : 1 + 1            = 2 jam  <- lebih tepat
+ *   - dibulatkan per BULAN : floor(3,97)      = 3 jam  <- yang terjadi di sini
+ * Jadi pembulatan di sini bersifat JARING PENGAMAN, bukan tempat yang ideal.
+ * Idealnya sisa menit sudah dipangkas per hari SAAT REKAP DIISI - jalur PDF
+ * e-Presensi sudah melakukannya per blok lembur (lihat presensiPdfKeRekap.ts),
+ * sementara pengisian manual lewat template bergantung pada pengisinya.
+ *
+ * TODO(confirm): belum ada rujukan pasal/SBM untuk pembulatan ke bawah ini -
+ * SBM 2026 item 23.1 cuma menetapkan besaran per jam tanpa menyebut perlakuan
+ * sisa menit. Aturannya datang dari user, bukan dokumen.
+ */
+function bulatkanKeJamPenuh(jam: number): number {
+  return Math.floor(jam);
+}
+
+/**
  * Hitung berapa HARI yang berhak uang makan lembur dari rincian jam lembur
  * per hari. Dipisah jadi fungsi sendiri supaya pemanggil yang PUNYA rincian
  * harian bisa menurunkannya sendiri, sementara pemanggil yang cuma punya
@@ -98,11 +121,17 @@ export function hitungUangLembur(input: UangLemburInput): UangLemburResult {
   const jamHariLiburMentah = Math.max(0, input.totalJamLemburHariLibur ?? 0);
   const jamHariKerjaMentah = Math.max(0, input.totalJamLembur);
 
+  // Sisa menit yang tidak genap satu jam dipangkas DULU, sebelum batas
+  // maksimal diterapkan - jam yang memang tidak dibayar tidak sepantasnya
+  // ikut menghabiskan kuota 40 jam.
+  const jamHariLiburPenuh = bulatkanKeJamPenuh(jamHariLiburMentah);
+  const jamHariKerjaPenuh = bulatkanKeJamPenuh(jamHariKerjaMentah);
+
   // Batas maksimal berlaku ke TOTAL jam (kerja + libur). Jam hari libur
   // diprioritaskan tidak dipotong karena tarifnya lebih tinggi - kalau
   // sampai kena batas, yang dikurangi jam hari kerjanya dulu.
-  const jamLemburHariLibur = Math.min(jamHariLiburMentah, batasMaksimal);
-  const jamLemburHariKerja = Math.max(0, Math.min(jamHariKerjaMentah, batasMaksimal - jamLemburHariLibur));
+  const jamLemburHariLibur = Math.min(jamHariLiburPenuh, batasMaksimal);
+  const jamLemburHariKerja = Math.max(0, Math.min(jamHariKerjaPenuh, batasMaksimal - jamLemburHariLibur));
   const jamLemburDihitung = jamLemburHariKerja + jamLemburHariLibur;
 
   // --- Komponen 1: uang lembur (per JAM), hari libur dikali pengali ---

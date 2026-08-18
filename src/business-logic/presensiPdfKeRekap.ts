@@ -26,7 +26,32 @@
 // di kolom lain mana pun. Lihat LUPA_PRESENSI di bawah.
 //
 // -------------------------------------------------------------------------
-// JADWAL KERJA - ANGKANYA DIVERIFIKASI KE DATA, BUKAN ASUMSI
+// JADWAL KERJA - SEKARANG PUNYA DASAR HUKUM (Pasal 9 Permenaker 15/2024)
+// -------------------------------------------------------------------------
+// Ketiga angka di JADWAL_KERJA_DEFAULT dulu diturunkan dari DATA dan ditandai
+// TODO(confirm) "belum ada dokumen resmi jam kerja Kemnaker". Dokumennya
+// sekarang ada, dan angkanya COCOK SEMUA:
+//
+//   ayat (1) "paling sedikit 7,5 jam untuk 1 hari dan 37,5 untuk 1 minggu"
+//            -> jamKerjaPerHari = 7.5
+//   ayat (2) "Senin s.d. Kamis, hadir pukul 07.30 sampai dengan pukul 16.00;
+//             hari Jumat, hadir pukul 07.30 sampai dengan pukul 16.30"
+//            -> jamMasukWajibMenit 07:30, jamPulangWajibMenit 16:00 / 16:30
+//   ayat (3) "diberikan toleransi waktu sebanyak 60 menit"
+//            -> toleransiTerlambatMenit = 60
+//
+// Penurunan dari data (di bawah) DIBIARKAN sebagai catatan sejarah: angka
+// yang sama muncul dari dua jalan yang tidak saling menyalin, dan itu
+// menguatkan keduanya.
+//
+// TODO(confirm) YANG TERSISA - ayat (4): "Ketentuan mengenai Hari Kerja dan
+// Jam Kerja ... dapat DIKECUALIKAN sesuai dengan ketentuan peraturan
+// perundang-undangan." Jadwal di sini berlaku seragam untuk SEMUA satker;
+// kalau ada unit yang dikecualikan (mis. shift, UPT tertentu), jadwalnya
+// harus dibedakan per satker dan JADWAL_KERJA_DEFAULT tidak lagi cukup.
+//
+// -------------------------------------------------------------------------
+// Penurunan dari data (dilakukan sebelum dokumennya didapat):
 // -------------------------------------------------------------------------
 // - Jam masuk 07:30: dicek ke 101 baris yang punya catatan "Keterlambatan N
 //   menit" di 3 file asli. 101 dari 101 cocok persis dengan
@@ -37,14 +62,12 @@
 //   (Jumat: 2 dari 29). Pola khas orang menunggu gerbang presensi terbuka.
 // - 7,5 jam/hari: "Kewajiban Jam Kerja" di PDF selalu kelipatan 7,5
 //   (172,5 = 23 hari, 150 = 20 hari, 112,5 = 15 hari).
-//
-// TODO(confirm): ketiganya cocok dengan praktik 5 hari kerja 37,5 jam/minggu,
-// TAPI belum dikonfirmasi ke dokumen resmi jam kerja Kemnaker. Kalau ada
-// satker dengan jadwal berbeda, angkanya cukup diubah di JADWAL_KERJA_DEFAULT.
 // ============================================================================
 
 import type { BarisRekapPresensi } from "./rekapPresensi";
 import type { BarisPresensiPdf, LaporanPresensiPdf } from "./presensiPdf";
+import type { JenisCuti } from "../types/index";
+import { uraiJenisCuti, LABEL_JENIS_CUTI } from "./jenisCuti";
 
 export type KategoriHari =
   | "WFO"
@@ -67,22 +90,64 @@ export interface JadwalKerja {
   jamPulangWajibMenit: (number | null)[];
   jamKerjaPerHari: number;
   /**
-   * Pasal 13 ayat (3) memotong "setiap 1 (satu) menit" tanpa menyebut
-   * toleransi, jadi default 0. Sengaja dibuat konstanta supaya kalau ternyata
-   * ada kebijakan toleransi resmi, cukup satu angka yang diubah.
-   * TODO(confirm) ke Biro OSDMA/Hukum.
+   * Menit toleransi yang DIKURANGKAN dari keterlambatan SETIAP HARI (bukan
+   * ambang all-or-nothing, dan bukan dari total sebulan) sebelum potongan
+   * Pasal 13 ayat (3) dihitung.
+   *
+   * Lihat TOLERANSI_TERLAMBAT_MENIT di bawah untuk dasar angkanya.
    */
   toleransiTerlambatMenit: number;
 }
 
 const MENIT = (jam: number, menit: number) => jam * 60 + menit;
 
+/**
+ * TOLERANSI KETERLAMBATAN 60 MENIT PER HARI.
+ *
+ * DASAR HUKUMNYA SUDAH ADA - Pasal 9 ayat (3) Permenaker 15/2024, dikutip
+ * langsung: "Jam Kerja sebagaimana dimaksud pada ayat (2) diberikan toleransi
+ * waktu sebanyak 60 (enam puluh) menit."
+ *
+ * Ini MENUTUP TODO(confirm) lama yang berbunyi "yang masih terbuka adalah
+ * dasar hukumnya, bukan angkanya - mintakan ke Biro OSDMA/Hukum". Angka 60
+ * yang dulu diturunkan dari data ternyata memang angka yang tertulis di
+ * pasalnya. Yang TETAP tidak diatur pasal itu adalah BENTUK penerapannya
+ * (pengurangan per hari vs ambang all-or-nothing) - itu masih dari data:
+ * lihat tabel di bawah, pengurangan per hari cocok 44/48, ambang cuma 22/48.
+ *
+ * Angkanya DIBUKTIKAN ke praktik yang berjalan, bukan diasumsikan. Rincian
+ * tukin manual Biro Keuangan & BMN periode Juli 2026 (48 pegawai, file
+ * "excel rincian tunkin Juli 2026 _Rokeu") diadu ke data presensi harian
+ * Gajihub untuk beberapa nilai toleransi sekaligus:
+ *
+ *     toleransi    cocok persis    total menit
+ *        0             5/48          23.325
+ *       30            11/48          11.244
+ *       60            44/48           4.407   <- rincian manual: 4.495
+ *       90            23/48           2.364
+ *
+ * 60 menit menang telak, dan bentuknya PENGURANGAN per hari - bukan ambang.
+ * Varian "kalau lewat 60 menit dihitung penuh" hanya cocok 22/48. Contoh yang
+ * cocok sampai ke satuan menit: keterlambatan harian 67,61,59,59,59,57,42,36,35
+ * menit -> (67-60) + (61-60) = 8 menit, sama persis dengan rincian manual.
+ *
+ * Sumbernya juga konsisten dengan kolom `sistem_kerja.toleransi` = 60 di
+ * database e-Presensi untuk WFO/WFH/WFA. Dulu Gajihub memakai 0 dan karena
+ * itu memotong 5,2x lebih besar dari perhitungan manual (selisih Rp 941.133
+ * untuk satu unit dalam satu bulan, Gajihub membayar LEBIH KECIL).
+ *
+ * Jadi TIGA sumber yang saling bebas menunjuk angka yang sama: teks Pasal 9
+ * ayat (3), kolom `sistem_kerja.toleransi` di e-Presensi, dan rincian tukin
+ * manual Biro Keuangan.
+ */
+export const TOLERANSI_TERLAMBAT_MENIT = 60;
+
 export const JADWAL_KERJA_DEFAULT: JadwalKerja = {
   jamMasukWajibMenit: MENIT(7, 30),
   //        Minggu Senin        Selasa       Rabu         Kamis        Jumat         Sabtu
   jamPulangWajibMenit: [null, MENIT(16, 0), MENIT(16, 0), MENIT(16, 0), MENIT(16, 0), MENIT(16, 30), null],
   jamKerjaPerHari: 7.5,
-  toleransiTerlambatMenit: 0,
+  toleransiTerlambatMenit: TOLERANSI_TERLAMBAT_MENIT,
 };
 
 /**
@@ -141,6 +206,13 @@ export interface RincianHariPdf {
   menitTerlambat: number;
   menitPulangCepat: number;
   kejadianTidakPresensi: number;
+  /**
+   * Berapa kejadian Pasal 13 ayat (2) yang DIBATALKAN karena tanggal ini
+   * ditandai kendala e-Presensi (Pasal 10 ayat (2)). `kejadianTidakPresensi`
+   * di atas sudah bersih dari angka ini - yang ini disimpan supaya
+   * pembatalannya bisa dilihat, bukan menghilang tanpa jejak.
+   */
+  kejadianDikecualikanKendala: number;
   jamLembur: number;
   hariLibur: boolean;
   berhakMakanLembur: boolean;
@@ -170,6 +242,13 @@ export interface HasilRekapDariPdf {
   selisihRingkasan: SelisihRingkasan[];
   /** Hal yang WAJIB dilihat manusia sebelum kalkulasi dijalankan. */
   catatan: string[];
+  /**
+   * Total kejadian Pasal 13 ayat (2) yang dibatalkan karena tanggalnya
+   * ditandai kendala e-Presensi. 0 kalau tidak ada penanda yang kena.
+   */
+  kejadianDikecualikanKendala: number;
+  /** Tanggal yang jam presensinya diperbaiki manusia, bukan dari e-Presensi. */
+  tanggalDikoreksiManual: string[];
 }
 
 function normal(s: string): string {
@@ -240,10 +319,43 @@ function bulatkan2(n: number): number {
  */
 export function rekapDariLaporanPdf(
   laporan: LaporanPresensiPdf,
-  jadwal: JadwalKerja = JADWAL_KERJA_DEFAULT
+  jadwal: JadwalKerja = JADWAL_KERJA_DEFAULT,
+  /**
+   * Tanggal ISO yang ditandai kendala e-Presensi untuk pegawai INI (Pasal 10
+   * ayat (2)) - lihat `tanggalKendalaUntukSatker` di `kendalaEpresensi.ts`.
+   *
+   * Pengecualiannya ditaruh DI SINI, di fungsi yang sama yang menghitung
+   * kejadiannya - bukan dikurangkan belakangan di lapisan kalkulasi. Kalau
+   * dipisah, penghitung dan pembatal bisa memakai aturan yang sedikit
+   * berbeda, dan selisihnya baru ketahuan setelah uangnya terkirim.
+   */
+  tanggalKendala: ReadonlySet<string> = new Set(),
+  /**
+   * Jam hasil koreksi petugas absensi untuk pegawai INI, per tanggal ISO
+   * (Pasal 10 ayat (2)) - lihat model `KoreksiPresensiHarian`.
+   *
+   * Nilai null pada salah satu kolom berarti "tidak dikoreksi": jam dari
+   * e-Presensi dipakai apa adanya untuk kolom itu.
+   */
+  koreksiJam: ReadonlyMap<string, { jamMasukMenit: number | null; jamKeluarMenit: number | null }> = new Map(),
+  /**
+   * Tanggal merah & cuti bersama (ISO "YYYY-MM-DD" -> keterangannya).
+   *
+   * DITARUH DI SINI, bukan dikurangkan belakangan, dengan alasan yang sama
+   * dengan `tanggalKendala`: satu tanggal libur berpengaruh ke TIGA hal
+   * sekaligus (pengali lembur 2x, jumlahHariKerja yang membatasi uang makan,
+   * dan potongan Pasal 13), jadi kalau ditangani di luar sini ketiganya bisa
+   * memakai daftar tanggal yang sedikit berbeda.
+   *
+   * KOSONG = perilaku persis seperti sebelum kalender ini ada: hari libur cuma
+   * Sabtu & Minggu. Jadi tabel yang belum diisi tidak mengubah apa pun.
+   */
+  hariLiburNasional: ReadonlyMap<string, string> = new Map()
 ): HasilRekapDariPdf {
   const catatan: string[] = [...laporan.peringatan];
   const dibuang: BarisDibuang[] = [];
+  let dikecualikanKendalaTotal = 0;
+  const adaKoreksiJam = new Set<string>();
 
   // --- 1. Kelompokkan per tanggal --------------------------------------------
   const perTanggal = new Map<string, BarisPresensiPdf[]>();
@@ -276,6 +388,14 @@ export function rekapDariLaporanPdf(
   let menitTerlambatTotal = 0;
   let menitPulangCepatTotal = 0;
   let kejadianTidakPresensi = 0;
+  // Jenis cuti yang muncul di periode ini, beserta jumlah harinya.
+  const cutiPerJenis = new Map<JenisCuti, number>();
+  // Per jenis: bulan ke-berapa -> jumlah hari. Dua tingkat karena satu jenis
+  // cuti bisa BERGANTI bulan di tengah periode - nyata di data Juli 2026:
+  // seorang pegawai tercatat "Cuti Besar II" 18 hari lalu "Cuti Besar III"
+  // 15 hari dalam bulan yang sama.
+  const cutiBulanPerJenis = new Map<JenisCuti, Map<number, number>>();
+  const cutiTakDikenali = new Set<string>();
   let jamLemburKerja = 0;
   let jamLemburLibur = 0;
   let hariMakanLemburKerja = 0;
@@ -287,7 +407,13 @@ export function rekapDariLaporanPdf(
     const semua = perTanggal.get(iso)!;
     const idxHari = indeksHari(semua[0]);
     const namaHari = semua[0].namaHari;
-    const jamPulangWajib = idxHari === null ? null : jadwal.jamPulangWajibMenit[idxHari];
+    // Tanggal merah diperlakukan SAMA PERSIS dengan Sabtu/Minggu: tidak ada
+    // kewajiban jam kerja, jadi jam pulang wajibnya dinolkan juga. Satu
+    // keputusan di sini otomatis merambat ke pengali lembur, batas hari uang
+    // makan, dan seluruh potongan Pasal 13 yang sudah dijaga `!hariLibur`.
+    const keteranganLibur = hariLiburNasional.get(iso) ?? null;
+    const jamPulangWajib =
+      keteranganLibur !== null || idxHari === null ? null : jadwal.jamPulangWajibMenit[idxHari];
     const hariLibur = jamPulangWajib === null;
 
     const berkategori = semua.map((b) => ({ baris: b, ...kategoriDariStatus(b.statusTeks) }));
@@ -316,11 +442,24 @@ export function rekapDariLaporanPdf(
               : "entri ganda dengan status yang sama",
         });
       }
-      if (bukanTidakHadir.length > 1) {
+      // "Perlu dicek manual" HANYA kalau statusnya benar-benar BERBEDA.
+      //
+      // Sebelumnya syaratnya cuma "ada lebih dari satu baris bukan Tidak
+      // Hadir", jadi dua baris yang isinya sama persis pun dilaporkan sebagai
+      // "2 status berbeda" - kalimat yang membantah dirinya sendiri karena
+      // kedua status yang dicantumkannya identik. Nyata di tarikan Juli 2026:
+      // satu pegawai cuti menghasilkan 10-14 catatan seperti itu sendirian.
+      //
+      // Ini bukan sekadar rapi-rapi. Catatan di blok ini artinya "sistem
+      // tidak bisa memutuskan, tolong manusia lihat" - kalau sebagian besar
+      // isinya duplikat yang sebenarnya tidak ambigu, yang benar-benar perlu
+      // dilihat ikut tenggelam dan pada akhirnya semuanya diabaikan.
+      const statusUnik = new Set(bukanTidakHadir.map((x) => normal(x.baris.statusTeks)));
+      if (statusUnik.size > 1) {
         catatan.push(
-          `${iso}: ada ${bukanTidakHadir.length} status berbeda di tanggal yang sama (${bukanTidakHadir
-            .map((x) => x.baris.statusTeks)
-            .join(", ")}) - dipakai yang pertama ("${terpilih.baris.statusTeks}"), sisanya diabaikan. Perlu dicek manual.`
+          `${iso}: ada ${statusUnik.size} status berbeda di tanggal yang sama (${[
+            ...new Set(bukanTidakHadir.map((x) => x.baris.statusTeks)),
+          ].join(", ")}) - dipakai yang pertama ("${terpilih.baris.statusTeks}"), sisanya diabaikan. Perlu dicek manual.`
         );
       }
     }
@@ -335,6 +474,18 @@ export function rekapDariLaporanPdf(
       const kategori = terpilih.kategori;
       const lupa = LUPA_PRESENSI.test(b.potonganTeks) || kategori === "TIDAK_PRESENSI";
 
+      // --- Koreksi jam oleh petugas absensi (Pasal 10 ayat (2)) -------------
+      // Jam hasil laporan pegawai (foto + geotag + jam) menggantikan jam dari
+      // e-Presensi HANYA untuk kolom yang benar-benar dikoreksi - petugas
+      // boleh memperbaiki jam pulang saja tanpa menyentuh jam masuk yang
+      // sudah benar.
+      const koreksi = koreksiJam.get(iso);
+      const jamMasukEfektif = koreksi?.jamMasukMenit ?? b.jamMasukMenit;
+      const jamKeluarEfektif = koreksi?.jamKeluarMenit ?? b.jamKeluarMenit;
+      const masukDikoreksi = koreksi?.jamMasukMenit != null;
+      const keluarDikoreksi = koreksi?.jamKeluarMenit != null;
+      if (koreksi) adaKoreksiJam.add(iso);
+
       // TIDAK ADA potongan apa pun di hari yang memang bukan hari kerja.
       // Pasal 13 memotong pelanggaran terhadap KEWAJIBAN jam kerja - kalau
       // hari itu tidak ada kewajibannya, tidak ada yang dilanggar. Ini nyata
@@ -347,12 +498,52 @@ export function rekapDariLaporanPdf(
       // tidak ada di sistem ini, dan file PDF-nya juga tidak memuatnya.
       // Selisih antara jumlah hari hadir dan "Kewajiban Jam Kerja" dipakai
       // sebagai penanda supaya kasusnya tetap kelihatan (lihat catatan akhir).
-      if (!hariLibur && (KATEGORI_WAJIB_PRESENSI.includes(kategori) || kategori === "TIDAK_PRESENSI")) {
-        if (b.jamMasukMenit === null) tidakPresensi++;
-        if (b.jamKeluarMenit === null) tidakPresensi++;
+      // KATEGORI_WAJIB_JAM_KERJA (WFO + WFH/WFA), bukan KATEGORI_WAJIB_PRESENSI.
+      //
+      // Diklat, Dinas Keluar, dan Lembur DIKECUALIKAN - alasannya sama persis
+      // dengan yang sudah dipakai untuk terlambat & pulang cepat di blok
+      // bawah: jam presensinya mengikuti kegiatan/perjalanan dinas, bukan jam
+      // kantor, jadi tap yang hilang di sana bukan pelanggaran kewajiban
+      // presensi kantor. Orang yang diklat seharian di luar memang sering
+      // tidak tap pulang di kantornya.
+      //
+      // Dibuktikan ke rincian tukin manual Rokeu Juli 2026: sebelum
+      // pengecualian ini, satu pegawai (Alpha Sandro) terhitung 15 kejadian
+      // padahal rincian manual menulis 2 - dan 13 selisihnya SEMUANYA hari
+      // Diklat. Pegawai lain (Prasetyo) terhitung 3, semuanya Dinas Keluar,
+      // sementara rincian manual menulis 0.
+      if (!hariLibur && (KATEGORI_WAJIB_JAM_KERJA.includes(kategori) || kategori === "TIDAK_PRESENSI")) {
+        // DIHITUNG PER KETUKAN, bukan per hari - Pasal 13 ayat (2) eksplisit
+        // "SETIAP KALI tidak melakukan presensi". Jadi hari yang lupa presensi
+        // masuk DAN pulang memang menghasilkan 2 kejadian (2%), bukan 1%.
+        if (jamMasukEfektif === null) tidakPresensi++;
+        if (jamKeluarEfektif === null) tidakPresensi++;
         // Penanda dari sumber cuma dipakai kalau jamnya TERISI - kalau selnya
         // memang kosong, kejadiannya sudah terhitung di atas.
-        if (tidakPresensi === 0 && lupa) tidakPresensi++;
+        //
+        // `menitKerja === 0` adalah penanda yang sama kuatnya, dan ini yang
+        // menutup kasus paling sering: tap pulang hilang, tapi e-Presensi
+        // MENGISI jam keluar dengan 23:59 sehingga jamnya tidak terlihat
+        // kosong. Yang menandainya cuma kolom menit_kerja yang dinolkan
+        // sumbernya sendiri - dari 788 hari kerja 48 pegawai Rokeu Juli 2026,
+        // 26 hari ber-menitKerja 0 dan SEMUANYA berpasangan dengan jam keluar
+        // 23:59. Diadu ke rincian tukin manual: penanda ini membawa
+        // kecocokan kolom "Lupa Absen" dari 34/48 jadi 44/48.
+        //
+        // SENGAJA hanya `=== 0`, bukan `< 450` (7,5 jam Pasal 9 ayat 1) -
+        // walau ambang 450 mencocokkan 45/48. Hari yang jam kerjanya KURANG
+        // tapi bukan nol adalah pulang cepat, dan itu Pasal 13 ayat (3) yang
+        // bertarif PER MENIT - sudah dihitung di blok bawah dari jam
+        // keluarnya. Memakai `< 450` di sini berarti hari yang sama ditagih
+        // dua kali dengan dasar hukum yang berbeda.
+        //
+        // Kalau petugas absensi sudah memperbaiki jamnya berdasarkan laporan
+        // pegawai, penanda "lupa" dari sumber TIDAK berlaku lagi: yang
+        // dinyatakan hilang oleh e-Presensi sudah digantikan keterangan yang
+        // diverifikasi manusia. Tanpa pengecualian ini, koreksi jam tidak
+        // ada gunanya - potongannya tetap terhitung.
+        const sudahDiperbaiki = masukDikoreksi || keluarDikoreksi;
+        if (tidakPresensi === 0 && !sudahDiperbaiki && (lupa || b.menitKerja === 0)) tidakPresensi++;
       }
 
       if (!hariLibur && KATEGORI_WAJIB_JAM_KERJA.includes(kategori)) {
@@ -362,21 +553,34 @@ export function rekapDariLaporanPdf(
         // kolom. Membacanya mentah-mentah berarti menagih "terlambat 736
         // menit" untuk orang yang sebenarnya lupa presensi pagi (pelanggaran
         // yang beda pasalnya, dan sudah dihitung di atas).
+        //
+        // Jam hasil KOREKSI petugas selalu dipercaya: itu keterangan yang
+        // sudah diverifikasi manusia terhadap bukti (foto, geotag, jam),
+        // bukan tebakan atas ketukan yang hilang.
         const masukDipercaya =
-          b.jamMasukMenit !== null &&
-          (!lupa || jamPulangWajib === null || b.jamMasukMenit < jamPulangWajib);
-        const keluarDipercaya = b.jamKeluarMenit !== null && !lupa;
+          jamMasukEfektif !== null &&
+          (masukDikoreksi || !lupa || jamPulangWajib === null || jamMasukEfektif < jamPulangWajib);
+        const keluarDipercaya = jamKeluarEfektif !== null && (keluarDikoreksi || !lupa);
 
-        if (masukDipercaya && b.jamMasukMenit !== null) {
-          const telat = b.jamMasukMenit - jadwal.jamMasukWajibMenit - jadwal.toleransiTerlambatMenit;
-          menitTerlambat = Math.max(0, telat);
+        // Keterlambatan MENTAH (tanpa toleransi) dipakai HANYA buat deteksi
+        // anomali di bawah. Ambangnya soal "ini jelas bukan ketukan pagi",
+        // yang ditentukan jam berapa orangnya datang - bukan oleh kebijakan
+        // toleransi. Kalau ambangnya diadu ke angka yang sudah dipotong
+        // toleransi, mengubah toleransi diam-diam ikut menggeser batas
+        // anomali, dan itu bukan hubungan yang diinginkan.
+        let menitTerlambatMentah = 0;
+        if (masukDipercaya && jamMasukEfektif !== null) {
+          menitTerlambatMentah = Math.max(0, jamMasukEfektif - jadwal.jamMasukWajibMenit);
+          menitTerlambat = Math.max(0, menitTerlambatMentah - jadwal.toleransiTerlambatMenit);
         }
-        if (keluarDipercaya && b.jamKeluarMenit !== null && jamPulangWajib !== null) {
-          menitPulangCepat = Math.max(0, jamPulangWajib - b.jamKeluarMenit);
+        if (keluarDipercaya && jamKeluarEfektif !== null && jamPulangWajib !== null) {
+          menitPulangCepat = Math.max(0, jamPulangWajib - jamKeluarEfektif);
         }
-        if (menitTerlambat > AMBANG_TERLAMBAT_JANGGAL_MENIT) {
+        // Peringatan "jam masuk janggal" tidak perlu muncul lagi kalau jamnya
+        // memang sudah diperbaiki manusia - itu justru penyelesaiannya.
+        if (!masukDikoreksi && menitTerlambatMentah > AMBANG_TERLAMBAT_JANGGAL_MENIT) {
           catatan.push(
-            `${iso}: jam masuk ${b.jamMasukTeks} menghasilkan keterlambatan ${menitTerlambat} menit - angkanya janggal, cek apakah pegawai lupa presensi pagi.`
+            `${iso}: jam masuk ${b.jamMasukTeks} menghasilkan keterlambatan ${menitTerlambatMentah} menit - angkanya janggal, cek apakah pegawai lupa presensi pagi.`
           );
         }
       }
@@ -384,10 +588,34 @@ export function rekapDariLaporanPdf(
       // Hari WFO/WFH di akhir pekan TIDAK dihitung sebagai hari kerja yang
       // berhak uang makan (SBM item 22.1 dasarnya hari kerja), dan "Tidak
       // Hadir" di akhir pekan bukan alpha - tidak ada kewajiban hadir.
-      if (hariLibur && ["WFO", "WFH_WFA", "TIDAK_HADIR"].includes(kategori)) {
+      //
+      // DIKLAT & DINAS_LUAR ikut dikecualikan sejak diadu ke rincian manual
+      // Rokeu: Alpha Sandro terhitung 14 hari Diklat di Juli 2026 sementara
+      // rincian manual menulis 13 - selisihnya SATU baris Diklat di Sabtu
+      // 4 Juli. Alasannya sama dengan WFO/WFH: hari itu bukan hari kerja, jadi
+      // tidak ada hari kerja yang "terpakai" oleh kegiatannya. Efek yang
+      // paling kelihatan: 295 dari 5.089 rekap Juli menampilkan hari hadir
+      // MELEBIHI hari kerja (Alpha Sandro 24 dari 23) - angka yang tidak bisa
+      // dibaca sebagai benar oleh siapa pun yang mencocokkannya.
+      //
+      // TIDAK mengubah rupiah: uang makan dihitung dari WFO + WFH/WFA (Diklat
+      // & Dinas Keluar memang tidak berhak, lihat SBM item 22.1), dan seluruh
+      // potongan Pasal 13 sudah dijaga `!hariLibur` di blok-blok di atas.
+      // Yang berubah hanya angka pelaporan - dan itu justru yang diadu ke
+      // rincian manual.
+      //
+      // Kategori lain (Cuti/Izin/Sakit/Upacara/Tugas Belajar) SENGAJA tidak
+      // ikut ditambahkan: di data Juli 2026 tidak ada satu pun barisnya yang
+      // jatuh di akhir pekan (Dinas Keluar 540 baris, Diklat 51, sisanya nol),
+      // jadi menambahkannya berarti mengubah perilaku atas kasus yang belum
+      // pernah terlihat. Cuti khususnya berisiko: jumlahHariCuti ikut menjadi
+      // dasar penanda PERIKSA MANUAL di hitungTukin.
+      if (hariLibur && ["WFO", "WFH_WFA", "TIDAK_HADIR", "DIKLAT", "DINAS_LUAR"].includes(kategori)) {
         hitung.akhirPekan++;
         catatan.push(
-          `${iso} (${namaHari ?? "akhir pekan"}): status "${b.statusTeks}" jatuh di akhir pekan - tidak dihitung sebagai hari kerja (tidak dapat uang makan, tidak kena potongan).`
+          keteranganLibur !== null
+            ? `${iso} (${namaHari ?? "-"}): status "${b.statusTeks}" jatuh di hari libur nasional (${keteranganLibur}) - tidak dihitung sebagai hari kerja (tidak dapat uang makan, tidak kena potongan).`
+            : `${iso} (${namaHari ?? "akhir pekan"}): status "${b.statusTeks}" jatuh di akhir pekan - tidak dihitung sebagai hari kerja (tidak dapat uang makan, tidak kena potongan).`
         );
       } else {
         switch (kategori) {
@@ -396,7 +624,23 @@ export function rekapDariLaporanPdf(
           case "DIKLAT": hitung.diklat++; break;
           case "DINAS_LUAR": hitung.dinasLuar++; break;
           case "UPACARA": hitung.upacara++; break;
-          case "CUTI": hitung.cuti++; break;
+          case "CUTI":
+            hitung.cuti++;
+            // Jenis cutinya ikut dicatat supaya potongan Pasal 14 tidak perlu
+            // diketik ulang. Yang tidak dikenali dikumpulkan buat dilaporkan -
+            // TIDAK ditebak, karena salah jenis = salah tarif potongan.
+            {
+              const j = uraiJenisCuti(terpilih.jenisCuti);
+              if (j) {
+                cutiPerJenis.set(j.jenis, (cutiPerJenis.get(j.jenis) ?? 0) + 1);
+                if (j.bulanKeberapa !== null) {
+                  const perBulan = cutiBulanPerJenis.get(j.jenis) ?? new Map<number, number>();
+                  perBulan.set(j.bulanKeberapa, (perBulan.get(j.bulanKeberapa) ?? 0) + 1);
+                  cutiBulanPerJenis.set(j.jenis, perBulan);
+                }
+              } else if (terpilih.jenisCuti) cutiTakDikenali.add(terpilih.jenisCuti);
+            }
+            break;
           case "IZIN": hitung.izin++; break;
           case "SAKIT": hitung.sakit++; break;
           case "TUGAS_BELAJAR": hitung.tugasBelajar++; break;
@@ -407,6 +651,24 @@ export function rekapDariLaporanPdf(
             break;
           default: break;
         }
+      }
+
+      // --- Kendala e-Presensi (Pasal 10 ayat (2)) ----------------------------
+      // Tanggal ini sudah ditandai manusia sebagai hari e-Presensi bermasalah,
+      // jadi kegagalan mencatat presensi bukan kelalaian pegawainya.
+      //
+      // Yang dibatalkan HANYA ayat (2). Keterlambatan (ayat 3) TETAP dihitung:
+      // pada kejadian nyata 15-16 Juli 2026, seluruh 1.173 kasus masih punya
+      // absen MASUK yang tercatat normal - yang gagal cuma sisi pulangnya.
+      // Menghapus keterlambatan juga berarti memutihkan pelanggaran yang
+      // datanya justru lengkap. Ketidakhadiran (ayat 1) juga tidak disentuh -
+      // orang yang memang tidak masuk tetap tidak masuk, sistem rusak atau
+      // tidak.
+      let dikecualikanHariIni = 0;
+      if (tidakPresensi > 0 && tanggalKendala.has(iso)) {
+        dikecualikanHariIni = tidakPresensi;
+        tidakPresensi = 0;
+        dikecualikanKendalaTotal += dikecualikanHariIni;
       }
 
       menitTerlambatTotal += menitTerlambat;
@@ -424,6 +686,7 @@ export function rekapDariLaporanPdf(
         menitTerlambat,
         menitPulangCepat,
         kejadianTidakPresensi: tidakPresensi,
+        kejadianDikecualikanKendala: dikecualikanHariIni,
         jamLembur: 0,
         hariLibur,
         berhakMakanLembur: false,
@@ -444,8 +707,12 @@ export function rekapDariLaporanPdf(
             `${iso}: baris Lembur tidak punya jam masuk/pulang lengkap - jam lemburnya tidak bisa dihitung, isi manual lewat template Excel kalau memang ada.`
           );
           if (KATEGORI_WAJIB_PRESENSI.includes("LEMBUR")) {
+            // Per ketukan yang hilang - lihat catatan yang sama di atas.
             const kurang = (b.jamMasukMenit === null ? 1 : 0) + (b.jamKeluarMenit === null ? 1 : 0);
-            kejadianTidakPresensi += kurang;
+            // Kendala e-Presensi berlaku di sini juga: kalau sistemnya tidak
+            // bisa dipakai, baris lembur pun tidak bisa dicatat lengkap.
+            if (tanggalKendala.has(iso)) dikecualikanKendalaTotal += kurang;
+            else kejadianTidakPresensi += kurang;
           }
           continue;
         }
@@ -489,6 +756,7 @@ export function rekapDariLaporanPdf(
             menitTerlambat: 0,
             menitPulangCepat: 0,
             kejadianTidakPresensi: 0,
+            kejadianDikecualikanKendala: 0,
             jamLembur: jam,
             hariLibur,
             berhakMakanLembur: adaBlokDuaJam,
@@ -505,6 +773,28 @@ export function rekapDariLaporanPdf(
 
   const jumlahHariHadir = hitung.wfo + hitung.wfhWfa + hitung.diklat + hitung.dinasLuar;
 
+  // Jenis cuti dengan hari terbanyak. Map mempertahankan urutan penyisipan,
+  // jadi kalau seri, yang lebih dulu muncul di bulan itu yang menang.
+  const jenisCutiTerbanyak =
+    [...cutiPerJenis.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  // Bulan ke-berapa untuk jenis yang menang di atas. Kalau satu jenis
+  // mencakup dua bulan sekaligus (mis. Cuti Besar II lalu III), dipakai yang
+  // HARINYA TERBANYAK - kalau seri, yang nomornya lebih kecil (lebih
+  // menguntungkan pegawai, karena tarif potongannya menaik).
+  //
+  // Pembagian proporsional antar bulan SENGAJA tidak dilakukan: Pasal 14
+  // memberi satu persentase per periode pembayaran, dan cara membagi cuti
+  // yang pindah bulan di tengah periode masih open item (lihat item 3 di
+  // "Yang BELUM ada", CLAUDE.md). Kasusnya dilaporkan sebagai catatan.
+  let bulanCutiKeberapa: number | null = null;
+  if (jenisCutiTerbanyak) {
+    const perBulan = cutiBulanPerJenis.get(jenisCutiTerbanyak);
+    if (perBulan && perBulan.size > 0) {
+      bulanCutiKeberapa = [...perBulan.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
+    }
+  }
+
   const rekap: BarisRekapPresensi = {
     nip: laporan.nip ?? "",
     jumlahHariAlpha: hitung.tidakHadir,
@@ -516,6 +806,10 @@ export function rekapDariLaporanPdf(
     // Dibiarkan 0, BUKAN ditebak. Kalau satker punya catatannya, isi lewat
     // template Excel yang sudah ada.
     totalMenitMeninggalkanKantor: 0,
+    // Blok "Kekurangan Jam Kerja" di PDF DIBACA (presensiPdf.ts) tapi tidak
+    // pernah jadi potongan - Pasal 13 ayat (3) cuma menyebut terlambat,
+    // pulang cepat, dan meninggalkan kantor, dan ketiganya sudah dihitung
+    // per hari di atas. Kolom potongannya sudah dicabut 2026-08-07.
     // Status "Upacara Bendera" di PDF artinya pegawai IKUT upacara. Yang
     // TIDAK ikut tidak punya baris apa pun, dan tanggal upacara juga tidak
     // tercatat di file - jadi pelanggaran Pasal 13 ayat (4) tidak bisa
@@ -527,6 +821,25 @@ export function rekapDariLaporanPdf(
     jumlahHariWfhWfa: hitung.wfhWfa,
     jumlahHariDiklat: hitung.diklat,
     jumlahHariDinasLuar: hitung.dinasLuar,
+    // Status "Tugas Belajar" memang muncul di export ini (kategoriDariStatus
+    // sudah mengenalinya), jadi penandanya bisa diturunkan langsung - tidak
+    // perlu diketik manual. Yang memakainya: pengali 80% di tukin.ts.
+    jumlahHariTugasBelajar: hitung.tugasBelajar,
+
+    // --- Cuti (Pasal 14) ---
+    // Jenis dengan hari TERBANYAK yang dipakai kalau ada lebih dari satu di
+    // bulan yang sama - `cutiAktif` di engine memang tunggal. Kasus banyak
+    // jenis dilaporkan sebagai catatan, bukan diputuskan diam-diam.
+    //
+    // `bulanCutiKeberapa` diturunkan dari NAMA jenis cutinya ("Cuti Besar II",
+    // "Cuti Sakit Bulan III") - lihat bulanCutiDariLabel() di jenisCuti.ts.
+    // Tetap null kalau nomornya memang tidak disebut sumbernya; pemakainya
+    // (tukin.ts) memperlakukan null sebagai bulan pertama, dan catatan di
+    // bawah memberi tahu user kalau itu yang terjadi pada jenis cuti yang
+    // tarifnya bertingkat.
+    jenisCutiAktif: jenisCutiTerbanyak,
+    bulanCutiKeberapa,
+    jumlahHariCuti: hitung.cuti,
     totalJamLembur: bulatkan2(jamLemburKerja),
     totalJamLemburHariLibur: bulatkan2(jamLemburLibur),
     jumlahHariMakanLembur: hariMakanLemburKerja,
@@ -601,12 +914,73 @@ export function rekapDariLaporanPdf(
   }
   if (hitung.cuti + hitung.izin + hitung.sakit + hitung.tugasBelajar > 0) {
     catatan.push(
-      `Ada ${hitung.cuti} hari cuti, ${hitung.izin} izin, ${hitung.sakit} sakit, ${hitung.tugasBelajar} tugas belajar. Hari-hari ini tidak dihitung alpha dan tidak dapat uang makan. Potongan cuti besar/sakit (Pasal 14) TIDAK otomatis - itu input terpisah di kalkulasi Tukin.`
+      `Ada ${hitung.cuti} hari cuti, ${hitung.izin} izin, ${hitung.sakit} sakit, ${hitung.tugasBelajar} tugas belajar. Hari-hari ini tidak dihitung alpha dan tidak dapat uang makan.`
     );
+  }
+  if (cutiTakDikenali.size > 0) {
+    catatan.push(
+      `Jenis cuti tidak dikenali: ${[...cutiTakDikenali].join(", ")}. Hari-harinya tetap terhitung sebagai cuti, TAPI potongan Pasal 14-nya tidak bisa ditentukan - isi kolom "Jenis Cuti" lewat template kalau memang perlu dipotong.`
+    );
+  }
+  if (cutiPerJenis.size > 1) {
+    catatan.push(
+      `Ada lebih dari satu jenis cuti di periode ini (${[...cutiPerJenis.entries()]
+        .map(([j, n]) => `${LABEL_JENIS_CUTI[j]} ${n} hari`)
+        .join(", ")}). Yang dipakai untuk potongan Pasal 14 adalah yang harinya terbanyak - periksa manual kalau bukan itu yang dimaksud.`
+    );
+  }
+  // Tarif 50%/75%/90% untuk cuti sakit & cuti besar ditentukan oleh BULAN KE
+  // BERAPA cuti berjalan. Sumber e-Presensi biasanya menyebutnya di nama
+  // jenisnya ("Cuti Besar II"), jadi peringatan ini cuma muncul kalau
+  // nomornya memang tidak ada - bukan setiap kali ada cuti seperti dulu.
+  if (jenisCutiTerbanyak === "CUTI_SAKIT" || jenisCutiTerbanyak === "CUTI_BESAR") {
+    if (bulanCutiKeberapa === null) {
+      catatan.push(
+        `${LABEL_JENIS_CUTI[jenisCutiTerbanyak]} terdeteksi, tapi BULAN KE BERAPA cuti ini berjalan tidak disebut di sumbernya - padahal itu yang menentukan potongannya (bulan I/II/III). Cuti ini diperlakukan sebagai BULAN PERTAMA; isi kolom "Bulan Cuti Ke" lewat template kalau ternyata bukan.`
+      );
+    } else {
+      const perBulan = cutiBulanPerJenis.get(jenisCutiTerbanyak);
+      if (perBulan && perBulan.size > 1) {
+        catatan.push(
+          `${LABEL_JENIS_CUTI[jenisCutiTerbanyak]} berpindah bulan di tengah periode ini (${[...perBulan.entries()]
+            .sort((a, b) => a[0] - b[0])
+            .map(([b, n]) => `bulan ke-${b}: ${n} hari`)
+            .join(", ")}). Potongan Pasal 14 dihitung memakai bulan ke-${bulanCutiKeberapa} (harinya terbanyak) - pembagian proporsional antar bulan belum diatur, periksa manual kalau nilainya besar.`
+        );
+      }
+    }
   }
   if (jumlahHariKerja > 0 && jumlahHariHadir > jumlahHariKerja) {
     catatan.push(
-      `Hari hadir (${jumlahHariHadir}) melebihi hari kerja (${jumlahHariKerja} hari, dari "Kewajiban Jam Kerja" ${kewajiban} jam di PDF). Ini WAJAR kalau pegawai dinas keluar / masuk di hari libur nasional - libur nasional tidak bisa dikenali sistem ini, jadi harinya tetap terbaca sebagai hari hadir. Hak uang makan tetap dibatasi ${jumlahHariKerja} hari.`
+      // Sabtu & Minggu SUDAH tidak bisa jadi penyebabnya (dikecualikan di blok
+      // penghitungan). Yang tersisa cuma libur nasional yang jatuh di hari
+      // kerja - itu memang tidak bisa dikenali sistem ini, jadi catatan ini
+      // sekarang jauh lebih jarang muncul dan lebih layak dipercaya.
+      `Hari hadir (${jumlahHariHadir}) melebihi hari kerja (${jumlahHariKerja} hari, dari "Kewajiban Jam Kerja" ${kewajiban} jam di PDF). Kemungkinan besar ada LIBUR NASIONAL di hari kerja - kalender libur nasional tidak ada di sistem ini, jadi harinya tetap terbaca sebagai hari hadir. Hak uang makan tetap dibatasi ${jumlahHariKerja} hari.`
+    );
+  }
+
+  // Pengecualian kendala e-Presensi WAJIB kelihatan, bukan cuma mengubah
+  // angka diam-diam. Ini yang dibaca orang yang bertanya "kenapa potongan
+  // orang ini hilang padahal jam pulangnya kosong".
+  if (dikecualikanKendalaTotal > 0) {
+    const tanggalKena = hari
+      .filter((h) => h.kejadianDikecualikanKendala > 0)
+      .map((h) => h.tanggalIso)
+      .join(", ");
+    catatan.push(
+      `${dikecualikanKendalaTotal} kejadian "tidak melakukan presensi" (Pasal 13 ayat (2)) TIDAK dipotong karena tanggalnya ditandai kendala e-Presensi (Pasal 10 ayat (2))${
+        tanggalKena ? `: ${tanggalKena}` : ""
+      }. Keterlambatan dan ketidakhadiran di tanggal itu TETAP dihitung.`
+    );
+  }
+
+  // Koreksi manual WAJIB kelihatan di hasilnya - angka yang diketik manusia
+  // tidak boleh menyamar sebagai angka dari e-Presensi.
+  if (adaKoreksiJam.size > 0) {
+    catatan.push(
+      `Jam presensi pada ${adaKoreksiJam.size} tanggal (${[...adaKoreksiJam].sort().join(", ")}) DIKOREKSI MANUAL ` +
+        "oleh petugas absensi berdasarkan laporan pegawai (Pasal 10 ayat (2)) - bukan angka dari e-Presensi."
     );
   }
 
@@ -620,5 +994,7 @@ export function rekapDariLaporanPdf(
     dibuang,
     selisihRingkasan,
     catatan,
+    kejadianDikecualikanKendala: dikecualikanKendalaTotal,
+    tanggalDikoreksiManual: [...adaKoreksiJam].sort(),
   };
 }

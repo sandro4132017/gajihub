@@ -5,11 +5,13 @@ import type { KeputusanApproval } from "../../approval/types";
 import { ApprovalForm } from "../ApprovalForm";
 import { ajukanApprovalUangMakanAction } from "../actions";
 import { FilterBar } from "../FilterBar";
+import { ApprovalMassalForm } from "../ApprovalMassalForm";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewApproverDashboard } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
 import { AksesDitolak } from "../AksesDitolak";
 import { StatusBadge } from "../StatusBadge";
+import { RincianUangMakan } from "../RincianUangMakan";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +68,34 @@ export default async function UangMakanPage({
     orderBy: { timestampAksi: "asc" },
   });
 
+  // Bahan rincian "kenapa segini". Diambil sekali untuk seluruh daftar lalu
+  // dipetakan per pegawai+periode - bukan satu query per kartu.
+  const rekapSemua = await prisma.rekapPresensiPeriode.findMany({
+    where: {
+      OR: kalkulasiList.map((k) => ({
+        pegawaiId: k.pegawaiId,
+        periodeBulan: k.periodeBulan,
+        periodeTahun: k.periodeTahun,
+      })),
+    },
+    select: {
+      pegawaiId: true,
+      periodeBulan: true,
+      periodeTahun: true,
+      jumlahHariWfo: true,
+      jumlahHariWfhWfa: true,
+      jumlahHariDiklat: true,
+      jumlahHariDinasLuar: true,
+      jumlahHariCuti: true,
+      jumlahHariAlpha: true,
+      jumlahHariKerja: true,
+    },
+  });
+  const kunciRekap = (pegawaiId: string, b: number, t: number) => `${pegawaiId}|${b}|${t}`;
+  const petaRekap = new Map(
+    rekapSemua.map((r) => [kunciRekap(r.pegawaiId, r.periodeBulan, r.periodeTahun), r])
+  );
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Makan</h1>
@@ -74,6 +104,18 @@ export default async function UangMakanPage({
       </p>
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
+
+      {/* Lihat catatan di src/app/tukin/page.tsx - periode wajib dipilih dulu. */}
+      {bulan && tahun && authUser.role !== "PIMPINAN" && (
+        <ApprovalMassalForm
+          jenis="UANG_MAKAN"
+          label="Uang Makan"
+          bulan={Number(bulan)}
+          tahun={Number(tahun)}
+          satker={satkerEfektif}
+          jumlahBelumApproved={kalkulasiList.filter((k) => k.status !== "APPROVED").length}
+        />
+      )}
 
       <div className="mt-8 space-y-4">
         {kalkulasiList.length === 0 && (
@@ -102,7 +144,8 @@ export default async function UangMakanPage({
                     NIP {kalkulasi.pegawai.nip} - Periode {kalkulasi.periodeBulan}/{kalkulasi.periodeTahun}
                   </p>
                   <p className="text-xs text-muted/80">
-                    Hadir {kalkulasi.jumlahHariHadir} dari {kalkulasi.jumlahHariKerja} hari kerja
+                    Dibayar {kalkulasi.jumlahHariDibayar} hari x {formatRupiah(kalkulasi.tarifHarian)} - hadir{" "}
+                    {kalkulasi.jumlahHariHadir} dari {kalkulasi.jumlahHariKerja} hari kerja
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
@@ -122,6 +165,29 @@ export default async function UangMakanPage({
                   Catatan validasi: {kalkulasi.catatanAnomali}
                 </p>
               )}
+
+              {(() => {
+                const rekap = petaRekap.get(
+                  kunciRekap(kalkulasi.pegawaiId, kalkulasi.periodeBulan, kalkulasi.periodeTahun)
+                );
+                if (!rekap) {
+                  // Jujur soal batasnya: rekap bulanan cuma ada untuk periode
+                  // yang ditarik/diupload. Tanpa itu rinciannya memang tidak
+                  // bisa direkonstruksi - dan itu dikatakan, bukan dikosongkan.
+                  return (
+                    <p className="mt-3 text-xs text-muted">
+                      Rincian per status kehadiran tidak tersedia - rekap presensi periode ini belum ada di database.
+                    </p>
+                  );
+                }
+                return (
+                  <RincianUangMakan
+                    input={{ golongan: kalkulasi.pegawai.golongan, ...rekap }}
+                    nilaiTersimpan={kalkulasi.totalUangMakan}
+                    hariDibayarTersimpan={kalkulasi.jumlahHariDibayar}
+                  />
+                );
+              })()}
 
               {logSiklusIni.length > 0 && (
                 <ul className="mt-2 space-y-1 text-xs text-muted">

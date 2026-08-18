@@ -78,11 +78,13 @@
 //    STATUSPEGAWAIID di SIAP mencampur JENIS kepegawaian (PNS/PPPK/CPNS)
 //    dengan status - pemetaan yang lebih halus perlu dibicarakan.
 // 3. Cakupan PPPK: golongan PPPK di SIAP berformat angka Romawi tunggal
-//    ("IX", "XI") sementara PNS berformat "III/d". Fungsi golonganRomawi()
-//    di tarifSbm.ts hanya mengenali format PNS dan mengembalikan null untuk
-//    PPPK - artinya PPPK akan DILEWATI saat kalkulasi uang makan/lembur
-//    dengan alasan eksplisit, bukan dihitung dengan tarif tebakan. Perlu
-//    diputuskan tarif SBM mana yang berlaku untuk PPPK.
+//    ("IX", "XI") pada skala I-XVII, sementara PNS berformat "III/d". Sejak
+//    2026-08-06 keduanya SUDAH terhitung: kurungTarifSbm() di tarifSbm.ts
+//    memetakan jenjang PPPK ke kurung tarif SBM lewat PADANAN_GOLONGAN_PPPK.
+//    Padanan itu sendiri masih TODO(confirm) - lihat komentarnya di sana.
+//    JANGAN menormalkan golongan PPPK jadi format PNS ("IX" -> "III/a") di
+//    importer ini: sufiks huruf itulah yang membedakan keduanya, dan begitu
+//    hilang, PPPK jenjang bawah tidak bisa lagi dibedakan dari PNS.
 // 4. Pegawai yang HILANG dari hasil query SIAP (mis. karena pensiun) SEKARANG
 //    DITANDAI, bukan dibiarkan seolah masih aktif: langkah "Rekonsiliasi
 //    status" di akhir main() menanyakan status terkini mereka ke SIAP lalu
