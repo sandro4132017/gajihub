@@ -1,4 +1,4 @@
-import { NAMA_BULAN } from "./bulan";
+import { NAMA_BULAN, daftarTahunPeriode } from "./bulan";
 import { SearchableSelect } from "./SearchableSelect";
 
 /**
@@ -25,6 +25,15 @@ export function FilterBar({
 }) {
   const adaFilterAktif = Boolean(bulan || tahun || satker);
 
+  // Tahun yang sedang dipakai TAPI di luar daftar (mis. link lama ?tahun=2025)
+  // tetap dimunculkan sebagai opsi. Kalau tidak, field-nya tampil kosong
+  // padahal filternya aktif - orang akan mengira filternya tidak jalan.
+  const tahunOpsi = daftarTahunPeriode();
+  if (tahun && /^\d{4}$/.test(tahun) && !tahunOpsi.includes(Number(tahun))) {
+    tahunOpsi.push(Number(tahun));
+    tahunOpsi.sort((a, b) => a - b);
+  }
+
   return (
     <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
       <div>
@@ -40,12 +49,12 @@ export function FilterBar({
 
       <div>
         <label className="field-label">Tahun</label>
-        <input
-          type="number"
+        <SearchableSelect
           name="tahun"
+          className="w-32"
+          options={tahunOpsi.map((t) => ({ value: String(t), label: String(t) }))}
           defaultValue={tahun ?? ""}
-          placeholder="cth. 2026"
-          className="field-input w-24 py-1.5"
+          emptyLabel="Semua tahun"
         />
       </div>
 

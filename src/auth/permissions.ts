@@ -239,6 +239,48 @@ export function canUploadRekapPresensi(user: AuthUser, targetSatuanKerja: string
 }
 
 /**
+ * Menandai sebuah TANGGAL sebagai kendala e-Presensi (Pasal 10 ayat (2)
+ * Permenaker 15/2024), yang membatalkan potongan Pasal 13 ayat (2) untuk
+ * semua pegawai terdampak di tanggal itu.
+ *
+ * SENGAJA PPABP + ADMIN saja, TIDAK termasuk KASUBAG_TU - beda dari
+ * canUploadRekapPresensi di atas yang memang di-scope unit.
+ *
+ * Alasannya bukan soal jenjang, tapi soal cakupan akibatnya: satu penanda
+ * bisa berlaku SE-KEMENTERIAN dan menghapus potongan ribuan orang sekaligus
+ * (kejadian 15-16 Juli 2026: 960 pegawai, Rp 18.178.588). Kewenangan
+ * membatalkan potongan lintas unit tidak berada di unit manapun - itu ada di
+ * pihak yang memang berwenang lintas satker, dan pasalnya sendiri
+ * menempatkan pengesahan presensi manual pada "pimpinan Unit Kerja", bukan
+ * pada pelaksana administrasinya.
+ *
+ * TODO(confirm): kalau nanti Kasubag TU perlu menandai kendala yang cuma
+ * menimpa unitnya sendiri (mis. jaringan satu balai putus), fungsi ini yang
+ * dilonggarkan - dengan syarat penandanya WAJIB ber-satuanKerja, tidak boleh
+ * se-kementerian.
+ */
+export function canKelolaKendalaEpresensi(user: AuthUser): boolean {
+  return cekPpabpAtauAdmin(user);
+}
+
+/**
+ * Kelola kalender hari libur nasional & cuti bersama.
+ *
+ * SENGAJA cakupan yang SAMA dengan canKelolaKendalaEpresensi (PPABP + ADMIN),
+ * dan alasannya sama: satu tanggal libur berlaku SE-KEMENTERIAN dan mengubah
+ * tiga hal sekaligus untuk semua orang - pengali lembur 2x, batas hari uang
+ * makan, dan pembebasan potongan Pasal 13. Itu bukan keputusan tingkat unit.
+ *
+ * Bedanya dengan penanda kendala: tanggal merah datang dari SKB 3 Menteri,
+ * jadi ini pekerjaan MENYALIN keputusan yang sudah ada - bukan menilai. Yang
+ * dijaga bukan penilaiannya, melainkan supaya tidak ada unit yang diam-diam
+ * memakai kalender berbeda dari unit lain.
+ */
+export function canKelolaHariLibur(user: AuthUser): boolean {
+  return cekPpabpAtauAdmin(user);
+}
+
+/**
  * Buka HALAMAN upload rekap predikat kinerja / presensi. Cek "boleh menulis
  * data pegawai unit MANA" dilakukan terpisah per baris lewat
  * canUploadRekapPredikatKinerja / canUploadRekapPresensi - pola yang sama
@@ -249,9 +291,28 @@ export function canBukaHalamanPredikatKinerja(user: AuthUser): boolean {
   return user.role === "ADMIN" || user.role === "PPABP" || user.role === "KASUBAG_TU";
 }
 
-/** Tombol "ajukan semua pegawai unit" - kalkulasi Tukin 30/70 massal + preview nominal sebelum diajukan. */
+/**
+ * Tombol "ajukan semua pegawai unit" - kalkulasi Tukin 30/70 massal + preview
+ * nominal sebelum diajukan.
+ *
+ * DUA ROLE, dua cakupan berbeda:
+ *   - KASUBAG_TU : unitnya sendiri saja.
+ *   - PPABP      : LINTAS satuan kerja, sama seperti kewenangannya yang lain.
+ *
+ * PPABP ditambahkan atas keputusan user 2026-08-06, menutup ketimpangan yang
+ * sebelumnya sudah tercatat sebagai gap: PPABP boleh meng-upload KEDUA
+ * komponen pembentuk Tukin (presensi 30% lewat canTarikAtauUploadPresensiFallback,
+ * predikat kinerja 70% lewat canUploadRekapPredikatKinerja) tapi tidak boleh
+ * menjalankan kalkulasi yang memakai keduanya - sehingga kalau unit kerjanya
+ * tidak menjalankan sendiri, datanya berhenti di tengah jalan tanpa ada yang
+ * bisa melanjutkan selain ADMIN.
+ *
+ * Ini TIDAK mengambil alih kewenangan Kasubag TU - keduanya bisa menjalankan,
+ * dan hasilnya sama karena perhitungannya deterministik dari data yang sama.
+ */
 export function canAjukanKalkulasiTukinMassalUnit(user: AuthUser, targetSatuanKerja: string): boolean {
-  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+  if (cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja)) return true;
+  return cekPpabpAtauAdmin(user, targetSatuanKerja);
 }
 
 /** Telaah dan ajukan Uang Makan pegawai unitnya. */

@@ -21,7 +21,7 @@ import {
   canApproveJenjangFinal,
   type AuthUser,
 } from "../auth/permissions";
-import { LABEL_ROLE } from "../auth/roleLabel";
+import { labelRole } from "../auth/roleLabel";
 
 export interface AjukanApprovalFormState {
   error?: string;
@@ -104,7 +104,7 @@ async function cekOtorisasiApprovalTukin(
   if (!diizinkan) {
     return {
       diizinkan: false,
-      alasan: `Role ${LABEL_ROLE[user.role]} tidak berwenang approve jenjang ${jenjang} untuk satuan kerja "${satuanKerjaPegawai}".`,
+      alasan: `Role ${labelRole(user.role, user.satuanKerja)} tidak berwenang approve jenjang ${jenjang} untuk satuan kerja "${satuanKerjaPegawai}".`,
     };
   }
   return { diizinkan: true };
@@ -182,7 +182,7 @@ async function cekOtorisasiApprovalJenjang(
   if (!diizinkan) {
     return {
       diizinkan: false,
-      alasan: `Role ${LABEL_ROLE[user.role]} tidak berwenang approve jenjang ${jenjang} untuk satuan kerja "${satuanKerjaPegawai}".`,
+      alasan: `Role ${labelRole(user.role, user.satuanKerja)} tidak berwenang approve jenjang ${jenjang} untuk satuan kerja "${satuanKerjaPegawai}".`,
     };
   }
   return { diizinkan: true };

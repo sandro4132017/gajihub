@@ -4,3 +4,19 @@ dist/
 .env
 .claude/settings.local.json
 *.tsbuildinfo
+
+Excel/
+docs/
+
+# Jaring pengaman kalau berkas serupa ditaruh di LUAR kedua folder di atas.
+# Pola DEFAULT-TOLAK, bukan daftar-tolak: berkas baru yang belum terpikirkan
+# ikut terkunci sendiri, tidak perlu diingat satu per satu.
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.pdf
+
+# Export "Laporan Detail Presensi Harian" e-Presensi - nama pegawai + jam
+# masuk/pulang per tanggal.
+rekap-presensi-*

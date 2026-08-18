@@ -34,11 +34,12 @@
 // - Baru mendukung rekap BULANAN ("Periode Bulanan N Tahun YYYY"), karena
 //   PredikatKinerja di skema ini memang per bulan. Rekap TAHUNAN ditolak
 //   dengan pesan jelas, bukan dipaksa jadi bulan tertentu.
-// - Kolom "Rating Hasil Kinerja" & "Rating Perilaku Kerja" DIBACA tapi
-//   TIDAK disimpan - skema `PredikatKinerja` cuma punya satu predikat akhir,
-//   dan yang dipakai Permenaker 15/2024 + Kepsekjen 82/2025 buat konversi
-//   ke persen memang "Predikat Kinerja Periodik". Kalau nanti kedua rating
-//   itu perlu diarsipkan, butuh kolom tambahan (migrasi terpisah).
+// - Kolom "Rating Hasil Kinerja" & "Rating Perilaku Kerja" SEKARANG DISIMPAN
+//   (kolom `hasilKerja` & `perilakuKerja` di PredikatKinerja) - dulu dibaca
+//   lalu dibuang. Keduanya TIDAK dipakai menghitung tukin: yang menentukan
+//   tetap "Predikat Kinerja Periodik" sesuai Permenaker 15/2024 + Kepsekjen
+//   82/2025. Disimpan murni supaya rincian di aplikasi sebanding dengan rekap
+//   Excel manual yang menampilkan keduanya.
 // ============================================================================
 
 import { konversiPredikatKeNilaiPersen, type PredikatKinerja } from "./konversiPredikat";
@@ -70,7 +71,7 @@ export interface BarisRekapPredikat {
   nip: string;
   nama: string | null;
   jabatan: string | null;
-  /** Dibaca dari file tapi tidak disimpan - lihat TODO(confirm) di atas. */
+  /** Disimpan apa adanya di PredikatKinerja.hasilKerja - tidak dipakai hitung. */
   ratingHasilKinerja: string | null;
   ratingPerilakuKerja: string | null;
   /** Teks asli dari file, buat ditampilkan apa adanya. */

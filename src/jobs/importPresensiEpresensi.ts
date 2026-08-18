@@ -25,6 +25,8 @@
 import { PrismaClient } from "@prisma/client";
 import { tarikPresensiPeriode } from "../adapters/EpresensiAdapter";
 import { simpanHasilPresensi } from "./simpanRekapPresensi";
+import { muatKendalaPeriode, muatKoreksiPeriode } from "../lib/kendalaPresensi";
+import { muatHariLiburPeriode } from "../lib/hariLibur";
 
 try {
   (process as NodeJS.Process & { loadEnvFile?: (p?: string) => void }).loadEnvFile?.();
@@ -47,12 +49,29 @@ async function main() {
     process.exit(1);
   }
 
+  const prisma = new PrismaClient();
+
+  // Penanda kendala e-Presensi (Pasal 10 ayat (2)) dimuat DULU lalu dioper ke
+  // tarikan - jalur CLI dan jalur tombol UI memakai helper yang sama supaya
+  // angkanya tidak bisa berbeda.
+  const kendala = await muatKendalaPeriode(prisma, bulan, tahun);
+  if (kendala.penanda.length > 0) {
+    const tanggal = [...new Set(kendala.penanda.map((k) => k.tanggalIso))].sort();
+    console.log(`Tanggal ditandai kendala e-Presensi: ${tanggal.join(", ")}`);
+    console.log("  -> potongan Pasal 13 ayat (2) di tanggal itu TIDAK diterapkan.\n");
+  }
+
   console.log(`Menarik presensi ${bulan}/${tahun} dari e-Presensi (READ-ONLY)...`);
-  const tarikan = await tarikPresensiPeriode(bulan, tahun);
+  const koreksi = await muatKoreksiPeriode(prisma, bulan, tahun);
+  if (koreksi.jumlah > 0) console.log(`Koreksi jam manual yang akan diterapkan: ${koreksi.jumlah} baris\n`);
+  const hariLibur = await muatHariLiburPeriode(bulan, tahun);
+  if (hariLibur.size > 0) {
+    console.log(`   hari libur nasional periode ini: ${[...hariLibur.entries()].map(([t, k]) => `${t} (${k})`).join(", ")}`);
+  }
+  const tarikan = await tarikPresensiPeriode(bulan, tahun, kendala.untukNip, koreksi.untukNip, hariLibur);
   console.log(`  ${tarikan.totalBarisSumber.toLocaleString("id-ID")} baris, ${tarikan.totalPegawaiSumber.toLocaleString("id-ID")} pegawai di sumber`);
   console.log(`  ${tarikan.pegawai.length.toLocaleString("id-ID")} berhasil dipetakan ke NIP`);
 
-  const prisma = new PrismaClient();
   const pegawaiGajihub = new Map(
     (await prisma.pegawai.findMany({ select: { id: true, nip: true } })).map((p) => [p.nip, p.id])
   );

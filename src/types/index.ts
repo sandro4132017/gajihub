@@ -36,7 +36,24 @@ export type JenisCuti =
   | "CUTI_BESAR_KURANG_1_BULAN"
   | "CUTI_BESAR"
   | "CUTI_SAKIT"
-  | "CUTI_SAKIT_GUGUR_KANDUNGAN";
+  | "CUTI_SAKIT_GUGUR_KANDUNGAN"
+  /**
+   * Cuti di Luar Tanggungan Negara (CLTN).
+   *
+   * Satu-satunya jenis di daftar ini yang TIDAK disebut Pasal 14 - dasarnya
+   * PASAL 4 HURUF D: "Tunjangan Kinerja ... TIDAK DIBERIKAN kepada ...
+   * Pegawai ... yang menjalani Cuti di luar tanggungan negara atau dalam
+   * bebas tugas untuk persiapan masa pensiun".
+   *
+   * Ditambahkan karena e-Presensi memakainya secara aktif (4 pegawai, 61
+   * hari, periode Juli 2026) dan tanpa jenis ini mereka terbaca "cuti tanpa
+   * jenis" lalu dibayar penuh.
+   *
+   * Engine SELALU menandainya sebagai anomali (lihat hitungPersenDibayarCuti
+   * di tukin.ts) - bukan lagi karena dasarnya meragukan, tapi karena ini
+   * satu-satunya jalur yang menghapus SELURUH tukin sebulan.
+   */
+  | "CUTI_DI_LUAR_TANGGUNGAN_NEGARA";
 
 /**
  * Nilai capaian kinerja (0-100). RESOLVED: Permenaker 15/2024 Pasal 6 ayat
@@ -75,6 +92,9 @@ export interface RekapKehadiranPeriode {
   totalMenitTerlambat: number;
   totalMenitPulangCepat: number;
   totalMenitMeninggalkanKantor: number;
+  // `totalMenitKekuranganJamKerja` DICABUT 2026-08-07 - Pasal 13 ayat (3)
+  // cuma menyebut terlambat/pulang cepat/meninggalkan kantor. Lihat
+  // InputPotonganKehadiran di src/business-logic/tukin.ts.
   /**
    * Jumlah KEJADIAN tidak ikut upacara bendera tanpa alasan sah - potongan
    * 3% per kejadian (Pasal 13 ayat 4).
@@ -96,14 +116,26 @@ export interface RekapKehadiranPeriode {
    * dimulai/berakhir di tengah periode (proporsional harian) - perlu
    * konfirmasi ke Biro OSDMA/Hukum bagaimana praktiknya selama ini.
    */
+  /**
+   * Pegawai sedang menjalani TUGAS BELAJAR pada periode ini.
+   *
+   * Permenaker 15/2024: pegawai yang melaksanakan tugas belajar menerima 80%
+   * dari Tunjangan Kinerja di kelas jabatan semula. Diperlakukan sebagai
+   * OVERRIDE (seperti cuti Pasal 14), bukan potongan kehadiran - dan itu
+   * disengaja: tanpa override, ketidakhadiran selama tugas belajar akan
+   * terbaca sebagai alpha dan pegawainya dihukum dua kali.
+   *
+   * PENTING: kalau flag ini true, SELURUH potongan Pasal 13 diabaikan.
+   */
+  tugasBelajar?: boolean;
   cutiAktif?: {
     jenis: JenisCuti;
     bulanKeberapa?: number; // untuk cuti besar/sakit yang bertingkat per bulan (1, 2, 3, ...)
     /**
      * Jumlah HARI cuti dalam periode ini. Dibutuhkan KHUSUS oleh Pasal 14
-     * huruf e angka 2 (cuti sakit karena gugur kandungan di atas 1 bulan
-     * s.d. 1,5 bulan = potongan 1% PER HARI) - satu-satunya ketentuan cuti
-     * yang tarifnya harian, bukan per bulan.
+     * huruf e (cuti sakit karena gugur kandungan di atas 1 bulan s.d. 1,5
+     * bulan = potongan 1% PER HARI) - satu-satunya ketentuan cuti yang
+     * tarifnya harian, bukan bertingkat per bulan.
      */
     jumlahHariCuti?: number;
   };
@@ -129,6 +161,16 @@ export interface TukinInput {
   capaianKinerja: CapaianKinerjaInput;
   /** Opsional: dikosongkan jika PPh dihitung terpisah di Web Gaji/SAKTI */
   tarifPphEfektif?: number;
+  /**
+   * Pejabat Pimpinan Tinggi (Eselon I/II) - komponen kehadiran dibayar PENUH,
+   * potongan Pasal 13 tidak diterapkan. Diturunkan dari kelas jabatan oleh
+   * pemanggil, lihat `src/business-logic/pejabatPimpinanTinggi.ts`.
+   *
+   * TODO(confirm): dasar hukumnya BELUM ada salinannya - lihat komentar
+   * lengkap di modul itu. Default `false`, jadi tidak ada perubahan perilaku
+   * untuk pemanggil yang tidak mengisinya.
+   */
+  dikecualikanPotonganKehadiran?: boolean;
 }
 
 /** Satu baris rincian potongan komponen kehadiran (Pasal 13). */
@@ -160,6 +202,15 @@ export interface TukinResult {
    * ulang di sisi UI.
    */
   rincianPotonganKehadiran: RincianPotonganKehadiran[];
+  /**
+   * Potongan Pasal 13 DIHITUNG tapi TIDAK diterapkan karena yang bersangkutan
+   * Pejabat Pimpinan Tinggi. `rincianPotonganKehadiran` tetap berisi
+   * pelanggarannya (faktanya tidak dihapus), tapi
+   * `potonganKehadiranPersen` = 0. Lihat pejabatPimpinanTinggi.ts.
+   */
+  pengecualianPotonganKehadiran: boolean;
+  /** Potongan yang SEHARUSNYA berlaku kalau tidak dikecualikan - buat ditampilkan & diaudit. */
+  potonganKehadiranPersenSebelumPengecualian: number;
   komponenKehadiranSetelahPotongan: number;
   komponenKinerja: number;
   tukinPokok: number;          // komponenKehadiran + komponenKinerja (sebelum override cuti/disiplin)

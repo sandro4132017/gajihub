@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import type { Role, User } from "@prisma/client";
 import { ubahAssignmentRoleAction, type UbahAssignmentRoleFormState } from "./actions";
-import { LABEL_ROLE } from "../../../auth/roleLabel";
+import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
 import { SearchableSelect } from "../../SearchableSelect";
 
 const INITIAL_STATE: UbahAssignmentRoleFormState = {};
@@ -99,7 +99,7 @@ export function AssignmentRow({
                 onChange={() => toggleRoleTambahan(r)}
                 className="size-4"
               />
-              {LABEL_ROLE[r]}
+              {labelRole(r, user.satuanKerja ?? satuanKerjaPegawai)}
             </label>
           ))}
         </div>

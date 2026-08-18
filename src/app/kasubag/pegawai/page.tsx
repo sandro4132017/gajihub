@@ -4,6 +4,7 @@ import { AksesDitolak } from "../../AksesDitolak";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { ambilAksesUnit } from "../access";
 import { SatkerPicker } from "../SatkerPicker";
+import { PencarianDebounce } from "../../PencarianDebounce";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,7 @@ export default async function RosterPegawaiUnitPage({
         {tampilkanNonaktif && <input type="hidden" name="nonaktif" value="1" />}
         <div className="flex-1 min-w-[200px]">
           <label className="field-label">Cari nama atau NIP</label>
-          <input type="text" name="q" defaultValue={q ?? ""} className="field-input" placeholder="Cari..." />
+          <PencarianDebounce defaultValue={q} placeholder="Cari..." />
         </div>
         <button type="submit" className="btn btn-primary">
           Cari

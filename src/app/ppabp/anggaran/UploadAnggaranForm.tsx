@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { uploadAnggaranRealisasiAction, type UploadAnggaranFormState } from "./actions";
 import { SearchableSelect } from "../../SearchableSelect";
+import { NAMA_BULAN } from "../../bulan";
 
 const INITIAL_STATE: UploadAnggaranFormState = {};
 
@@ -22,7 +23,11 @@ export function UploadAnggaranForm({ satuanKerjaList }: { satuanKerjaList: strin
       </div>
       <div>
         <label className="field-label">Bulan</label>
-        <input type="number" name="periodeBulan" min="1" max="12" required className="field-input" />
+        <SearchableSelect
+          name="periodeBulan"
+          options={NAMA_BULAN.map((nama, i) => ({ value: String(i + 1), label: nama }))}
+          required
+        />
       </div>
       <div>
         <label className="field-label">Tahun</label>

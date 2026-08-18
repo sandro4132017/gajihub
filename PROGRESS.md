@@ -9,7 +9,42 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-08-05** - dua hal besar: (1) ternyata proyek ini
+Terakhir diperbarui: **2026-08-12** - **kendala e-Presensi**. Ketahuan waktu
+menelusuri kenapa satu pegawai punya "lupa absen" di Gajihub tapi tidak di
+rincian manual PPABP: **15 & 16 Juli 2026 web e-Presensi bermasalah**, dan
+karena absensi Kemnaker murni online (tidak ada mesin tap) **960 pegawai
+kena potongan Rp 18.178.588** untuk kerusakan yang bukan miliknya. Sekarang
+ada penanda tanggal kendala (Pasal 10 ayat (2)) + deteksi otomatis di
+`/tukin/presensi/kendala`: satu keputusan menggantikan ~960 koreksi manual,
+dan yang tidak sempat melapor ikut terkoreksi. **99,2% dari kasus itu
+sebenarnya tidak perlu bukti foto** - absen masuk paginya sudah tercatat
+normal. Tanggalnya **sengaja belum ditandai**, menunggu konfirmasi ke
+pengelola e-Presensi. Ditambah **koreksi jam per hari** untuk petugas absensi
+(alurnya: pegawai lapor via WhatsApp dengan foto bergeotag & jam -> petugas
+memperbaiki di `/tukin/presensi/[nip]`) - hanya boleh di tanggal yang sudah
+ditandai kendala, jadi larangan "edit presensi bebas" tetap utuh. Test 411 ->
+438.
+
+Sebelumnya, **2026-08-07 (batch 2)** - teks Pasal 9, 12, 13 diterima
+dari user. **Tiga TODO(confirm) tertutup sekaligus** (jam kerja 7,5 jam, jam
+07:30-16:00/16:30, dan toleransi 60 menit - semuanya ternyata tertulis di
+Pasal 9). Kolom **"kekurangan jam kerja" DICABUT** (ayat (3) cuma menyebut
+tiga pelanggaran). **Lupa absen sekarang otomatis** dari kolom `menit_kerja`
+e-Presensi - cocok 41/48 dengan rincian manual, naik dari 34/48. Diklat &
+Dinas Keluar dikecualikan dari potongan itu. Tabel Rincian Tukin dapat
+**paginasi** (default 10, bisa 20/50/100). **BUG BESAR DIPERBAIKI**: cuti
+tahunan 1 hari menghapus SELURUH potongan Pasal 13 sebulan - 16 dari 46
+pegawai Biro Keuangan kena, Rp 634.959 dalam satu unit. Test 318 -> 334.
+
+Sebelumnya, **2026-08-07 (batch 1)** - **jenis cuti & potongan Pasal 14 sekarang
+ditarik OTOMATIS dari e-Presensi**, termasuk "bulan ke berapa" yang selama ini
+dikira mustahil diturunkan dan harus diketik manual (ternyata ada di nama
+jenisnya: "Cuti Besar II", "Cuti Sakit Bulan III"). SIAP sudah dicek dan
+TIDAK bisa dipakai untuk cuti - modulnya mati sejak 2019. Ada jebakan baru
+yang butuh keputusan user: cuti SATU HARI bisa menghapus tukin sebulan penuh
+(lihat bagian 3 nomor 0). Test 300 -> 318.
+
+Sebelumnya, **2026-08-05** - dua hal besar: (1) ternyata proyek ini
 selama beberapa waktu menarik data dari **instance SIAP yang SALAH** (dua
 instance, database bernama sama, tidak ada error sama sekali) - setelah pindah,
 pegawai aktif 3.607 -> **5.077** dan pemetaan presensi membaik dari 67% jadi
@@ -24,8 +59,8 @@ kinerja per orang (tambah/ubah/hapus).
 | | |
 |---|---|
 | Commit terakhir di `main` | `cae0212` |
-| Test | 258 lolos (`npm test`) |
-| Migrasi | 13, semua sudah `deploy` di lokal & VPS |
+| Test | 438 lolos (`npm test`) |
+| Migrasi | 20; tujuh terakhir (`20260807000000_cabut_kekurangan_jam_kerja`, `20260810000000_tambah_jam_lembur_harian`, `20260810120000_penurunan_kelas_jabatan_hukdis`, `20260810140000_sk_hukdis_belum_terbit`, `20260812090000_identitas_web_gaji`, `20260812140000_kendala_epresensi`, `20260812160000_koreksi_presensi_harian`) BELUM di-deploy ke VPS |
 | Deploy | VPS kantor `192.168.221.44:3002` via pm2 (`gajihub`, restart ke-17), nginx -> `gajihub.rokeubmn.id` (HTTP) |
 | Repo | https://github.com/sandro4132017/gajihub |
 
@@ -48,6 +83,10 @@ Server itu SHARED - jangan ganggu `bot-siska` (port 3000) dan
 | Dashboard Tukin satu pintu (presensi + kinerja + kalkulasi) | idem |
 | Upload rekap presensi manual + tombol sinkronisasi e-Presensi | idem |
 | **Upload PDF presensi e-Presensi (1 file / 1 folder)** | "Upload PDF presensi e-Presensi" |
+| **Jenis cuti + "bulan ke berapa" ditarik otomatis dari e-Presensi (Pasal 14 jalan sendiri)** | "Jenis cuti & potongan Pasal 14 ditarik otomatis dari e-Presensi" |
+| **Lupa absen otomatis dari `menit_kerja` e-Presensi** | "Lupa absen diturunkan dari `menit_kerja` e-Presensi" |
+| **Jam kerja & toleransi 60 menit punya dasar hukum (Pasal 9)** | "Pasal 9 & 13 diterima teksnya" |
+| **Paginasi tabel (10/20/50/100)** | "Paginasi tabel" |
 | Upload rekap predikat kinerja e-Kinerja BKN | "Upload rekap predikat kinerja e-Kinerja BKN" |
 | **Kelola predikat kinerja per orang (tambah/ubah/hapus) + filter periode & unit** | "Kelola predikat kinerja per orang" |
 | Uang makan & uang lembur per SBM 2026 | "Uang makan & uang lembur mengikuti SBM 2026" |
@@ -60,6 +99,95 @@ Server itu SHARED - jangan ganggu `bot-siska` (port 3000) dan
 
 ---
 
+## 2b. Yang ditunggu dari OSDMA / Biro Hukum / Biro Keuangan
+
+Semuanya sudah dikumpulkan jadi satu dokumen siap kirim:
+**`docs/permintaan-data-dan-konfirmasi-osdma.md`**.
+
+Tiga yang paling menahan pekerjaan:
+
+1. **Status CPNS/PNS terkini** — flag di SIAP BASI (660 dari 670 "CPNS"
+   diangkat Mei 2025). Pasal 16 ayat (1) tidak bisa dijalankan sampai ada
+   sumber yang benar. JANGAN pakai flag SIAP.
+2. **Cuti beberapa hari yang memotong sebulan penuh** — 3 pegawai Juli 2026
+   punya cuti berpotongan 100% sebanyak SATU HARI.
+3. **Peraturan tata cara lembur & potongan hukuman disiplin** — dua dokumen
+   yang belum ada sama sekali, keduanya mengubah uang.
+
+---
+
+## 2c. Periode yang rekapnya masih memakai tarikan lama (2026-08-10)
+
+Rekap presensi ditarik beberapa kali, dan tarikan lama dilakukan SEBELUM kolom
+cuti ada / sebelum jenis cuti bisa dibaca. Akibatnya beda per periode:
+
+| Periode | Rekap ditarik | Jenis cuti | Layak dipakai? |
+|---|---|---|---|
+| 7/2026 | **10 Agu (ulang)** | 1.935 | **ya** |
+| 5/2026 | **10 Agu (ulang)** | 1.686 | **ya** |
+| 1,2,3,4,6,8/2026 | 5 Agu | 0 | tidak - belum mendesak |
+
+Mei & Juli sudah ditarik ulang 10 Agu, jadi keduanya memuat jenis cuti (Pasal
+14 jalan) DAN perbaikan Diklat/Dinas Keluar akhir pekan. Hasilnya terverifikasi:
+Alpha Sandro Diklat **14 -> 13** (cocok rincian manual), dan rekap dengan hari
+hadir melebihi hari kerja **295 -> 0**.
+
+Periode 1,2,3,4,6,8 sengaja dibiarkan - belum ada predikat kinerja, jadi belum
+bisa dihitung sama sekali. Tarik ulang kalau nanti diperlukan.
+
+**SISA LANGKAH USER**: hitung ulang Kalkulasi Unit **Mei & Juli** lewat
+`/kasubag/kalkulasi` - baris Tukin keduanya masih memakai rekap sebelum tarikan
+ini. Semua baris berstatus DRAFT (nol approval), jadi tidak ada siklus yang
+hilang saat dihitung ulang.
+
+### ADK Uang Lembur: formatnya sudah benar, ISINYA yang belum ada
+
+Format export uang makan & uang lembur sudah diganti mengikuti template asli
+(daftar per hari, tanpa rupiah) - detail di `CLAUDE.md`, bagian "ADK Uang
+Makan & Uang Lembur". Uang makan terbukti cocok **415 dari 415** entri
+terhadap file asli.
+
+Uang lembur beda ceritanya. Gajihub cuma mengenali lembur dari baris berstatus
+"Lembur" di e-Presensi, dan di hari kerja status itu hampir tidak pernah
+dipakai - pegawainya tercatat WFO lalu pulang malam. Juni 2026 se-kementerian
+cuma **21 baris lembur hari kerja**; file ADK asli satu unit saja memuat
+**109**.
+
+**Perlu diputuskan**: Gajihub menerima upload/entri **surat perintah lembur**
+(satu-satunya sumber sah), atau ADK lembur tetap diisi manual di luar sistem.
+**JANGAN menurunkannya dari jam pulang** - di unit yang sama 46 dari 48
+pegawai punya hari dengan jam keluar lewat 17:00 (367 hari), sementara yang
+benar-benar diajukan 35 orang / 111 hari.
+
+### Roster = unit HARI INI, bukan unit periode itu
+
+`Pegawai.satuanKerja` cuma menyimpan unit sekarang - tidak ada riwayat unit.
+Jadi periode yang dihitung SETELAH seseorang mutasi ikut pindah ke unit baru,
+walau orangnya bekerja sebulan penuh di unit lama.
+
+Sudah terjadi: **ERIYANI** (NIP 198405142014032002) punya rekap presensi Juli
+DAN predikat Juli (diupload sebagai "Subbagian Tata Usaha"), tapi tidak punya
+kalkulasi Tukin Juli - SK `1/1779/KP.11.00/VII/2026` TMT **1 Agustus 2026**
+memindahkannya dari Biro Keuangan dan BMN ke Pusat Pasar Kerja, dan import
+pegawai jalan 5 Agustus. Inilah sebabnya Juli Biro Keuangan **46 baris, bukan
+47**.
+
+Skalanya terukur: **11 pegawai pindah Eselon II dengan TMT >= 1 Juli 2026**
+(3 di antaranya TMT 1 Agustus). Bukan 65 - sisanya naik jabatan di dalam
+Eselon II yang sama.
+
+**Belum diputuskan & JANGAN diputuskan sendiri**: Tukin Juli orang yang pindah
+1 Agustus ditagihkan ke unit LAMA (yang Kasubag TU-nya memverifikasi presensi &
+predikatnya, dan pagunya di situ) atau unit BARU (yang membayarkan di Agustus)?
+Ini menentukan unit mana yang approve dan pagu siapa yang terpakai.
+
+**Tidak ada yang hilang, jadi tidak perlu buru-buru membangun riwayat unit**:
+SIAP menyimpan `RIWAYATJABATAN` lengkap dengan TMT selamanya, jadi "siapa di
+unit mana pada bulan X" selalu bisa direkonstruksi kapan pun. Putuskan
+kebijakannya dulu, baru implementasi sekali.
+
+---
+
 ## 3. MENUNGGU KEPUTUSAN USER
 
 Ini yang paling gampang hilang waktu pindah chat. Semuanya sudah pernah
@@ -67,6 +195,21 @@ disampaikan, belum dijawab. Tidak ada yang memblokir pekerjaan lain - tapi
 beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
 
 ### Mengubah uang
+
+0. **Cuti beberapa hari yang memotong tukin SEBULAN PENUH** (BARU, 2026-08-07,
+   paling mendesak di daftar ini). Pasal 14 memberi satu persentase per
+   PERIODE, tidak ada pembagian proporsional harian. Sejak jenis cuti ditarik
+   otomatis dari e-Presensi, Juli 2026 memunculkan **3 pegawai dengan cuti
+   berpotongan 100% sebanyak SATU HARI** (2 CLTN, 1 cuti sakit >3 bulan) -
+   aturannya menghapus tukin mereka sebulan. Sekarang cuma ditandai
+   `PERIKSA MANUAL` di anomali, angkanya tetap dipotong penuh. Perlu keputusan:
+   proporsional harian, ambang minimal hari, atau memang begitu aturannya.
+   Lihat `src/business-logic/tukin.ts` + open item #3 di `CLAUDE.md`.
+
+0b. **Cuti di Luar Tanggungan Negara dipotong 100%** - jenis ini TIDAK disebut
+   Pasal 14. Dasarnya PP 11/2017 Pasal 312-313 + `cuti.nilai_persen` = 100 di
+   e-Presensi. Kena 4 pegawai di Juli 2026. Engine selalu menandainya anomali.
+   Perlu penegasan Biro OSDMA/Hukum.
 
 1. **Pembulatan rupiah** - kalkulasi tukin menghasilkan pecahan (pernah
    ketemu total `Rp 95.443.018,725`). Sekarang dibulatkan **hanya di lapisan

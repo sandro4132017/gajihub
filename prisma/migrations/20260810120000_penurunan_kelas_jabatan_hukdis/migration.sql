@@ -1,0 +1,22 @@
+-- Penurunan kelas jabatan akibat hukuman disiplin.
+--
+-- PP 94/2021 mengenal hukuman disiplin berat berupa "penurunan jabatan
+-- setingkat lebih rendah" selama jangka waktu tertentu (umumnya 12 bulan).
+-- Akibatnya kelas jabatan yang dipakai membayar Tunjangan Kinerja ikut turun,
+-- karena tarif tukin pokok memang ditentukan kelas jabatan (Lampiran
+-- Permenaker 15/2024).
+--
+-- KENAPA TIDAK CUKUP MENGUBAH Pegawai.kelas_jabatan:
+--   1. Kolom itu MIRROR dari SIAP dan ditimpa ulang tiap `npm run sync:pegawai`
+--      - koreksi manual apa pun di sana hilang pada sinkronisasi berikutnya.
+--   2. SIAP tidak mencatat penurunan ini sama sekali (dikonfirmasi user), jadi
+--      tidak akan pernah datang sendiri dari sumbernya.
+--   3. Penurunannya BERJANGKA. Setelah masa hukuman lewat, kelasnya kembali -
+--      dan periode-periode lama harus tetap dihitung dengan kelas yang turun.
+--      Menyimpannya sebagai satu angka di Pegawai membuat riwayat itu mustahil.
+--
+-- Disimpan ABSOLUT (kelas berapa, bukan "turun berapa tingkat") supaya angka
+-- yang dipakai membayar sama persis dengan yang tertulis di SK - kalau relatif,
+-- kelas dasar yang keliru di SIAP ikut menggeser hasilnya tanpa ketahuan.
+ALTER TABLE "sk_hukuman_disiplin"
+  ADD COLUMN IF NOT EXISTS "kelas_jabatan_selama_hukuman" INTEGER;

@@ -5,6 +5,7 @@ import type { KeputusanApproval } from "../../approval/types";
 import { ApprovalForm } from "../ApprovalForm";
 import { ajukanApprovalUangLemburAction } from "../actions";
 import { FilterBar } from "../FilterBar";
+import { ApprovalMassalForm } from "../ApprovalMassalForm";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewApproverDashboard } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
@@ -74,6 +75,18 @@ export default async function UangLemburPage({
       </p>
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
+
+      {/* Lihat catatan di src/app/tukin/page.tsx - periode wajib dipilih dulu. */}
+      {bulan && tahun && authUser.role !== "PIMPINAN" && (
+        <ApprovalMassalForm
+          jenis="UANG_LEMBUR"
+          label="Uang Lembur"
+          bulan={Number(bulan)}
+          tahun={Number(tahun)}
+          satker={satkerEfektif}
+          jumlahBelumApproved={kalkulasiList.filter((k) => k.status !== "APPROVED").length}
+        />
+      )}
 
       <div className="mt-8 space-y-4">
         {kalkulasiList.length === 0 && (

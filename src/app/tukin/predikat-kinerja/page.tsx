@@ -13,7 +13,9 @@ import { SearchableSelect } from "../../SearchableSelect";
 import { UploadRekapForm } from "./UploadRekapForm";
 import { AksiBarisPredikat } from "./AksiBarisPredikat";
 import { TambahPredikatForm } from "./TambahPredikatForm";
+import { HapusPeriodeForm } from "./HapusPeriodeForm";
 import { LABEL_PREDIKAT, adalahInputManual, kelasChipPredikat, labelSumber } from "./predikat";
+import { PencarianDebounce } from "../../PencarianDebounce";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +63,13 @@ export default async function PredikatKinerjaPage({
   if (authUser.role === "KASUBAG_TU" && !satkerWajib) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-        <h1 className="text-xl font-extrabold tracking-tight text-ink">Predikat Kinerja</h1>
+        {/* Cabang ini yang paling butuh jalan keluar: halamannya tidak bisa
+            menampilkan apa-apa, dan tanpa tautan ini satu-satunya cara pergi
+            adalah tombol Back browser. */}
+        <Link href="/tukin" className="text-sm font-semibold text-teal-deep underline">
+          &larr; Kembali ke Dashboard Tukin
+        </Link>
+        <h1 className="mt-2 text-xl font-extrabold tracking-tight text-ink">Predikat Kinerja</h1>
         <div className="card mt-4 border-l-4 border-l-gold p-5">
           <p className="font-bold text-ink">Akun kamu belum punya unit kerja</p>
           <p className="mt-1 text-sm text-muted">
@@ -103,7 +111,11 @@ export default async function PredikatKinerjaPage({
       }
     : { id: "___tidak-ada___" };
 
-  const [satuanKerjaRows, jumlahBaris, sebaran, barisList] = await Promise.all([
+  // Hitungan untuk hapus massal SENGAJA tidak memakai `where` di atas: `where`
+  // ikut tersaring pencarian nama/NIP, sementara yang dihapus adalah SELURUH
+  // baris satuan kerja + periode itu. Kalau angka tersaring yang dipakai,
+  // tombolnya bisa menulis "hapus 1 predikat" padahal 47 yang terhapus.
+  const [satuanKerjaRows, jumlahBaris, sebaran, barisList, jumlahSeUnitPeriode] = await Promise.all([
     prisma.pegawai.findMany({ distinct: ["satuanKerja"], select: { satuanKerja: true }, orderBy: { satuanKerja: "asc" } }),
     prisma.predikatKinerja.count({ where }),
     prisma.predikatKinerja.groupBy({ by: ["predikat"], where, _count: { _all: true } }),
@@ -113,6 +125,11 @@ export default async function PredikatKinerjaPage({
       orderBy: { pegawai: { nama: "asc" } },
       include: { pegawai: { select: { id: true, nip: true, nama: true, satuanKerja: true, kelasJabatan: true } } },
     }),
+    adaPeriode && satkerEfektif
+      ? prisma.predikatKinerja.count({
+          where: { periodeBulan: periodeBulan!, periodeTahun: periodeTahun!, pegawai: { satuanKerja: satkerEfektif } },
+        })
+      : Promise.resolve(0),
   ]);
 
   // --- Bahan form "tambah predikat satuan" ---
@@ -157,9 +174,22 @@ export default async function PredikatKinerjaPage({
   const namaPeriode = adaPeriode ? `${NAMA_BULAN[periodeBulan! - 1] ?? periodeBulan} ${periodeTahun}` : "";
   const jumlahManual = barisList.filter((b) => adalahInputManual(b.inputMethod)).length;
 
+  // Periode & satker ikut dibawa balik supaya Dashboard Tukin terbuka di
+  // periode yang BARU SAJA dilihat di sini - kalau tidak, halaman tujuan jatuh
+  // ke periode defaultnya sendiri dan terasa seperti pindah konteks.
+  const kembaliKeTukin =
+    "/tukin" +
+    (adaPeriode
+      ? `?bulan=${periodeBulan}&tahun=${periodeTahun}` +
+        (satkerEfektif && !satkerWajib ? `&satker=${encodeURIComponent(satkerEfektif)}` : "")
+      : "");
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Predikat Kinerja</h1>
+      <Link href={kembaliKeTukin} className="text-sm font-semibold text-teal-deep underline">
+        &larr; Kembali ke Dashboard Tukin
+      </Link>
+      <h1 className="mt-2 text-xl font-extrabold tracking-tight text-ink">Predikat Kinerja</h1>
       <p className="mt-1 text-sm text-muted">
         Sumber bobot <strong>70% Tunjangan Kinerja</strong>. Sumber utamanya file Rekap Penilaian e-Kinerja BKN yang
         diupload di sini. Perbaikan per orang (tambah/ubah/hapus) tersedia buat kasus yang tidak tertangani file -
@@ -204,7 +234,9 @@ export default async function PredikatKinerjaPage({
                 <SearchableSelect
                   name="satker"
                   className="min-w-[240px]"
-                  options={satuanKerjaRows.map((r) => ({ value: r.satuanKerja, label: r.satuanKerja }))}
+                  options={satuanKerjaRows
+                    .filter((r) => r.satuanKerja.trim() !== "")
+                    .map((r) => ({ value: r.satuanKerja, label: r.satuanKerja }))}
                   defaultValue={satker ?? ""}
                   emptyLabel="Semua satuan kerja"
                 />
@@ -212,7 +244,7 @@ export default async function PredikatKinerjaPage({
             )}
             <div className="min-w-[180px] flex-1">
               <label className="field-label">Cari nama atau NIP</label>
-              <input type="text" name="q" defaultValue={q ?? ""} className="field-input" placeholder="Cari pegawai..." />
+              <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
             </div>
             <button type="submit" className="btn btn-primary">
               Terapkan
@@ -308,6 +340,19 @@ export default async function PredikatKinerjaPage({
               }))}
               totalBelumPunya={totalBelumPunya}
               perluPilihSatker={perluPilihSatker}
+            />
+          )}
+
+          {/* Hapus massal cuma muncul kalau satuan kerjanya SUDAH dipilih -
+              tanpa itu cakupannya jadi seluruh kementerian, dan salah klik
+              di situ menghapus ribuan baris lintas unit. */}
+          {adaPeriode && satkerEfektif && (
+            <HapusPeriodeForm
+              satuanKerja={satkerEfektif}
+              periodeBulan={periodeBulan!}
+              periodeTahun={periodeTahun!}
+              namaPeriode={namaPeriode}
+              jumlahBaris={jumlahSeUnitPeriode}
             />
           )}
 

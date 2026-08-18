@@ -1,9 +1,3 @@
-// ============================================================================
-// APPROVAL DIGITAL - service untuk UangMakan
-// Pola sama persis dengan approvalTukinService.ts - lihat komentar di sana
-// untuk penjelasan lengkap soal siklus approval & alasan desainnya.
-// ============================================================================
-
 import type { PrismaClient } from "@prisma/client";
 import { evaluasiApproval } from "./approvalEngine";
 import type { KeputusanApproval, ApprovalOutcome } from "./types";

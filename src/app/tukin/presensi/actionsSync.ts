@@ -22,6 +22,8 @@ import { ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canUploadRekapPresensi, type AuthUser } from "../../../auth/permissions";
 import { tarikPresensiPeriode } from "../../../adapters/EpresensiAdapter";
 import { simpanHasilPresensi } from "../../../jobs/simpanRekapPresensi";
+import { muatKendalaPeriode, muatKoreksiPeriode } from "../../../lib/kendalaPresensi";
+import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 
 export interface SinkronPresensiFormState {
   error?: string;
@@ -31,6 +33,12 @@ export interface SinkronPresensiFormState {
     totalPegawaiSumber: number;
     tersimpan: number;
     dilewati: { alasan: string; jumlah: number }[];
+    /** Tanggal kendala e-Presensi yang berlaku di periode ini (Pasal 10 ayat (2)). */
+    tanggalKendala: string[];
+    /** Total kejadian Pasal 13 ayat (2) yang dibatalkan karenanya. */
+    kejadianDikecualikan: number;
+    /** Baris koreksi jam manual yang ikut diterapkan di periode ini. */
+    koreksiJamDipakai: number;
   };
 }
 
@@ -52,7 +60,19 @@ export async function tarikPresensiEpresensiAction(
       return { error: "Periode tidak valid - pilih bulan 1-12 dan tahun yang benar." };
     }
 
-    const tarikan = await tarikPresensiPeriode(bulan, tahun);
+    // Penanda kendala e-Presensi (Pasal 10 ayat (2)) dimuat SEBELUM tarikan,
+    // lalu dioper ke dalamnya - pengecualiannya terjadi di fungsi yang sama
+    // yang menghitung kejadiannya, bukan dikurangkan belakangan.
+    const kendala = await muatKendalaPeriode(prisma, bulan, tahun);
+    const koreksi = await muatKoreksiPeriode(prisma, bulan, tahun);
+    const hariLibur = await muatHariLiburPeriode(bulan, tahun);
+    const tarikan = await tarikPresensiPeriode(
+      bulan,
+      tahun,
+      kendala.untukNip,
+      koreksi.untukNip,
+      hariLibur
+    );
 
     const pegawaiDb = await prisma.pegawai.findMany({
       where: { nip: { in: tarikan.pegawai.map((p) => p.nip) } },
@@ -65,6 +85,7 @@ export async function tarikPresensiEpresensiAction(
     for (const d of tarikan.dilewati) catat(d.alasan);
 
     let tersimpan = 0;
+    let kejadianDikecualikan = 0;
     for (const p of tarikan.pegawai) {
       const pegawai = peta.get(p.nip);
       if (!pegawai) {
@@ -75,6 +96,10 @@ export async function tarikPresensiEpresensiAction(
         catat(`di luar kewenangan kamu (pegawai ${pegawai.satuanKerja})`);
         continue;
       }
+      // Dihitung dari yang BENAR-BENAR tersimpan, bukan dari seluruh tarikan -
+      // pegawai di luar kewenangan tidak ikut ditulis, jadi tidak boleh ikut
+      // dilaporkan sebagai "sudah dikecualikan".
+      kejadianDikecualikan += p.hasil.kejadianDikecualikanKendala;
       await simpanHasilPresensi(prisma, {
         pegawaiId: pegawai.id,
         periodeBulan: bulan,
@@ -98,6 +123,9 @@ export async function tarikPresensiEpresensiAction(
         dilewati: [...alasanDilewati]
           .map(([alasan, jumlah]) => ({ alasan, jumlah }))
           .sort((a, b) => b.jumlah - a.jumlah),
+        tanggalKendala: [...new Set(kendala.penanda.map((k) => k.tanggalIso))].sort(),
+        kejadianDikecualikan,
+        koreksiJamDipakai: koreksi.jumlah,
       },
     };
   } catch (err) {

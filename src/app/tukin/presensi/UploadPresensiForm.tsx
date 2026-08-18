@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { uploadRekapPresensiAction, type UploadPresensiFormState } from "./actions";
 import { NAMA_BULAN } from "../../bulan";
+import { SearchableSelect } from "../../SearchableSelect";
 
 const INITIAL_STATE: UploadPresensiFormState = {};
 
@@ -28,7 +29,12 @@ export function UploadPresensiForm({
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-3">
         <div>
           <label className="field-label">Bulan</label>
-          <input type="number" name="periodeBulan" min="1" max="12" defaultValue={defaultBulan} required className="field-input w-24 py-1.5" />
+          <SearchableSelect
+            name="periodeBulan"
+            className="w-36"
+            options={NAMA_BULAN.map((nama, i) => ({ value: String(i + 1), label: nama }))}
+            defaultValue={String(defaultBulan)}
+          />
         </div>
         <div>
           <label className="field-label">Tahun</label>

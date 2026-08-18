@@ -26,5 +26,12 @@ export function resolveSatuanKerjaListUntukFilter(akun: AuthUser, semuaSatuanKer
   if (akun.role === "KASUBAG_TU") {
     return akun.satuanKerja ? [akun.satuanKerja] : [];
   }
-  return semuaSatuanKerja;
+  // Nilai kosong dibuang. Ada pegawai yang satuan kerjanya belum terisi di
+  // data induk, dan kalau nilainya ikut masuk daftar filter, opsinya tampil
+  // sebagai baris tanpa tulisan yang kalau dipilih artinya justru "semua
+  // satuan kerja" (nilai "" memang dipakai untuk itu) - membingungkan, dan
+  // bertabrakan dengan opsi "Semua satuan kerja" yang memang bernilai "".
+  //
+  // Memperbaiki pegawainya sendiri dilakukan di /pegawai, bukan di sini.
+  return semuaSatuanKerja.filter((s) => s.trim() !== "");
 }

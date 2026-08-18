@@ -4,6 +4,7 @@ import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canKelolaGajiInduk, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { UploadRekeningForm } from "./UploadRekeningForm";
+import { PencarianDebounce } from "../../PencarianDebounce";
 
 export const dynamic = "force-dynamic";
 
@@ -104,7 +105,7 @@ export default async function RekeningPage({
         <input type="hidden" name="jenis" value={jenisAktif} />
         <div className="min-w-[240px] flex-1">
           <label className="field-label">Cari nama atau NIP</label>
-          <input type="text" name="q" defaultValue={q ?? ""} className="field-input" placeholder="Cari pegawai..." />
+          <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
         </div>
         <button type="submit" className="btn btn-primary">
           Cari

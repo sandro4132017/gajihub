@@ -2,26 +2,33 @@ import { NextRequest } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canGenerateAdk } from "../../../../auth/permissions";
-import { susunBarisTotalAdk, type SelAdk } from "../../../../business-logic/adk";
-import { responseAdk } from "../responseAdk";
+import { responseAdkHarian } from "../responseAdk";
+import { dataUangMakanHarian } from "../dataUangMakanHarian";
 
 /**
- * Export ADK Uang Makan - dua format (xlsx & txt), lihat catatan lengkap di
- * ../tukin/route.ts.
+ * Export ADK Uang Makan - dua format (.xlsx & .txt).
  *
- * Kolomnya BUKAN format "daftar bayar" resmi seperti ADK Tukin - belum ada
- * contoh file ADK uang makan dari user, jadi yang dipakai adalah kolom
- * ringkas berisi dasar perhitungannya. Struktur & baris totalnya mengikuti
- * pola yang sama dengan ADK Tukin supaya kedua file terasa satu keluarga.
- * TODO(confirm): minta contoh ADK uang makan asli kalau formatnya memang
- * sudah baku di Web Gaji.
+ * FORMATNYA DIGANTI TOTAL (2026-08-10) setelah user mengirim template asli
+ * `Template-ADK-UM.xlsm` + `Template-ADK-UM-TXT.txt`. Versi sebelumnya
+ * mengeluarkan tabel rekap berisi rupiah (Hari Kerja | Hari Dibayar | Tarif |
+ * Total) dengan baris TOTAL di akhir - bentuk yang dikarang sendiri waktu
+ * contoh filenya belum ada, dan tidak akan diterima Web Gaji.
+ *
+ * Bentuk yang benar: SATU BARIS PER PEGAWAI PER HARI, isinya cuma
+ * `NIP <tab> YYYY-MM-DD`. Tanpa rupiah, tanpa tarif, tanpa total, tanpa
+ * header. Web Gaji yang menghitung nominalnya dari grade pegawai - file ini
+ * cuma menyetorkan FAKTA hari mana saja pegawai berhak.
+ *
+ * SUMBER HARINYA = `PresensiHarian`, bukan `UangMakan.jumlahHariDibayar`.
+ * Angka bulanan tidak bisa dipecah balik jadi tanggal-tanggal tanpa mengarang
+ * data. Keduanya tetap dicocokkan lewat `selisih` di `dataUangMakanHarian()`,
+ * dan selisihnya ditampilkan di halaman /ppabp/adk sebelum berkasnya diunduh.
+ *
+ * DIVERIFIKASI ke file asli Juni 2026 (137 pegawai, 2.097 baris): aturan
+ * "WFO/WFH/WFA di hari kerja" mereproduksi **130 dari 137 pegawai sama
+ * persis**, selisihnya 13 tanggal - semuanya kasus Dinas Luar & Cuti yang
+ * memang beda perlakuan (lihat catatan di halaman /ppabp/adk).
  */
-const KOLOM = [
-  "NO", "Bulan", "Tahun", "NIP", "Nama Pegawai", "Satuan Kerja",
-  "Hari Kerja", "Hari Hadir", "Hari Dibayar", "Tarif Harian", "Total Uang Makan",
-] as const;
-const KOLOM_TOTAL = [10];
-
 export async function GET(req: NextRequest) {
   const akun = await getSessionAccount();
   if (!akun) return new Response("Belum login.", { status: 401 });
@@ -32,25 +39,40 @@ export async function GET(req: NextRequest) {
   const tahun = Number(req.nextUrl.searchParams.get("tahun"));
   if (!bulan || !tahun) return new Response("Parameter bulan dan tahun wajib diisi.", { status: 400 });
 
-  const rows = await prisma.uangMakan.findMany({
-    where: { periodeBulan: bulan, periodeTahun: tahun, status: "APPROVED" },
-    include: { pegawai: true },
-    orderBy: { pegawai: { nama: "asc" } },
+  // Barisnya disusun di modul bersama - halaman /ppabp/adk memakai fungsi yang
+  // SAMA untuk pratinjaunya, jadi yang dilihat di layar dan yang diunduh tidak
+  // bisa berbeda.
+  const { pegawai } = await dataUangMakanHarian(bulan, tahun);
+
+  // Berkas ADK adalah PERINTAH BAYAR yang keluar dari sistem ini menuju Web
+  // Gaji/SAKTI. Sampai sebelum ini pengunduhannya TIDAK tercatat sama sekali -
+  // jadi pertanyaan "siapa yang menarik berkas pembayaran periode ini, kapan"
+  // tidak punya jawaban. Dicatat SETELAH otorisasi lolos & sebelum berkasnya
+  // dikirim.
+  //
+  // satuanKerja NULL: berkas ini memuat SEMUA unit yang barisnya sudah
+  // disetujui, jadi memang bukan aktivitas satu unit.
+  await prisma.auditTrail.create({
+    data: {
+      entitas: "export_adk",
+      entitasId: `uang-makan-${bulan}-${tahun}`,
+      aksi: "EXPORT",
+      aktor: akun.nip,
+      satuanKerja: null,
+      dataSesudah: {
+        jenis: "Uang Makan",
+        periode: `${bulan}/${tahun}`,
+        format: req.nextUrl.searchParams.get("format") ?? "xlsx",
+      },
+    },
   });
 
-  const bulanPad = String(bulan).padStart(2, "0");
-  const baris: SelAdk[][] = rows.map((r, i) => [
-    i + 1, bulanPad, String(tahun), r.pegawai.nip, r.pegawai.nama, r.pegawai.satuanKerja,
-    r.jumlahHariKerja, r.jumlahHariHadir, r.jumlahHariDibayar, r.tarifHarian, r.totalUangMakan,
-  ]);
-  const total = susunBarisTotalAdk(baris, KOLOM_TOTAL, KOLOM.length);
-
-  return responseAdk({
+  return responseAdkHarian({
     format: req.nextUrl.searchParams.get("format"),
-    header: KOLOM,
-    baris,
-    total,
-    namaSheet: "uang makan",
-    namaFile: `adk-uang-makan-${bulanPad}-${tahun}`,
+    pegawai,
+    periodeBulan: bulan,
+    periodeTahun: tahun,
+    denganJam: false,
+    namaFile: `adk-uang-makan-${String(bulan).padStart(2, "0")}-${tahun}`,
   });
 }

@@ -38,9 +38,13 @@ import { parseRekapPredikatKinerja, type BarisRekapPredikat } from "../../../bus
  */
 
 const MAKS_UKURAN_FILE = 8 * 1024 * 1024;
+/** Di bawah serverActions.bodySizeLimit (10 MB) - lihat alasannya di action. */
+const MAKS_TOTAL_UKURAN = 9 * 1024 * 1024;
 const UKURAN_BATCH = 50;
 
 export interface RingkasanPeriodePredikat {
+  /** Nama file asalnya - penting sejak upload bisa beberapa file sekaligus. */
+  namaFile: string;
   namaSheet: string;
   periodeBulan: number;
   periodeTahun: number;
@@ -50,6 +54,26 @@ export interface RingkasanPeriodePredikat {
   perPredikat: { predikat: string; jumlah: number }[];
 }
 
+/**
+ * Kelengkapan predikat SETELAH upload, per satuan kerja + periode yang
+ * tersentuh. Inilah verifikasi yang sebenarnya dibutuhkan: satu satuan kerja
+ * bisa dinilai beberapa penilai dengan file terpisah, jadi setelah mengupload
+ * satu file orang perlu tahu apakah masih ada yang kurang.
+ *
+ * SENGAJA bukan "sudah N file atau belum" - jumlah penilai beda-beda per unit
+ * dan tidak dipunyai sistem, sementara "siapa yang belum punya predikat" bisa
+ * dijawab langsung dan tetap benar berapa pun jumlah filenya.
+ */
+export interface KelengkapanPredikat {
+  periode: string;
+  satuanKerja: string;
+  totalAktif: number;
+  sudahPunya: number;
+  belumPunya: number;
+  contohBelum: string[];
+  sumberPenilaian: string[];
+}
+
 export interface UploadRekapPredikatFormState {
   error?: string;
   success?: string;
@@ -57,6 +81,8 @@ export interface UploadRekapPredikatFormState {
   ringkasanPerPeriode?: RingkasanPeriodePredikat[];
   /** Sheet yang tidak bisa diproses sama sekali beserta alasannya. */
   sheetDilewati?: { namaSheet: string; alasan: string }[];
+  /** Kelengkapan per satuan kerja + periode yang tersentuh upload ini. */
+  kelengkapan?: KelengkapanPredikat[];
   /** Baris yang dilewati, digabung dari seluruh sheet. */
   dilewati?: { alasan: string; jumlah: number; contohNip: string[] }[];
   /**
@@ -99,7 +125,10 @@ type BarisSiapSimpan = BarisRekapPredikat & {
   satuanKerja: string;
   periodeBulan: number;
   periodeTahun: number;
+  namaFile: string;
   namaSheet: string;
+  /** Unit penilai dari kepala file, bukan dari baris pegawainya. */
+  unitPenilaian: string | null;
 };
 
 export async function uploadRekapPredikatAction(
@@ -114,49 +143,98 @@ export async function uploadRekapPredikatAction(
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
 
-    const file = formData.get("file");
-    if (!(file instanceof File) || file.size === 0) {
-      return { error: "Pilih file Rekap Penilaian (.xlsx/.xls) dulu." };
+    // TIDAK ADA pernyataan periode/unit/penilai dari form. Ketiganya
+    // diturunkan dari isi file: periode dari baris kepala tiap sheet, satuan
+    // kerja dari lookup NIP ke tabel Pegawai, penilai dari baris kedua kepala
+    // file. Kewenangan tetap dijaga PER BARIS di bawah - itu yang menahan file
+    // unit lain, bukan dropdown di depan.
+
+    // Beberapa file sekaligus - satu satuan kerja bisa dinilai lebih dari satu
+    // penilai (mis. Subbagian Tata Usaha dan Biro), masing-masing mengekspor
+    // filenya sendiri berisi orang yang BERBEDA. Sebelumnya cuma satu file per
+    // upload, jadi orang harus mengupload dua kali dan tidak ada yang
+    // memberi tahu kalau file kedua terlupa.
+    const semuaFile = formData.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+    if (semuaFile.length === 0) {
+      return { error: "Pilih file Rekap Penilaian (.xlsx/.xls) dulu - boleh lebih dari satu sekaligus." };
     }
-    if (file.size > MAKS_UKURAN_FILE) {
-      return { error: `Ukuran file ${(file.size / 1024 / 1024).toFixed(1)} MB melebihi batas 8 MB.` };
+    const terlaluBesar = semuaFile.find((f) => f.size > MAKS_UKURAN_FILE);
+    if (terlaluBesar) {
+      return {
+        error: `File "${terlaluBesar.name}" berukuran ${(terlaluBesar.size / 1024 / 1024).toFixed(1)} MB, melebihi batas 8 MB per file.`,
+      };
+    }
+    // Batas TOTAL, bukan cuma per file. Server Action Next dibatasi 10 MB
+    // (serverActions.bodySizeLimit di next.config.mjs) untuk SELURUH request,
+    // jadi beberapa file yang masing-masing lolos batas 8 MB tetap bisa
+    // menembusnya bersama-sama - dan kalau itu terjadi, request-nya ditolak
+    // framework sebelum sempat masuk sini, dengan error yang tidak menjelaskan
+    // apa pun. Ambangnya ditaruh di bawah batas framework supaya pesan yang
+    // muncul adalah yang ini.
+    const totalUkuran = semuaFile.reduce((a, f) => a + f.size, 0);
+    if (totalUkuran > MAKS_TOTAL_UKURAN) {
+      return {
+        error:
+          `Total ${semuaFile.length} file berukuran ${(totalUkuran / 1024 / 1024).toFixed(1)} MB, melebihi batas 9 MB sekali upload.` +
+          " Upload sebagian dulu, sisanya menyusul - hasilnya sama saja karena tiap file diproses sendiri-sendiri.",
+      };
     }
 
-    // --- Baca file (I/O di sini, pemetaannya di business-logic) ---
-    let workbook: ReturnType<typeof read>;
-    try {
-      workbook = read(Buffer.from(await file.arrayBuffer()), { type: "buffer" });
-    } catch {
-      return { error: "File tidak bisa dibaca sebagai Excel. Pastikan formatnya .xlsx/.xls hasil export e-Kinerja." };
-    }
-    if (workbook.SheetNames.length === 0) return { error: "File tidak punya sheet yang bisa dibaca." };
-
-    // --- Parse TIAP sheet, masing-masing punya periodenya sendiri ---
+    // --- Baca tiap file, lalu tiap sheet di dalamnya ---
+    // (I/O di sini, pemetaannya tetap di business-logic)
     const sheetDilewati: { namaSheet: string; alasan: string }[] = [];
-    const hasilPerSheet: { namaSheet: string; hasil: ReturnType<typeof parseRekapPredikatKinerja> }[] = [];
+    const hasilPerSheet: {
+      namaFile: string;
+      namaSheet: string;
+      hasil: ReturnType<typeof parseRekapPredikatKinerja>;
+    }[] = [];
 
-    for (const namaSheet of workbook.SheetNames) {
-      const sheet = workbook.Sheets[namaSheet];
-      if (!sheet) {
-        sheetDilewati.push({ namaSheet, alasan: "sheet kosong" });
+    for (const file of semuaFile) {
+      // Label sheet diberi nama file di depannya supaya laporan hasilnya tidak
+      // ambigu waktu dua file sama-sama punya sheet bernama "Sheet1".
+      const label = (namaSheet: string) => (semuaFile.length > 1 ? `${file.name} / ${namaSheet}` : namaSheet);
+
+      let workbook: ReturnType<typeof read>;
+      try {
+        workbook = read(Buffer.from(await file.arrayBuffer()), { type: "buffer" });
+      } catch {
+        sheetDilewati.push({
+          namaSheet: file.name,
+          alasan: "tidak bisa dibaca sebagai Excel - pastikan formatnya .xlsx/.xls hasil export e-Kinerja",
+        });
         continue;
       }
-      const matriks = utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: null });
-      const hasil = parseRekapPredikatKinerja(matriks);
-      if (hasil.error) {
-        sheetDilewati.push({ namaSheet, alasan: hasil.error });
+      if (workbook.SheetNames.length === 0) {
+        sheetDilewati.push({ namaSheet: file.name, alasan: "file tidak punya sheet yang bisa dibaca" });
         continue;
       }
-      if (hasil.baris.length === 0) {
-        sheetDilewati.push({ namaSheet, alasan: "tidak ada baris predikat yang bisa diproses" });
-        continue;
+
+      for (const namaSheet of workbook.SheetNames) {
+        const sheet = workbook.Sheets[namaSheet];
+        if (!sheet) {
+          sheetDilewati.push({ namaSheet: label(namaSheet), alasan: "sheet kosong" });
+          continue;
+        }
+        const matriks = utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: null });
+        const hasil = parseRekapPredikatKinerja(matriks);
+        if (hasil.error) {
+          sheetDilewati.push({ namaSheet: label(namaSheet), alasan: hasil.error });
+          continue;
+        }
+        if (hasil.baris.length === 0) {
+          sheetDilewati.push({ namaSheet: label(namaSheet), alasan: "tidak ada baris predikat yang bisa diproses" });
+          continue;
+        }
+        hasilPerSheet.push({ namaFile: file.name, namaSheet: label(namaSheet), hasil });
       }
-      hasilPerSheet.push({ namaSheet, hasil });
     }
 
     if (hasilPerSheet.length === 0) {
       return {
-        error: "Tidak ada sheet yang bisa diproses dari file ini.",
+        error:
+          semuaFile.length > 1
+            ? "Tidak ada sheet yang bisa diproses dari file-file itu."
+            : "Tidak ada sheet yang bisa diproses dari file ini.",
         sheetDilewati: sheetDilewati.length > 0 ? sheetDilewati : undefined,
       };
     }
@@ -173,7 +251,7 @@ export async function uploadRekapPredikatAction(
     const dilewati: { nip: string | null; alasan: string }[] = [];
     const siapSimpan: BarisSiapSimpan[] = [];
 
-    for (const { namaSheet, hasil } of hasilPerSheet) {
+    for (const { namaFile, namaSheet, hasil } of hasilPerSheet) {
       for (const d of hasil.dilewati) dilewati.push({ nip: d.nip, alasan: d.alasan });
 
       for (const baris of hasil.baris) {
@@ -199,7 +277,12 @@ export async function uploadRekapPredikatAction(
           satuanKerja: pegawai.satuanKerja,
           periodeBulan: hasil.periodeBulan,
           periodeTahun: hasil.periodeTahun,
+          namaFile,
           namaSheet,
+          // Unit penilai dibaca dari baris kedua kepala file - satu file = satu
+          // penilai. Bukan satuan kerja pegawainya (itu dari lookup NIP), dan
+          // bukan isian user.
+          unitPenilaian: hasil.unitPenilaian,
         });
       }
     }
@@ -229,6 +312,13 @@ export async function uploadRekapPredikatAction(
           periodeTahun: b.periodeTahun,
           predikat: b.predikat,
           nilaiAngka: b.nilaiAngka,
+          // Dua rating penyusun predikat, disimpan apa adanya dari file.
+          // TIDAK dipakai menghitung - lihat komentar model PredikatKinerja.
+          hasilKerja: b.ratingHasilKinerja,
+          perilakuKerja: b.ratingPerilakuKerja,
+          // Unit penilai dari kepala file - dipakai menampilkan sumber
+          // penilaian mana saja yang sudah masuk untuk periode itu.
+          unitPenilaian: b.unitPenilaian,
           sourceSystem: "e-Kinerja BKN",
           sourceSyncedAt: sekarang,
           inputMethod: "MANUAL_UPLOAD",
@@ -236,6 +326,9 @@ export async function uploadRekapPredikatAction(
         update: {
           predikat: b.predikat,
           nilaiAngka: b.nilaiAngka,
+          hasilKerja: b.ratingHasilKinerja,
+          perilakuKerja: b.ratingPerilakuKerja,
+          unitPenilaian: b.unitPenilaian,
           sourceSystem: "e-Kinerja BKN",
           sourceSyncedAt: sekarang,
           inputMethod: "MANUAL_UPLOAD",
@@ -253,11 +346,12 @@ export async function uploadRekapPredikatAction(
     const ringkasanPerPeriode: RingkasanPeriodePredikat[] = [];
     const perluHitungUlang: { periode: string; satuanKerja: string; jumlah: number }[] = [];
 
-    for (const { namaSheet, hasil } of hasilPerSheet) {
+    for (const { namaFile, namaSheet, hasil } of hasilPerSheet) {
       const barisPeriode = siapSimpan.filter((b) => b.namaSheet === namaSheet);
       if (barisPeriode.length === 0) continue;
 
       ringkasanPerPeriode.push({
+        namaFile,
         namaSheet,
         periodeBulan: hasil.periodeBulan,
         periodeTahun: hasil.periodeTahun,
@@ -290,31 +384,86 @@ export async function uploadRekapPredikatAction(
         });
       }
 
-      await prisma.auditTrail.create({
-        data: {
+      // SATU baris audit PER satuan kerja yang datanya tersentuh - bukan satu
+      // baris per berkas. Satu berkas rekap bisa memuat pegawai lintas unit,
+      // dan panel Notifikasi & Aktivitas men-scope per unit: kalau ditulis
+      // sebagai satu baris tanpa unit, unggahan ini tidak akan pernah muncul
+      // di panel unit manapun.
+      const jumlahPerSatker = new Map<string, number>();
+      for (const b of barisPeriode) {
+        jumlahPerSatker.set(b.satuanKerja, (jumlahPerSatker.get(b.satuanKerja) ?? 0) + 1);
+      }
+      await prisma.auditTrail.createMany({
+        data: [...jumlahPerSatker.entries()].map(([satuanKerja, jumlah]) => ({
           entitas: "predikat_kinerja",
           entitasId: `${hasil.periodeBulan}/${hasil.periodeTahun}`,
           aksi: "CREATE",
           aktor: user.nip,
+          satuanKerja,
           dataSesudah: {
-            namaFile: file.name,
+            namaFile,
             namaSheet,
             periode: `${hasil.periodeBulan}/${hasil.periodeTahun}`,
             unitPenilaian: hasil.unitPenilaian,
-            jumlahBarisTersimpan: barisPeriode.length,
+            jumlahBarisTersimpan: jumlah,
             sumber: "e-Kinerja BKN (upload manual)",
           },
-        },
+        })),
+      });
+    }
+
+    // --- VERIFIKASI KELENGKAPAN ---
+    // Ditampilkan langsung di halaman upload, bukan cuma di halaman kalkulasi:
+    // begitu satu file masuk, orang perlu tahu saat itu juga apakah file dari
+    // penilai lain masih kurang. Dicek per satuan kerja + periode yang benar-
+    // benar tersentuh upload ini, bukan seluruh kementerian.
+    const kombinasi = new Map<string, { satuanKerja: string; periodeBulan: number; periodeTahun: number }>();
+    for (const b of siapSimpan) {
+      kombinasi.set(`${b.satuanKerja}|${b.periodeBulan}|${b.periodeTahun}`, {
+        satuanKerja: b.satuanKerja,
+        periodeBulan: b.periodeBulan,
+        periodeTahun: b.periodeTahun,
+      });
+    }
+
+    const kelengkapan: KelengkapanPredikat[] = [];
+    for (const { satuanKerja, periodeBulan, periodeTahun } of kombinasi.values()) {
+      // Hanya pegawai AKTIF - pensiunan tidak akan pernah punya predikat baru,
+      // dan memasukkannya membuat kelengkapan mustahil tercapai.
+      const aktif = await prisma.pegawai.findMany({
+        where: { satuanKerja, statusPegawai: "AKTIF" },
+        select: { id: true, nama: true },
+        orderBy: { nama: "asc" },
+      });
+      const punya = await prisma.predikatKinerja.findMany({
+        where: { pegawaiId: { in: aktif.map((p) => p.id) }, periodeBulan, periodeTahun },
+        select: { pegawaiId: true, unitPenilaian: true },
+      });
+      const setPunya = new Set(punya.map((k) => k.pegawaiId));
+      const belum = aktif.filter((p) => !setPunya.has(p.id));
+
+      kelengkapan.push({
+        periode: `${periodeBulan}/${periodeTahun}`,
+        satuanKerja,
+        totalAktif: aktif.length,
+        sudahPunya: aktif.length - belum.length,
+        belumPunya: belum.length,
+        contohBelum: belum.slice(0, 10).map((p) => p.nama),
+        sumberPenilaian: [...new Set(punya.map((k) => k.unitPenilaian ?? "(sumber tidak tercatat)"))].sort(),
       });
     }
 
     revalidatePath("/tukin/predikat-kinerja");
+    revalidatePath("/kasubag/kalkulasi");
     const jumlahPeriode = ringkasanPerPeriode.length;
+    const labelSumber =
+      semuaFile.length > 1 ? `${semuaFile.length} file` : `"${semuaFile[0].name}"`;
     return {
       success:
-        `${siapSimpan.length} predikat kinerja tersimpan dari "${file.name}"` +
-        (jumlahPeriode > 1 ? ` - ${jumlahPeriode} periode sekaligus.` : "."),
+        `${siapSimpan.length} predikat kinerja tersimpan dari ${labelSumber}` +
+        (jumlahPeriode > 1 ? ` - ${jumlahPeriode} periode/sheet sekaligus.` : "."),
       ringkasanPerPeriode,
+      kelengkapan,
       sheetDilewati: sheetDilewati.length > 0 ? sheetDilewati : undefined,
       dilewati: dilewati.length > 0 ? kelompokkanAlasan(dilewati) : undefined,
       perluHitungUlang: perluHitungUlang.length > 0 ? perluHitungUlang : undefined,

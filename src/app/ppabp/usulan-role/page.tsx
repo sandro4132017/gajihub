@@ -3,7 +3,7 @@ import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canUsulkanPerubahanRole, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { StatusBadge } from "../../StatusBadge";
-import { LABEL_ROLE } from "../../../auth/roleLabel";
+import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
 import { UsulkanPerubahanRoleForm } from "./UsulkanPerubahanRoleForm";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,8 @@ export default async function UsulanPerubahanRolePage() {
               <div>
                 <p className="font-bold text-ink">{u.user.nama}</p>
                 <p className="text-sm text-muted">
-                  {LABEL_ROLE[u.roleSaatIni]} &rarr; {LABEL_ROLE[u.roleDiusulkan]} - diusulkan oleh {u.diusulkanOleh.nama}
+                  {labelRole(u.roleSaatIni, u.user.satuanKerja)} &rarr; {LABEL_ROLE[u.roleDiusulkan]} - diusulkan oleh{" "}
+                  {u.diusulkanOleh.nama}
                 </p>
                 {u.alasan && <p className="mt-1 text-sm text-ink-2">{u.alasan}</p>}
                 {u.diputuskanOleh && (

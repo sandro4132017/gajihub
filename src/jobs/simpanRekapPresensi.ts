@@ -37,6 +37,12 @@ export async function simpanHasilPresensi(
     totalMenitTerlambat: d.totalMenitTerlambat,
     totalMenitPulangCepat: d.totalMenitPulangCepat,
     totalMenitMeninggalkanKantor: d.totalMenitMeninggalkanKantor,
+    // `totalMenitKekuranganJamKerja` SENGAJA TIDAK ditulis di sini. Tarikan
+    // e-Presensi tidak punya angkanya (kekurangan jam kerja di sana adalah
+    // akibat dari terlambat & pulang cepat yang sudah dihitung per hari), dan
+    // dengan tidak menyertakannya, nilai yang pernah diisi manual lewat
+    // template TIDAK ikut ter-reset jadi 0 setiap kali sinkronisasi diulang.
+    // Baris baru tetap dapat 0 dari DEFAULT kolomnya.
     jumlahTidakIkutUpacara: d.jumlahTidakIkutUpacara,
     jumlahHariKerja: d.jumlahHariKerja,
     jumlahHariHadir: d.jumlahHariHadir,
@@ -44,6 +50,21 @@ export async function simpanHasilPresensi(
     jumlahHariWfhWfa: d.jumlahHariWfhWfa,
     jumlahHariDiklat: d.jumlahHariDiklat,
     jumlahHariDinasLuar: d.jumlahHariDinasLuar,
+    // Ditulis dari sumber otomatis (beda dari totalMenitKekuranganJamKerja di
+    // atas) - e-Presensi memang mencatat status "Tugas Belajar" per hari, jadi
+    // angkanya nyata, bukan turunan dari kolom lain.
+    jumlahHariTugasBelajar: d.jumlahHariTugasBelajar,
+    jenisCutiAktif: d.jenisCutiAktif,
+    jumlahHariCuti: d.jumlahHariCuti,
+    // `bulanCutiKeberapa` ditulis HANYA kalau sumbernya benar-benar
+    // menyebutkannya (mis. jenis cuti "Cuti Besar II" di e-Presensi).
+    //
+    // Kalau hasilnya null, kolomnya sengaja TIDAK disertakan sama sekali -
+    // bukan ditulis null. Bedanya penting: null berarti "tidak diketahui dari
+    // sumber ini", dan menuliskannya akan MENGHAPUS angka yang sudah pernah
+    // diisi manual lewat template setiap kali sinkronisasi diulang. Baris
+    // baru tetap dapat null dari kolomnya sendiri.
+    ...(d.bulanCutiKeberapa !== null ? { bulanCutiKeberapa: d.bulanCutiKeberapa } : {}),
     totalJamLembur: d.totalJamLembur,
     totalJamLemburHariLibur: d.totalJamLemburHariLibur,
     jumlahHariMakanLembur: d.jumlahHariMakanLembur,
@@ -80,6 +101,9 @@ export async function simpanHasilPresensi(
           menitPulangCepat: h.menitPulangCepat,
           menitMeninggalkanKantor: 0,
           tidakIkutUpacara: false,
+          // Dipakai export ADK Uang Lembur (formatnya per tanggal). Angkanya
+          // sudah dihitung sejak awal, cuma dulu tidak ada tempat menyimpannya.
+          jamLembur: h.jamLembur,
           sourceSystem,
           sourceSyncedAt: new Date(),
         })),

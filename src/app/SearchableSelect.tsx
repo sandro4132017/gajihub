@@ -187,8 +187,16 @@ export function SearchableSelect({
           className="absolute z-40 mt-1 max-h-64 w-full min-w-[220px] overflow-y-auto rounded-lg border border-line bg-surface py-1 shadow-lg"
         >
           {hasil.length === 0 && <li className="px-3 py-2 text-xs text-muted">Tidak ada yang cocok.</li>}
+          {/* Key memakai INDEKS, bukan nilai opsinya. Nilai tidak dijamin unik:
+              `emptyLabel` menambahkan opsi bernilai "" di depan daftar, dan
+              daftar yang datang dari database bisa memuat nilai kosong juga
+              (mis. pegawai yang satuan kerjanya belum terisi) - dua-duanya
+              dulu jatuh ke key yang sama dan React memperingatkan duplikat.
+              Indeks aman di sini karena `hasil` selalu dirender ulang utuh
+              tiap kali query pencariannya berubah, tidak pernah disisipi atau
+              diurutkan ulang sebagian. */}
           {hasil.map((o, i) => (
-            <li key={o.value || "__kosong"} role="option" aria-selected={o.value === value}>
+            <li key={`${i}-${o.value}`} role="option" aria-selected={o.value === value}>
               <button
                 type="button"
                 onMouseEnter={() => setSorotan(i)}

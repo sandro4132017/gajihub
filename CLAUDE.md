@@ -132,13 +132,29 @@ Sisa yang masih relevan dari langkah awal:
   referensi string generik (placeholder `https://placeholder.local/...` di
   seed), belum ada implementasi storage (local disk vs object storage)
   ataupun kebijakan retensi dokumen.
-- **PPABP per satker** - masih keputusan kebijakan terbuka, jangan
-  diasumsikan bakal terjadi otomatis. **CATATAN PENTING**: dulu di sini
-  tertulis "skema sudah siap (`User.satuanKerja` nullable)" - itu SUDAH
-  TIDAK BERLAKU. Rencana numpang kolom `satuanKerja` buat men-scope PPABP
-  sudah DICABUT karena bentrok dengan multi-role (lihat "Bug akun
-  multi-role kehilangan jangkauan PPABP" di bawah). Kalau nanti jadi
-  di-scale, itu BUTUH kolom sendiri + migrasi.
+- **PPABP per satker - TERJAWAB (2026-08-13)**: keterangan user, *"PPABP itu
+  tim keuangan di Biro Keuangan dan BMN"*. Jadi **unit ASAL** mereka memang
+  Biro Keuangan dan BMN, TAPI pekerjaannya memproses pembayaran SELURUH
+  satuan kerja - approval jenjang final, export ADK, rekonsiliasi lintas
+  unit. **Unit asal BUKAN batas kewenangan**, dan perilaku yang sekarang
+  (`cekPpabp()` sengaja mengabaikan `satuanKerja`) memang yang benar.
+  Sejalan dengan Pasal 20 ayat (5)-(6) yang memisahkan unit penyusun dari
+  unit keuangan sebagai pembayar.
+  - Ini juga menjawab keterangan susulan *"PPABP di bawah Kasubag TU,
+    Kasubag TU di bawah Pimpinan"*: itu hierarki **di dalam Biro Keuangan
+    dan BMN**, BUKAN berarti PPABP tunduk pada Kasubag TU tiap unit. Jadi
+    alur Kasubag TU jenjang 1 -> PPABP jenjang final tidak terbalik -
+    Kasubag TU memverifikasi data unitnya sendiri, PPABP memeriksanya
+    sebagai sisi keuangan.
+  - Terlihat di data: akun PPABP Irwan Syafril punya `User.satuanKerja`
+    **NULL** (lintas satker) sementara `Pegawai.satuanKerja`-nya **Biro
+    Keuangan dan Barang Milik Negara** - dua kolom itu memang menjawab
+    pertanyaan berbeda, dan di sinilah bedanya paling kelihatan.
+  - **CATATAN PENTING** yang tetap berlaku: rencana numpang kolom
+    `satuanKerja` buat men-scope PPABP sudah DICABUT karena bentrok dengan
+    multi-role (lihat "Bug akun multi-role kehilangan jangkauan PPABP" di
+    bawah). Kalau suatu saat tiap satker benar-benar punya PPABP sendiri,
+    itu BUTUH kolom sendiri + migrasi - jangan pakai `User.satuanKerja`.
 
 ## Simulasi role matrix lengkap (in progress - demo stakeholder)
 
@@ -1013,6 +1029,81 @@ bruto - potongan = bersih konsisten, dan TXT-nya 22 kolom konsisten di semua
 baris. Nama Rekening ikut terbaca terpisah dari nama pegawai (mis. pegawai
 "IRVAN GANEVA, M.M. , S.Ds" -> rekening "IRVAN GANEVA, S.DS").
 
+### Basis Data Gaji: nama pegawai untuk ADK datang dari Web Gaji, bukan SIAP
+
+Dipicu berkas user `basis data gaji_Kemnaker.xlsx` (2 sheet: `data_PNS`,
+`data_P3K`). Keluhannya: nama di database internal beda dengan yang dipakai
+pihak luar - singkatan & gelar.
+
+**Terukur, bukan kesan**: dari 4.701 NIP yang cocok ke tabel `Pegawai`,
+**3.628 (77%) namanya berbeda** - `"ADE ALEXANDER"` (SIAP) vs
+`"Ade Alexander, SH"` (Web Gaji).
+
+**Model `IdentitasWebGaji`** (migrasi `20260812090000_identitas_web_gaji`, satu
+`CREATE TABLE`): nama, jenis pegawai, kode satker, nama satuan kerja.
+
+**KENAPA TABEL SENDIRI, bukan mengoreksi `Pegawai.nama`** - alasan yang sama
+persis dengan `kelasJabatanSelamaHukuman`: kolom itu **ditimpa ulang tiap
+`npm run sync:pegawai`** (`nama` ikut di blok `update` upsert), jadi koreksi
+manual pasti hilang. Ditambah: SIAP sah untuk kepegawaian, Web Gaji sah untuk
+pembayaran - dua-duanya benar di ranahnya, tidak boleh saling menimpa.
+
+**Rekening TIDAK dibuatkan tabel baru** walau ada di berkas yang sama - tetap
+ke `RekeningPegawai` yang sudah jadi sumber pemisahan ADK per bank. Satu
+unggahan mengisi DUA tabel. Dua tabel rekening = dua kebenaran.
+
+**`src/business-logic/basisDataGaji.ts`** (PURE, 15 unit test). Dua kerusakan
+NYATA di berkas asli yang ditangani berbeda karena sifatnya beda:
+
+| Temuan | Jumlah | Perlakuan |
+|---|---|---|
+| Kolom **NIK & NIP tertukar** (Ditjen PHI dan Jamsos, BBPVP Medan) | **286 baris** | **Diperbaiki otomatis** - NIK 16 digit vs NIP 18 digit, tidak mungkin salah kenali |
+| **NIP tersimpan sebagai ANGKA** di Excel | **46 baris** | **DITOLAK** |
+
+Yang kedua itu jebakan presisi Excel yang sama dengan yang sudah dijaga di
+export: 18 digit melebihi 15 digit signifikan, jadi tiga digit terakhirnya
+jadi `000` (mis. `196906202003121000`). **Nol dari 46 cocok ke tabel Pegawai**
+- jadi tidak ada risiko salah orang, tapi juga tidak bisa dipulihkan dari mana
+pun, dan menebaknya berarti mengarang NIP. Deteksinya butuh `raw: true` saat
+membaca sheet: kalau selnya sudah diformat jadi teks, NIP rusak tidak bisa
+dibedakan lagi dari yang benar.
+
+**NIK SENGAJA TIDAK diimpor** - konvensi yang sama dengan `importPegawaiSiap.ts`
+(data pribadi yang tidak dibutuhkan skema tidak diambil).
+
+**Dua hal yang TIDAK diperbaiki diam-diam, tapi dilaporkan ke layar**:
+- **13 NIP ganda** - yang tersimpan baris TERAKHIR; kalau isinya beda, yang
+  menang ditentukan urutan baris, bukan keputusan siapa pun.
+- **3 kode bank SPAN dipakai dengan >1 nama bank** - mis. 343 baris ber-kode
+  `520002000990` (BRI) tapi namanya ditulis "BANK NEGARA INDONESIA".
+  Pemisahan ADK memakai KODE, jadi semuanya masuk berkas BRI. Hanya manusia
+  yang bisa memutuskan mana yang benar. Ada juga 4 baris yang kolom kode
+  banknya berisi nomor rekening (`1600005287947`) - tetap disimpan, ditandai.
+
+**UI `/ppabp/basis-data-gaji`** (izin `canKelolaGajiInduk` - PPABP + ADMIN):
+unggah, tabel perbandingan SIAP vs Web Gaji berdampingan, tombol "Hanya yang
+beda dari SIAP", dan tile **"Memakai nama SIAP (cadangan)"** yang menghitung
+pegawai aktif yang belum tercakup berkas.
+
+**ADK Tukin sekarang memakai `IdentitasWebGaji.nama`**, jatuh ke
+`Pegawai.nama` kalau belum ada - berkas pembayaran tidak boleh punya baris
+tanpa nama, dan jumlah yang memakai cadangan ditampilkan supaya bisa
+diperiksa. **Kode Satker** juga dapat sumber kedua dari sini: `GajiInduk`
+periode berjalan didahulukan, kalau periodenya belum diunggah dipakai kode
+dari basis data gaji (tidak terikat periode).
+
+**Diverifikasi terhadap berkas ASLI** lewat jalur kode yang sama: 4.993 baris
+terbaca (286 tertukar diperbaiki), 47 dilewati, **4.973 tersimpan**, dan
+`RekeningPegawai` yang tadinya **KOSONG (0 baris)** terisi **9.944** (4.972
+TUKIN + 4.972 GAJI). Export ADK Tukin diuji lewat production build: nama
+keluar sebagai `"M. Satrio Pratomo, S.T"` / `"Wardah Sabrina Rambe, S.H."`
+(bukan `"M.SATRIO PRATOMO"` / `"WARDAH SABRINA RAMBE"`), Kode Satker `450938`
+terisi, kolom bank & rekening terisi, dan **Nama Rekening tetap kolom
+tersendiri** (`"M SATRIO PRATOMO"`) - beda dari Nama Pegawai, sesuai maksudnya.
+Aritmatika baris total tetap konsisten (13.811.100 − 137.142 = 13.673.958).
+Tiga baris yang di-set APPROVED sementara untuk pengujian **SUDAH
+dikembalikan ke DRAFT** (nol baris APPROVED tersisa).
+
 ### Export ADK dua format: Excel (.xlsx) & TXT
 
 Dipicu 2 file contoh dari user: `export txt adk_tunkin-PNS_ROMUM_JUni__2026.xlsx`
@@ -1079,6 +1170,495 @@ baris lewat script terhadap data DB nyata: **13/13 baris (periode 6/2026) dan
 dengan hasil penjumlahan ulang, dan aritmatika bruto - potongan = bersih
 konsisten. Kode Satker terisi `450938` untuk 7/2026 dan kosong untuk 6/2026
 (gaji induknya belum diupload) - persis perilaku yang diinginkan.
+
+### Tombol "Setujui semua" (approval massal)
+
+Ada di ketiga dashboard approver (`/tukin`, `/uang-makan`, `/uang-lembur`),
+`src/app/actionsApprovalMassal.ts` + `ApprovalMassalForm.tsx`. Dibuat karena
+satu periode bisa berisi ratusan baris x 2 jenjang, dan menyetujui satu per
+satu membuat pengujian end-to-end (mis. memastikan export ADK ada isinya)
+praktis mustahil.
+
+**Yang membedakannya dari jalan pintas** - ini yang menentukan boleh/tidaknya
+fitur seperti ini ada:
+- **TIDAK** menulis `status = "APPROVED"` langsung ke tabel kalkulasi. Tiap
+  baris tetap lewat `ajukanApprovalTukin`/`UangMakan`/`UangLembur` yang sama
+  dengan tombol satuan, jadi urutan jenjang, penolakan siklus basi (log
+  sebelum `calculatedAt`), dan pembaruan status tetap dievaluasi engine yang
+  sama.
+- **TIDAK** melewati otorisasi. Izin dicek **per baris** terhadap satuan kerja
+  pegawainya - bukan sekali di awal - memakai `canApproveJenjang1` /
+  `canApproveJenjangFinal`. Kasubag TU tetap cuma jenjang 1 di unitnya; baris
+  di luar kewenangannya **dilewati dengan alasan yang ditampilkan**, bukan
+  diloloskan. `?satker=` dari form tidak dipercaya untuk KASUBAG_TU.
+- **TIDAK** memalsukan jejak. Tiap keputusan tetap satu baris `ApprovalLog`
+  atas nama akun yang menekan tombol, bercatatan `"Approval massal"` - jadi
+  bisa dibedakan dari approval yang benar-benar diperiksa satu per satu.
+- Periode **wajib** sudah dipilih; tanpa `?bulan=&tahun=` tombolnya tidak
+  muncul sama sekali (tanpa periode, "semua" berarti seluruh riwayat).
+  PIMPINAN tidak pernah melihatnya (read-only).
+- Konfirmasi dua langkah, bukan `confirm()` bawaan browser - dialog itu tidak
+  bisa menampilkan berapa baris & periode mana, padahal justru itu yang perlu
+  dibaca.
+
+Satu akun bisa menuntaskan kedua jenjang hanya kalau memang berwenang di
+keduanya (mis. ADMIN). Kasubag TU yang menekannya akan memajukan semua baris
+ke jenjang 2 lalu berhenti, dan pesannya menyebutkan itu apa adanya.
+
+**TODO(confirm)**: approval massal berarti approver menyetujui tanpa melihat
+rincian tiap pegawai. Untuk pengujian wajar; untuk production perlu diputuskan
+apakah tombol ini boleh ada, atau dibatasi ke lingkungan non-production.
+
+### Gerbang "sudah disetujui" di tombol Hitung sekarang
+
+Menutup TODO lama *"Kalkulasi massal Kasubag TU tidak punya pengaman sudah
+APPROVED"*. Menghitung ulang selalu mengembalikan status ke `DRAFT` dan
+memperbarui `calculatedAt`, sehingga seluruh `ApprovalLog` sebelum waktu itu
+dianggap basi oleh `evaluasiApproval` - satu klik menghapus hasil approval satu
+unit penuh.
+
+**Bukan skenario teoretis.** Periode 7/2026 Biro Keuangan punya **278 baris
+ApprovalLog** (139 jenjang 1 + 139 jenjang 2) untuk **47 pegawai** - siklusnya
+terulang sekitar **tiga kali**, dan tiap kali export ADK-nya kosong lagi.
+Terakhir: approval pukul 10.08.11, kalkulasi ulang pukul 10.08.33 - **22 detik**
+kemudian.
+
+Sekarang, kalau periode itu punya baris APPROVED, form menampilkan panel merah
+berisi jumlahnya dan dua pilihan:
+- **Lewati yang sudah disetujui** (bawaan) - hanya baris non-APPROVED yang
+  dihitung, approval yang ada tetap utuh.
+- **Hitung ulang semua** - baru muncul kotak konfirmasi yang menyebut jumlah
+  approval yang akan dibatalkan. Dua langkah, pola sama dengan "Setujui semua".
+
+**Bawaannya yang aman, bukan yang merusak** - dan hasilnya disebutkan apa
+adanya di pesan sukses (`N pegawai yang sudah APPROVED DILEWATI` atau
+`PERHATIAN: N approval DIBATALKAN`). Dicek ULANG di server (form bisa dikirim
+siapa saja, dan jumlahnya bisa berubah antara halaman dirender dan tombol
+ditekan) - pola sama dengan gerbang kelengkapan predikat yang sudah ada.
+
+Diverifikasi lewat production build terhadap data nyata: panel muncul berbunyi
+"1 pegawai periode Juli 2026 sudah APPROVED", radio `lewati` ber-`checked`, dan
+kotak konfirmasi belum dirender selama pilihannya masih "lewati".
+
+**"Nol dihitung" TIDAK LAGI tampil hijau.** Kalau seluruh baris dilewati karena
+sudah APPROVED, pesannya dulu berbunyi *"Tukin terhitung untuk 0 pegawai... 47
+pegawai yang sudah APPROVED DILEWATI"* — kalimat benar, warna salah: hijau
+terbaca "beres" dan orang berhenti di situ. Terjadi betulan sesudah koreksi jam
+Acep: tombolnya ditekan, ke-47 baris Biro Keuangan tetap basi, dan penanda
+kuning di tabel dikira kerusakan. Sekarang keadaan itu memakai field terpisah
+`peringatan` (panel kuning, BUKAN `success`) yang menyebut penyebabnya dan
+langkah berikutnya. Syaratnya sempit — `dihitung === 0` DAN yang dilewati murni
+karena APPROVED — supaya kasus "dilewati karena predikat belum ada" tetap
+memakai jalur laporan yang sudah ada.
+
+**TODO(confirm) - ADK Tukin TIDAK di-filter per satuan kerja.** Route-nya cuma
+menyaring periode + `status: "APPROVED"` + `?bank=`, jadi satu berkas memuat
+SEMUA unit yang barisnya sudah disetujui, dikelompokkan per bank saja. Sekarang
+tidak kelihatan karena baru satu unit yang punya baris APPROVED. Kalau SAKTI SPP
+ternyata butuh per satker DAN per bank, route ini perlu parameter satker
+tambahan - perlu ditanyakan sebelum dipakai membayar lintas unit.
+
+Diverifikasi lewat jalur kode yang sama (2 baris Tukin 7/2026): baris yang
+sudah punya jenjang 1 dilanjutkan dari jenjang 2, baris kosong dijalankan
+1 lalu 2, keduanya berakhir `APPROVED` dengan `ApprovalLog` lengkap.
+
+### Pejabat Pimpinan Tinggi: komponen kehadiran dibayar penuh
+
+Keterangan user: pejabat setingkat **Eselon II** (Kepala Biro, Sekretaris
+Ditjen/Itjen/Badan, Direktur, Inspektur, Kepala Pusat) menerima bobot
+kehadiran 30% **penuh** sebagai kompensasi jabatan - tanpa potongan Pasal 13.
+
+**`src/business-logic/pejabatPimpinanTinggi.ts`** (PURE, 11 unit test) +
+field opsional `TukinInput.dikecualikanPotonganKehadiran`.
+
+**TIDAK ADA KOLOM ESELON, dan tidak perlu ditambah.** `Pegawai` tidak
+menyimpannya dan SIAP tidak mengirimkannya dalam bentuk itu, TAPI
+`kelasJabatan` sudah cukup - untuk jabatan struktural angkanya datang dari
+`SATKER.JOBGRADE`, sumber yang SAMA yang menentukan tarif tukin pokok. Diuji
+ke 5.077 pegawai aktif, sebarannya jatuh persis di batas eselon tanpa satu
+pun jabatan lain yang nyasar:
+
+| Kelas | Jumlah | Isinya |
+|---|---|---|
+| 17 | 6 | Sekjen, Irjen, 3 Dirjen, Kepala Badan (JPT Madya) |
+| 16 | 4 | Staf Ahli (JPT Madya) |
+| **15** | **40** | Kepala Biro, Direktur, Inspektur I-IV, Sekretaris Ditjen/Itjen/Badan, Kepala Pusat, Ka. Sekretariat BNSP (**JPT Pratama = Eselon II**) |
+
+**Cara lain yang diuji dan DITOLAK**: `unitKerja === satuanKerja` (dugaan
+"kepala unit Eselon II ber-SATKERID tepat 6 digit"). Kena **3.069 dari
+5.077** pegawai - seluruh staf UPT/Balai ikut, karena SATKERID mereka memang
+berhenti di nama balainya.
+
+**ESELON I IKUT DIKECUALIKAN** (batas `>= 15`) walau yang disebut user cuma
+Eselon II: memisahkannya menghasilkan aturan yang tidak koheren - Kepala Biro
+(15) dibayar penuh sementara Sekretaris Jenderal (17) tetap dipotong. Satu
+konstanta `KELAS_JABATAN_MINIMUM_JPT`, gampang diubah jadi `=== 15` kalau
+ternyata keliru.
+
+**Yang dimatikan HANYA Pasal 13.** Pasal 14 (cuti), pengali tugas belajar,
+dan bobot kinerja 70% tetap berlaku - ketiganya mekanisme berbeda, dan tidak
+ada keterangan bahwa JPT dikecualikan dari mereka juga. Ada test yang
+menguncinya (predikat 60% -> dibayar 30% + 42% = 72%).
+
+**Pelanggarannya TIDAK dihapus.** `rincianPotonganKehadiran` tetap berisi
+terlambat/pulang cepatnya dan tetap tampil di layar (dicoret + panel kuning),
+cuma tidak menghasilkan potongan rupiah; `potonganKehadiranPersenSebelum
+Pengecualian` menyimpan berapa yang seharusnya. Menghapusnya berarti
+kehilangan bahan pengawasan atas orang yang justru paling perlu diawasi.
+Kalkulasi juga **menyebut nama & nominalnya di layar** - sama seperti
+penurunan kelas jabatan, perubahan tarif tidak boleh terjadi diam-diam.
+
+**Diturunkan dari kelas jabatan EFEKTIF, bukan kelas dasar** - pejabat yang
+diturunkan jabatannya karena hukuman disiplin memang tidak lagi memegang
+jabatan yang dikompensasi itu.
+
+**`src/app/BadgePejabatEselon.tsx`** - ikon ★ kecil di samping nama, diklik
+memunculkan keterangan (jenjang, kelas jabatan, apa yang dikecualikan, dan
+bahwa dasar hukumnya masih ditunggu). Terpasang di tabel `/kasubag/kalkulasi`
+(lewat `NamaPegawai`, jadi ketiga tabelnya sekaligus), dashboard `/tukin`,
+tabel `/tukin/presensi`, judul `/tukin/presensi/[nip]`, dan profil `/saya`.
+Mengembalikan `null` untuk pegawai biasa - penanda yang muncul di mana-mana
+tidak menandai apa pun.
+- Pakai **`<details>` bawaan HTML, bukan popover client component**:
+  buka-tutupnya ditangani browser, jadi tetap jalan tanpa JavaScript -
+  konsisten dengan janji yang dipegang filter GET & form approval.
+- Isinya muncul **di dalam sel**, bukan melayang di atasnya. Tabel-tabel itu
+  dibungkus `overflow-x: auto`, dan panel melayang akan terpotong di tepi
+  kontainer.
+- **JANGAN taruh badge ini di dalam `<p>`, heading, atau `<span>`.**
+  `<details>` itu *flow content*, sementara elemen-elemen itu cuma boleh
+  memuat *phrasing content* - parser HTML menutup paksa induknya, jadi DOM
+  hasil parsing beda dari pohon React dan Next melempar **hydration error yang
+  menunjuk ke `<summary>` di dalam komponennya**, bukan ke tempat
+  pemakaiannya. Sempat terjadi di `/tukin` (di dalam `<p>`) dan
+  `/tukin/presensi/[nip]` (di dalam `<h1>`) - keduanya sudah diganti `<div>` /
+  dikeluarkan dari heading. Di dalam `<td>` aman.
+
+**Diverifikasi terhadap data & production build** (server sementara di port
+3099, akun PPABP): halaman Irma Puspita memuat badge-nya, dan tabel rincian
+menampilkan "Terlambat hadir 40 menit -> 0,4% -> Rp 23.136" serta "Pulang
+lebih awal 20 menit -> 0,2% -> Rp 11.568" **dicoret**, dengan baris "Total
+potongan (dikecualikan) 0% / Rp 0" dan "Komponen kehadiran yang dibayar
+**Rp 5.784.000**" sama persis dengan bobot penuhnya - dan angka itu juga
+sama persis dengan kolom hasil kali 30% di rincian manual Rokeu. Galih
+Febian Azhar (kelas 7) diperiksa sebagai pembanding: **nol** badge, nol
+`<details>`.
+
+**TODO(confirm) - DASAR HUKUMNYA BELUM ADA SALINANNYA.** Seluruh teks
+Permenaker sudah dibaca: Pasal 7 ayat (2) mengecualikan penyampaian aktivitas
+harian HANYA untuk tugas belajar/diklat/cuti, dan Pasal 20 ayat (2) huruf b
+justru menempatkan JPT Pratama sebagai **penanggung jawab** rekapitulasi
+kehadiran unitnya - bukan pihak yang dikecualikan. Aturan ini membayar penuh
+~50 orang tanpa melihat presensi, jadi WAJIB diminta dasarnya (lihat B1b di
+`docs/permintaan-data-dan-konfirmasi-osdma.md`). Selama belum ada, tiap
+pemakaiannya menghasilkan catatan anomali ber-`TODO(confirm)`.
+
+**Bukti praktik** (rincian manual Rokeu Juli 2026): Irma Puspita, Kepala Biro
+Keuangan dan BMN (kelas 15), dibayar Rp 19.280.000 dengan kolom potongan NOL
+padahal rekap e-Presensi mencatat terlambat 40 menit (9 Juli) + pulang cepat
+20 menit (10 Juli). Toleransi 60 menit Pasal 9 ayat (3) hanya menjelaskan
+yang 40 menit. Angka Rp 19.280.000 itu dikunci di test.
+**HATI-HATI menyimpulkan dari file itu saja**: dari 48 baris, 21 berpotongan
+nol dan **7 di antaranya punya pelanggaran menurut Gajihub** - cuma satu yang
+Eselon II. Sisanya (telat 6 menit, pulang cepat 2/14 menit, lupa absen 1)
+lebih mungkin efek toleransi 60 menit yang belum diterapkan, bukan status
+jabatan.
+
+**GAP YANG BELUM DITUTUP - 50 pejabat itu tidak punya predikat kinerja.**
+Query ke database: **0 dari 50** pegawai berkelas >= 15 punya `PredikatKinerja`
+untuk 6/2026 maupun 7/2026, padahal Irma punya nilai "Sangat Baik" di sheet
+SKP rincian manual. Penilaian mereka datang lewat atasan langsung, bukan
+rekap unit e-Kinerja BKN yang di-upload Kasubag TU. Akibatnya mereka
+**DILEWATI kalkulasi** dengan alasan "predikat kinerja belum diupload" dan
+tidak muncul di ADK sama sekali. Sementara ini ditutup lewat form "tambah
+predikat satuan" di `/tukin/predikat-kinerja` (otomatis bertanda
+`MANUAL_ENTRY` + chip "bukan dari BKN"). TODO(confirm): apakah ada export
+e-Kinerja tersendiri untuk JPT yang bisa di-upload seperti rekap unit.
+
+### Penurunan kelas jabatan karena hukuman disiplin
+
+PP 94/2021 mengenal hukuman disiplin berat berupa **penurunan jabatan setingkat
+lebih rendah** selama jangka waktu tertentu. Karena tarif tukin pokok
+ditentukan kelas jabatan, itu langsung mengubah yang dibayarkan.
+
+**SIAP TIDAK MENCATATNYA SAMA SEKALI** - dikonfirmasi user lewat kasus nyata:
+Galih Febian Azhar turun kelas **7 → 6** selama satu tahun, SIAP tetap menulis
+7. Jadi angkanya memang harus diketik manusia, dan itu bukan kekurangan
+sementara yang akan hilang begitu integrasinya membaik.
+
+Ketemunya lewat jalan memutar: waktu ADK Gajihub diadu ke rincian manual
+Rokeu, kelas jabatan cocok **46 dari 48** - dan dua yang meleset persis
+turun satu tingkat (Gadis Sukma Dewa 8→7, Galih Febian Azhar 7→6).
+
+**Kolom baru `SkHukumanDisiplin.kelasJabatanSelamaHukuman`** (migrasi
+`20260810120000_penurunan_kelas_jabatan_hukdis`, satu ADD COLUMN nullable).
+
+**KENAPA BUKAN mengoreksi `Pegawai.kelasJabatan`** - tiga alasan, semuanya
+menentukan:
+1. Kolom itu MIRROR dari SIAP dan **ditimpa ulang tiap `npm run sync:pegawai`**
+   - koreksi manual di sana hilang pada tarikan berikutnya.
+2. SIAP tidak akan pernah mengirimkannya, jadi tidak ada yang memperbaikinya
+   sendiri.
+3. Penurunannya **BERJANGKA**. Setelah masa hukuman lewat kelasnya kembali,
+   TAPI periode selama hukuman harus tetap dihitung dengan kelas yang turun.
+   Satu angka di tabel Pegawai tidak bisa menyimpan dua kebenaran sekaligus.
+
+**Disimpan ABSOLUT** (kelas berapa), bukan "turun berapa tingkat": kalau
+relatif, kelas dasar yang keliru di SIAP ikut menggeser hasilnya tanpa
+ketahuan. Yang dipakai membayar jadi sama persis dengan yang tertulis di SK.
+
+`src/business-logic/kelasJabatanEfektif.ts` (PURE, 11 unit test):
+- **Hanya SK berstatus `DISETUJUI` yang berpengaruh.** Memotong pembayaran atas
+  usulan yang belum diputuskan OSDMA jelas keliru - lebih mudah membayar
+  kekurangan nanti daripada menarik kembali uang yang sudah dipotong.
+- Batas atas periode **inklusif**: "selama 1 tahun" mulai 7/2026 = selesai
+  6/2027, dua belas periode (ada test yang menghitungnya).
+- Periode selesai kosong = berlaku sampai dicabut. Action **menolak** kalau
+  cuma bulan ATAU tahunnya yang diisi - kalau lolos, hukuman setahun diam-diam
+  jadi permanen.
+- Kalau ada dua SK bertumpang, dipakai kelas TERENDAH, dan `semuaSkPenurunanBerlaku()`
+  memunculkan tumpangnya supaya bisa diperiksa manusia.
+
+**Dipakai di dua tempat yang harus sepakat**: kalkulasi massal
+(`/kasubag/kalkulasi`) dan export ADK Tukin. Kalau ADK tetap memakai kelas
+SIAP, Nilai Bruto-nya lebih besar dari yang dipakai menghitung dan potongannya
+kelihatan menggelembung. Kalkulasi juga **melaporkan perubahannya ke layar**
+("kelas jabatan 7 → 6 karena hukuman disiplin, SK ...") - perubahan tarif tidak
+boleh terjadi diam-diam.
+
+**TIDAK ADA hubungannya dengan Pasal 15** (potongan persentase karena hukuman
+disiplin) yang masih belum diimplementasi. Ini mekanisme BERBEDA: bukan
+memotong hasil, tapi mengganti tarif dasarnya. TODO(confirm): kalau nanti
+Pasal 15 jadi diimplementasi, perlu ditegaskan ke Biro Hukum apakah keduanya
+berlaku bersamaan - kalau iya, satu pelanggaran dihukum dua kali.
+
+#### Penanda "SK belum terbit"
+
+Keputusan hukuman diproses pimpinan dan nomor SK-nya terbit **belakangan**,
+sementara unit sudah perlu mencatat orangnya supaya tukin periode berjalan
+tidak terlanjur dibayar dengan kelas jabatan lama. Kolom
+`SkHukumanDisiplin.skBelumTerbit` + `nomorSk` jadi nullable (migrasi
+`20260810140000_sk_hukdis_belum_terbit`).
+
+**KENAPA KOLOM SENDIRI, bukan menulis "(belum terbit)" di `nomorSk`:**
+- **Bisa di-query.** Pertanyaan yang wajib bisa dijawab sebelum go-live - "SK
+  mana saja yang sudah memotong tukin padahal nomornya belum ada?" - tidak bisa
+  dijawab dari teks bebas tanpa menebak pola penulisannya.
+- Teks bebas ikut tercetak apa adanya ke daftar & laporan; satu baris
+  bertuliskan "(belum terbit)" di kolom Nomor SK gampang terbaca sebagai nomor
+  yang sebenarnya.
+- Penulisannya pasti tidak seragam antar orang ("belum ada", "-", "TBD"), jadi
+  tidak bisa dihitung.
+
+**Nomor SK dan penandanya saling meniadakan** - action menolak kalau keduanya
+terisi, dan field nomornya dinonaktifkan begitu dicentang. Kalau dua-duanya
+boleh diisi, orang akan mengetik "-" lalu mencentang, dan penandanya jadi tidak
+berarti apa-apa.
+
+**TIDAK menghalangi perhitungan**: baris bertanda ini tetap berpengaruh ke
+tarif setelah disetujui OSDMA, supaya alurnya bisa diuji utuh. Yang dijamin
+cuma satu hal - keadaannya kelihatan di **setiap layar tempat manusia bisa
+mengambil keputusan**: chip merah di daftar Kasubag TU, chip merah di layar
+approval OSDMA (supaya menyetujuinya jadi tindakan sadar), catatan hasil
+kalkulasi ("SK BELUM TERBIT" menggantikan nomornya), dan **panel merah khusus**
+di halaman Kasubag TU yang mendaftar kombinasi paling berbahaya: sudah
+DISETUJUI tapi nomornya belum ada - jadi bisa ditelusuri sekali lihat menjelang
+tutup periode.
+
+**TODO(confirm) - GADIS SUKMA DEWA**: selisih kelasnya (SIAP 8, manual 7) juga
+turun tepat satu tingkat, tapi belum ada keterangan sebabnya. Perlu dipastikan
+apakah itu hukuman disiplin juga (kalau iya, tinggal diinput SK-nya) atau
+memang kelas jabatannya yang salah di SIAP.
+
+### BUG: Nilai Bruto & Potongan di ADK Tukin (FIXED)
+
+Ketemu waktu mencari cara memaksimalkan fitur Tukin, dengan membaca sheet
+**"Masuk ADK"** di rincian manual Rokeu (`Rincian Tunkin Juli 2026.xlsx`) -
+sheet itu cuma punya dua kolom uang:
+
+```
+NIP                  nama            pot          tukin
+197601091999032001   ARINI SARKOWI   44.235,12    9.851.764,88
+```
+
+`tukin` = tarif penuh kelas jabatannya (kelas 12 = 9.896.000) dikurangi `pot`.
+Jadi **Nilai Bruto = tarif PENUH, Nilai Potongan = potongan kehadiran**.
+
+Gajihub mengisi ketiganya dari `tukinPokok / potonganPph / tukinBersih`, dan
+itu keliru dua kali:
+1. `TukinCalculation.tukinPokok` sudah nilai **SETELAH** potongan Pasal 13,
+   bukan tarif penuh.
+2. `potonganPph` **tidak pernah diisi** - kalkulasi massal Kasubag TU tidak
+   mengoper `tarifPphEfektif` sama sekali.
+
+Akibatnya file ADK keluar dengan **Nilai Bruto = Nilai Bersih dan Nilai
+Potongan = 0** — seluruh potongan kehadiran yang jadi inti perhitungan tidak
+muncul. Terukur: **46 dari 46** baris Juli 2026 akan terkirim dengan potongan
+nol.
+
+Perbaikannya di `nilaiUangAdkTukin()` (`src/business-logic/adk.ts`): bruto dari
+`TUKIN_POKOK_PER_KELAS_JABATAN`, potongan = bruto − bersih. **Pembulatan pada
+bruto & bersih DULU**, potongan diturunkan dari selisih keduanya - supaya
+`bruto − potongan = bersih` tepat pada bilangan bulat di dalam file.
+
+**PPh yang selalu nol ternyata SESUAI praktik** - tidak ada satu pun kolom
+PPh/pajak di seluruh workbook manual itu. Yang salah cuma pemakaian kolomnya.
+Kalau suatu saat PPh benar-benar dipotong, angkanya ikut sendiri: `tukinBersih`
+sudah bersih dari PPh, jadi selisih ke bruto membesar dengan sendirinya.
+
+**Diverifikasi ke sheet "Rekap Tukin Juli"** (48 pegawai), dibandingkan ke
+kolom "Tunjangan Kinerja" yang memang tarif penuhnya: **tarif cocok 46/48**,
+dan dua yang meleset persis kasus penurunan kelas karena hukuman disiplin
+(lihat bagian di atas) - bukan salah rumus.
+
+**TODO(confirm) yang tersisa - apa arti "Nilai Potongan" bagi Web Gaji?**
+Kolom "Potongan" di rekap manual ternyata **hanya potongan KEHADIRAN**, bukan
+total pengurangan. Buat 47 dari 48 pegawai itu tidak berbeda, karena predikat
+mereka 100% sehingga tidak ada pengurangan dari sisi kinerja. Bedanya baru
+muncul pada Galih Febian Azhar (predikat "Butuh Perbaikan" = 85%):
+
+```
+tarif kelas 6      3.510.400
+potongan kehadiran   248.852   (23,63% dari bobot kehadiran)
+bersih             2.892.956   <- 3.510.400 - 248.852 = 3.261.548, BUKAN ini
+```
+
+Selisih 368.592 itu pengurangan predikat, dan di rekap manual memang tidak
+masuk kolom Potongan. Gajihub memakai `potongan = bruto - bersih`, jadi untuk
+Galih angkanya 617.444, bukan 248.852. Pilihan itu disengaja: file pembayaran
+harus memenuhi `bruto - potongan = bersih`, dan versi kehadiran-saja tidak.
+Perlu ditanyakan mana yang diharapkan Web Gaji sebelum dipakai membayar
+sungguhan.
+
+### Rincian potongan kehadiran ditampilkan ke pegawai
+
+`hitungPotonganKehadiranPersen()` sudah lama menghasilkan rincian per jenis
+pelanggaran (jenis, dasar hukum, jumlah, satuan, tarif, total) — tapi grep
+`rincianPotonganKehadiran` cuma menemukan engine, test, dan definisi tipe.
+**Nol tempat di UI.** Angka itu dihitung tiap kalkulasi lalu dibuang.
+
+`src/app/RincianPotonganKehadiran.tsx` (BARU) menampilkannya sebagai tabel di
+dua tempat: `/saya` (pegawai menjawab sendiri "kenapa tukin saya segini") dan
+`/tukin/presensi/[nip]` (Kasubag TU/PPABP menelusuri satu orang).
+
+- **Memanggil fungsi yang SAMA dengan yang menghitung pembayaran**, bukan
+  menyalin tarifnya. Kalau aturan Pasal 13 berubah, tabel ikut sendiri - tidak
+  ada kesempatan tampilan dan perhitungan berbeda.
+- **Direkonstruksi dari `RekapPresensiPeriode`, bukan disimpan.** Menyimpannya
+  butuh migrasi + tabel baru, sementara bahannya sudah ada dan pasti.
+- **Selisih terhadap angka tersimpan ditunjukkan, bukan disembunyikan.** Yang
+  ditampilkan adalah rekap presensi SAAT INI; kalau tidak menjumlah ke
+  `komponenKehadiran` yang tersimpan (toleransi 1 rupiah untuk pembulatan
+  floating point), itu berarti presensinya berubah setelah Tukin terakhir
+  dihitung - dan halamannya bilang "perlu hitung ulang".
+
+### ADK Uang Makan & Uang Lembur: format PER HARI, tanpa rupiah
+
+Dipicu 4 file template dari user (`Template-ADK-UM.xlsm` + `-TXT.txt`,
+`Template-ADK-Lembur.xlsm` + `-txt.txt`). Keluhannya: "yang sekarang ketika di
+export malah berantakan isinya" - dan memang, export lama mengeluarkan tabel
+rekap berisi rupiah + baris TOTAL, bentuk yang dikarang sendiri waktu contoh
+filenya belum ada.
+
+**Bentuk yang benar sama sekali beda dari ADK Tukin**, dan bedanya bukan gaya:
+
+| | ADK Tukin | ADK Makan & Lembur |
+|---|---|---|
+| Satu baris = | satu PEGAWAI | satu pegawai **per HARI** |
+| Isi | rupiah + rekening + kode bank | **NIP + tanggal** (+ jam, untuk lembur) |
+| Baris header | ada | **tidak ada** |
+| Baris total | ada | **tidak ada** |
+| Dipisah per bank | ya (SAKTI SPP per bank) | **tidak** |
+
+Web Gaji yang menghitung rupiahnya sendiri dari grade pegawai - file ini cuma
+menyetorkan FAKTA harian. Karena tidak ada perintah bayar di dalamnya,
+pemisahan per bank tidak berlaku di sini.
+
+**Struktur .xlsm operator sudah dibaca sampai tuntas**: 4 sheet - `depan`
+(grid entri manual, satu kolom per tanggal), `ref` (nama bulan buat dropdown),
+`pegawai` (master NIP/nama/grade), dan `hasil`. **Isi sheet `hasil` SAMA
+PERSIS dengan file .txt-nya** (dicek 2.097/2.097 dan 111/111 entri) - jadi
+.txt itu "save as text" dari sheet tersebut, dan .xlsm-nya alat entri + makro,
+bukan formatnya. Export Gajihub meniru keduanya: .xlsx berisi sheet `depan`
+(buat diperiksa manusia) **dan** `hasil` (muatan yang disetor).
+
+**Yang dibuktikan dari isi file, bukan diasumsikan** - semuanya di
+`src/business-logic/adkHarian.ts`:
+- TAB separated, akhir baris **CRLF**, tanggal ISO `YYYY-MM-DD`.
+- Jam lembur **bilangan bulat** (nilai yang muncul 1-6, 8, 9; nol pecahan di
+  111 baris). Mesin Gajihub menghasilkan pecahan, jadi dibulatkan di lapisan
+  export.
+- Uang makan **tidak punya kolom ketiga** - kehadiran itu ya/tidak.
+- Dua kolom ringkasan di sheet `depan` lembur = **[jam hari kerja, jam hari
+  libur]**, diuji **cocok 35/35**. Persis pemisahan yang sudah dipunya Gajihub.
+- File asli diakhiri baris berisi tab kosong (sisa "save as text"). **TIDAK
+  ditiru** - baris kosong bukan bagian format.
+- NIP di file asli ada 15 baris yang berspasi di belakang. Export Gajihub
+  merapikannya, dan menulis NIP sebagai **teks** di .xlsx (18 digit melebihi
+  presisi angka Excel - kalau jadi angka, ujungnya berubah nol dan barisnya
+  tidak akan ketemu di Web Gaji).
+
+**LIBUR NASIONAL TERNYATA TIDAK PERLU KALENDER.** Ini yang paling melegakan:
+tanggal merah otomatis hilang dari daftar uang makan karena di hari itu
+e-Presensi memang tidak punya satupun baris WFO/WFH. Dibuktikan dua arah -
+1 Juni 2026 (Hari Lahir Pancasila) cuma berisi Upacara 4.517 orang + Lembur 12,
+16 Juni 2026 (Tahun Baru Islam) cuma Lembur 7; dan 20 tanggal di file asli =
+persis 20 hari kerja Juni setelah kedua tanggal itu keluar.
+
+**Kolom `PresensiHarian.jamLembur` BARU** (migrasi
+`20260810000000_tambah_jam_lembur_harian`, satu ADD COLUMN dengan default).
+Angkanya sebenarnya **sudah lama dihitung per hari** oleh `rekapDariLaporanPdf()`
+- tiap elemen `hari[]` punya `jamLembur` - tapi dibuang setelah dijumlahkan.
+Catatan lama di route uang lembur ("format asli per-HARI JHARI1..31 sementara
+skema cuma simpan total, jadi tidak dibuat") sekarang **tidak berlaku pada dua
+hal**: formatnya bukan JHARI1..31, dan rinciannya sekarang ada.
+
+**Diverifikasi terhadap data & file asli** (Biro Keuangan, Juni 2026): bentuk
+file lolos semua (kolom, NIP 18 digit, tanggal ISO, jam bulat, CRLF), dan
+**uang makan cocok 415 dari 415** entri yang NIP-nya juga ada di file asli -
+nol baris yang berbeda. (507 baris sisanya untuk pegawai yang memang tidak ada
+di ADK unit itu.)
+
+#### PERINGATAN: isi ADK Uang Lembur akan jauh lebih sedikit
+
+Ini soal DATA, bukan format, dan tidak bisa diperbaiki dengan menulis kode.
+
+Gajihub menghitung lembur **hanya dari baris berstatus "Lembur"** di
+e-Presensi - aturan yang dulu diturunkan dari file PDF uji, di mana 14 dari 14
+baris Lembur jatuh di Sabtu/Minggu. Data nyata membantah generalisasinya untuk
+hari kerja:
+
+| | Hari kerja | Akhir pekan |
+|---|---|---|
+| Baris "Lembur" di e-Presensi, Juni 2026, SE-KEMENTERIAN | **21** (12 di antaranya tanggal merah) | 405 |
+| File ADK asli, Juni 2026, **satu unit saja** | **109** | 2 |
+
+Sebabnya terlihat jelas di data: John Pieter diklaim lembur 3, 9, 16, 22, 29
+Juni; di e-Presensi tanggal 16 (libur nasional) statusnya **Lembur**, tapi
+tanggal 3, 9, 22, 29 statusnya **WFO** dengan jam keluar 18:54, 20:31, 19:12,
+19:37. Lembur hari kerja dikerjakan sebagai WFO yang pulang malam.
+
+**JANGAN menurunkan lembur dari jam pulang.** Di unit yang sama, 46 dari 48
+pegawai punya hari dengan jam keluar lewat 17:00 (367 hari) - sementara yang
+benar-benar diajukan cuma 35 orang / 111 hari. Lembur butuh **surat perintah
+lembur**; pulang malam bukan lembur. Sumber sahnya tidak ada di database
+manapun. TODO(confirm): perlu diputuskan apakah Gajihub menerima upload/entri
+SPL, atau ADK lembur tetap diisi manual di luar sistem. Halaman `/ppabp/adk`
+menampilkan peringatan ini otomatis selama jumlah lembur hari kerjanya tidak
+wajar.
+
+#### TODO(confirm) dari selisih uang makan
+
+Perbandingan ke file asli Juni 2026 menyisakan 13 tanggal berbeda dari 2.097
+baris, dan penyebabnya bukan bug:
+- **4 hari Dinas Luar DIBAYAR di file asli** (Adipa Rizky Putra 17-19 Juni,
+  Yudi Apriyanto 17 Juni), sementara aturan yang user tetapkan sendiri
+  mengecualikan Dinas Keluar (konsumsi ditanggung perjalanan dinas). Belum
+  diubah - 4 dari 2.097 bisa saja kekeliruan operator, tapi kalau ternyata
+  memang praktiknya, `STATUS_BERHAK_UANG_MAKAN` yang perlu diubah.
+- **4 hari Cuti dibayar** (Defri Ariandi, Saka Prayitno Putro) - kemungkinan
+  cutinya masuk e-Presensi setelah ADK dibuat.
+- 2 hari WFH Jumat yang Gajihub hitung tapi file asli tidak.
 
 ### Uang makan & uang lembur mengikuti SBM 2026
 
@@ -1256,10 +1836,14 @@ ayat (4) diperlakukan sebagai boolean, bukan hitungan kejadian. Sekarang:
   tersedia. Begitu RealPresensiAdapter ada, cukup ubah konstanta
   `TERSAMBUNG` di `SinkronisasiPresensi.tsx` + pasang action-nya.
 - Tombol "Hitung Tukin" cuma muncul buat yang benar-benar berwenang
-  (`canAjukanKalkulasiTukinMassalUnit`). **GAP yang ketemu waktu verifikasi**:
-  PPABP boleh meng-upload KEDUA komponen tapi TIDAK boleh menjalankan
-  kalkulasi massal (itu KASUBAG_TU + ADMIN). Belum diubah - itu keputusan
-  kewenangan tersendiri, bukan efek samping penyatuan menu ini.
+  (`canAjukanKalkulasiTukinMassalUnit`). ~~**GAP**: PPABP boleh meng-upload
+  KEDUA komponen tapi TIDAK boleh menjalankan kalkulasi massal (itu
+  KASUBAG_TU + ADMIN).~~ **CATATAN ITU SUDAH BASI** (diperiksa 2026-08-13):
+  fungsinya sekarang berbunyi `cekScopeSatkerAtauAdmin(...KASUBAG_TU...) ||
+  cekPpabpAtauAdmin(...)`, jadi **PPABP LOLOS** untuk unit mana pun. Artinya
+  satu petugas PPABP bisa menuntaskan rantai kerjanya sendiri: tetapkan
+  kalender libur -> tarik ulang presensi -> hitung ulang -> approve ->
+  export ADK.
 
 **Model `RekapPresensiPeriode`** (migrasi
 `20260729130000_tambah_rekap_presensi_periode`) - yang di-upload adalah rekap
@@ -1534,9 +2118,12 @@ Tugas Belajar), jadi `kategoriDariStatus()` dipakai apa adanya.
   DIABAIKAN sebagai nominal** - Gajihub menghitung sendiri. Yang diambil dari
   situ HANYA penanda "lupa presensi" (fakta, bukan nominal).
 - **`jumlahHariKerja` dihitung dari kalender** (Senin-Jumat), karena blok
-  "Kewajiban Jam Kerja" hanya ada di PDF. **LIBUR NASIONAL TIDAK DIKENALI** -
-  tabel `libur` di e-Presensi ada tapi KOSONG. Jadi angkanya bisa lebih besar
-  dari hari kerja sebenarnya pada bulan bertanggal merah. **JEBAKAN**: kalau
+  "Kewajiban Jam Kerja" hanya ada di PDF. ~~**LIBUR NASIONAL TIDAK DIKENALI** -
+  tabel `libur` di e-Presensi ada tapi KOSONG.~~ **CATATAN ITU SALAH, dan
+  sudah diperbaiki 2026-08-13**: tabel `libur` berisi **127 baris** (2022-2026)
+  dan masih dirawat - lihat "Kalender libur ditarik dari e-Presensi" di bawah.
+  Libur nasional sekarang dikenali lewat model `HariLiburNasional` yang
+  diisi dari situ. **JEBAKAN**: kalau
   field ini null, `uangMakan.ts` memakainya sebagai batas atas (`Math.min`)
   dan uang makan SELURUH pegawai jadi Rp 0 tanpa error - ketemu waktu dry-run
   pertama.
@@ -1561,6 +2148,234 @@ sebagaimana akses administratif.
 `npm run build` (production) lolos. Tarikan Juni 2026 tersimpan: 3.392 pegawai,
 71.513 baris `PresensiHarian`, sebaran status masuk akal (WFO 46.698, WFH
 7.846, Dinas Luar 7.325, Cuti 3.867, Upacara 3.012, Alpha 1.113, Lembur 196).
+
+### Pasal 9 & 13 diterima teksnya - tiga asumsi tutup, satu kolom dicabut
+
+User mengirim teks Pasal 9, 12, dan 13 Permenaker 15/2024. Dampaknya besar
+karena menyentuh angka yang selama ini diturunkan dari data.
+
+**TIGA TODO(confirm) TERTUTUP SEKALIGUS** - `JADWAL_KERJA_DEFAULT` yang dulu
+seluruhnya diturunkan dari data ternyata cocok dengan Pasal 9:
+
+| Kode | Pasal 9 |
+|---|---|
+| `jamKerjaPerHari: 7.5` | ayat (1) "paling sedikit 7,5 jam untuk 1 hari" |
+| `07:30` / `16:00` / Jumat `16:30` | ayat (2) |
+| `toleransiTerlambatMenit: 60` | ayat (3) "toleransi waktu sebanyak 60 menit" |
+
+Yang ketiga paling penting: toleransi 60 menit dulu ditandai "dasar hukumnya
+belum ada, kalau ternyata tidak ada angka ini harus dikembalikan ke 0".
+Ternyata tertulis di pasalnya. TIGA sumber bebas menunjuk angka yang sama -
+teks pasal, kolom `sistem_kerja.toleransi` e-Presensi, dan rincian manual
+Rokeu. Yang MASIH terbuka cuma BENTUK penerapannya (pengurangan per hari vs
+ambang) - itu tetap dari data (44/48 vs 22/48).
+
+**TODO(confirm) BARU dari ayat (4)**: jam kerja "dapat DIKECUALIKAN sesuai
+ketentuan peraturan perundang-undangan". `JADWAL_KERJA_DEFAULT` berlaku
+seragam untuk SEMUA satker; kalau ada UPT/unit shift yang dikecualikan,
+jadwalnya harus dibedakan per satker.
+
+**KOLOM "KEKURANGAN JAM KERJA" DICABUT** (migrasi
+`20260807000000_cabut_kekurangan_jam_kerja`). Ditambahkan 2026-08-06 sebagai
+pelanggaran KEEMPAT bertarif per menit; teks ayat (3) menyebut TEPAT TIGA -
+"terlambat hadir, pulang cepat, atau meninggalkan kantor" - dan Pasal 12
+huruf c yang dirujuknya menyebut tiga hal yang sama. Aman dicabut: **0 dari
+40.740 baris** berisi nilai bukan 0, jadi tidak ada angka tersimpan yang
+hilang. Test-nya DIBALIK (bukan dihapus) supaya kalau ada yang menambahkannya
+lagi "supaya lengkap", test itu yang jatuh duluan.
+
+### BUG: cuti tahunan 1 hari menghapus SELURUH potongan Pasal 13 (FIXED)
+
+Ketemu saat user menanyakan penanda "cek override cuti / tugas belajar" di
+tabel Rincian Tukin. Penandanya benar - yang salah angkanya.
+
+**Mekanismenya**: `hitungTukin` menerapkan override Pasal 14 untuk SETIAP
+jenis cuti, termasuk yang persen dibayarnya 100% (cuti tahunan, melahirkan,
+alasan penting, cuti besar < 1 bulan). Karena override MENIMPA `tukinPokok`
+dengan `tarif kelas x persen`, hasilnya tarif PENUH - dan seluruh potongan
+Pasal 13 sebulan lenyap. Pegawai yang terlambat berkali-kali justru dibayar
+penuh begitu dia ambil cuti sehari.
+
+**Dorman selama cuti diisi manusia, langsung aktif begitu ditarik otomatis.**
+Periode 7/2026 Biro Keuangan: **16 dari 46 pegawai** kehilangan potongannya,
+total **Rp 634.959** dalam satu unit satu bulan. Terparah Erni Kusumastuty
+(Rp 228.564 hilang karena cuti tahunan 1 hari).
+
+**Dibuktikan keliru ke rincian manual**: Ahmad Henda punya potongan
+Rp 30.604 yang terhapus oleh cuti tahunan 1 hari. Tarif kelas 8
+Rp 4.595.150 - Rp 30.604 = **Rp 4.564.546**, dan itu PERSIS angka
+"Dibayarkan" di rincian manual Rokeu. Ada test yang mengunci angka ini.
+
+**Perbaikannya**: override cuma dijalankan kalau Pasal 14 memang MENGURANGI
+(`persenDibayar < 1`). Dasarnya jelas di teks - Pasal 14 mengatur berapa
+persen tukin dibayarkan selama cuti, tidak ada satu kata pun yang menyatakan
+cuti membatalkan Pasal 13. `overrideCutiDiterapkan` sekarang berarti
+"override benar-benar menimpa", bukan "pegawai sedang cuti", jadi penanda di
+UI hanya muncul kalau memang ada yang perlu dicek.
+
+**TODO(confirm) yang tersisa**: untuk cuti yang MEMANG memotong (cuti besar,
+cuti sakit bulan II ke atas, CLTN), override tetap memakai `tarif kelas x
+persen` sehingga potongan Pasal 13 tetap tertimpa. Apakah keduanya
+seharusnya berlaku bersamaan belum ditegaskan Biro OSDMA/Hukum. Perlakuan
+sekarang lebih menguntungkan pegawai dan sengaja tidak diubah tanpa
+konfirmasi.
+
+### Lupa absen diturunkan dari `menit_kerja` e-Presensi (Pasal 13 ayat 2)
+
+Menutup sumber selisih terbesar yang tersisa terhadap rincian tukin manual.
+
+**Masalahnya**: e-Presensi MENGISI jam keluar dengan `23:59` ketika tap pulang
+hilang, jadi jamnya tidak terlihat kosong dan pelanggaran ayat (2) lolos.
+Contoh Ahmad Henda (Juli 2026): rincian manual menulis 2 lupa absen, Gajihub
+0 - selisih 2,00% potongan, persentase kehadiran 29,934% vs 29,334%.
+
+**Sinyalnya kolom `presensi.menit_kerja`** yang belum pernah disentuh. Dari
+788 hari kerja 48 pegawai Rokeu, 26 hari ber-`menit_kerja = 0` dan SEMUANYA
+berpasangan dengan jam keluar 23:59 - e-Presensi menolkannya sendiri saat tap
+pulang hilang.
+
+**SENGAJA `= 0`, BUKAN `< 450`** (7,5 jam Pasal 9), walau ambang 450
+mencocokkan 45/48 lawan 41/48. Hari yang jam kerjanya KURANG tapi bukan nol
+adalah **pulang cepat** - Pasal 13 ayat (3), bertarif PER MENIT, dan sudah
+dihitung dari jam keluarnya. Memakai `< 450` berarti menagih hari yang sama
+dua kali dengan dasar hukum berbeda. Contohnya nyata (Rizki Akbar 8 Juli:
+masuk 14:20, pulang 17:37, `menit_kerja` 240): yang dilanggar keterlambatan
+350 menit, bukan "tidak melakukan presensi".
+
+**DIKLAT, DINAS KELUAR & LEMBUR SEKARANG DIKECUALIKAN** dari potongan ayat (2)
+- perubahan perilaku, bukan cuma penambahan. Alasannya SAMA dengan
+pengecualian mereka dari terlambat/pulang cepat yang sudah berlaku sejak awal:
+jam presensinya mengikuti kegiatan, bukan jam kantor. Dibuktikan: sebelum
+pengecualian, Alpha Sandro terhitung **15 kejadian** lawan 2 di rincian manual
+- dan 13 selisihnya SEMUANYA hari Diklat; Prasetyo 3 (semuanya Dinas Keluar)
+lawan 0. ("Lembur" punya jalur sendiri di blok lembur dan TIDAK diubah -
+di sana tap yang hilang dihitung karena tanpa jam masuk-pulang jam lemburnya
+memang tidak bisa dihitung.)
+
+**Hasil terhadap rincian manual Juli 2026** (48 pegawai): kolom "Lupa Absen"
+cocok **41/48**, "Terlambat" **44/48**. Sisanya penilaian manusia yang tidak
+bisa direproduksi aturan - empat menyangkut 15/17 Juli (user menegaskan TIDAK
+ada gangguan e-Presensi di tanggal itu), dan dua kasus **datang terlalu siang**
+(Abie 22 Juli masuk 12:36 dengan tap lengkap) yang `menit_kerja` tidak tangkap
+karena jam kerjanya tetap genap. Ambang jam masuk (mis. "lewat 09:30 =
+lupa absen") sempat diuji dan DITOLAK: hanya 38/48, dan tidak punya dasar di
+pasal manapun.
+
+**Tersimpan**: sinkronisasi Juli 2026 diulang - 2.084 pegawai punya lupa
+absen, total 3.400 kejadian.
+
+### Jenis cuti & potongan Pasal 14 ditarik otomatis dari e-Presensi
+
+Menutup sumber koreksi manual terbesar yang tersisa. Sampai sekarang
+`jenisCutiAktif` selalu null lewat jalur sinkronisasi, jadi Pasal 14 TIDAK
+PERNAH berjalan otomatis - hari cuti yang jenisnya tidak terbaca bisa
+terhitung alpha, dan pegawai cuti besar/sakit tetap dibayar penuh.
+
+**SIAP TIDAK BISA dipakai untuk cuti - jangan buang waktu ke sana.** Tabel
+`CUTI` di SIAP memang ada (979 baris) tapi sudah ditinggalkan: puncaknya 2019
+(304 baris), 2023 cuma 7, 2024 cuma 11, 2025 cuma 26, dan **NOL baris yang
+beririsan dengan Juli 2026**. Entri terakhir Desember 2025. Pengajuan cuti
+sudah lama pindah ke e-Presensi. Ada juga `CUTI_copy1`, `JENISCUTI`,
+`MASTER_STATUS_CUTI`, `IZIN_TIDAK_MASUK` (41 baris, terakhir 2019) - semuanya
+legacy.
+
+**e-Presensi punya semuanya**, di dua tabel yang sebelumnya tidak tersentuh:
+```
+presensi.id_presensi -> presensi_cuti.id_presensi -> cuti.nama_cuti
+```
+`presensi_cuti` 168.920 baris; cakupan Juli 2026 **6.761 dari 6.798 hari cuti
+(99,5%)** punya jenis.
+
+**TEMUAN YANG MEMBATALKAN ASUMSI LAMA: "bulan ke berapa" ADA di nama
+jenisnya.** Master `cuti` memecah sampai tingkat bulan - "Cuti Besar I/II/III",
+"Cuti Sakit Bulan I/II/III", "Cuti Sakit Bulan Lebih Dari 3 Bulan" - dan kolom
+`cuti.nilai_persen` di sana **cocok persis** dengan tabel Pasal 14 yang sudah
+ada di `tukin.ts` (13 dari 13 jenis bertingkat; ada test khusus yang mengadu
+keduanya). Dua sumber yang tidak saling menyalin. Penomorannya juga terbukti
+dipakai berurutan: satu pegawai tercatat Cuti Besar I (Mei) -> I lalu II
+(Juni) -> II lalu III (Juli).
+
+Jadi komentar lama di `RekapPresensiPeriode.bulanCutiKeberapa` ("TIDAK bisa
+diturunkan dari data presensi satu bulan, harus diisi manual lewat template")
+**sudah tidak berlaku**.
+
+**Perubahan kodenya sengaja tipis** - tidak ada adapter cuti terpisah:
+- `EpresensiAdapter.ts` menarik `nama_cuti` lewat **DUA query terpisah** yang
+  dipasangkan di memori - JANGAN diubah jadi JOIN/LATERAL. **`presensi_cuti`
+  TIDAK punya index atas `id_presensi`** (satu-satunya index di tabel itu PK
+  `id_presensi_cuti`), jadi apa pun yang mencari per-baris ke sana memicu Seq
+  Scan penuh atas ±169.000 baris SETIAP KALI. Versi pertama memakai
+  `LEFT JOIN LATERAL ... LIMIT 1` dan itu **kesalahan yang mahal**: EXPLAIN
+  memberi cost **212.999.001** lawan **120.006** untuk bentuk dua-query
+  (±1.775x), dan di lapangan tarikan Juli 2026 berjalan **19 menit tanpa
+  selesai** dengan CPU proses cuma 3 detik - semuanya menunggu database
+  produksi. Setelah diperbaiki: **9 detik**. Menambah index BUKAN pilihan -
+  e-Presensi read-only tanpa kecuali. Sifat "satu hari = satu jenis cuti"
+  tetap dijaga lewat dedup di JS (`ORDER BY pc."createdAt" ASC`, yang
+  belakangan menimpa) - persis perilaku `LIMIT 1` yang digantikan.
+- `gabungStatusCuti()` merangkai jadi `"Cuti - Cuti Besar II"` - format yang
+  SAMA PERSIS dengan export PDF, jadi `kategoriDariStatus()` yang sudah teruji
+  dipakai apa adanya. Jenis cuti cuma ditempel kalau statusnya memang CUTI
+  (kalau tidak, kategori hari kerja biasa ikut berubah jadi cuti).
+- `jenisCuti.ts` dapat `bulanCutiDariLabel()` + `uraiJenisCuti()`.
+- `presensiPdfKeRekap.ts` mengisi `bulanCutiKeberapa`; peringatan "bulan ke
+  berapa tidak diketahui" sekarang muncul HANYA kalau nomornya memang tidak
+  ada.
+- `simpanRekapPresensi.ts` menulis `bulanCutiKeberapa` **hanya kalau non-null**
+  - kalau null, kolomnya tidak disertakan sama sekali supaya angka yang pernah
+  diisi manual tidak terhapus tiap sinkronisasi.
+- **TIDAK ADA MIGRASI** - ketiga kolomnya sudah ada sejak
+  `20260806110000_tambah_cuti_rekap_presensi`.
+
+**`CUTI_DI_LUAR_TANGGUNGAN_NEGARA` jenis baru di enum `JenisCuti`**.
+Ditambahkan karena e-Presensi memakainya aktif (4 pegawai, 61 hari, Juli 2026)
+dan tanpa itu mereka terbaca "cuti tanpa jenis" lalu dibayar PENUH.
+**RESOLVED 2026-08-07**: dasarnya **Pasal 4 huruf d** - "Tunjangan Kinerja ...
+TIDAK DIBERIKAN kepada ... Pegawai ... yang menjalani Cuti di luar tanggungan
+negara". Sebelum teks lengkap Permenaker masuk, ini ditandai TODO(confirm)
+karena Pasal 14 tidak menyebutnya dan dasarnya cuma PP 11/2017 dari luar.
+Engine **SELALU** menandainya anomali - sekarang bukan karena dasarnya
+meragukan, tapi karena ini satu-satunya jalur yang menghapus SELURUH tukin
+sebulan. **Yang MASIH terbuka**: huruf d yang sama menyebut "bebas tugas untuk
+persiapan masa pensiun" (MPP) dengan akibat SAMA, dan itu belum ditangani -
+tidak ada penandanya di skema `Pegawai`.
+
+**JEBAKAN BARU YANG HARUS DISADARI - cuti 1 hari menghapus tukin SEBULAN.**
+Pasal 14 memberi satu persentase per PERIODE, tidak ada pembagian proporsional
+harian (open item #3). Selama `cutiAktif` cuma diisi manusia lewat template,
+ini tidak pernah terjadi. Sejak ditarik otomatis, kasusnya NYATA: Juli 2026
+ada 3 pegawai dengan CLTN / cuti sakit >3 bulan sebanyak **satu hari** -
+aturannya menghapus tukin mereka sebulan penuh. `hitungTukin` sekarang
+menandai `PERIKSA MANUAL` kalau potongan > 0 sementara hari cuti < setengah
+hari kerja. Penandanya BUKAN tambalan aturan (mengarang pembagian proporsional
+= mengarang kebijakan) - cuma penjamin bahwa kasus itu tidak bisa lewat tanpa
+dilihat manusia.
+
+**Perbaikan sampingan**: catatan `"ada N status berbeda di tanggal yang sama"`
+dulu muncul untuk baris ganda yang isinya IDENTIK - kalimat yang membantah
+dirinya sendiri. Satu pegawai cuti bisa menghasilkan 10-14 catatan palsu
+sendirian, dan catatan yang benar-benar perlu dilihat ikut tenggelam. Sekarang
+dibandingkan teks statusnya dulu.
+
+**Diverifikasi ke data asli** (bukan mock): dry-run Juli 2026 menarik 122.641
+baris / 5.195 pegawai, 5.089 siap disimpan. Empat kasus diuji sampai ke rupiah:
+Inayati Ulin Na'mah (Cuti Besar II 13 hari + III 10 hari -> bulan ke-2,
+dibayar 25%, catatan "berpindah bulan" muncul), Try Mulya Lestary & Elda
+Yunita (Cuti Melahirkan -> 100%, tidak dipotong), Edy Pujimulyono (Cuti Sakit
+bulan I -> 100%). Alpha 0 di keempatnya - sebelumnya hari cuti berisiko
+terbaca alpha. Dampak ke nominal: **10 pegawai** lintas satker punya cuti
+berpotongan di Juli 2026, semuanya cocok NIP-nya, dan **belum satupun punya
+kalkulasi Tukin Juli** - jadi tidak ada siklus approval yang ter-reset.
+
+**SUDAH DISINKRONKAN** (2026-08-07, periode 7/2026): 5.089 pegawai tersimpan,
+**1.934 punya jenisCutiAktif** (1.337 Cuti Tahunan, 479 Cuti Sakit, 87 Alasan
+Penting, 24 Melahirkan, 4 Cuti Besar, 2 CLTN). `bulanCutiKeberapa` terisi 6 -
+memang cuma jenis bertingkat (Cuti Besar I/II/III, Cuti Sakit Bulan I/II/III)
+yang menyebut nomor bulan; sisanya tidak punya dan itu benar.
+
+**Kalkulasi Tukin yang dibuat SEBELUM sinkronisasi ini jadi basi** - rekap
+presensinya berubah (jenis cuti baru terisi), jadi perlu dihitung ulang supaya
+potongan Pasal 14 ikut berlaku.
 
 ### Upload PDF presensi e-Presensi (1 file / 1 folder sekaligus)
 
@@ -1673,6 +2488,124 @@ di tabel, tapi summary-nya menulis "Tidak Hadir : 1" dan "WFO : 1", dan
 "Kekurangan Jam Kerja"-nya bahkan negatif (-97,5). Di export 2026 summary-nya
 sudah cocok. Kalau total summary jauh di bawah jumlah baris, halaman memberi
 tahu eksplisit supaya daftar "selisih" tidak bikin ragu pada angka yang benar.
+
+#### Tata letak `/tukin/presensi` (2026-08-13, mengikuti mockup user)
+
+Urutannya sekarang mengikuti seberapa sering dipakai, bukan urutan
+pembangunannya:
+
+```
+Kembali -> H1 "Presensi" + "Komponen 30% Tunjangan Kinerja (Tukin)"
+  1. Sinkronisasi e-Presensi        <- tiap periode
+  2. filter + Rekap Presensi Periode <bulan> <tahun>
+  3. [Data e-Presensi Bermasalah] [Kalender Hari Libur]   <- beberapa x setahun
+  4. "Cara lain mengisi presensi": PDF & template Excel (tertutup)
+```
+
+Dua kartu di nomor 3 **turun dari puncak halaman** - keduanya dibuka beberapa
+kali setahun, dan menaruhnya di atas mendorong panel Sinkronisasi (yang
+dipakai tiap periode) ke bawah lipatan.
+
+**Kartu Sinkronisasi disusun ulang mengikuti mockup user**: judul + chip
+hijau "Tersambung" (pil, `rounded-full` - sengaja beda bentuk dari chip status
+data di tabel), lalu SATU baris `[bulan] Tahun [2026] [Tarik Data Presensi]`
+tanpa label di atas tiap field, lalu satu paragraf keterangan.
+- **Dua paragraf keterangan digabung jadi satu.** Yang soal potongan
+  (toleransi 60 menit vs 1 menit) dulu terdampar di KAKI kartu, terpisah dari
+  tombolnya oleh blok hasil - padahal keduanya menjawab pertanyaan yang sama:
+  "apa yang terjadi kalau tombol ini ditekan".
+- Ikon unduh di tombolnya **dicabut lagi** - tidak ada di mockup.
+
+**Dasar hukum pindah ke ikon "i" di samping judul** (`src/app/SumberAcuan.tsx`,
+BARU). Deskripsi pembuka dulu memuat "sebagai dasar potongan Pasal 13
+Permenaker 15/2024" dan jadi dua baris; nomor pasal itu penting saat
+DIPERIKSA (auditor/Itjen/pegawai yang protes), bukan tiap halaman dibuka.
+Sekarang deskripsinya satu baris (92 karakter) dan pasalnya di ikon.
+
+- **Tanpa JavaScript sama sekali** - murni CSS `group-hover` +
+  `group-focus-within` (bisa di-Tab), plus atribut `title` sebagai cadangan.
+  Bukan client component, tidak ada state.
+- **SELURUHNYA `<span>`** (*phrasing content*), jadi aman di dalam `<h1>`,
+  `<p>`, atau `<td>`. **JANGAN diganti `<details>`** - pelajaran dari
+  `BadgePejabatEselon`: elemen itu *flow content*, dan di dalam heading
+  parser HTML menutup paksa induknya lalu Next melempar hydration error yang
+  menunjuk ke dalam komponennya, bukan ke tempat pemakaiannya.
+- Isinya di `/tukin/presensi`: Pasal 5 ayat (2) huruf b (bobot 30%), Pasal 13
+  (tarif potongan), Pasal 9 (jam kerja & toleransi), Pasal 14 (cuti), Pasal
+  10 ayat (2) (presensi manual saat kendala), + catatan bahwa sumber datanya
+  database e-Presensi yang **dibaca, tidak pernah ditulis**.
+- Diverifikasi di production build: `<h1>` halaman memuat `role="note"`,
+  panelnya memuat kelima pasal, `title` terisi sebagai cadangan, dan nol
+  `<details>` di dalam heading.
+
+Komponennya sengaja generik (`acuan: {aturan, tentang}[]` + `catatan`) supaya
+halaman lain bisa ikut - **belum dipasang di halaman lain**, tunggu diminta.
+
+**Kolom tabelnya = VARIABEL PRESENSI saja** (daftar dari user):
+
+```
+Pegawai | Hari kerja | WFO | WFH/WFA | Dinas luar | Alpha | Lupa absen | Telat | Plg cepat | Cuti
+```
+
+Tabel ini menjawab *"bagaimana kehadiran orang ini"*, bukan *"berapa yang
+dibayar"*. Yang SENGAJA TIDAK ada di sini:
+- **Hasil hitungan** (hari dibayar uang makan, total potongan %) - tempatnya
+  `/uang-makan` & `/kasubag/kalkulasi`, bukan tabel presensi.
+- **Lembur** - ada di `/uang-lembur` dan di rincian per pegawai.
+- **Meninggalkan kantor & tidak ikut upacara** - **0 dari 5.089 baris** periode
+  7/2026 berisi nilai bukan nol, dan memang tidak bisa lain: e-Presensi tidak
+  mencatat keduanya, jadi jalur sinkronisasi maupun PDF selalu menghasilkan 0
+  (hanya template Excel yang bisa mengisinya). Kolom yang nol untuk ribuan
+  baris cuma memakan lebar. **Engine TETAP menghitung keduanya** dan keduanya
+  tetap tampil di `/tukin/presensi/[nip]` - yang hilang cuma kolomnya di sini.
+
+**Kolom Cuti = total hari SEMUA jenis** (`jumlahHariCuti`), dengan **jenisnya
+disebut di bawah angkanya** (`uraiJenisCuti` + `LABEL_JENIS_CUTI`, plus "bln
+ke-N" untuk jenis bertingkat). "3 hari cuti" saja tidak cukup buat menilai -
+Pasal 14 memotong berbeda per jenis (cuti tahunan 0%, CLTN 100%). Diklat
+digabung ke sel Dinas luar (`+N diklat`) karena perlakuannya identik.
+
+Diverifikasi terhadap data nyata (7/2026, 200 baris dirender): 10 kolom / 10
+`<td>` per baris, 75 baris memunculkan label jenis cuti, dan tiga baris
+pertama **menjumlah tepat ke hari kerja** (18 WFO + 5 cuti = 23; 9 + 13 dinas
++ 1 = 23; 9 + 3 + 10 + 1 = 23).
+
+**Ikon "Satuan Kerja" & "Jumlah Pegawai" dibedakan sesuai artinya** - gedung
+untuk unit, orang untuk jumlah pegawai. Sebelumnya keduanya roda gigi, jadi
+ikonnya tidak membedakan apa pun (masalah yang sama dengan tiga ikon jam di
+sidebar).
+
+**DUA KELAS CSS YANG TIDAK PERNAH ADA - ketemu saat ini dikerjakan:**
+- **`.btn-secondary`** dipakai di 3 halaman (`/tukin/presensi`,
+  `/tukin/presensi/kendala`, `/ppabp/basis-data-gaji`) tapi **tidak pernah
+  didefinisikan** di `globals.css` - tombolnya dirender tanpa warna sama
+  sekali, cuma teks + padding. Sekarang didefinisikan memakai palet
+  (`teal-tint` + `teal-deep`), bukan warna baru.
+- **`.text-danger`** dipakai di `SinkronisasiPresensi.tsx` &
+  `ApprovalMassalForm.tsx` - tidak ada token `--color-danger` (yang ada
+  `--color-red`), jadi **pesan error dirender tanpa warna merah**. Diganti
+  `text-red`. Diverifikasi di CSS hasil `next build`:
+  `.text-red{color:var(--color-red)}` ada, `.btn-secondary{...}` ada.
+
+Diverifikasi lewat production build (akun PPABP, periode 7/2026): urutan
+blok benar (Sinkronisasi 11.303 -> Rekap 26.797 -> Data Bermasalah 236.191 ->
+Cara lain 237.640), `<h1>Presensi</h1>` tunggal, **nol** ikon roda gigi
+tersisa, ketiga tombol berikon (Tarik Data Presensi / Periksa Data Bermasalah
+/ Kelola Kalender Libur).
+
+**LETAK PDF & TEMPLATE EXCEL DI KAKI HALAMAN** (2026-08-13, permintaan user). Sejak
+sambungan langsung ke e-Presensi jalan, upload PDF dan template Excel
+keduanya cuma CADANGAN - menaruhnya di atas membuat panel Sinkronisasi yang
+dipakai tiap periode justru terdorong ke bawah. Urutan `/tukin/presensi`
+sekarang: Sinkronisasi -> filter -> tabel -> bagian "Cara lain mengisi
+presensi" berisi dua `<details>` tertutup. Masing-masing dibuka dengan
+penjelasan **kapan dipakai** (pertanyaan user: "upload PDF ini buat apa?"):
+- **PDF**: server e-Presensi tidak terjangkau, atau cuma perlu satu-dua
+  pegawai. Isinya identik dengan tarikan langsung - PDF diubah jadi rekap
+  lewat `rekapDariLaporanPdf()` yang SAMA.
+- **Template Excel**: buat angka yang memang tidak ada di e-Presensi -
+  **menit meninggalkan kantor** & **jumlah tidak ikut upacara**. Keduanya
+  selalu 0 lewat jalur sinkronisasi maupun PDF.
 
 **UI** - semua di `/tukin/presensi` (halaman yang sudah ada, sekarang punya
 entri sidebar sendiri "Presensi" di MENU_KASUBAG & MENU_PPABP):
@@ -2063,6 +2996,372 @@ honorarium Rp 11.400.000 pada Irwan Syafril adalah ANGKA UJI (disalin dari
 slip contoh milik orang lain), kosongkan lewat `/ppabp/gaji-induk` kalau
 tidak mau ikut tampil waktu demo.
 
+### Diklat & Dinas Keluar di akhir pekan tidak lagi dihitung hari kerja
+
+Ketemu waktu user mengadu rincian manual: Alpha Sandro tercatat **14 hari
+Diklat** di Juli 2026, rincian manual Rokeu menulis **13**. Selisihnya satu
+baris - Diklat di **Sabtu 4 Juli**. 13 sisanya semuanya hari kerja.
+
+Pengecualian akhir pekan di `presensiPdfKeRekap.ts` cuma mencakup
+`["WFO", "WFH_WFA", "TIDAK_HADIR"]`, jadi Diklat & Dinas Keluar di Sabtu/Minggu
+lolos dan terhitung sebagai hari kerja. Gejala yang paling kelihatan:
+**295 dari 5.089 rekap Juli menampilkan hari hadir MELEBIHI hari kerja**
+(Alpha Sandro 24 dari 23) - angka yang tidak bisa dibaca sebagai benar oleh
+siapa pun yang mencocokkannya.
+
+**TIDAK mengubah rupiah, dan itu perlu ditegaskan** supaya tidak ada yang
+mencari selisih pembayaran yang tidak ada: uang makan dihitung dari WFO +
+WFH/WFA (Diklat & Dinas Keluar memang tidak berhak, SBM item 22.1), dan
+seluruh potongan Pasal 13 sudah dijaga `!hariLibur` sejak awal. Yang berubah
+angka pelaporan - dan justru itu yang diadu ke rincian manual.
+
+**Kategori lain SENGAJA tidak ikut ditambahkan.** Di Juli 2026 baris akhir
+pekan cuma ada pada Dinas Keluar (540) dan Diklat (51); Cuti, Izin, Upacara,
+dan Tugas Belajar **nol**. Menambahkannya berarti mengubah perilaku atas kasus
+yang belum pernah terlihat - dan Cuti khususnya berisiko karena
+`jumlahHariCuti` ikut jadi dasar penanda `PERIKSA MANUAL` di `hitungTukin`.
+
+Catatan "hari hadir melebihi hari kerja" ikut diperbaiki kalimatnya: Sabtu &
+Minggu sudah tidak bisa jadi penyebabnya, jadi yang tersisa cuma libur nasional
+di hari kerja (tetap tidak bisa dikenali sistem ini). Catatan itu sekarang jauh
+lebih jarang muncul dan lebih layak dipercaya.
+
+**Perbaikan ini berlaku pada TARIKAN BERIKUTNYA, bukan surut** - baris
+`RekapPresensiPeriode` yang sudah tersimpan tetap memuat angka lama sampai
+periodenya disinkronkan ulang.
+
+### Kendala e-Presensi: satu tanggal rusak, bukan 960 orang lalai
+
+**Dasar: Pasal 10 ayat (2)** - *"Dalam hal presensi elektronik mengalami
+kendala atau keadaan kahar, presensi dilakukan secara manual yang diketahui
+oleh pimpinan Unit Kerja masing-masing."*
+
+**Kejadian yang melahirkannya.** Absensi Kemnaker **murni online, tidak ada
+mesin tap** - jadi kalau webnya tidak bisa diakses, tidak ada cara lain
+mencatat kehadiran. Pada 15 & 16 Juli 2026 itu benar-benar terjadi, dan
+datanya menunjukkannya tanpa perlu ditanyakan:
+
+| | Hari kerja | Jam keluar 23:59 | % |
+|---|---|---|---|
+| Hari biasa (Sen-Kam) | ~4.200 | 55-105 | **1,3-2,5%** |
+| Jumat (konsisten, tiap minggu) | ~4.400 | 197-223 | **4,5-5,1%** |
+| **15 Juli** | 4.237 | **576** | **13,6%** |
+| **16 Juli** | 4.223 | **597** | **14,1%** |
+
+**1.173 kejadian, 960 pegawai, Rp 18.178.588** potongan Pasal 13 ayat (2).
+Jam `23:59` itu isian otomatis e-Presensi saat absen pulang tidak pernah
+masuk - dibuktikan sebarannya: 3.320 baris persis di menit yang sama lawan
+456 yang tersebar di 59 menit lain sepanjang jam 23. Manusia tidak menekan
+tombol serentak di satu menit.
+
+**Yang PPABP lakukan sebelum ini**: mengetik jam 16:00 satu per satu, hanya
+untuk pegawai yang kebetulan melapor beserta foto bertimestamp & geotag.
+Yang tidak tahu harus melapor tetap dipotong - untuk kerusakan yang bukan
+miliknya.
+
+**Yang membuat pekerjaan itu sebagian besar tidak perlu**: dari 1.173 kasus,
+**1.164 (99,2%) masih punya absen MASUK pagi yang tercatat normal** dan nol
+yang gagal absen masuk. Kehadiran mereka sudah dibuktikan oleh e-Presensi
+sendiri; meminta foto lagi adalah menduplikasi bukti yang sudah ada. Alpha
+juga tidak melonjak (1,1% di kedua tanggal, sama dengan hari lain), jadi
+tidak ada yang terlanjur tercatat bolos.
+
+**Bentuknya di kode:**
+- **`src/business-logic/kendalaEpresensi.ts`** (PURE, 15 unit test) - dua
+  tugas yang SENGAJA dipisah: `deteksiTanggalJanggal()` mencari kandidat,
+  `indeksKendala()`/`tanggalDikecualikan()` menerapkan penanda yang ditulis
+  MANUSIA. **Deteksi tidak pernah langsung jadi pengecualian** - kalau sistem
+  boleh memutihkan sendiri tanggal yang kelihatan aneh, hari yang memang
+  banyak orang lalai ikut terhapus dan tidak ada yang tahu.
+- **Ambang deteksi**: `>= 8%` **DAN** `>= 3x median` bulan itu. Median, bukan
+  rata-rata - kalau ada beberapa hari rusak, rata-ratanya ikut terangkat dan
+  menyamarkan hari rusak itu sendiri (ada test yang menguncinya). Ambang 8%
+  memisahkan 13,6%/14,1% dari Jumat yang 5,1% dengan jarak lega di kedua sisi
+  - **hari Jumat memang selalu lebih tinggi, itu perilaku manusia menjelang
+  akhir pekan, bukan kerusakan, dan tidak boleh ikut tertandai.**
+- **Model `KendalaEpresensi`** (migrasi `20260812140000_kendala_epresensi`,
+  satu CREATE TABLE): tanggal + `satuanKerja` nullable (NULL = seluruh
+  kementerian) + **`alasan` WAJIB** + siapa & kapan. Alasan tidak boleh kosong
+  karena baris itulah yang dibaca auditor ketika bertanya kenapa potongan
+  sehari hilang untuk ratusan orang.
+- **Pengecualiannya ditaruh DI DALAM `rekapDariLaporanPdf()`** - fungsi yang
+  SAMA yang menghitung kejadiannya, lewat parameter ketiga. BUKAN dikurangkan
+  belakangan di lapisan kalkulasi: kalau penghitung dan pembatal dipisah,
+  keduanya bisa memakai aturan yang sedikit berbeda dan selisihnya baru
+  ketahuan setelah uangnya terkirim.
+- **`src/lib/kendalaPresensi.ts`** - jembatan ke database, dipakai bareng
+  tombol UI dan CLI. Tabel `Pegawai` hanya dibaca kalau memang ada penanda
+  ber-scope satker; hasil per satker di-cache (ribuan pegawai cuma tersebar
+  di puluhan satker).
+- **`/tukin/presensi/kendala`** - tabel per tanggal, panel merah berisi
+  kandidat yang belum ditandai, daftar penanda yang sudah ada + tombol cabut
+  (konfirmasi dua langkah), dan form penandaan. Agregasinya `$queryRaw` GROUP
+  BY - satu periode berisi ~117.000 baris presensi, menariknya ke memori cuma
+  untuk dihitung per tanggal jelas pemborosan.
+
+**Yang dibatalkan HANYA Pasal 13 ayat (2).** Keterlambatan (ayat 3) tetap
+dihitung - absen masuknya memang berhasil, dan memutihkannya berarti
+menghapus pelanggaran yang datanya justru lengkap. Ketidakhadiran (ayat 1)
+juga tidak disentuh: sistem rusak tidak membuat orang yang tidak masuk jadi
+masuk. Dua-duanya dikunci test.
+
+**Izin `canKelolaKendalaEpresensi` SENGAJA cuma PPABP + ADMIN**, tidak
+termasuk KASUBAG_TU - beda dari `canUploadRekapPresensi` yang memang
+ber-scope unit. Alasannya bukan jenjang tapi cakupan akibat: satu penanda
+bisa menghapus potongan ribuan orang lintas unit sekaligus. TODO(confirm):
+kalau nanti Kasubag TU perlu menandai kendala yang cuma menimpa unitnya,
+fungsi itu yang dilonggarkan - dengan syarat penandanya WAJIB ber-satuanKerja.
+
+**Sekali klik, banyak sekaligus, dan bisa diubah.** Bentuk pertama cuma punya
+"tambah satu" + "hapus", dan itu memancing kebiasaan yang mahal: menambah satu
+tanggal lalu menarik ulang presensi, berulang kali. Sekarang:
+- **Tombol "Tetapkan libur" langsung di daftar kandidat** hasil deteksi
+  (keterangan otomatis "Libur nasional", diperbaiki lewat Ubah). Menuntut orang
+  mengetik nama harinya dulu membuat daftar kandidat itu sendiri tidak berguna.
+- **Isian banyak tanggal sekaligus** - dipisah spasi/koma/baris baru. Satu
+  tahun SKB 3 Menteri masuk sekali kerja, lalu **tarik ulang cukup SEKALI**.
+  Yang formatnya salah & yang sudah ada dilaporkan per tanggal, tidak
+  menggagalkan yang sah.
+- **Ubah** (tanggal, keterangan, jenis) - sebelumnya membetulkan salah ketik
+  berarti hapus lalu tambah lagi, dua baris AuditTrail, dan tanggalnya sempat
+  hilang dari kalender di antaranya. Kalau TANGGALNYA yang diubah, pesannya
+  menyebut **dua** periode yang terdampak, bukan satu.
+
+**MENANDAI TANGGAL TIDAK LANGSUNG MENGUBAH ANGKA.** Pengecualiannya dipakai
+saat rekap presensi dihitung, jadi setelah menandai (atau mencabut) harus
+**tarik ulang presensi periode itu**, lalu hitung ulang Tukin. Ini disebutkan
+di halaman & di pesan sukses action-nya - bukan jebakan tersembunyi. Pilihan
+ini disengaja: alternatifnya menyimpan kejadian per hari di `PresensiHarian`
+(kolom baru + migrasi) supaya bisa dikurangkan saat kalkulasi, dan itu
+menciptakan dua tempat yang menghitung hal yang sama.
+
+**Diverifikasi** (production build, akun PPABP Irwan Syafril, data nyata):
+halaman menampilkan 15 Juli **13,6% (7,7x hari biasa)** dan 16 Juli **14,2%
+(8,0x)** ber-chip "Janggal - perlu dicek", sementara Jumat 3 Juli (4,8%)
+tidak tertandai; KASUBAG_TU Ayu Puspita Sari mendapat "Akses ditolak" dan
+panel kendala tidak muncul di `/tukin/presensi` miliknya. Jembatan database
+diuji terpisah dengan penanda sungguhan: penanda se-kementerian menjangkau
+pegawai Biro Keuangan MAUPUN Pusdatik, penanda ber-scope Pusdatik hanya
+menjangkau Pusdatik, dan NIP tak dikenal hanya mendapat penanda
+se-kementerian. **Semua baris uji sudah dihapus** (tabel kembali 0 baris).
+
+#### Koreksi jam per hari (petugas absensi)
+
+Alur nyatanya, dari keterangan user: e-Presensi error -> pegawai memotret
+dirinya beserta **geotag & jam** -> dikirim ke **WhatsApp petugas absensi** ->
+petugas memperbaiki jamnya di Gajihub. Model `KoreksiPresensiHarian` (migrasi
+`20260812160000_koreksi_presensi_harian`) tempat perbaikan itu, form-nya per
+baris di `/tukin/presensi/[nip]`.
+
+**Sebagian besar kasus TIDAK memerlukannya, dan itu terukur.** Dari 1.173
+kejadian 15-16 Juli 2026, **1.114 tidak punya potongan lain sama sekali** -
+untuk mereka menandai tanggalnya menghasilkan angka yang **persis sama**
+dengan mengetik jam 16:00 (ayat (2) dibatalkan, dan pulang cepat memang sudah
+0 karena jam 23:59 tidak pernah dipercaya sebagai jam pulang). Menyediakan
+form isian untuk 1.114 orang itu justru mengembalikan pekerjaan yang baru saja
+dihapus.
+
+Yang benar-benar butuh koreksi jam ada di sisa **59 baris**, dan yang paling
+jelas ada di ujungnya:
+
+```
+2026-07-15  ANDI PRASETYO             masuk=19:32  telat=662 menit
+2026-07-15  YISWI NILAM PRASTIKASARI  masuk=17:54  telat=564 menit
+2026-07-16  RESTU PUJIANTI            masuk=15:52  telat=442 menit
+```
+
+Orang tidak datang kerja pukul 19:32 - itu pola lupa yang sama, tapi di sisi
+**masuk**. Penanda tanggal tidak menyentuh keterlambatan (memang tidak boleh),
+jadi hanya koreksi jam yang bisa membetulkannya.
+
+**KENAPA TABEL SENDIRI, BUKAN MENIMPA `PresensiHarian`**: sinkronisasi
+menghapus sebulan penuh lalu menulis ulang, jadi jam hasil koreksi yang
+ditulis langsung ke sana **hilang pada tarikan berikutnya** - persis masalah
+yang dulu memaksa `kelasJabatanSelamaHukuman` punya kolom sendiri. Data mentah
+e-Presensi tetap utuh (jam 23:59 tetap tersimpan dan tetap ditampilkan di
+layar), koreksinya ditumpuk di atasnya saat rekap dihitung.
+
+**Tiga pengaman yang membuatnya bisa dipertanggungjawabkan:**
+1. **Hanya di tanggal yang sudah ditandai kendala.** Ini yang membedakannya
+   dari "edit presensi bebas" - invariant `canEditPresensiKinerjaLangsung =
+   false` untuk SEMUA role tetap utuh. Di tanggal biasa, kolomnya berbunyi
+   "tanggal belum ditandai kendala" dan action-nya menolak.
+2. **Otorisasi terhadap satuan kerja pegawai yang DIKOREKSI** (pakai
+   `canUploadRekapPresensi` yang sudah ada, jadi Kasubag TU bisa mengurus
+   unitnya sendiri, PPABP/Admin lintas unit) - id dari form tidak dipercaya.
+3. **AuditTrail memuat jam ASLI dari e-Presensi di `dataSebelum`.** Itu yang
+   membedakan "diperbaiki" dari "dikarang". Hasil rekap juga membawa
+   `tanggalDikoreksiManual` + catatan eksplisit, jadi angka ketikan manusia
+   tidak bisa menyamar sebagai angka e-Presensi.
+
+Jam hasil koreksi **selalu dipercaya** untuk menghitung terlambat/pulang cepat
+(itu keterangan terverifikasi, bukan tebakan atas ketukan hilang), TAPI
+**tidak memutihkan pelanggaran**: dikoreksi masuk 09:00 tetap menghasilkan 30
+menit terlambat setelah toleransi. Ada test yang menguncinya. Kolom yang
+dikosongkan berarti "tidak dikoreksi" - petugas boleh memperbaiki jam pulang
+saja tanpa menyentuh jam masuk yang sudah benar.
+
+Foto & geotag-nya sendiri **TIDAK disimpan di Gajihub** (kebijakan
+penyimpanan dokumen masih terbuka - lihat TODO(confirm) storage). Yang dicatat
+sistem adalah keputusannya beserta dasar tertulisnya.
+
+**Diverifikasi** (production build, akun PPABP, pegawai ACEP SJAIFULLOH R):
+sebelum tanggalnya ditandai, kolom Koreksi berbunyi "tanggal belum ditandai
+kendala" dan tombolnya tidak ada; setelah 15 Juli ditandai, tombol "Koreksi
+jam" muncul; setelah koreksi disimpan, badge "Dikoreksi manual" tampil
+**sementara jam asli 23:59 tetap terlihat di kolomnya**. Jembatan ke mesin
+hitung mengembalikan `{"2026-07-15":{jamMasukMenit:null,jamKeluarMenit:960}}`
+untuk NIP itu dan kosong untuk NIP lain. Semua baris uji sudah dihapus.
+
+**TODO(confirm) - dua hal yang masih menunggu manusia**:
+1. **Apa yang sebenarnya terjadi 15-16 Juli 2026 belum dipastikan** ke
+   pengelola e-Presensi. Sebelumnya sempat dikatakan tidak ada gangguan;
+   datanya membantah, atau setidaknya menunjukkan ada sesuatu yang tidak
+   tercatat sebagai gangguan. Tanggal itu **belum ditandai** - sengaja,
+   karena penandanya harus keputusan sadar, bukan efek samping fitur ini.
+2. **9 orang yang absen masuknya siang/sore** di kedua tanggal itu tetap
+   butuh verifikasi bukti (foto & geotag) seperti sebelumnya - untuk mereka
+   kehadiran paginya memang tidak tercatat di manapun.
+
+### Periode default halaman (`src/app/periodeDefault.ts`)
+
+Halaman berperiode dulu selalu jatuh ke **bulan berjalan** kalau dibuka tanpa
+`?bulan=&tahun=` - dan bulan berjalan hampir selalu bulan yang belum ada
+datanya (rekap presensi ditarik setelah bulannya lewat, predikat kinerja
+terbit lebih lambat lagi). Link sidebar tidak membawa query string, jadi
+mendarat di halaman kosong. Ini pernah benar-benar menyesatkan: *"saya udah
+kalkulasi unit, kok belum ada angka data nya di tabel?"* - kalkulasinya
+berhasil, yang terbuka bulan yang berbeda.
+
+Sekarang: **bulan berjalan tetap diutamakan kalau datanya memang ada**, kalau
+tidak jatuh ke periode TERBARU yang ada datanya. Begitu periode berjalan mulai
+terisi, perilakunya kembali seperti dulu tanpa mengubah apa pun.
+
+- **Periode yang dipilih user TIDAK PERNAH dipindahkan diam-diam**, termasuk ke
+  periode kosong. Kalau dia membuka Agustus dan Agustus memang kosong, itu
+  jawaban yang benar - memindahkannya justru menyembunyikan fakta. Yang
+  di-resolve hanya nilai yang tidak ada / tidak waras.
+- Nilai ngawur dari query string (`?bulan=abc`, `0`, `13`) dulu jadi `NaN` yang
+  diteruskan ke Prisma dan mengembalikan nol baris tanpa penjelasan. Sekarang
+  diabaikan dan diganti periode default.
+- Kalau cuma salah satu yang terisi (`?bulan=7` tanpa tahun), yang terisi tetap
+  menang - sisanya diambil dari periode default.
+
+**Tiap halaman bertanya ke tabel yang jadi isinya sendiri**, sengaja TIDAK
+disatukan jadi satu "periode terbaru" global: `/tukin/presensi` punya data
+untuk 8 periode sementara kalkulasi cuma 2, dan satu angka untuk keduanya akan
+memindahkan salah satunya ke periode kosong.
+
+| Halaman | Sumber periode |
+|---|---|
+| `/kasubag/kalkulasi` | predikat kinerja, **di-scope ke unitnya** |
+| `/tukin/presensi` | rekap presensi (di-scope unit untuk Kasubag TU) |
+| `/tukin/presensi/[nip]` | presensi harian PEGAWAI ITU |
+| `/ppabp/adk` | kalkulasi Tukin |
+
+Kalkulasi Unit sengaja memakai **predikat kinerja, bukan kalkulasi**: kalkulasi
+adalah HASIL halaman itu, jadi memakainya sebagai penentu default membuat
+periode yang belum pernah dihitung tidak akan pernah terbuka - persis periode
+yang paling perlu dibuka. Predikat adalah komponen yang paling terakhir
+tersedia (presensi ada untuk semua bulan), jadi periode terbaru yang punya
+predikat = periode terbaru yang benar-benar bisa dihitung.
+
+13 unit test, termasuk penjagaan bahwa periode pilihan user tidak dipindahkan
+dan bahwa database kosong tidak membuat halaman gagal dibuka.
+
+### Paginasi tabel (`src/app/Paginasi.tsx`)
+
+Tabel Rincian Tukin di `/kasubag/kalkulasi` menampilkan seluruh roster unit
+(±80 baris, dan jauh lebih banyak buat PPABP/ADMIN lintas satker) dalam satu
+halaman. Sekarang dipotong: **default 10 baris**, dengan pilihan 20/50/100 dan
+navigasi nomor halaman.
+
+- Posisi & ukuran halaman disimpan di query string (`?hal=`, `?per=`), BUKAN
+  state klien - konsisten dengan filter periode dan tombol "Lihat rincian
+  lengkap" yang sudah ada, jadi tetap jalan tanpa JavaScript dan link-nya bisa
+  dibagikan.
+- `hitungPaginasi()` PURE dan menjepit nilai ngawur (huruf, nol, negatif,
+  ukuran di luar daftar, halaman melebihi total) tanpa melempar error - query
+  string datang dari luar. 8 unit test, termasuk penjagaan bahwa menelusuri
+  seluruh halaman berurutan menghasilkan setiap baris **persis sekali**.
+- Ganti UKURAN halaman selalu kembali ke halaman 1 (dari 100/halaman ke
+  10/halaman bisa mendarat di halaman yang tidak ada isinya). Ganti mode
+  ringkas/rinci mempertahankan ukuran tapi mengembalikan nomor halaman.
+- Nomor urut kolom "No." memakai posisi di SELURUH unit
+  (`paginasi.mulai + i + 1`), bukan di halaman itu - kalau di-reset, baris
+  pertama halaman 2 ikut bernomor 1.
+- **Yang TIDAK ikut dipotong**: panel kelengkapan (`pegawaiAktif`,
+  `belumPunyaPredikat`, `belumPunyaPresensi`) dan kalkulasi massalnya tetap
+  memakai roster UTUH. Kalau ikut dipotong, panel "siap dihitung" akan
+  menjawab pertanyaan berbeda di tiap halaman dan tombol hitungnya ikut salah.
+
+### Nama role Kasubag TU menyebut unitnya (`labelRole`)
+
+Tiap unit/biro punya Kasubag TU sendiri, jadi label "Kasubag TU" saja tidak
+menunjuk siapa pun. `src/auth/roleLabel.ts` sekarang punya
+`labelRole(role, satuanKerja)` di samping `LABEL_ROLE` yang lama:
+
+| | Dipakai untuk |
+|---|---|
+| `LABEL_ROLE[role]` | role sebagai JENIS - pilihan di dropdown, role yang DIUSULKAN |
+| `labelRole(role, satuanKerja)` | role MILIK SESEORANG - chip sidebar, menu akun, tabel akun, pesan penolakan |
+
+Terpasang di: chip role sidebar & topbar mobile, menu akun (termasuk daftar
+"Ganti role"), `/admin/role-assignment`, `/admin/usulan-role`,
+`/ppabp/usulan-role`, panel "Akun login pegawai ini" di `/pegawai`, serta
+pesan penolakan approval satuan **dan** massal.
+
+Paling terasa di pesan penolakan: *"Role Kasubag TU tidak berwenang approve
+untuk satuan kerja Biro Keuangan"* tidak menjelaskan apa-apa, sementara
+*"Role Kasubag TU Pusdatik tidak berwenang..."* langsung menyebut sebabnya.
+
+**Role selain KASUBAG_TU TIDAK diberi unit** walau `User.satuanKerja`
+kebetulan terisi - kolom itu memang milik KASUBAG_TU, dan menempelkannya ke
+PPABP/OSDMA menyiratkan pembatasan wilayah yang tidak berlaku. Itu pernah jadi
+bug sungguhan (lihat "Bug akun multi-role kehilangan jangkauan PPABP").
+
+**Unit kosong disebut eksplisit**: `"Kasubag TU (unit belum diisi)"`, bukan
+disembunyikan. Akun seperti itu lolos guard role tapi tidak cocok dengan
+satuan kerja manapun, jadi semua halamannya tampil kosong tanpa penjelasan -
+sekarang penyebabnya terbaca di layar mana pun labelnya muncul.
+
+**SENGAJA TIDAK ADA penyingkat nama unit.** Mengambil beberapa kata pertama
+terlihat rapi tapi menghasilkan label yang salah: "Direktorat Bina Kelembagaan
+Pelatihan Vokasi" dan "Direktorat Bina Kelembagaan Keselamatan dan Kesehatan
+Kerja" dua-duanya jadi "Direktorat Bina" - dua unit berbeda dengan label
+identik, di layar yang gunanya justru membedakan unit. Tabel singkatan manual
+juga ikut basi tiap reorganisasi. Yang dipakai: nama penuh + `truncate` CSS +
+`title` berisi teks lengkap. 6 unit test menjaga semua aturan di atas.
+
+### Pencarian debounce (`src/app/PencarianDebounce.tsx`)
+
+Semua kotak "Cari nama atau NIP" (8 halaman: `/pegawai`, `/kasubag/pegawai`,
+`/admin/role-assignment`, `/osdma/update-sk`, `/ppabp/rekening`,
+`/ppabp/gaji-induk`, `/tukin/presensi`, `/tukin/predikat-kinerja`) sekarang
+menembak sendiri **400 ms** setelah berhenti mengetik. Grep `name="q"` di
+`.tsx` sudah tidak menemukan input polos.
+
+400 ms dipilih supaya jeda antar huruf saat mengetik normal terlewati: tanpa
+jeda, mengetik "Kharina" berarti 7 query ke tabel 5.000+ baris dan 6 di
+antaranya hasilnya langsung dibuang.
+
+**Tiga hal yang SENGAJA dipertahankan** - ini yang membedakannya dari
+sekadar mengganti form jadi state klien:
+1. **Statusnya tetap di URL** (`?q=`). Link hasil pencarian tetap bisa
+   dibagikan, dan parameter lain di halaman yang sama (satker, periode,
+   jenis, nonaktif) disalin ulang - cuma `q` yang diubah.
+2. **Tetap jalan tanpa JavaScript.** Komponennya dipasang DI DALAM
+   `<form method="get">` yang sudah ada dan tombol submitnya TIDAK dihapus,
+   jadi tanpa JS perilakunya persis seperti dulu - yang hilang cuma
+   otomatisnya. (Beberapa tombol itu juga masih perlu buat menerapkan filter
+   periode di form yang sama.)
+3. **`router.replace`, bukan `push`.** Kalau tiap jeda ketik menambah entri
+   riwayat, tombol Back jadi memutar ulang ketikan huruf per huruf.
+
+Nomor halaman (`?hal=`) ikut di-reset tiap pencarian berubah - hasil baru
+hampir selalu lebih pendek, dan bertahan di "halaman 5" berarti mendarat di
+tabel kosong yang terlihat seperti "tidak ada hasil".
+
 ### Dropdown searchable (`src/app/SearchableSelect.tsx`)
 
 SEMUA `<select>` di aplikasi diganti komponen ini (grep `<select` sekarang
@@ -2114,7 +3413,13 @@ kode action.
    sekali di `tukin.ts`. Butuh feed data status disiplin pegawai dari OSDMA.
 3. **Cuti besar/sakit yang mulai/berakhir di tengah periode** - `tukin.ts`
    saat ini cuma terima `bulanKeberapa` (integer), belum bisa proporsional
-   harian. Perlu konfirmasi praktik ke Biro OSDMA/Hukum.
+   harian. Perlu konfirmasi praktik ke Biro OSDMA/Hukum. **NAIK PRIORITAS
+   sejak jenis cuti ditarik otomatis dari e-Presensi**: dulu ini teoretis
+   karena `cutiAktif` cuma diisi manusia, sekarang nyata - Juli 2026 ada 3
+   pegawai dengan cuti berpotongan 100% sebanyak SATU HARI, dan aturan
+   per-periode menghapus tukin mereka sebulan penuh. Sementara ditandai
+   `PERIKSA MANUAL` (lihat "Jenis cuti & potongan Pasal 14 ditarik otomatis
+   dari e-Presensi"), TAPI penanda bukan pengganti aturan.
 4. ~~**Cuti sakit karena gugur kandungan di atas 1 bulan** - Pasal 14 huruf e
    butuh perhitungan per hari (1%/hari), belum diimplementasi.~~ **RESOLVED**
    - sudah diimplementasi di `hitungPersenDibayarCuti` (butuh input
@@ -2147,13 +3452,501 @@ kode action.
    Non-ASN/Satpam/Pengemudi (SBM item 24) - skema `Pegawai` belum
    membedakan kelompok itu.
 
+## Daftar tanya ke OSDMA: `docs/permintaan-data-dan-konfirmasi-osdma.md`
+
+Semua `TODO(confirm)` yang tersebar di kode dikumpulkan di satu dokumen yang
+siap dikirim: (A) data pegawai yang belum dipunyai sistem, (B) keputusan
+kebijakan yang tidak boleh diputuskan tim teknis, (C) dokumen yang diminta.
+Diurutkan dari yang paling besar dampaknya ke uang. Ada juga lampiran "sudah
+terjawab" supaya tidak ditanyakan dua kali.
+
+**Perbarui dokumen itu tiap ada TODO(confirm) baru atau yang terjawab** -
+kalau tidak, daftarnya jadi basi dan orang kembali menelusuri komentar kode
+satu per satu.
+
+## Teks peraturan: `docs/permenaker-15-2024-tunjangan-kinerja.md`
+
+Salinan teks Permenaker 15/2024 disimpan di repo. **Kalau kode dan file itu
+berbeda, yang benar FILE ITU** - perbaiki kodenya, jangan menyesuaikan
+kutipannya supaya cocok.
+
+**LENGKAP Pasal 1-26** (diisi 2026-08-07). Filenya juga memuat peta
+pasal→kode dan daftar aturan yang dipakai Gajihub TAPI berasal dari luar
+Permenaker ini (SBM 2026, Kepsekjen 82/2025), supaya tidak ada yang
+mencarinya di pasal yang salah.
+
+**Tiga hal yang baru ketahuan setelah teks lengkap terbaca** - baca ini
+sebelum menyentuh kalkulasi:
+
+1. **Pasal 4 huruf d** memberi dasar langsung untuk CLTN (sebelumnya cuma
+   PP 11/2017), DAN menyebut **MPP (bebas tugas persiapan pensiun)** yang
+   akibatnya sama tapi **belum ditangani sama sekali**.
+2. **Pasal 16 ayat (2) & (3)** - pejabat struktural/fungsional tugas belajar
+   seharusnya **pindah ke kelas jabatan 7/6/5**, bukan dikali 80% seperti
+   yang Gajihub lakukan sekarang. Ayat (1) (**CPNS 80%**) juga belum ada,
+   TAPI **JANGAN mengimplementasikannya dari `STATUSPEGAWAIID='1'` SIAP** -
+   flag itu BASI: 660 dari 670 "CPNS" diangkat Mei 2025 (per Juli 2026 sudah
+   14 bulan), dan rincian tukin manual Biro Keuangan menulis "PNS" untuk
+   ke-13 orang yang muncul di sana serta membayar mereka 100%. Memakai flag
+   itu akan memotong 20% dari ~661 pegawai yang sebenarnya sudah PNS.
+   Menebak dari NIP juga tidak boleh (pengangkatan tidak otomatis genap
+   setahun). Butuh sumber status CPNS/PNS yang terkini dari Biro OSDMA -
+   lihat catatan lengkap di `docs/permenaker-15-2024-tunjangan-kinerja.md`.
+3. **Pasal 17** - tambahan tukin **Plt/Plh** (20% atau selisih), belum ada.
+   Perhatikan ayat (3): pembayarannya tertunda satu bulan.
+
+Selain itu Pasal 14 akhirnya mengunci pembacaan "dibayarkan setelah
+**dikurangi** persentase" = POTONGAN, membenarkan perbaikan bug cuti besar
+terbalik yang sudah dilakukan.
+
+### Panel Notifikasi & Aktivitas (kanan, bisa dibuka-tutup)
+
+Tombol lonceng mengambang di **kanan atas**, panel geser dari kanan. **Tidak
+permanen** - hampir semua halaman di sini bertabel lebar (rincian tukin 12
+kolom, grid ADK 33 kolom), jadi panel tetap selebar 320px memakan ruang yang
+justru paling dibutuhkan.
+
+- **Isinya diambil saat DIBUKA** lewat `GET /api/kabar`, bukan ikut tiap render
+  halaman - kalau ikut, setiap halaman menanggung 4 query untuk panel yang
+  mungkin tidak pernah dibuka.
+- **Notifikasi** = yang perlu ditangani (kalkulasi DRAFT, banding menunggu,
+  rekonsiliasi SELISIH), diturunkan dari data yang sudah ada - tidak ada tabel
+  notifikasi baru. **Aktivitas** = `AuditTrail` + `ApprovalLog` digabung lalu
+  diurutkan ulang (approval hidup di tabel tersendiri; kalau tidak digabung,
+  keputusan approval - salah satu aktivitas terpenting - tidak pernah muncul).
+- Tombolnya **tidak dirender untuk PEGAWAI** (server juga menolak, 403) - pola
+  sama dengan tombol approval yang disembunyikan dari PIMPINAN: tombol yang
+  selalu kosong itu dead-end.
+
+**Penyaring unit - MENYEMPITKAN, tidak pernah melebarkan.** Pemakai lintas
+satker (PPABP, OSDMA, Pimpinan, Admin) dapat dropdown satuan kerja di kepala
+panel; `?satker=` diteruskan ke `ambilIsiPanelKabar` yang **mengabaikannya**
+kalau cakupan akun itu sudah dipaksa. Bedanya dijaga dua field terpisah:
+`satkerScope` (dipaksa kewenangan) vs `satkerPilih` (pilihan tampilan).
+
+PPABP TIDAK dikunci ke Biro Keuangan dan BMN walau unit asalnya memang di
+situ - mereka memproses pembayaran seluruh unit, jadi mengunci panelnya
+berarti menyembunyikan approval unit lain yang justru jadi pekerjaan mereka.
+Yang diberi cuma alat menelusuri per unit. Lihat "PPABP per satker - TERJAWAB"
+di atas.
+
+Diverifikasi terhadap data nyata: PPABP tanpa saring dapat **84 unit** di
+dropdown dengan aktivitas bercampur; disaring ke Biro Keuangan -> **0 baris di
+luar unit itu**; KASUBAG_TU Pusdatik yang mengirim `?satker=` unit lain ->
+`satkerPilih` tetap **null**, cakupan tetap unitnya, **0 baris bocor**.
+
+#### Kolom `AuditTrail.satuanKerja` - kenapa harus ditambah
+
+Scoping per unit MUSTAHIL dilakukan saat membaca. Formatnya `entitasId` beda
+per jenis entitas, dan sudah dibuktikan ke data:
+
+```
+tukin_calculation        "kalkulasi-massal-Biro Keuangan dan Baran..."
+koreksi_presensi_harian  "198111302025211042-2026-07-15"
+app_user                 "<uuid>"
+```
+
+Menebak satker dari string itu berarti berisiko menampilkan aktivitas unit lain
+ke orang yang tidak berhak. Jadi kolomnya ditambah (migrasi
+`20260813120000_audit_trail_satuan_kerja`, satu ADD COLUMN nullable + index) dan
+**diisi saat MENULIS**, ketika kodenya memang tahu unitnya.
+
+- **NULL = lintas satker** (penanda kendala se-kementerian, kalender hari libur,
+  perubahan role akun). Baris NULL **TIDAK ikut terlihat oleh KASUBAG_TU** -
+  itu keputusan tingkat kementerian, bukan urusan unit. Default aman: write
+  site yang belum diisi bernilai NULL, jadi tidak bocor ke unit manapun.
+- Sudah diisi di: kalkulasi massal, predikat kinerja (tambah & ubah), koreksi
+  jam presensi. Sisanya menyusul kalau memang perlu muncul di panel unit.
+- **Yang menentukan cakupan adalah satuan kerja yang DIKENAI aksi, bukan satuan
+  kerja aktornya** - PPABP (tim pusat) yang mengoreksi data Biro Umum itu
+  aktivitas Biro Umum.
+
+**Diverifikasi** lewat production build dengan 3 baris audit tanam (unit
+Kasubag TU / unit lain / NULL): Kasubag TU melihat **hanya** baris unitnya
+(unit lain `false`, NULL `false`, dan seluruh aktivitasnya ber-unit sendiri);
+PPABP melihat ketiganya; PEGAWAI dapat **403** dan tombolnya tidak dirender;
+tanpa login **307 ke /login** - tidak pernah sampai ke handler. Semua baris uji
+sudah dihapus.
+
+### Palet & sidebar baru (2026-08-13)
+
+Palet ditetapkan user, dan **#13416B dipilih karena sama dengan logo Kemnaker**
+- jadi itu yang jadi warna UTAMA, bukan sekadar warna teks:
+
+| | Peran |
+|---|---|
+| **#13416B** navy | warna utama: teks, judul, **item menu aktif**, tombol utama, tile logo |
+| **#3F72AF** biru | aksen KEDUA: avatar, ikon penanda, tautan - tidak boleh bersaing dengan navy |
+| **#DBE2EF** kabut | garis, permukaan sekunder, chip netral |
+| **#F9F7F7** putih | latar halaman |
+
+~~**Sidebar dari navy gelap jadi TERANG**, mengikuti acuan desain yang dikirim
+user.~~ **DIKEMBALIKAN JADI GELAP (2026-08-13, permintaan user)**: latar navy
+`#13416B`, teks putih. Bentuknya tetap seperti acuan (tile logo beraksen, item
+aktif berupa pil, item lain tanpa latar) - yang dibalik cuma terang/gelapnya.
+
+Semua warnanya lewat **token `--color-nav-*`** di `globals.css`, tidak ada satu
+pun warna sidebar yang di-hardcode di komponen - jadi kalau mau dibalik lagi,
+cukup satu blok itu:
+
+| Token | Nilai | Peran |
+|---|---|---|
+| `--color-nav-bg` | `#13416B` | latar sidebar |
+| `--color-nav-text` | `#C9D6E8` | label item non-aktif |
+| `--color-nav-hover` | `#1D5285` | latar hover + tombol akun |
+| `--color-nav-line` | `#2A5F93` | garis pemisah & tepi |
+| `--color-nav-active` | `#FFFFFF` | pil item aktif |
+| `--color-nav-active-text` | `#13416B` | teks di dalam pil |
+
+- **Item aktif DIBALIK jadi pil PUTIH** dengan teks navy. Di atas latar navy,
+  pil navy jelas tidak terlihat, dan navy-di-atas-navy-muda cuma ~2:1.
+- **Tile logo jadi biru `#3F72AF`**, bukan navy - tile navy di atas sidebar
+  navy hilang sama sekali. Aksen kedua palet memang untuk keperluan ini.
+- **Popover menu akun TETAP terang** (panel melayang di atas sidebar), jadi
+  hover-nya diganti `bg-line-2` - `nav-hover` sekarang navy dan akan membuat
+  teksnya hilang. Yang ikut gelap cuma TOMBOL pemicunya di kaki sidebar.
+- Kontras diuji ulang, semua **lulus AA**: putih di navy **10,52:1**, label
+  `#C9D6E8` di navy **7,15:1**, navy di pil putih **10,52:1**, label di hover
+  **5,49:1**, putih di tile biru **4,96:1**.
+- Diverifikasi di production build: `<aside>` ber-`bg-nav-bg text-nav-text
+  border-nav-line`, 19 label ber-`text-nav-text`, satu pil aktif, dan **nol**
+  sisa kelas terang (`text-navy`/`text-ink-2`/`bg-surface-2`/`border-line`) di
+  dalam sidebar.
+
+**Scrollbar diset SEKALI di `html`**, bukan ditempel per elemen:
+`scrollbar-color` & `scrollbar-width` adalah properti **turunan**, jadi semua
+kontainer ber-`overflow` ikut - tabel lebar (rincian tukin, grid ADK 33 kolom),
+panel Kabar, sidebar.
+
+```css
+html          { scrollbar-width: auto; scrollbar-color: rgb(115 115 115 / .55) rgb(255 255 255 / 0); }
+[data-sidebar]{ scrollbar-color: rgb(201 214 232 / .45) rgb(255 255 255 / 0); }
+```
+
+- **Track transparan, bukan putih** - banyak kontainer di sini berlatar
+  bukan-putih (surface-2, sidebar navy), dan track putih jadi jalur terang
+  yang tidak diminta siapa pun.
+- **Sidebar dapat thumb sendiri**: abu 115 di alpha 0,55 berbaur jadi
+  ~`rgb(72 92 111)` di atas `#13416B` - cuma **1,5:1** terhadap latarnya,
+  praktis tidak terlihat. Dipakai nada `nav-text` supaya tetap satu palet.
+- Dikunci ke `[data-sidebar]`, **BUKAN ke `aside` polos** - panel Kabar juga
+  `<aside>` tapi berlatar putih, dan thumb terang di sana justru hilang.
+  Diverifikasi: halaman punya 2 `<aside>`, hanya yang navy ber-`data-sidebar`.
+- **SENGAJA TIDAK memakai `::-webkit-scrollbar` sebagai cadangan**: kalau
+  selektor itu ada, Chrome memakai jalur lamanya dan mengabaikan yang standar,
+  jadi harus dirawat dua kali. Konsekuensinya **Safari kembali ke scrollbar
+  bawaan sistem** (belum mendukung properti standar ini) - diterima apa adanya.
+
+Catatan penting kalau nanti menyentuh warna:
+
+- **Token `teal` DIPERTAHANKAN NAMANYA** walau nilainya sekarang navy. Ada ~200
+  pemakaian `text-teal-deep` / `bg-teal` di seluruh aplikasi; mengganti namanya
+  berarti menyentuh semuanya tanpa mengubah apa pun yang terlihat. Ganti
+  belakangan kalau memang mau dirapikan.
+- **Warna status (hijau/merah/amber) SENGAJA TIDAK diganti ke palet ini.**
+  Keempat warna palet semuanya biru-netral - kalau "disetujui" dan "ditolak"
+  dijadikan biru, bedanya hilang, padahal justru itu yang menentukan orang
+  berhenti atau lanjut. Yang dilakukan cuma menyetel nadanya.
+- **Abu label menu #5F7085, BUKAN abu terang seperti acuan.** Acuan memakai abu
+  ~3,0:1 di putih - di bawah 4,5:1 WCAG AA untuk teks 13,5px. Halaman ini
+  dipakai memeriksa angka gaji di layar kantor apa adanya; label samar bukan
+  pilihan gaya di sini. `gold-deep` juga digelapkan (#9A6715 -> #8F5F13) karena
+  di atas tint-nya sendiri cuma 4,33:1.
+
+Seluruh pasangan warna yang benar-benar dipakai sudah diuji rasio kontrasnya
+dan **lulus AA**: menu aktif 10,52:1, teks utama 9,86:1, label menu 5,07:1,
+amber di tint-nya 4,91:1, hijau 5,03:1, merah 4,96:1.
+
+#### Urutan menu PPABP mengikuti alur kerja
+
+Dulu 15 item berurutan tanpa pola - "Dashboard Tukin" di posisi 2, sementara
+Uang Makan & Uang Lembur (fungsinya persis sama) di 5-6, dipisah Presensi dan
+Kalkulasi. Sekarang: **Presensi -> Kalkulasi -> Approval Tukin -> Approval Uang
+Makan -> Approval Uang Lembur -> Rekonsiliasi -> Export ADK**, persis langkah
+yang dikerjakan tiap periode; lalu data pokok, lalu sisanya.
+
+- Ketiganya disandingkan, labelnya cukup **nama domainnya**: "Tukin", "Uang
+  Makan", "Uang Lembur". Kata "Approval"/"Dashboard" tidak menambah keterangan
+  apa pun - semua halaman di sidebar ini dashboard, dan approval cuma salah
+  satu yang bisa dilakukan di situ.
+- **Ikonnya dibedakan per domain** (lembar uang / garpu & pisau / bulan). Dulu
+  ketiganya **ikon JAM yang sama persis**, jadi ikonnya tidak membedakan apa
+  pun dan mata terpaksa membaca label. Jam juga keliru: tukin & uang makan
+  tidak berhubungan dengan waktu, dan untuk lembur ikon jam rancu dengan
+  halaman Presensi. Ikon mata uang (`M12 2v20M17 5...`) sekarang **hanya**
+  dipakai Kalkulasi - sebelumnya dipakai dua arti berbeda di menu yang berbeda.
+- `pisah: true` pada item = garis pemisah di atasnya. **Tanpa judul kelompok**,
+  mengikuti acuan - grup tetap terbaca dari jeda dan sidebar tidak bertambah
+  tinggi. Judul "Menu" yang lama dihapus.
+#### Grup yang bisa dilipat
+
+15 item (PPABP) / 12 item (Kasubag TU) berjejer ke bawah membuat sidebar
+memanjang melewati lipatan layar. Item yang JARANG dibuka dikelompokkan jadi
+grup lipat:
+
+| Menu | Grup | Terlihat |
+|---|---|---|
+| PPABP | **Data Pokok** (5 item) | 15 -> **11 baris** |
+| Kasubag TU | **Pegawai** (2), **Dokumen SK** (2) | 12 -> **10 baris** |
+
+- **Yang HARIAN sengaja TIDAK dilipat.** Menyembunyikan langkah yang dikerjakan
+  tiap periode cuma menambah satu klik ke seluruh pekerjaan rutin - persis
+  kebalikan dari tujuannya. Yang dilipat selalu yang dibuka beberapa kali
+  setahun (perbaikan data, SK).
+- **Pakai `<details>` BAWAAN HTML, bukan state React** - buka-tutupnya
+  ditangani browser, jadi tetap jalan tanpa JavaScript. Pola yang sama dengan
+  `BadgePejabatEselon` dan filter GET.
+- **Grup yang memuat halaman aktif dirender `open` dari server** (`adaYangAktif`),
+  jadi tidak pernah ada keadaan "halaman yang sedang dibuka tersembunyi di
+  balik grup tertutup". Diverifikasi: membuka `/ppabp/rekening` -> grup "Data
+  Pokok" terbuka dengan "Rekening Pegawai" bertanda aktif; membuka `/kasubag`
+  -> kedua grupnya tertutup.
+- Anak grup diberi garis vertikal di kiri, bukan indentasi dalam - hierarkinya
+  terbaca tanpa memakan lebar sidebar yang cuma 264px.
+
+- **Hari Libur & Kendala e-Presensi TIDAK dinaikkan jadi item sidebar** - tetap
+  panel di dalam `/tukin/presensi`. Keduanya dibuka beberapa kali setahun;
+  menaikkannya bikin menu 17 baris dan mendorong yang harian ke bawah lipatan.
+
+Urutan hasilnya diverifikasi lewat production build (15 item, 3 pemisah, judul
+"Menu" hilang, gradient navy lama tidak ada lagi).
+
+### Pratinjau grid ADK Uang Makan di `/ppabp/adk`
+
+Dipicu pertanyaan user setelah mengirim contoh ADK: *"apakah bagus jika
+menampilkan tabel gitu?"* Jawabannya ya — **sebagai tampilan baca**, bukan
+sebagai grid isian. Grid di berkas `.xlsm` operator berbentuk isian manual;
+menirunya sebagai form justru mengembalikan pekerjaan yang dihapus Gajihub,
+karena datanya sudah ada per hari di database.
+
+Yang dibangun: `src/app/ppabp/adk/GridAdkHarian.tsx` (read-only) +
+`dataUangMakanHarian.ts`.
+
+- **`susunGridAdkHarian()` yang SAMA dipakai berkas `.xlsx` dipanggil untuk
+  layar** — bukan menyusun ulang. Begitu juga barisnya: penyusunan yang dulu
+  inline di Route Handler diekstrak ke `dataUangMakanHarian()` dan sekarang
+  dipakai bareng route + halaman. Prinsip yang sama dengan
+  `business-logic/adk.ts`: kalau disusun dua kali, pratinjau dan berkas cepat
+  atau lambat berbeda, dan bedanya baru ketahuan setelah berkas terkirim.
+- **Dua panel peringatan yang sebelumnya tidak ada di mana pun**: pegawai
+  APPROVED yang **nol hari** (barisnya kosong di berkas), dan pegawai yang
+  **jumlah tanggal di berkas BEDA dari `jumlahHariDibayar` yang disetujui** —
+  yang dibayar Web Gaji adalah jumlah tanggal di berkas, bukan angka yang
+  di-approve. Komentar lama di route menyebut `selisih` padahal fungsinya tidak
+  pernah ada; sekarang benar-benar dihitung.
+- Kolom Sabtu/Minggu ditandai merah, kolom Nama `sticky`, dan tabelnya punya
+  `overflow-x` sendiri — 31 kolom tidak boleh membuat SELURUH halaman menggeser.
+  Dibatasi 25 baris dengan catatan eksplisit berapa yang tidak ditampilkan.
+
+**Diverifikasi** lewat production build (47 pegawai 7/2026, di-APPROVED
+sementara lalu **dikembalikan ke DRAFT** — nol baris APPROVED tersisa):
+pratinjau menyebut **770 baris / 47 pegawai** dan berkas TXT yang benar-benar
+diunduh juga **770 baris**; nol baris jatuh di Sabtu/Minggu; nol baris di luar
+periode; header 33 kolom (Nama + 31 tanggal + ringkasan) sama persis dengan
+jumlah sel per baris; 8 kolom bertanda akhir pekan (Juli 2026 memang 8).
+Panel selisih diuji dengan memaksa satu baris berbeda — muncul, menyebut
+namanya, lalu dikembalikan.
+
+**ADK Uang Lembur SENGAJA BELUM diberi pratinjau yang sama.** Diadu ke berkas
+asli `ADK-Lembur Peg.Rokeu_Juni 2026.xlsm` (111 entri, 35 pegawai): Gajihub
+cuma punya **5 entri** ber-`jamLembur > 0` untuk ke-35 pegawai itu, **nol
+cocok penuh**, dan **109 dari 111 entri berkas jatuh di hari kerja**. Itu gap
+sumber data yang sudah didokumentasikan (lembur hari kerja tercatat sebagai
+WFO pulang malam; lembur butuh SPL yang tidak ada sumbernya di sistem manapun)
+— grid yang menampilkan 5 dari 111 lebih menyesatkan daripada tidak ada.
+Bangun pratinjaunya SETELAH ada jalan masuk SPL.
+
+### Kalender hari libur nasional & cuti bersama
+
+Keterangan user: **lembur ada 2 jenis** - lembur hari libur (Sabtu, Minggu,
+**tanggal merah**) dan lembur hari kerja. Sampai sebelum ini Gajihub cuma
+mengenali Sabtu/Minggu, jadi tanggal merah yang jatuh di hari kerja terbaca
+sebagai hari kerja biasa - dan itu salah di TIGA tempat sekaligus:
+
+1. **Lembur dibayar 1x, seharusnya 2x.** Terukur: Juni 2026 ada **12 baris
+   lembur pada 1 Juni** (Hari Lahir Pancasila) dan **7 baris pada 16 Juni**
+   (Tahun Baru Islam).
+2. Hari itu ikut terhitung `jumlahHariKerja`, yang jadi **batas atas** hari
+   uang makan (`Math.min` di `uangMakan.ts`).
+3. Potongan Pasal 13 tetap berlaku, padahal tidak ada kewajiban jam kerja yang
+   bisa dilanggar.
+
+**Model `HariLiburNasional`** (migrasi `20260813090000_hari_libur_nasional`,
+satu CREATE TABLE) + `src/lib/hariLibur.ts` (jembatan DB) + halaman
+`/tukin/presensi/hari-libur` (izin `canKelolaHariLibur` - **PPABP + ADMIN**,
+alasan sama dengan penanda kendala: satu tanggal berlaku se-kementerian).
+
+#### Kalender libur ditarik dari e-Presensi (jalur utama)
+
+**Catatan lama "tabel `libur` di e-Presensi ada tapi KOSONG" TERNYATA SALAH.**
+Diperiksa ulang 2026-08-13 atas pertanyaan user: tabel itu berisi **127 baris**
+(2022: 19, 2023: 26, 2024: 28, 2025: 29, **2026: 25**), terakhir diperbarui
+**15 Januari 2026** - jadi memang dirawat, bukan sisa. Selama ini kalender
+Gajihub diisi tangan padahal sumbernya sudah ada.
+
+Diadu ke data kehadiran: dari **21 tanggal libur 2026 yang jatuh di hari
+kerja**, semuanya ber-kehadiran WFO/WFH/WFA **~0** (hanya 1 Januari yang
+bukan nol, dengan 2 baris). Daftarnya cocok dengan kenyataan.
+
+`src/adapters/liburEpresensi.ts` (READ-ONLY, SELECT saja) + tombol **"Tarik
+kalender <tahun>"** di `/tukin/presensi/hari-libur`.
+
+- **DI-IMPOR, bukan dibaca langsung saat menghitung** - snapshot, pola sama
+  dengan `importPegawaiSiap.ts`. Kalau dibaca live, e-Presensi yang mengubah
+  tabelnya diam-diam mengubah angka periode yang SUDAH disetujui, tanpa jejak
+  siapa pun; kalender ini menentukan pengali lembur 2x dan batas hari uang
+  makan, jadi harus bisa ditelusuri ke baris di database MILIK Gajihub.
+- **TIDAK menimpa tanggal yang sudah ada** - koreksi manusia tidak boleh
+  dikembalikan ke tulisan e-Presensi oleh impor berikutnya. Jumlah yang
+  dilewati disebutkan, bukan hilang diam-diam.
+- **JEBAKAN ZONA WAKTU yang sama** seperti `$queryRaw`: kolom `tanggal`
+  bertipe `date`, dan driver pg mengembalikannya sebagai tengah malam WAKTU
+  LOKAL - di +7, `2026-03-20` terbaca `2026-03-19T17:00Z`, **mundur sehari**.
+  Di-cast `::text` di SQL-nya. Diverifikasi: Idul Fitri terbaca 2026-03-20.
+- **Penanda `cutiBersama` diturunkan dari NAMA, dan pasti kurang lengkap untuk
+  2026**: 2022-2025 punya baris bernama "Cuti Bersama ..." (4/11/8/9), tapi
+  2026 **nol** - cuti bersama Idul Fitri 2026 ditulis dengan nama hari rayanya
+  ("Hari Raya Idul Fitri 1447 Hijriah", 20-24 Maret). Ini DISEBUTKAN di pesan
+  suksesnya supaya penanda kosong tidak dikira kerusakan. Tidak mengubah
+  pembayaran (perlakuannya sama), cuma pelaporan.
+- Form manual TETAP ada - buat tanggal yang tidak tercakup, dan buat waktu
+  server e-Presensi tidak terjangkau (kegagalan koneksi disebut apa adanya,
+  bukan dibiarkan jadi galat mentah).
+
+Diverifikasi lewat jalur kode yang sama: `ambilLiburEpresensi(2026)` -> 25
+tanggal, tanggal Idul Fitri benar (tidak mundur), 25 akan ditambahkan / 0
+dilewati terhadap kalender yang saat itu kosong.
+
+**Sisa data uji yang SUDAH DICABUT**: satu baris `2026-07-31 "testing"`
+tertinggal dari verifikasi halaman ini. 31 Juli 2026 itu **hari Jumat** - hari
+kerja - jadi kalau presensi Juli ditarik ulang, hari itu akan diperlakukan
+libur (lembur 2x, hari kerja berkurang). Rekap 7/2026 terakhir diperbarui
+2026-08-12, sebelum baris itu berpengaruh, jadi **tidak ada angka tersimpan
+yang terlanjur salah**.
+
+- **Tanggal merah diperlakukan SAMA PERSIS dengan Sabtu/Minggu** - satu baris
+  di `rekapDariLaporanPdf` (`jamPulangWajib` dinolkan), sehingga keputusan itu
+  merambat sendiri ke pengali lembur, batas uang makan, dan seluruh potongan
+  Pasal 13 yang memang sudah dijaga `!hariLibur`. **Bukan** dikurangkan
+  belakangan di lapisan kalkulasi - kalau dipisah, ketiganya bisa memakai
+  daftar tanggal yang berbeda.
+- **Kalender kosong = perilaku persis seperti sebelumnya** (libur cuma
+  Sabtu/Minggu). Ada test yang menguncinya, jadi tabel yang belum diisi tidak
+  mengubah apa pun.
+- **Deteksi kandidat, bukan penetapan otomatis** - pola sama dengan kendala
+  e-Presensi. Hari kerja yang kehadirannya di bawah **20% median** bulan itu
+  ditawarkan sebagai dugaan; yang menetapkan tetap manusia, dan halamannya
+  menyuruh mencocokkan ke SKB 3 Menteri dulu. Diverifikasi: Juni 2026 tepat
+  menemukan **1 & 16 Juni** (keduanya 0 hadir, median 4.201) dan **nol** hari
+  kerja biasa ikut tertandai.
+- `cutiBersama` dipisah BUKAN untuk perlakuan pembayaran (sama saja), tapi
+  supaya bisa dilaporkan terpisah - cuti bersama memotong jatah cuti tahunan.
+- **Menetapkan tanggal TIDAK langsung mengubah angka**: kalender dipakai saat
+  rekap dihitung, jadi harus **tarik ulang presensi** lalu **hitung ulang**.
+  Disebutkan di halaman DAN di pesan sukses action-nya.
+
+#### BUG yang ketemu saat mengerjakannya: `$queryRaw` menggeser tanggal 7 jam
+
+Mengoper objek **`Date` sebagai parameter `$queryRaw`** ke kolom `timestamp`
+membuat driver pg menyerialkannya memakai **zona waktu LOKAL proses**. Di
+Asia/Jakarta (+7) batas periodenya bergeser 7 jam: **tanggal 1 terbuang** dan
+tanggal 1 bulan berikutnya ikut masuk.
+
+Terukur: **4.596 baris** presensi hilang diam-diam dari agregasi Juni 2026
+(261.342 lawan 265.938), dan **1 Juni tidak pernah muncul sebagai kandidat**
+walau seluruh 4.517 barisnya berstatus Upacara. Ketahuannya justru karena
+deteksi kalender ini menemukan 16 Juni tapi tidak 1 Juni.
+
+**Halaman kendala e-Presensi kena bug yang SAMA** dan sudah ikut diperbaiki -
+di sana tidak kelihatan karena 15 & 16 Juli kebetulan masih di dalam jendela
+yang tergeser. Perbaikannya: batas dikirim sebagai TEKS `"YYYY-MM-DD"` lalu
+di-cast `::timestamp` di SQL-nya (`batasPeriodeIso()` di kedua halaman).
+
+**API bertipe Prisma (`where: { tanggal: { gte, lt } }`) TIDAK kena** - sudah
+diadu langsung, keduanya menghasilkan 107.262 baris untuk Juni 2026. Ini
+khusus jalur SQL mentah.
+
+### Rincian uang makan ditampilkan ke layar (golongan → tarif → hari)
+
+Rumus uang makan cuma satu perkalian, tapi dua angkanya tidak kelihatan dari
+hasil akhir: **kenapa tarifnya segitu** (golongan) dan **kenapa harinya
+sekian** (hari hadir TIDAK sama dengan hari dibayar). Dashboard `/uang-makan`
+dulu menulis *"Hadir 22 dari 23 hari kerja"* lalu nominal yang sebenarnya hasil
+kali **18** hari — aritmatikanya tidak bisa diperiksa dari layar, dan selisih 4
+hari itu tidak punya tempat untuk dijelaskan.
+
+`src/business-logic/rincianUangMakan.ts` (PURE, 13 unit test) +
+`src/app/RincianUangMakan.tsx`, dipasang di `/uang-makan` (per kartu) dan
+`/saya`. **Tidak ada migrasi** — `jumlahHariDibayar`, `tarifHarian`, dan
+golongan semuanya sudah tersimpan; yang belum ada cuma penjelasannya.
+
+- **Dikunci ke fungsi yang membayar.** Ada test `it.each` yang menjalankan
+  `rincianUangMakan()` dan `hitungUangMakan()` atas kasus yang sama dan menuntut
+  `hariDibayar` + `total` identik — termasuk kasus clamp ke hari kerja. Tampilan
+  tidak bisa bercerita beda dari kas.
+- **WAJIB `kurungTarifSbm()`, BUKAN `golonganRomawi()`.** Yang kedua cuma
+  mengenali format PNS ("III/d") dan mengembalikan null untuk jenjang PPPK
+  ("IX"). Memakainya akan menandai **~996 pegawai PPPK "tidak dikenali"** di
+  layar padahal kalkulasi tetap membayar mereka lewat `PADANAN_GOLONGAN_PPPK`.
+  Nyaris masuk; sekarang ada test yang menguncinya, dan padanan PPPK-nya
+  **disebut terang-terangan sebagai TODO(confirm)** di layar.
+- **Diklat & Dinas Keluar ditampilkan dicoret + alasannya** ("konsumsi
+  ditanggung penyelenggara diklat" / "perjalanan dinas"), bukan dihilangkan
+  dari tabel. Itu bukan potongan, dan kalau barisnya tidak ada, selisih hari
+  hadir vs dibayar kembali jadi misteri.
+- **Direkonstruksi dari `RekapPresensiPeriode`**, pola sama dengan
+  `RincianPotonganKehadiran` — beserta konsekuensinya: kalau tidak menjumlah ke
+  `totalUangMakan` yang tersimpan, panel kuning bilang presensinya berubah
+  setelah kalkulasi terakhir dan perlu dihitung ulang.
+
+Diverifikasi lewat production build terhadap data nyata (periode 7/2026, 47
+baris): rincian terender 94 kali (47 × 2, salinan kedua dari RSC flight
+payload), dan lima baris pertama diadu ke hitungan ulang independen — **COCOK
+semua** (mis. PANUT RAHAYU gol IV/a, 15 hari × Rp 41.000 = Rp 615.000 dengan 8
+hari hadir yang tidak dibayar).
+
+## Teks peraturan: `docs/pmk-32-2025-sbm-2026-uang-makan-lembur.md`
+
+Salinan bagian uang makan & uang lembur dari **PMK 32/2025 (SBM TA 2026)**,
+sumber `src/business-logic/tarifSbm.ts`. Berkas aslinya `docs/PMK 32 Tahun
+2025.pdf`. Aturan yang sama berlaku: **kalau kode dan dokumen itu berbeda,
+yang benar dokumen itu**.
+
+Ke-**12 tarif** (item 22.1, 23.1, 23.2) sudah diadu langsung ke berkasnya dan
+**cocok persis** dengan konstanta di kode, termasuk perbedaan pengelompokan
+golongan (uang makan menyatukan Gol I & II; uang lembur memisahkannya).
+
+**Yang paling penting dari pembacaan itu - dokumen ini TIDAK mengatur siapa
+yang berhak dibayar, cuma BESARAN tarifnya.** Pasal 1 menyebutnya "satuan
+biaya... dalam penyusunan Rencana Kerja dan Anggaran" dan Pasal 4 melempar tata
+cara penerapannya ke PMK Pelaksanaan Anggaran. Terukur: frasa "hari kerja"
+muncul **tepat satu kali** di seluruh dokumen, sementara "kehadiran", "masuk
+kerja", dan "absen" **nol kali**. Jadi jangan mencari aturan kehadiran uang
+makan di berkas itu, dan jangan mengutipnya untuk membela aturan siapa-berhak
+yang sekarang dipakai.
+
+TODO(confirm) BARU yang lahir dari situ: penjelasan item 22.1 berbunyi uang
+makan "dihitung berdasarkan **jumlah hari kerja**" - bukan hari hadir.
+Gajihub membayar per hari WFO + WFH/WFA (Diklat & Dinas Keluar dikecualikan),
+aturan yang datang dari keterangan user. Dua-duanya bisa benar kalau "hari
+kerja" itu cara MENGANGGARKAN sementara pembayarannya berbasis kehadiran sesuai
+peraturan yang dirujuk Pasal 4 - dan itu pembacaan yang dipakai sekarang.
+**Minta PMK/Perdirjen Perbendaharaan tentang tata cara pembayaran uang makan
+ASN**; di situlah aturan kehadirannya, dan tanpa salinannya aturan siapa-berhak
+di Gajihub masih bersandar pada keterangan lisan.
+
+Dokumen itu juga mendaftar aturan yang dipakai Gajihub tapi **tidak ada
+dasarnya di SBM**: batas 40 jam lembur/bulan, pengali 2x lembur hari libur
+(kata "libur" tidak muncul sama sekali di PMK ini), dan padanan golongan PPPK.
+
 ## Konvensi kode
 
 - Business logic engine = pure functions, tidak boleh ada I/O (database,
   network) di dalamnya. Semua data eksternal masuk lewat parameter.
 - Setiap keputusan regulasi yang diimplementasi WAJIB dikomentari dengan
   nomor Pasal yang jadi acuan - supaya gampang diverifikasi ulang dan
-  gampang dijelaskan ke Itjen/auditor kalau ditanya.
+  gampang dijelaskan ke Itjen/auditor kalau ditanya. Nomor Pasal itu
+  merujuk ke `docs/permenaker-15-2024-tunjangan-kinerja.md`.
 - Kalau ada asumsi yang belum dikonfirmasi ke pihak terkait (OSDMA, Biro
   Hukum, DJA, dst), tandai eksplisit dengan komentar `TODO(legal-confirm)`
   atau `TODO(confirm)` - jangan diam-diam mengasumsikan sesuatu sebagai final.

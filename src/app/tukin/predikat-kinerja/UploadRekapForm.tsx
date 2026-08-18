@@ -7,6 +7,14 @@ import { NAMA_BULAN } from "../../bulan";
 
 const INITIAL_STATE: UploadRekapPredikatFormState = {};
 
+/**
+ * Form ini SENGAJA tidak meminta pernyataan periode/unit/penilai sebelum
+ * upload. Semuanya diturunkan dari isi file - periode dari baris kepala tiap
+ * sheet, unit dari lookup NIP ke tabel Pegawai, penilai dari baris kedua
+ * kepala file. Kewenangan tetap dicek PER BARIS di action terhadap satuan
+ * kerja pegawainya, jadi file unit lain tetap tidak bisa ditulis walaupun
+ * tidak ada dropdown yang menghadangnya di depan.
+ */
 export function UploadRekapForm() {
   const [state, formAction, pending] = useActionState(uploadRekapPredikatAction, INITIAL_STATE);
 
@@ -19,27 +27,90 @@ export function UploadRekapForm() {
         manual. Kalau satu file berisi beberapa sheet bulan (Januari, Februari, dst),{" "}
         <span className="font-semibold">semuanya diproses sekaligus</span> - tidak perlu dipisah per bulan.
       </p>
+      <p className="mt-1.5 text-sm text-muted">
+        <span className="font-semibold text-ink-2">Bisa pilih beberapa file sekaligus.</span> Satu satuan kerja sering
+        dinilai lebih dari satu penilai (mis. Subbagian Tata Usaha dan Biro), masing-masing punya file sendiri berisi
+        orang yang berbeda - pilih semuanya dalam satu kali upload. Unit penilainya dibaca dari isi file, tidak perlu
+        kamu tandai sendiri.
+      </p>
 
-      <form action={formAction} className="mt-3 flex flex-wrap items-center gap-3">
-        <input
-          type="file"
-          name="file"
-          accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-          required
-          className="field-input py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-ink-2"
-        />
-        <button type="submit" disabled={pending} className="btn btn-primary">
-          {pending ? "Memproses..." : "Upload & proses"}
-        </button>
+      <form action={formAction} className="mt-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="file"
+            name="file"
+            multiple
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            required
+            className="field-input py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-ink-2"
+          />
+          <button type="submit" disabled={pending} className="btn btn-primary">
+            {pending ? "Memproses..." : "Upload & proses"}
+          </button>
+        </div>
       </form>
 
       <p className="mt-2 text-xs text-muted">
         File-nya sendiri TIDAK disimpan - yang masuk database cuma NIP, periode, dan predikatnya. Predikat yang labelnya
-        tidak dikenali akan dilewati dan dilaporkan, bukan ditebak.
+        tidak dikenali akan dilewati dan dilaporkan, bukan ditebak. Kalau ada typo, cukup perbaiki di Excel lalu upload
+        ulang: nilainya tertimpa berdasarkan NIP + periode, tidak perlu menghapus siapa pun dulu.
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        Upload ulang file yang sama <span className="font-semibold text-ink-2">tidak menghapus apa pun</span>: pegawai
+        yang sudah punya predikat nilainya ditulis ulang dengan isi yang sama, pegawai yang belum punya ditambahkan, dan
+        pegawai yang tidak ada di file tidak disentuh. Jadi file penilai kedua bisa menyusul kapan saja.
       </p>
 
       {state.error && <p className="mt-3 text-sm font-medium text-red">{state.error}</p>}
       {state.success && <p className="mt-3 text-sm font-semibold text-green">{state.success}</p>}
+
+      {/* VERIFIKASI KELENGKAPAN - inti dari upload beberapa file. Muncul
+          langsung setelah upload supaya file penilai yang belum masuk
+          ketahuan saat itu juga, bukan nanti waktu kalkulasi. */}
+      {state.kelengkapan?.map((k) => (
+        <div
+          key={`${k.periode}-${k.satuanKerja}`}
+          className={`mt-3 rounded-lg p-3 text-sm ${
+            k.belumPunya === 0 ? "border border-line bg-surface-2" : "bg-gold-tint"
+          }`}
+        >
+          <p className="font-semibold text-ink">
+            {k.satuanKerja} - periode {k.periode}
+          </p>
+          <p className="mt-1 text-ink-2">
+            <span className="font-semibold">
+              {k.sudahPunya} / {k.totalAktif}
+            </span>{" "}
+            pegawai aktif sudah punya predikat kinerja.
+          </p>
+          {k.sumberPenilaian.length > 0 && (
+            <p className="mt-1 text-xs text-muted">
+              Sumber penilaian yang sudah masuk: {k.sumberPenilaian.join(", ")}
+            </p>
+          )}
+
+          {k.belumPunya > 0 ? (
+            <>
+              <p className="mt-2 text-ink-2">
+                <span className="font-semibold">{k.belumPunya} pegawai belum punya predikat.</span> Kalau unit ini
+                dinilai lebih dari satu penilai, kemungkinan besar filenya belum semua diupload.
+              </p>
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-ink-2">
+                {k.contohBelum.map((nama) => (
+                  <li key={nama}>{nama}</li>
+                ))}
+                {k.belumPunya > k.contohBelum.length && (
+                  <li className="text-muted">...dan {k.belumPunya - k.contohBelum.length} pegawai lainnya</li>
+                )}
+              </ul>
+            </>
+          ) : (
+            <p className="mt-2 text-sm font-semibold text-green">
+              Lengkap - semua pegawai aktif unit ini sudah punya predikat, siap dihitung.
+            </p>
+          )}
+        </div>
+      ))}
 
       {state.ringkasanPerPeriode && state.ringkasanPerPeriode.length > 0 && (
         <div className="mt-3 space-y-2">
@@ -52,8 +123,10 @@ export function UploadRekapForm() {
                 <span className="font-semibold text-ink">
                   {NAMA_BULAN[r.periodeBulan - 1] ?? r.periodeBulan} {r.periodeTahun}
                 </span>
-                <span className="text-muted"> - dari sheet "{r.namaSheet}"</span>
-                {r.unitPenilaian && <span className="text-muted"> - unit penilaian di file: {r.unitPenilaian}</span>}
+                <span className="text-muted"> - {r.namaSheet}</span>
+                {r.unitPenilaian && (
+                  <span className="text-muted"> - penilai: {r.unitPenilaian}</span>
+                )}
               </p>
               <ul className="mt-1.5 space-y-1 text-ink-2">
                 {r.perSatuanKerja.map((s) => (

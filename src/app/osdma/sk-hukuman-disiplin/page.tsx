@@ -41,7 +41,18 @@ export default async function OsdmaSkHukdisPage() {
                   NIP {sk.pegawai.nip} - {sk.pegawai.satuanKerja}
                 </p>
                 <p className="mt-1 text-sm text-ink-2">
-                  {sk.nomorSk} - {sk.jenisHukuman} - berlaku sejak {sk.periodeMulaiBulan}/{sk.periodeMulaiTahun}
+                  {sk.skBelumTerbit ? (
+                    <span className="chip chip-danger mr-1.5">SK belum terbit</span>
+                  ) : (
+                    <>{sk.nomorSk} - </>
+                  )}
+                  {sk.jenisHukuman} - berlaku sejak {sk.periodeMulaiBulan}/{sk.periodeMulaiTahun}
+                  {sk.periodeSelesaiBulan && sk.periodeSelesaiTahun
+                    ? ` s.d. ${sk.periodeSelesaiBulan}/${sk.periodeSelesaiTahun}`
+                    : " (sampai dicabut)"}
+                  {sk.kelasJabatanSelamaHukuman !== null && (
+                    <> - kelas jabatan turun ke <strong>{sk.kelasJabatanSelamaHukuman}</strong></>
+                  )}
                 </p>
                 {sk.keterangan && <p className="mt-1 text-xs text-muted">{sk.keterangan}</p>}
               </div>

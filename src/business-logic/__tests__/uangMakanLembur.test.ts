@@ -6,6 +6,8 @@ import {
   TARIF_UANG_LEMBUR_PER_JAM,
   TARIF_UANG_MAKAN_LEMBUR_PER_HARI,
   golonganRomawi,
+  golonganPppkKeKurungSbm,
+  kurungTarifSbm,
 } from "../tarifSbm";
 
 const dasar = { pegawaiId: "p1", periodeBulan: 7, periodeTahun: 2026 };
@@ -50,6 +52,59 @@ describe("tarifSbm - angka resmi SBM 2026", () => {
   it("golonganRomawi tidak salah baca IV sebagai I, atau III sebagai II", () => {
     expect(golonganRomawi("IV/b")).not.toBe("I");
     expect(golonganRomawi("III/a")).not.toBe("II");
+  });
+
+  it("golonganRomawi MENOLAK angka romawi telanjang - itu format PPPK, bukan PNS", () => {
+    // Ini perbaikan bug, bukan pengetatan kosmetik: sebelumnya "III" milik
+    // PPPK dibaca sebagai PNS Gol III dan dibayar Rp 37.000/hari +
+    // Rp 30.000/jam tanpa peringatan apa pun. Ada 5 pegawai nyata yang kena
+    // (semuanya PENGELOLA UMUM OPERASIONAL, kelas jabatan 4, TMT 2025).
+    expect(golonganRomawi("III")).toBeNull();
+    expect(golonganRomawi("I")).toBeNull();
+    expect(golonganRomawi("IX")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Padanan golongan PPPK -> kurung tarif SBM
+// ---------------------------------------------------------------------------
+describe("tarifSbm - golongan PPPK", () => {
+  it("memetakan jenjang PPPK ke kurung tarif SBM sesuai kesetaraan pendidikan", () => {
+    expect(golonganPppkKeKurungSbm("V")).toBe("II"); // SMA
+    expect(golonganPppkKeKurungSbm("VII")).toBe("II"); // D3
+    expect(golonganPppkKeKurungSbm("IX")).toBe("III"); // S1 / Ahli Pertama
+    expect(golonganPppkKeKurungSbm("X")).toBe("III"); // S2
+    expect(golonganPppkKeKurungSbm("XI")).toBe("IV");
+  });
+
+  it("jenjang PPPK bawah (I-IV) TIDAK sama artinya dengan golongan PNS I-IV", () => {
+    // Penjaga paling penting di file ini. PPPK gol III itu jenjang terbawah
+    // (setara SD/SMP), sementara PNS Gol III setara S1 - beda Rp 2.000/hari
+    // dan Rp 6.000/jam. Menyamakan keduanya = salah bayar yang tidak
+    // menimbulkan error apa pun.
+    expect(golonganPppkKeKurungSbm("III")).toBe("I");
+    expect(golonganPppkKeKurungSbm("III")).not.toBe("III");
+    expect(kurungTarifSbm("III")).toBe("I");
+    expect(kurungTarifSbm("III/d")).toBe("III");
+  });
+
+  it("golonganPppkKeKurungSbm tidak mengklaim format PNS", () => {
+    expect(golonganPppkKeKurungSbm("III/d")).toBeNull();
+    expect(golonganPppkKeKurungSbm("IV/a")).toBeNull();
+  });
+
+  it("di luar skala I-XVII tetap null - tidak ditebak", () => {
+    expect(golonganPppkKeKurungSbm("XVIII")).toBeNull();
+    expect(golonganPppkKeKurungSbm("XX")).toBeNull();
+    expect(kurungTarifSbm("Penata Tk.I")).toBeNull();
+    expect(kurungTarifSbm(null)).toBeNull();
+  });
+
+  it("kurungTarifSbm menangani PNS dan PPPK lewat satu pintu", () => {
+    expect(kurungTarifSbm("IV/a")).toBe("IV");
+    expect(kurungTarifSbm("II/c")).toBe("II");
+    expect(kurungTarifSbm("IX")).toBe("III");
+    expect(kurungTarifSbm("V")).toBe("II");
   });
 });
 
@@ -121,6 +176,49 @@ describe("hitungUangMakan - hanya WFO & WFH/WFA yang berhak", () => {
       tarifHarianUangMakan: TARIF_UANG_MAKAN_PER_HARI.III,
     });
     expect(hasil.totalUangMakan).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pembulatan ke bawah - aturan user 2026-08-06
+// ---------------------------------------------------------------------------
+describe("hitungUangLembur - sisa menit dipangkas ke jam penuh", () => {
+  const lembur = (over: Partial<Parameters<typeof hitungUangLembur>[0]> = {}) =>
+    hitungUangLembur({ ...dasar, totalJamLembur: 0, tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM.III, ...over });
+
+  it("1 jam 59 menit dibayar 1 jam, bukan 2 jam", () => {
+    // 1 jam 59 menit = 1 + 59/60 = 1,9833... jam
+    const hasil = lembur({ totalJamLembur: 1 + 59 / 60 });
+    expect(hasil.jamLemburDihitung).toBe(1);
+    expect(hasil.uangLembur).toBe(1 * 30_000);
+  });
+
+  it("jam yang sudah bulat tidak berubah", () => {
+    expect(lembur({ totalJamLembur: 7 }).jamLemburDihitung).toBe(7);
+  });
+
+  it("kurang dari 1 jam tidak dibayar sama sekali", () => {
+    const hasil = lembur({ totalJamLembur: 0.75 });
+    expect(hasil.jamLemburDihitung).toBe(0);
+    expect(hasil.uangLembur).toBe(0);
+  });
+
+  it("hari kerja & hari libur dipangkas MASING-MASING, bukan setelah dijumlah", () => {
+    // 1,5 + 1,5 = 3 kalau dijumlah dulu baru dibulatkan (3 jam), tapi
+    // masing-masing floor -> 1 + 1 = 2 jam. Yang benar yang kedua: sisa menit
+    // di hari kerja tidak boleh menambal sisa menit di hari libur, tarifnya
+    // pun beda.
+    const hasil = lembur({ totalJamLembur: 1.5, totalJamLemburHariLibur: 1.5 });
+    expect(hasil.jamLemburHariKerja).toBe(1);
+    expect(hasil.jamLemburHariLibur).toBe(1);
+    expect(hasil.jamLemburDihitung).toBe(2);
+  });
+
+  it("sisa menit tidak ikut menghabiskan kuota batas maksimal", () => {
+    // 40,9 jam dipangkas jadi 40 -> pas di batas, tidak ada yang hangus
+    // gara-gara desimal.
+    const hasil = lembur({ totalJamLembur: 40.9, batasMaksimalJamLembur: 40 });
+    expect(hasil.jamLemburDihitung).toBe(40);
   });
 });
 

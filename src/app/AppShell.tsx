@@ -4,24 +4,25 @@ import { type ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AccountMenu } from "./AccountMenu";
-import { LABEL_ROLE } from "../auth/roleLabel";
+import { PanelKabar } from "./PanelKabar";
+import { labelRole } from "../auth/roleLabel";
 import type { Role } from "@prisma/client";
 
 const MENU_APPROVER = [
   {
     href: "/tukin",
-    label: "Dashboard Tukin",
-    icon: <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />,
+    label: "Tukin",
+    icon: <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></>,
   },
   {
     href: "/uang-makan",
     label: "Uang Makan",
-    icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    icon: <><path d="M5 2v6a2 2 0 0 0 4 0V2" /><path d="M7 8v14" /><path d="M17 2c1.7 1.8 2 4 2 6s-.3 3.5-2 3.5V22" /></>,
   },
   {
     href: "/uang-lembur",
     label: "Uang Lembur",
-    icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    icon: <><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></>,
   },
 ];
 
@@ -29,62 +30,66 @@ const MENU_APPROVER = [
 // canViewDataSendiri yang sekarang berlaku semua role) + menu khusus scope
 // unit kerjanya. Approval jenjang 1 Tukin/Uang Makan/Uang Lembur TETAP lewat
 // 3 dashboard approver yang sama (MENU_APPROVER), bukan halaman terpisah.
+// KASUBAG_TU: urutannya juga mengikuti alur kerja bulanan (pola sama dengan
+// MENU_PPABP). Dua kelompok dilipat: "Pegawai" (roster & perbaikan data, cuma
+// dibuka kalau ada yang salah) dan "Dokumen SK" (SK KGB & hukuman disiplin,
+// beberapa kali setahun). Yang dilipat SELALU yang jarang - langkah bulanan
+// tetap datar supaya tidak menambah klik ke pekerjaan rutin.
 const MENU_KASUBAG = [
   {
     href: "/kasubag",
     label: "Dashboard Unit",
     icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
   },
+
+  // --- siklus bulanan, berurutan ---
   {
-    href: "/kasubag/pegawai",
-    label: "Pegawai Unit",
-    icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
-  },
-  {
-    href: "/pegawai",
-    label: "Data Pegawai",
-    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M12 20h9" /></>,
+    href: "/tukin/presensi",
+    label: "Presensi",
+    pisah: true,
+    icon: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
   },
   {
     href: "/kasubag/kalkulasi",
     label: "Kalkulasi",
     icon: <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />,
   },
-  { href: "/tukin", label: "Dashboard Tukin", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
-  {
-    href: "/tukin/presensi",
-    label: "Presensi",
-    icon: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
-  },
-  { href: "/uang-makan", label: "Uang Makan", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
-  { href: "/uang-lembur", label: "Uang Lembur", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
+  { href: "/tukin", label: "Tukin", icon: <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></> },
+  { href: "/uang-makan", label: "Uang Makan", icon: <><path d="M5 2v6a2 2 0 0 0 4 0V2" /><path d="M7 8v14" /><path d="M17 2c1.7 1.8 2 4 2 6s-.3 3.5-2 3.5V22" /></> },
+  { href: "/uang-lembur", label: "Uang Lembur", icon: <><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></> },
   {
     href: "/kasubag/banding",
     label: "Verifikasi Banding",
-    icon: <><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>,
+    icon: <><path d="M12 3v18" /><path d="M5 7h14" /><path d="M7 7 4 14h6L7 7Z" /><path d="M17 7l-3 7h6l-3-7Z" /></>,
+  },
+
+  // --- dilipat: jarang dibuka ---
+  {
+    label: "Pegawai",
+    pisah: true,
+    icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
+    anak: [
+      { href: "/kasubag/pegawai", label: "Pegawai Unit" },
+      { href: "/pegawai", label: "Data Pegawai" },
+    ],
   },
   {
-    href: "/kasubag/sk-kgb",
-    label: "SK KGB",
-    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></>,
+    label: "Dokumen SK",
+    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 15h6" /></>,
+    anak: [
+      { href: "/kasubag/sk-kgb", label: "SK KGB" },
+      { href: "/kasubag/sk-hukuman-disiplin", label: "SK Hukuman Disiplin" },
+    ],
   },
-  {
-    href: "/kasubag/sk-hukuman-disiplin",
-    label: "SK Hukuman Disiplin",
-    icon: <><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><path d="M12 9v4M12 17h.01" /></>,
-  },
+
   {
     href: "/saya",
     label: "Data Saya",
-    icon: (
-      <>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      </>
-    ),
+    pisah: true,
+    icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
   },
 ];
+
 
 // OSDMA: privilege Pegawai (link "Data Saya" tetap ditampilkan) + approval
 // final lintas satuan kerja (Banding jenjang 2, SK KGB, SK Hukuman
@@ -134,25 +139,47 @@ const MENU_OSDMA = [
 // lintas unit + telaah/approve jenjang final (via 3 dashboard approver yang
 // sudah ada, lintas satker buat PPABP) + rekonsiliasi + export ADK +
 // anggaran realisasi + usulan perubahan role.
+// PPABP: URUTANNYA MENGIKUTI ALUR KERJA BULANAN, bukan abjad atau urutan
+// dibangunnya fitur. Dari atas ke bawah persis langkah yang dikerjakan tiap
+// periode - Presensi -> Kalkulasi -> tiga Approval -> Rekonsiliasi -> Export
+// ADK. Orang tidak perlu menghafal langkah berikutnya, tinggal turun satu
+// baris. Di bawahnya data pokok (dibuka kalau ada yang salah, bukan rutin),
+// lalu sisanya.
+//
+// `pisah: true` = garis pemisah DI ATAS item itu. Sengaja tanpa judul
+// kelompok, mengikuti acuan desain yang dipilih user - grup tetap kebaca dari
+// jeda, dan sidebar tidak bertambah tinggi oleh label.
 const MENU_PPABP = [
   {
     href: "/ppabp",
     label: "Dashboard Lintas Unit",
     icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
   },
-  { href: "/tukin", label: "Dashboard Tukin", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
+
+  // --- siklus bulanan, berurutan ---
   {
     href: "/tukin/presensi",
     label: "Presensi",
+    pisah: true,
     icon: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
   },
-  { href: "/uang-makan", label: "Uang Makan", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
-  { href: "/uang-lembur", label: "Uang Lembur", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></> },
+  // Halamannya di bawah /kasubag karena dibangun untuk Kasubag TU duluan, TAPI
+  // PPABP juga berwenang kalkulasi massal (canAjukanKalkulasiTukinMassalUnit).
+  // Bedanya: satuan kerjanya dipilih lewat filter, tidak dipaksa satu unit.
   {
-    href: "/pegawai",
-    label: "Data Pegawai",
-    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M12 20h9" /></>,
+    href: "/kasubag/kalkulasi",
+    label: "Kalkulasi",
+    icon: <><rect x="4" y="2" width="16" height="20" rx="2" /><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h6" /></>,
   },
+  // Ketiganya disandingkan karena memang sekelompok. Labelnya cukup nama
+  // domainnya - kata "Approval"/"Dashboard" tidak menambah keterangan apa pun
+  // (semua halaman di sini dashboard, dan approval cuma salah satu yang bisa
+  // dilakukan di situ). Ikonnya dibedakan per domain: dulu ketiganya ikon JAM
+  // yang sama persis, jadi ikon tidak membedakan apa pun - dan jam keliru
+  // untuk uang makan & tukin, sekaligus rancu dengan halaman Presensi.
+  { href: "/tukin", label: "Tukin", icon: <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></> },
+  { href: "/uang-makan", label: "Uang Makan", icon: <><path d="M5 2v6a2 2 0 0 0 4 0V2" /><path d="M7 8v14" /><path d="M17 2c1.7 1.8 2 4 2 6s-.3 3.5-2 3.5V22" /></> },
+  { href: "/uang-lembur", label: "Uang Lembur", icon: <><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></> },
   {
     href: "/ppabp/rekonsiliasi",
     label: "Rekonsiliasi",
@@ -163,38 +190,38 @@ const MENU_PPABP = [
     label: "Export ADK",
     icon: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></>,
   },
+
+  // --- data pokok: dilipat, karena dibuka saat ada yang perlu dibetulkan,
+  //     bukan tiap bulan. Yang HARIAN sengaja TIDAK dilipat - menyembunyikan
+  //     langkah yang dikerjakan tiap periode cuma menambah satu klik ke semua
+  //     pekerjaan rutin. ---
   {
-    href: "/ppabp/anggaran",
-    label: "Anggaran & Realisasi",
-    icon: <><path d="M3 3v18h18" /><path d="M22 7 13.5 15.5 8.5 10.5 2 17" /></>,
+    label: "Data Pokok",
+    pisah: true,
+    icon: <><path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z" /><path d="M4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7" /><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></>,
+    anak: [
+      { href: "/pegawai", label: "Data Pegawai" },
+      { href: "/ppabp/rekening", label: "Rekening Pegawai" },
+      { href: "/ppabp/basis-data-gaji", label: "Basis Data Gaji" },
+      { href: "/ppabp/gaji-induk", label: "Riwayat Gaji Pegawai" },
+      { href: "/ppabp/anggaran", label: "Anggaran & Realisasi" },
+    ],
   },
-  {
-    href: "/ppabp/rekening",
-    label: "Rekening Pegawai",
-    icon: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><circle cx="17" cy="15" r="1.5" /></>,
-  },
-  {
-    href: "/ppabp/gaji-induk",
-    label: "Riwayat Gaji Pegawai",
-    icon: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>,
-  },
+
+  // --- sisanya ---
   {
     href: "/ppabp/usulan-role",
     label: "Usulan Perubahan Role",
+    pisah: true,
     icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
   },
   {
     href: "/saya",
     label: "Data Saya",
-    icon: (
-      <>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      </>
-    ),
+    icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
   },
 ];
+
 
 // ADMIN: menu KHUSUS 3 fitur admin-only (kelola assignment role, eksekusi
 // usulan role, konfigurasi & kesehatan sistem) + Data Saya. TIDAK
@@ -282,21 +309,38 @@ const MENU_PEGAWAI = [
 ];
 
 function GajihubLogo() {
+  // Mark PUTIH di atas tile beraksen. Tile-nya SEKARANG biru #3F72AF, bukan
+  // navy: sidebar sudah navy, jadi tile navy di atas navy tidak terlihat sama
+  // sekali. Aksen kedua palet dipakai persis untuk keperluan seperti ini -
+  // memisahkan blok merek dari latarnya tanpa keluar dari palet.
   return (
-    <div className="grid size-11 flex-none place-items-center rounded-xl bg-[#10203c] shadow-[0_4px_14px_rgba(0,0,0,0.25)]">
+    <div className="grid size-11 flex-none place-items-center rounded-xl bg-biru shadow-[0_6px_16px_rgba(0,0,0,0.28)]">
       <svg viewBox="0 0 64 64" fill="none" className="size-[30px]">
-        <path
-          d="M45 16 A 21 21 0 1 0 45 48"
-          stroke="#00B3A4"
-          strokeWidth="10.5"
-          strokeLinecap="round"
-        />
-        <path d="M31 31 L45 31" stroke="#00B3A4" strokeWidth="10.5" strokeLinecap="round" />
-        <circle cx="45.5" cy="45.5" r="8" fill="#D4A017" />
+        <path d="M45 16 A 21 21 0 1 0 45 48" stroke="#ffffff" strokeWidth="10.5" strokeLinecap="round" />
+        <path d="M31 31 L45 31" stroke="#ffffff" strokeWidth="10.5" strokeLinecap="round" />
+        <circle cx="45.5" cy="45.5" r="8" fill="#13416B" />
       </svg>
     </div>
   );
 }
+
+/**
+ * Satu baris sidebar. `anak` = grup yang bisa dilipat; kalau ada, `href`
+ * TIDAK dipakai (grupnya sendiri bukan halaman).
+ *
+ * Dilipat pakai <details> BAWAAN HTML, bukan state React: buka-tutupnya
+ * ditangani browser, jadi tetap jalan tanpa JavaScript - konsisten dengan
+ * janji yang dipegang filter GET, form approval, dan BadgePejabatEselon.
+ * Grup yang memuat halaman yang sedang dibuka dirender `open` dari server,
+ * jadi tidak pernah ada keadaan "halaman aktif tersembunyi".
+ */
+type ItemMenu = {
+  href?: string;
+  label: string;
+  icon: React.ReactNode;
+  pisah?: boolean;
+  anak?: { href: string; label: string }[];
+};
 
 function initials(nama: string) {
   return nama
@@ -314,7 +358,7 @@ export function AppShell({
   // rolesTersedia = role utama + role tambahan akun ini (lihat
   // src/auth/roleAktif.ts). Panjang 1 = akun single-role seperti sebelumnya,
   // menu "Ganti role" tidak ditampilkan.
-  account: { nama: string; jabatan: string; role: Role; rolesTersedia: Role[] } | null;
+  account: { nama: string; jabatan: string; role: Role; rolesTersedia: Role[]; satuanKerja: string | null } | null;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -376,7 +420,9 @@ export function AppShell({
             Gaji<span className="font-semibold text-muted">hub</span>
           </span>
         </div>
-        <span className="chip chip-navy">{LABEL_ROLE[account.role]}</span>
+        <span className="chip chip-navy max-w-[45vw] truncate" title={labelRole(account.role, account.satuanKerja)}>
+          {labelRole(account.role, account.satuanKerja)}
+        </span>
       </div>
 
       {open && (
@@ -387,50 +433,116 @@ export function AppShell({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[264px] -translate-x-full flex-col border-r border-[#0e1830] bg-gradient-to-b from-navy to-navy-deep text-[#cdd6e6] transition-transform duration-200 print:hidden md:sticky md:top-0 md:h-screen md:translate-x-0 ${
+        data-sidebar
+        className={`fixed inset-y-0 left-0 z-50 flex w-[264px] -translate-x-full flex-col border-r border-nav-line bg-nav-bg text-nav-text transition-transform duration-200 print:hidden md:sticky md:top-0 md:h-screen md:translate-x-0 ${
           open ? "translate-x-0" : ""
         }`}
       >
-          <div className="flex items-center gap-3 border-b border-white/10 px-[22px] py-[18px]">
+          <div className="flex items-center gap-3 px-[22px] pb-3 pt-[22px]">
             <GajihubLogo />
             <div>
-              <h1 className="text-[18px] font-extrabold leading-tight tracking-tight text-white">
-                Gaji<span className="font-semibold text-[#9fb0cf]">hub</span>
+              <h1 className="text-[19px] font-extrabold leading-tight tracking-tight text-white">
+                Gaji<span className="font-semibold text-nav-text">hub</span>
               </h1>
-              <span className="text-[11px] font-semibold text-[#8ea0c0]">oleh Kemnaker</span>
+              <span className="text-[11px] font-semibold text-nav-text">oleh Kemnaker</span>
             </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto p-3">
-            <div className="px-3 pb-1.5 pt-3 text-[10px] font-bold uppercase tracking-[1.4px] text-[#6f81a6]">
-              Menu
-            </div>
-            {menu.map((item) => {
+          <nav className="flex-1 overflow-y-auto px-3 pb-3 pt-2">
+            {(menu as ItemMenu[]).map((item) => {
+              const pisah = item.pisah === true && <div className="my-2 border-t border-nav-line" />;
+
+              // --- Grup yang bisa dilipat ---
+              if (item.anak) {
+                // Dirender terbuka kalau halaman yang sedang dibuka ada di
+                // dalamnya - kalau tidak, item aktif jadi tak terlihat dan
+                // orang mengira menunya hilang.
+                const adaYangAktif = item.anak.some((a) => pathname === a.href);
+                return (
+                  <div key={item.label}>
+                    {pisah}
+                    <details open={adaYangAktif} className="group mb-1">
+                      <summary
+                        className={`flex cursor-pointer list-none items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13.5px] font-bold transition [&::-webkit-details-marker]:hidden ${
+                          adaYangAktif ? "text-white" : "text-nav-text hover:bg-nav-hover hover:text-white"
+                        }`}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="size-[19px] flex-none"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        >
+                          {item.icon}
+                        </svg>
+                        <span className="flex-1">{item.label}</span>
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="size-4 flex-none transition-transform group-open:rotate-180"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                        >
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </summary>
+
+                      {/* Garis vertikal di kiri: penanda bahwa yang di dalam
+                          adalah turunan, tanpa perlu indentasi berlebihan. */}
+                      <div className="ml-[26px] mt-0.5 border-l border-nav-line pl-2">
+                        {item.anak.map((a) => {
+                          const aktif = pathname === a.href;
+                          return (
+                            <Link
+                              key={a.href}
+                              href={a.href}
+                              onClick={() => setOpen(false)}
+                              className={`mb-0.5 block rounded-lg px-3 py-2 text-[12.5px] font-semibold transition ${
+                                aktif
+                                  ? "bg-nav-active text-nav-active-text shadow-[0_6px_14px_rgba(0,0,0,0.18)]"
+                                  : "text-nav-text hover:bg-nav-hover hover:text-white"
+                              }`}
+                            >
+                              {a.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  </div>
+                );
+              }
+
+              // --- Item biasa ---
               const active = pathname === item.href;
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={`relative mb-0.5 flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13.5px] font-semibold transition ${
-                    active ? "bg-navy-soft text-white" : "text-[#c0cae0] hover:bg-white/[.06] hover:text-white"
-                  }`}
-                >
-                  {active && (
-                    <span className="absolute -left-3 top-1/2 h-[22px] w-1 -translate-y-1/2 rounded-r bg-gold" />
-                  )}
-                  <svg
-                    viewBox="0 0 24 24"
-                    className={`size-[18px] flex-none ${active ? "text-[#3fd0b3] opacity-100" : "opacity-80"}`}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
+                <div key={item.href}>
+                  {pisah}
+                  <Link
+                    href={item.href!}
+                    onClick={() => setOpen(false)}
+                    className={`mb-1 flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13.5px] font-bold transition ${
+                      active
+                        ? "bg-nav-active text-nav-active-text shadow-[0_8px_18px_rgba(0,0,0,0.22)]"
+                        : "text-nav-text hover:bg-nav-hover hover:text-white"
+                    }`}
                   >
-                    {item.icon}
-                  </svg>
-                  {item.label}
-                </Link>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="size-[19px] flex-none"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    >
+                      {item.icon}
+                    </svg>
+                    {item.label}
+                  </Link>
+                </div>
               );
             })}
           </nav>
@@ -438,11 +550,12 @@ export function AppShell({
           {/* Tombol akun = menu (ganti role + logout), lihat AccountMenu.tsx.
               Logout SENGAJA tidak lagi berdiri sendiri di sini biar kaki
               sidebar tetap ringkas. */}
-          <div className="border-t border-white/10 p-3.5">
+          <div className="border-t border-nav-line p-3.5">
             <AccountMenu
               nama={account.nama}
               jabatan={account.jabatan}
               role={account.role}
+              satuanKerja={account.satuanKerja}
               rolesTersedia={account.rolesTersedia}
               initials={initials(account.nama)}
             />
@@ -450,6 +563,12 @@ export function AppShell({
         </aside>
 
       <div className="min-w-0">{children}</div>
+
+      {/* Panel kanan Notifikasi & Aktivitas - tombolnya mengambang di kanan
+          atas, panelnya tertutup sampai diklik. PEGAWAI tidak dapat (ditolak
+          di sisi server), jadi tombolnya tetap muncul tapi panelnya kosong -
+          lihat catatan cakupan di panelKabar.ts. */}
+      <PanelKabar tampilkan={account.role !== "PEGAWAI"} />
     </div>
   );
 }

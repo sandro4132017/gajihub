@@ -1,0 +1,13 @@
+-- Jam lembur PER HARI di presensi_harian.
+--
+-- Angkanya sebenarnya SUDAH dihitung sejak awal oleh rekapDariLaporanPdf()
+-- (tiap elemen `hari[]` punya `jamLembur`), tapi selama ini dibuang - yang
+-- disimpan cuma total sebulan di rekap_presensi_periode.
+--
+-- Dibutuhkan karena format ADK Uang Lembur yang dipakai Web Gaji ternyata
+-- PER HARI: satu baris = NIP + tanggal + jumlah jam. Total sebulan tidak bisa
+-- dipecah balik jadi tanggal-tanggal tanpa mengarang datanya.
+--
+-- Non-destruktif: satu ADD COLUMN dengan DEFAULT 0. Baris lama dapat 0, dan
+-- akan terisi benar begitu periodenya disinkronkan ulang.
+ALTER TABLE "presensi_harian" ADD COLUMN IF NOT EXISTS "jam_lembur" DOUBLE PRECISION NOT NULL DEFAULT 0;

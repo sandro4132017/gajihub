@@ -42,16 +42,38 @@
 // e-Presensi tidak konsisten ("Ir ANNA YULIANA M.Si." vs "Anna Yuliana").
 //
 // ---------------------------------------------------------------------------
+// JENIS CUTI - sumber potongan Pasal 14, DAN "bulan ke berapa"-nya
+// ---------------------------------------------------------------------------
+//   presensi.id_presensi -> presensi_cuti.id_presensi -> cuti.nama_cuti
+//
+// Diambil lewat DUA query terpisah lalu dipasangkan di memori - JANGAN
+// diubah jadi JOIN/LATERAL, lihat alasannya di ambilBarisPresensi().
+//
+// Tabel `cuti` (16 baris) memecah jenisnya SAMPAI KE TINGKAT BULAN - "Cuti
+// Besar I/II/III", "Cuti Sakit Bulan I/II/III", "Cuti Sakit Bulan Lebih Dari
+// 3 Bulan" - dan kolom `cuti.nilai_persen` di sana cocok PERSIS dengan tabel
+// Pasal 14 yang sudah ada di tukin.ts (50/75/90 untuk cuti besar, 0/50/75
+// untuk cuti sakit, 1%/hari untuk gugur kandungan di atas 1 bulan).
+//
+// Ini membatalkan asumsi lama bahwa "bulan ke berapa" mustahil diturunkan
+// dari data satu bulan dan harus diketik manual. Lihat bulanCutiDariLabel()
+// di business-logic/jenisCuti.ts.
+//
+// JANGAN ambil cuti dari SIAP. Tabel `CUTI` di sana memang ada, tapi sudah
+// ditinggalkan: puncaknya 2019 (304 baris), 2025 cuma 26 baris, dan NOL baris
+// yang beririsan dengan Juli 2026. Pengajuan cuti sudah pindah ke e-Presensi.
+//
+// ---------------------------------------------------------------------------
 // TODO(confirm) - PERBEDAAN ANGKA YANG HARUS DISADARI
 // ---------------------------------------------------------------------------
-// 1. e-Presensi memberi TOLERANSI KETERLAMBATAN 60 MENIT (kolom
-//    sistem_kerja.toleransi untuk WFO/WFH/WFA = 60), Gajihub memakai 0 karena
-//    Pasal 13 ayat (3) memotong "setiap 1 (satu) menit" tanpa menyebut
-//    toleransi. AKIBATNYA potongan Gajihub LEBIH BESAR dari yang tertera di
-//    e-Presensi. Ini memang yang diinginkan (PROGRESS.md butir 5), tapi
-//    sekarang angkanya punya penjelasan pasti. Kalau toleransi itu ternyata
-//    punya dasar resmi, ubah `toleransiTerlambatMenit` di
-//    JADWAL_KERJA_DEFAULT - JANGAN dipatch di sini.
+// 1. TOLERANSI KETERLAMBATAN 60 MENIT (kolom sistem_kerja.toleransi untuk
+//    WFO/WFH/WFA = 60) SEKARANG DIIKUTI Gajihub - lihat
+//    TOLERANSI_TERLAMBAT_MENIT di presensiPdfKeRekap.ts untuk bukti angkanya
+//    (diadu ke rincian tukin manual Rokeu Juli 2026: 44 dari 48 pegawai cocok
+//    sampai ke satuan menit). Sebelumnya Gajihub memakai 0 dan memotong 5,2x
+//    lebih besar dari perhitungan manual.
+//    Toleransinya diterapkan di JADWAL_KERJA_DEFAULT, BUKAN di sini - supaya
+//    jalur tarikan e-Presensi dan jalur upload PDF tidak bisa berbeda.
 // 2. Kolom `potongan`, `keterangan_potongan`, dan tabel `potongan_tukin` di
 //    e-Presensi DIABAIKAN sebagai nominal - Gajihub menghitung sendiri sesuai
 //    Permenaker 15/2024. Dari kolom itu yang diambil HANYA penanda "lupa
@@ -59,6 +81,12 @@
 // 3. Database e-Presensi punya baris bertanggal rusak (mis. "252026-01-22",
 //    "0003-02-28"). Filter periode di query membuangnya, tapi jangan
 //    berasumsi kolom tanggalnya selalu waras.
+// 4. NAMA JENIS CUTI BISA BERTENTANGAN DENGAN ISINYA. Ada pegawai dengan 34
+//    hari cuti berlabel "Cuti Sakit <1 bulan" di Juli 2026 - jelas bukan
+//    kurang dari sebulan. Labelnya tetap dipakai apa adanya (menebak ulang
+//    dari jumlah hari berarti menimpa keputusan pihak yang berwenang), TAPI
+//    kasus seperti ini menghasilkan potongan yang terlalu kecil. Kalau nanti
+//    ada pemeriksaan, ini salah satu tempat yang perlu diadu ke SK cutinya.
 // ============================================================================
 
 import pg from "pg";
@@ -101,6 +129,10 @@ interface BarisEpresensi {
   jam_masuk: string | null;
   jam_keluar: string | null;
   status: string | null;
+  /** Nama jenis cuti dari tabel `cuti`, mis. "Cuti Besar II". null = bukan cuti. */
+  jenis_cuti: string | null;
+  /** Menit kerja hari itu menurut e-Presensi. 0 = tap pulang hilang. */
+  menit_kerja: number | null;
   keterangan_potongan: string | null;
 }
 
@@ -113,17 +145,24 @@ interface BarisEpresensi {
  * BATAS ATAS hari yang dibayar (Math.min) - artinya uang makan SELURUH
  * pegawai jadi Rp 0 tanpa ada error apa pun. Ketemu waktu verifikasi.
  *
- * TODO(confirm): LIBUR NASIONAL TIDAK DIKENALI - belum ada kalender libur di
- * sistem ini (tabel `libur` di e-Presensi ada tapi KOSONG). Jadi angka ini
- * bisa lebih besar dari hari kerja sebenarnya pada bulan bertanggal merah,
- * dan batas uang makannya ikut lebih longgar. Keterbatasan yang sama dengan
- * jalur PDF, cuma di sini sumbernya kalender bukan file.
+ * Tanggal merah & cuti bersama DIKURANGKAN lewat parameter `hariLibur` (ISO
+ * "YYYY-MM-DD"), sumbernya tabel `HariLiburNasional`. Tanpa itu angka ini
+ * lebih besar dari hari kerja sebenarnya pada bulan bertanggal merah, dan
+ * batas uang makannya ikut lebih longgar. Daftar kosong = perilaku lama
+ * (Senin-Jumat saja).
  */
-export function hariKerjaKalender(bulan: number, tahun: number): number {
+export function hariKerjaKalender(
+  bulan: number,
+  tahun: number,
+  hariLibur: ReadonlySet<string> = new Set()
+): number {
   let n = 0;
   for (let d = 1; d <= new Date(Date.UTC(tahun, bulan, 0)).getUTCDate(); d++) {
-    const hari = new Date(Date.UTC(tahun, bulan - 1, d)).getUTCDay();
-    if (hari >= 1 && hari <= 5) n++;
+    const tanggal = new Date(Date.UTC(tahun, bulan - 1, d));
+    const hari = tanggal.getUTCDay();
+    if (hari < 1 || hari > 5) continue;
+    if (hariLibur.has(tanggal.toISOString().slice(0, 10))) continue;
+    n++;
   }
   return n;
 }
@@ -155,13 +194,15 @@ async function ambilBarisPresensi(bulan: number, tahun: number): Promise<BarisEp
   try {
     // tanggal di-cast ke teks di SQL supaya tidak bergeser hari oleh zona
     // waktu klien - pola yang sama dengan jalur PDF (tanggal apa adanya).
-    const { rows } = await client.query<BarisEpresensi>(
-      `SELECT p.id_pegawai,
+    const { rows } = await client.query<BarisEpresensi & { id_presensi: string }>(
+      `SELECT p.id_presensi,
+              p.id_pegawai,
               p.nama_pegawai,
               to_char(p.tanggal, 'YYYY-MM-DD') AS tanggal_iso,
               p.jam_masuk,
               p.jam_keluar,
               sk.nama_sistem_kerja AS status,
+              p.menit_kerja,
               p.keterangan_potongan
          FROM presensi p
          LEFT JOIN sistem_kerja sk ON sk.id_sistem_kerja = p.id_sistem_kerja
@@ -170,7 +211,48 @@ async function ambilBarisPresensi(bulan: number, tahun: number): Promise<BarisEp
         ORDER BY p.id_pegawai, p.tanggal`,
       [tahun, bulan]
     );
-    return rows;
+
+    // ------------------------------------------------------------------
+    // JENIS CUTI - DUA QUERY TERPISAH, BUKAN JOIN KE QUERY DI ATAS
+    // ------------------------------------------------------------------
+    // Ini bukan pilihan gaya. `presensi_cuti` TIDAK punya index atas
+    // `id_presensi` (satu-satunya index di tabel itu PK `id_presensi_cuti`),
+    // jadi apa pun yang mencari per-baris ke sana memicu Seq Scan penuh atas
+    // ±169.000 baris SETIAP KALI.
+    //
+    // Versi pertama modul ini memakai LEFT JOIN LATERAL ... LIMIT 1. Rencana
+    // eksekusinya: Seq Scan presensi_cuti dijalankan sekali per baris
+    // presensi - EXPLAIN memberi cost 212.999.001 untuk satu periode, lawan
+    // 120.006 untuk bentuk di bawah (±1.775x). Terbukti di lapangan: tarikan
+    // Juli 2026 berjalan 19 menit tanpa selesai, dan CPU proses cuma terpakai
+    // 3 detik - semuanya menunggu database. Sinkronisasi yang tadinya
+    // beberapa menit jadi tidak selesai sama sekali.
+    //
+    // MENAMBAH INDEX BUKAN PILIHAN - e-Presensi READ-ONLY tanpa kecuali, dan
+    // itu database produksi yang sedang melayani presensi pegawai.
+    //
+    // Bentuk di bawah membaca seluruh keterkaitan cuti periode itu SEKALI
+    // (hash join, satu lintasan), lalu pemasangannya ke tiap hari dilakukan
+    // di memori. Sifat "satu hari = satu jenis cuti" tetap dijaga: dedup
+    // di JS memakai baris TERBARU (ORDER BY createdAt ASC, yang belakangan
+    // menimpa) - persis perilaku LIMIT 1 yang digantikan.
+    const { rows: barisCuti } = await client.query<{ id_presensi: string; nama_cuti: string }>(
+      `SELECT pc.id_presensi, c.nama_cuti
+         FROM presensi_cuti pc
+         JOIN cuti c ON c.id_cuti = pc.id_cuti
+         JOIN presensi p ON p.id_presensi = pc.id_presensi
+        WHERE p.tanggal >= make_date($1, $2, 1)
+          AND p.tanggal <  (make_date($1, $2, 1) + interval '1 month')
+        ORDER BY pc."createdAt" ASC`,
+      [tahun, bulan]
+    );
+    const petaCuti = new Map<string, string>();
+    for (const b of barisCuti) petaCuti.set(b.id_presensi, b.nama_cuti);
+
+    return rows.map(({ id_presensi, ...b }) => ({
+      ...b,
+      jenis_cuti: petaCuti.get(id_presensi) ?? null,
+    }));
   } finally {
     await client.end();
   }
@@ -202,13 +284,37 @@ async function petaIdKeNip(ids: string[]): Promise<Map<string, string>> {
   return peta;
 }
 
+/**
+ * Status hari + jenis cutinya, dirangkai jadi SATU teks berformat
+ * "Cuti - Cuti Besar II" - format yang SAMA PERSIS dengan yang muncul di
+ * export PDF e-Presensi.
+ *
+ * Sengaja dirangkai di sini, bukan dibawa sebagai field terpisah sampai ke
+ * business logic: `kategoriDariStatus()` sudah tahu cara memecah format itu,
+ * dan sudah teruji. Menambah jalur kedua berarti dua tempat yang bisa
+ * berbeda perilaku, dan bedanya baru ketahuan sebagai selisih rupiah.
+ *
+ * Jenis cuti cuma ditempelkan kalau statusnya memang CUTI. `presensi_cuti`
+ * secara teori bisa memuat baris untuk hari non-cuti; kalau itu terjadi,
+ * menempelkannya akan MENGUBAH kategori hari itu jadi cuti (kategori
+ * ditentukan dari awalan teks) - hari kerja biasa berubah jadi hari cuti.
+ */
+export function gabungStatusCuti(status: string | null, jenisCuti: string | null): string {
+  const s = (status ?? "").trim();
+  if (!jenisCuti || !s.toLowerCase().startsWith("cuti")) return s;
+  const j = jenisCuti.replace(/\s+/g, " ").trim();
+  if (j === "") return s;
+  return `${s} - ${j}`;
+}
+
 /** Baris database -> bentuk yang SAMA dengan hasil parsing PDF, supaya analisisnya dipakai ulang. */
 function keLaporan(
   nip: string,
   nama: string | null,
   bulan: number,
   tahun: number,
-  baris: BarisEpresensi[]
+  baris: BarisEpresensi[],
+  hariLiburNasional: ReadonlySet<string>
 ): LaporanPresensiPdf {
   const barisPdf: BarisPresensiPdf[] = baris.map((b, i) => {
     const [y, m, d] = b.tanggal_iso.split("-").map(Number);
@@ -226,10 +332,13 @@ function keLaporan(
       jamMasukTeks: b.jam_masuk,
       jamKeluarTeks: b.jam_keluar,
       lokasiKeluar: null,
-      statusTeks: (b.status ?? "").trim(),
+      statusTeks: gabungStatusCuti(b.status, b.jenis_cuti),
       // Dipakai HANYA sebagai penanda "lupa presensi", tidak pernah sebagai nominal.
       potonganTeks: b.keterangan_potongan ?? "",
       aktivitas: null,
+      // 0 = tap pulang hilang (jam keluarnya diisi 23:59 oleh e-Presensi).
+      // Penanda Pasal 13 ayat (2) - lihat pemakaiannya di presensiPdfKeRekap.ts.
+      menitKerja: b.menit_kerja,
     };
   });
 
@@ -257,7 +366,8 @@ function keLaporan(
       wfa: null,
       // SATU-SATUNYA yang diisi: dari sinilah jumlahHariKerja diturunkan
       // (kewajiban / 7,5 jam). Lihat hariKerjaKalender() di atas.
-      kewajibanJamKerja: hariKerjaKalender(bulan, tahun) * JADWAL_KERJA_DEFAULT.jamKerjaPerHari,
+      kewajibanJamKerja:
+        hariKerjaKalender(bulan, tahun, hariLiburNasional) * JADWAL_KERJA_DEFAULT.jamKerjaPerHari,
       kekuranganJamKerja: null,
     },
     baris: barisPdf,
@@ -272,7 +382,35 @@ function keLaporan(
  * memutuskan mana yang boleh disimpan (otorisasi per pegawai) dan menyimpannya
  * lewat simpanHasilPresensi().
  */
-export async function tarikPresensiPeriode(bulan: number, tahun: number): Promise<HasilTarikPeriode> {
+export async function tarikPresensiPeriode(
+  bulan: number,
+  tahun: number,
+  /**
+   * Tanggal ISO yang ditandai kendala e-Presensi untuk pegawai ber-NIP itu
+   * (Pasal 10 ayat (2)) - lihat `kendalaEpresensi.ts`.
+   *
+   * Diterima sebagai FUNGSI, bukan daftar jadi: penandanya bisa ber-scope
+   * satuan kerja, dan yang tahu satuan kerja tiap NIP adalah database
+   * Gajihub - yang tidak boleh disentuh adapter ini. Pemanggil yang
+   * menutupnya dalam closure.
+   */
+  tanggalKendalaUntuk: (nip: string) => ReadonlySet<string> = () => new Set(),
+  /**
+   * Jam hasil koreksi petugas absensi untuk pegawai ber-NIP itu. Alasan
+   * bentuknya fungsi sama dengan parameter di atas: sumbernya database
+   * Gajihub, yang tidak boleh disentuh adapter ini.
+   */
+  koreksiJamUntuk: (
+    nip: string
+  ) => ReadonlyMap<string, { jamMasukMenit: number | null; jamKeluarMenit: number | null }> = () => new Map(),
+  /**
+   * Tanggal merah & cuti bersama (ISO -> keterangan), dari tabel
+   * `HariLiburNasional`. Berlaku sama untuk semua pegawai - jadi cukup satu
+   * daftar, tidak perlu fungsi per-NIP seperti dua parameter di atas.
+   */
+  hariLiburNasional: ReadonlyMap<string, string> = new Map()
+): Promise<HasilTarikPeriode> {
+  const kunciLibur = new Set(hariLiburNasional.keys());
   const baris = await ambilBarisPresensi(bulan, tahun);
 
   const perPegawai = new Map<string, BarisEpresensi[]>();
@@ -302,7 +440,17 @@ export async function tarikPresensiPeriode(bulan: number, tahun: number): Promis
       });
       continue;
     }
-    pegawai.push({ nip, nama, hasil: rekapDariLaporanPdf(keLaporan(nip, nama, bulan, tahun, rows), JADWAL_KERJA_DEFAULT) });
+    pegawai.push({
+      nip,
+      nama,
+      hasil: rekapDariLaporanPdf(
+        keLaporan(nip, nama, bulan, tahun, rows, kunciLibur),
+        JADWAL_KERJA_DEFAULT,
+        tanggalKendalaUntuk(nip),
+        koreksiJamUntuk(nip),
+        hariLiburNasional
+      ),
+    });
   }
 
   return {

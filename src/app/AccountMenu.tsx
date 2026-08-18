@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import type { Role } from "@prisma/client";
 import { gantiRoleAction, logoutAction, type GantiRoleFormState } from "./login/actions";
-import { LABEL_ROLE } from "../auth/roleLabel";
+import { labelRole } from "../auth/roleLabel";
 
 const INITIAL_STATE: GantiRoleFormState = {};
 
@@ -24,12 +24,15 @@ export function AccountMenu({
   jabatan,
   role,
   rolesTersedia,
+  satuanKerja,
   initials,
 }: {
   nama: string;
   jabatan: string;
   role: Role;
   rolesTersedia: Role[];
+  /** Unit akun - cuma dipakai melengkapi label Kasubag TU (lihat labelRole). */
+  satuanKerja: string | null;
   initials: string;
 }) {
   const [buka, setBuka] = useState(false);
@@ -58,10 +61,10 @@ export function AccountMenu({
   return (
     <div ref={wrapperRef} className="relative">
       {buka && (
-        <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 overflow-hidden rounded-xl border border-white/10 bg-[#132244] shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
+        <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 overflow-hidden rounded-xl border border-line bg-surface shadow-[0_18px_40px_rgba(19,65,107,0.18)]">
           {multiRole && (
             <>
-              <div className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-[1.2px] text-[#6f81a6]">
+              <div className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-[1.2px] text-muted">
                 Ganti role
               </div>
               {rolesTersedia.map((r) => {
@@ -74,13 +77,13 @@ export function AccountMenu({
                       disabled={aktif || pending}
                       className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[12.5px] font-semibold transition ${
                         aktif
-                          ? "cursor-default text-white"
-                          : "text-[#c0cae0] hover:bg-white/[.07] hover:text-white disabled:opacity-60"
+                          ? "cursor-default font-bold text-navy"
+                          : "text-ink-2 hover:bg-line-2 hover:text-navy disabled:opacity-60"
                       }`}
                     >
-                      {LABEL_ROLE[r]}
+                      <span className="truncate">{labelRole(r, satuanKerja)}</span>
                       {aktif && (
-                        <svg viewBox="0 0 24 24" className="size-4 flex-none text-[#3fd0b3]" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <svg viewBox="0 0 24 24" className="size-4 flex-none text-biru" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                           <path d="M20 6 9 17l-5-5" />
                         </svg>
                       )}
@@ -88,14 +91,14 @@ export function AccountMenu({
                   </form>
                 );
               })}
-              {state.error && <p className="px-3 pb-1.5 text-[11px] font-semibold text-[#ff9d9d]">{state.error}</p>}
-              <div className="my-1 border-t border-white/10" />
+              {state.error && <p className="px-3 pb-1.5 text-[11px] font-semibold text-red">{state.error}</p>}
+              <div className="my-1 border-t border-line" />
             </>
           )}
           <form action={logoutAction}>
             <button
               type="submit"
-              className="w-full px-3 py-2.5 text-left text-[12.5px] font-bold text-[#c0cae0] transition hover:bg-white/[.07] hover:text-white"
+              className="w-full px-3 py-2.5 text-left text-[12.5px] font-bold text-ink-2 transition hover:bg-line-2 hover:text-navy"
             >
               Logout
             </button>
@@ -108,20 +111,20 @@ export function AccountMenu({
         onClick={() => setBuka((v) => !v)}
         aria-expanded={buka}
         aria-haspopup="menu"
-        className="flex w-full items-center gap-2.5 rounded-[10px] bg-white/[.04] p-2.5 text-left transition hover:bg-white/[.08]"
+        className="flex w-full items-center gap-2.5 rounded-xl border border-nav-line bg-nav-hover p-2.5 text-left transition hover:border-nav-text"
       >
-        <div className="grid size-[34px] flex-none place-items-center rounded-[9px] bg-gradient-to-br from-gold to-gold-deep text-[13px] font-extrabold text-white">
+        <div className="grid size-[34px] flex-none place-items-center rounded-[9px] bg-biru text-[13px] font-extrabold text-white">
           {initials}
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[12.5px] font-bold leading-tight text-white">{nama}</div>
-          <div className="truncate text-[10.5px] text-[#8ea0c0]">
-            {LABEL_ROLE[role]} &middot; {jabatan}
+          <div className="truncate text-[10.5px] text-nav-text">
+            {labelRole(role, satuanKerja)} &middot; {jabatan}
           </div>
         </div>
         <svg
           viewBox="0 0 24 24"
-          className={`size-4 flex-none text-[#8ea0c0] transition-transform ${buka ? "rotate-180" : ""}`}
+          className={`size-4 flex-none text-nav-text transition-transform ${buka ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -132,7 +135,7 @@ export function AccountMenu({
       </button>
 
       {multiRole && (
-        <p className="mt-1.5 px-1 text-[10px] leading-snug text-[#6f81a6]">
+        <p className="mt-1.5 px-1 text-[10px] leading-snug text-nav-text">
           Akun ini punya {rolesTersedia.length} role - klik nama di atas buat ganti sudut pandang.
         </p>
       )}

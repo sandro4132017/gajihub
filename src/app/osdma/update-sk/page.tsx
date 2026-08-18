@@ -4,6 +4,7 @@ import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canUpdateSkPegawaiStrukturalFungsional, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { UpdateSkForm } from "./UpdateSkForm";
+import { PencarianDebounce } from "../../PencarianDebounce";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function OsdmaUpdateSkPage({
       <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
         <div className="flex-1 min-w-[240px]">
           <label className="field-label">Cari nama atau NIP</label>
-          <input type="text" name="q" defaultValue={q ?? ""} className="field-input" placeholder="Cari pegawai..." />
+          <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
         </div>
         <button type="submit" className="btn btn-primary">
           Cari

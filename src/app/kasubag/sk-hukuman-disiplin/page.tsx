@@ -52,6 +52,34 @@ export default async function SkHukumanDisiplinUnitPage({
       <h1 className="text-xl font-extrabold tracking-tight text-ink">SK Hukuman Disiplin</h1>
       <p className="mt-1 text-sm text-muted">{satkerEfektif}</p>
 
+      {/* Kombinasi paling berbahaya: SUDAH disetujui (jadi sudah memotong
+          tukin) TAPI nomor SK-nya belum ada. Ditampilkan sebagai daftar, bukan
+          cuma chip per baris, supaya bisa ditelusuri sekali lihat menjelang
+          tutup periode. */}
+      {(() => {
+        const rawan = skList.filter((sk) => sk.skBelumTerbit && sk.status === "DISETUJUI");
+        if (rawan.length === 0) return null;
+        return (
+          <div className="card mt-4 border-l-4 border-l-danger p-4">
+            <p className="text-sm font-bold text-ink">
+              {rawan.length} SK sudah disetujui tapi nomornya belum terbit
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              Baris di bawah ini <strong>sudah memotong tunjangan kinerja</strong> sementara dokumen resminya belum
+              ada. Lengkapi nomor SK-nya begitu terbit, atau cabut kalau keputusannya berubah.
+            </p>
+            <ul className="mt-2 list-inside list-disc text-sm text-ink-2">
+              {rawan.map((sk) => (
+                <li key={sk.id}>
+                  {sk.pegawai.nama} - {sk.jenisHukuman}
+                  {sk.kelasJabatanSelamaHukuman !== null && ` (kelas jabatan turun ke ${sk.kelasJabatanSelamaHukuman})`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
+
       <div className="mt-4 rounded-lg bg-gold-tint px-3 py-2 text-xs font-semibold text-gold-deep">
         TODO(confirm) - alur approval OSDMA untuk SK Hukuman Disiplin di halaman ini ASUMSI dari spesifikasi simulasi,
         BELUM ada konfirmasi resmi dari OSDMA/Biro Hukum. Jenis hukuman masih bebas isi (free-text) karena kategorisasi
@@ -67,7 +95,18 @@ export default async function SkHukumanDisiplinUnitPage({
             <div>
               <p className="font-bold text-ink">{sk.pegawai.nama}</p>
               <p className="text-sm text-muted">
-                {sk.nomorSk} - {sk.jenisHukuman} - berlaku sejak {sk.periodeMulaiBulan}/{sk.periodeMulaiTahun}
+                {sk.skBelumTerbit ? (
+                  <span className="chip chip-danger mr-1.5">SK belum terbit</span>
+                ) : (
+                  <>{sk.nomorSk} - </>
+                )}
+                {sk.jenisHukuman} - berlaku sejak {sk.periodeMulaiBulan}/{sk.periodeMulaiTahun}
+                {sk.periodeSelesaiBulan && sk.periodeSelesaiTahun
+                  ? ` s.d. ${sk.periodeSelesaiBulan}/${sk.periodeSelesaiTahun}`
+                  : " (sampai dicabut)"}
+                {sk.kelasJabatanSelamaHukuman !== null && (
+                  <> - kelas jabatan turun ke <strong>{sk.kelasJabatanSelamaHukuman}</strong></>
+                )}
               </p>
               {sk.keterangan && <p className="mt-1 text-xs text-muted">{sk.keterangan}</p>}
             </div>

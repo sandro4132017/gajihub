@@ -1,26 +1,3 @@
-// ============================================================================
-// APPROVAL DIGITAL - service untuk TukinCalculation
-//
-// Orchestrate: catat keputusan approver ke ApprovalLog -> evaluasi status
-// berjenjang lewat approvalEngine (pure) -> update status TukinCalculation
-// (APPROVED / balik ke DRAFT untuk revisi).
-//
-// CATATAN CAKUPAN: baru untuk TUKIN, konsisten dengan hitungTukinPeriodeJob.ts
-// yang juga baru mencakup Tukin. Uang Makan/Uang Lembur belum punya job
-// orchestration sama sekali (lihat catatan di hitungTukinPeriodeJob.ts),
-// jadi belum ada approval service untuk keduanya juga.
-//
-// SIKLUS APPROVAL: kalkulasi bisa direcalculate (job scheduler jalan ulang
-// untuk periode yang sama, misal setelah koreksi data presensi). Supaya
-// approval log dari SEBELUM recalculation tidak dianggap masih berlaku,
-// hanya log dengan timestampAksi >= calculatedAt milik kalkulasi saat ini
-// yang dipakai untuk evaluasi. hitungTukinPeriodeJob.ts sudah di-update
-// supaya me-refresh calculatedAt tiap kali recalculation terjadi.
-// TODO(confirm): ini keputusan teknis sementara, bukan kebijakan resmi -
-// perlu dikonfirmasi ke Biro OSDMA/Hukum apakah "siklus approval direset
-// oleh recalculation" ini sesuai praktik yang diinginkan.
-// ============================================================================
-
 import type { PrismaClient } from "@prisma/client";
 import { evaluasiApproval } from "./approvalEngine";
 import type { KeputusanApproval, ApprovalOutcome } from "./types";
@@ -30,11 +7,6 @@ export type ApprovalTukinPrisma = Pick<
   "approvalLog" | "tukinCalculation"
 >;
 
-/**
- * TODO(legal-confirm): jumlah jenjang approval resmi belum diputuskan -
- * lihat catatan di approvalEngine.ts. 2 dipakai sebagai default sementara
- * (starting point, bukan final) supaya pipeline bisa ditest end-to-end.
- */
 export const DEFAULT_TOTAL_JENJANG_APPROVAL = 2;
 
 export interface AjukanApprovalTukinInput {
