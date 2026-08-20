@@ -60,9 +60,9 @@ export function RincianUangMakan({
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-left text-muted">
+            <tr className="text-muted">
               <th className="py-1 pr-2 font-medium">Status kehadiran</th>
-              <th className="py-1 pr-2 text-right font-medium">Hari</th>
+              <th className="py-1 pr-2 font-medium">Hari</th>
               <th className="py-1 pl-2 font-medium">Uang makan</th>
             </tr>
           </thead>
@@ -70,7 +70,7 @@ export function RincianUangMakan({
             {r.baris.map((b) => (
               <tr key={b.status} className="border-t border-line/60">
                 <td className="py-1 pr-2 text-ink-2">{b.status}</td>
-                <td className="py-1 pr-2 text-right font-mono text-ink">{b.jumlahHari}</td>
+                <td className="py-1 pr-2 font-mono text-ink">{b.jumlahHari}</td>
                 <td className={`py-1 pl-2 ${b.berhak ? "text-ink" : "text-muted"}`}>
                   {b.berhak ? (
                     <span className="font-mono">
@@ -85,7 +85,7 @@ export function RincianUangMakan({
             ))}
             <tr className="border-t-2 border-line font-semibold">
               <td className="py-1.5 pr-2 text-ink">Dibayar</td>
-              <td className="py-1.5 pr-2 text-right font-mono text-ink">{r.hariDibayar}</td>
+              <td className="py-1.5 pr-2 font-mono text-ink">{r.hariDibayar}</td>
               <td className="py-1.5 pl-2 font-mono text-ink">{r.total === null ? "-" : rupiah(r.total)}</td>
             </tr>
           </tbody>

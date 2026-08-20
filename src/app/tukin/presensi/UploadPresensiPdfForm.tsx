@@ -150,8 +150,8 @@ export function UploadPresensiPdfForm() {
           <div className="card mt-1.5 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-                  <th className="px-3 py-2">Pegawai</th>
+                <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+                  <th className="col-nama px-3 py-2">Pegawai</th>
                   <th className="px-3 py-2">Periode</th>
                   <th className="px-3 py-2">WFO + WFH/WFA</th>
                   <th className="px-3 py-2">Dinas / Diklat</th>
@@ -164,7 +164,7 @@ export function UploadPresensiPdfForm() {
               <tbody>
                 {state.pegawai.map((p) => (
                   <tr key={`${p.nip}-${p.periodeTahun}-${p.periodeBulan}`} className="border-b border-line-2 align-top">
-                    <td className="px-3 py-2">
+                    <td className="col-nama px-3 py-2">
                       <span className="font-semibold text-ink">{p.nama}</span>
                       <span className="block font-mono text-xs text-muted">{p.nip}</span>
                       <span className="block text-xs text-muted">{p.satuanKerja}</span>

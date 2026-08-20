@@ -233,7 +233,11 @@ export default async function KalkulasiUnitPage({
 
   const lengkap = belumPunyaPredikat.length === 0 && pegawaiAktif.length > 0;
 
-  const th = "whitespace-nowrap px-3 py-2 text-left align-bottom";
+  // Tanpa text-left/align-bottom: perataan tengah-menengah datang dari aturan
+  // tabel di globals.css. Utility di sini akan MENIMPA aturan itu (layer
+  // utilities menang atas base), jadi menuliskannya berarti tabel 40 kolom ini
+  // sendirian tidak ikut perataan yang berlaku di seluruh project.
+  const th = "whitespace-nowrap px-3 py-2";
   const td = "whitespace-nowrap px-3 py-2 font-mono text-ink-2";
 
   const tampilRinci = rincian === "1";
@@ -400,8 +404,8 @@ export default async function KalkulasiUnitPage({
         <div className="card mt-2 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-                <th className="px-4 py-2.5">Nama</th>
+              <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+                <th className="col-nama px-4 py-2.5">Nama</th>
                 <th className="px-4 py-2.5">Predikat Kinerja</th>
                 <th className="px-4 py-2.5">
                   Tunjangan Kinerja
@@ -443,7 +447,7 @@ export default async function KalkulasiUnitPage({
 
                 return (
                   <tr key={p.id} className={`border-b border-line-2 align-top ${basi ? "bg-gold-tint" : ""}`}>
-                    <td className="px-4 py-2.5">
+                    <td className="col-nama px-4 py-2.5">
                       <NamaPegawai
                         nama={p.nama}
                         nip={p.nip}
@@ -527,7 +531,7 @@ export default async function KalkulasiUnitPage({
           <thead>
             <tr className="border-b border-line bg-surface-2 text-[11px] font-bold uppercase tracking-wide text-muted">
               <th className={th}>No.</th>
-              <th className={th}>Nama Pegawai</th>
+              <th className={`col-nama ${th}`}>Nama Pegawai</th>
               <th className={th}>NIP</th>
               <th className={th}>GOL</th>
               <th className={th}>Kelas Jabatan</th>
@@ -597,7 +601,7 @@ export default async function KalkulasiUnitPage({
                       ini - kalau di-reset tiap halaman, baris pertama halaman
                       2 ikut bernomor 1 dan tidak bisa dirujuk. */}
                   <td className={`${td} text-muted`}>{paginasi.mulai + i + 1}</td>
-                  <td className="whitespace-nowrap px-3 py-2">
+                  <td className="col-nama whitespace-nowrap px-3 py-2">
                     <NamaPegawai
                       nama={p.nama}
                       nip={p.nip}
@@ -752,8 +756,8 @@ export default async function KalkulasiUnitPage({
       <div className="card mt-2 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-              <th className="px-4 py-2.5">Nama</th>
+            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+              <th className="col-nama px-4 py-2.5">Nama</th>
               <th className="px-4 py-2.5">Uang Makan</th>
               <th className="px-4 py-2.5">Uang Lembur</th>
               <th className="px-4 py-2.5">Koreksi jam lembur</th>
@@ -765,7 +769,7 @@ export default async function KalkulasiUnitPage({
               const lembur = p.uangLembur[0];
               return (
                 <tr key={p.id} className="border-b border-line-2 align-top">
-                  <td className="px-4 py-2.5">
+                  <td className="col-nama px-4 py-2.5">
                     <NamaPegawai
                       nama={p.nama}
                       nip={p.nip}

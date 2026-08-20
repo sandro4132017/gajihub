@@ -120,7 +120,47 @@ html {
   scrollbar-color: rgb(201 214 232 / 0.45) rgb(255 255 255 / 0);
 }
 
+/* --------------------------------------------------------------------------
+   PERATAAN ISI TABEL
+   --------------------------------------------------------------------------
+   Permintaan user: seluruh sel tabel rata TENGAH mendatar dan MENENGAH tegak,
+   kecuali kolom NAMA yang tetap rata kiri (dan tetap menengah).
+
+   DITARUH DI @layer base, BUKAN sebagai aturan tanpa layer - ini yang membuat
+   pengecualiannya mungkin. Di Tailwind v4 urutan layernya
+   `theme, base, components, utilities`, dan CSS TANPA layer selalu menang atas
+   semuanya. Kalau aturan ini ditulis di luar layer, `text-left` di kolom nama,
+   `text-right` di kolom rupiah, dan `align-top` di sel berisi form tidak akan
+   berpengaruh sama sekali - dan satu-satunya jalan keluar tinggal menulis
+   `!important` di ratusan sel. Di base layer, utility apa pun tetap menimpanya
+   tanpa trik.
+
+   Selektor elemen (bukan kelas) dipilih supaya berlaku ke SEMUA tabel,
+   termasuk yang dibuat nanti - user memintanya untuk seluruh project, dan
+   aturan yang harus ditempel manual per tabel pasti terlewat di tabel baru.
+
+   `table[data-tabel="dokumen"]` DIKECUALIKAN. Slip gaji memakai <table>
+   sebagai tata letak DOKUMEN resmi - blok identitas "Nama : nilai", daftar
+   penghasilan bernomor, dan kolom rupiah rata kanan - bukan grid data.
+   Meratakan tengah di situ merusak bentuk cetaknya, dan slip itu ditandatangani
+   PPABP.
+   -------------------------------------------------------------------------- */
+@layer base {
+  table:not([data-tabel="dokumen"]) :is(th, td) {
+    text-align: center;
+    vertical-align: middle;
+  }
+}
+
 @layer components {
+  /* Kolom NAMA: rata kiri, tetap menengah. Dipakai di <th> DAN <td>-nya
+     sekaligus supaya judul dan isinya tidak pernah lepas satu sama lain -
+     itu yang paling gampang terlewat kalau tiap sel ditempeli `text-left`
+     sendiri-sendiri. */
+  .col-nama {
+    @apply text-left align-middle;
+  }
+
   .card {
     @apply rounded-2xl border border-line bg-surface shadow-[0_1px_2px_rgba(19,65,107,0.04),0_6px_22px_rgba(19,65,107,0.06)];
   }

@@ -61,8 +61,8 @@ export default async function SistemPage() {
         <h2 className="p-4 pb-0 text-sm font-bold text-ink">Konfigurasi Adapter</h2>
         <table className="mt-2 w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-              <th className="px-4 py-2.5">Sistem Eksternal</th>
+            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+              <th className="col-nama px-4 py-2.5">Sistem Eksternal</th>
               <th className="px-4 py-2.5">Adapter Aktif</th>
               <th className="px-4 py-2.5">Status</th>
               <th className="px-4 py-2.5">Catatan</th>
@@ -71,7 +71,7 @@ export default async function SistemPage() {
           <tbody>
             {ADAPTER_LIST.map((a) => (
               <tr key={a.sistem} className="border-b border-line-2">
-                <td className="px-4 py-2.5 font-semibold text-ink">{a.sistem}</td>
+                <td className="col-nama px-4 py-2.5 font-semibold text-ink">{a.sistem}</td>
                 <td className="px-4 py-2.5 font-mono text-xs text-ink-2">{a.adapter}</td>
                 <td className="px-4 py-2.5">
                   <span className={`chip ${a.status === "Mock" ? "chip-wait" : "chip-draft"}`}>{a.status}</span>
@@ -92,7 +92,7 @@ export default async function SistemPage() {
         <h2 className="p-4 pb-0 text-sm font-bold text-ink">Aktivitas Terbaru (Audit Trail)</h2>
         <table className="mt-2 w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
+            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
               <th className="px-4 py-2.5">Waktu</th>
               <th className="px-4 py-2.5">Entitas</th>
               <th className="px-4 py-2.5">Aksi</th>

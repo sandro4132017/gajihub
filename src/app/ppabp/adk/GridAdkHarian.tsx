@@ -53,7 +53,7 @@ export function GridAdkHarian({
         <table className="min-w-max text-[11px]">
           <thead>
             <tr className="bg-surface-2">
-              <th className="sticky left-0 z-10 border-r border-line bg-surface-2 px-2 py-1.5 text-left font-semibold text-ink">
+              <th className="col-nama sticky left-0 z-10 border-r border-line bg-surface-2 px-2 py-1.5 font-semibold text-ink">
                 Nama
               </th>
               {kolomTanggal.map((k) => {
@@ -76,7 +76,7 @@ export function GridAdkHarian({
           <tbody>
             {ditampilkan.map((baris, i) => (
               <tr key={String(baris[1] ?? i)} className="border-t border-line/60">
-                <td className="sticky left-0 z-10 border-r border-line bg-surface px-2 py-1 text-ink">
+                <td className="col-nama sticky left-0 z-10 border-r border-line bg-surface px-2 py-1 text-ink">
                   <span className="block max-w-[15rem] truncate" title={`${baris[2]} - NIP ${baris[1]}`}>
                     {String(baris[2] ?? "")}
                   </span>

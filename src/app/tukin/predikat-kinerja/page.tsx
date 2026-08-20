@@ -16,6 +16,7 @@ import { TambahPredikatForm } from "./TambahPredikatForm";
 import { HapusPeriodeForm } from "./HapusPeriodeForm";
 import { LABEL_PREDIKAT, adalahInputManual, kelasChipPredikat, labelSumber } from "./predikat";
 import { PencarianDebounce } from "../../PencarianDebounce";
+import { SumberAcuan } from "../../SumberAcuan";
 
 export const dynamic = "force-dynamic";
 
@@ -186,22 +187,39 @@ export default async function PredikatKinerjaPage({
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-      <Link href={kembaliKeTukin} className="text-sm font-semibold text-teal-deep underline">
-        &larr; Kembali ke Dashboard Tukin
+      <Link
+        href={kembaliKeTukin}
+        className="inline-flex items-center gap-2 text-sm font-bold text-teal-deep transition hover:text-biru"
+      >
+        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        <span className="underline underline-offset-2">Kembali</span>
       </Link>
-      <h1 className="mt-2 text-xl font-extrabold tracking-tight text-ink">Predikat Kinerja</h1>
-      <p className="mt-1 text-sm text-muted">
-        Sumber bobot <strong>70% Tunjangan Kinerja</strong>. Sumber utamanya file Rekap Penilaian e-Kinerja BKN yang
-        diupload di sini. Perbaikan per orang (tambah/ubah/hapus) tersedia buat kasus yang tidak tertangani file -
-        semuanya dibatasi ke unit kewenanganmu, ditandai sebagai input manual, dan tercatat di audit trail.
-        {satkerWajib && (
-          <>
-            {" "}
-            Kamu hanya melihat pegawai di <strong>{satkerWajib}</strong>.
-          </>
-        )}
-      </p>
 
+      <h1 className="mt-3 flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
+        Predikat Kinerja
+        {/* Dasar hukumnya di ikon, bukan memakan baris deskripsi - pola yang
+            sama dengan /tukin/presensi. Yang perlu dibaca tiap hari adalah
+            apa yang dikelola halaman ini, bukan nomor pasalnya. */}
+        <SumberAcuan
+          acuan={[
+            { aturan: "Permenaker 15/2024 Pasal 5 ayat (2) huruf a", tentang: "Capaian kinerja berbobot 70% dari Tunjangan Kinerja" },
+            { aturan: "Permenaker 15/2024 Pasal 11", tentang: "Tunjangan Kinerja dibayarkan menurut capaian kinerja pegawai" },
+            { aturan: "Kepsekjen 82/2025 (Lampiran)", tentang: "Konversi predikat ke persen: Sangat Baik & Baik 100%, Perlu Perbaikan 85%, Kurang & Sangat Kurang 60%" },
+          ]}
+          catatan="Sumber data: file Rekap Penilaian dari portal e-Kinerja BKN (upload manual - belum ada akses API)."
+        />
+      </h1>
+      <p className="mt-0.5 text-sm font-bold text-ink">Komponen 70% Tunjangan Kinerja (Tukin)</p>
+      <p className="mt-2 text-sm text-biru">
+        Kelola predikat kinerja pegawai berdasarkan Rekap Penilaian e-Kinerja BKN.
+      </p>
+      {satkerWajib && (
+        <p className="mt-1 text-sm text-muted">
+          Kamu hanya melihat pegawai di <strong className="text-ink">{satkerWajib}</strong>.
+        </p>
+      )}
       <UploadRekapForm />
 
       {periodeTersedia.length === 0 ? (
@@ -214,7 +232,9 @@ export default async function PredikatKinerjaPage({
         </div>
       ) : (
         <>
-          <form method="get" className="card mt-6 flex flex-wrap items-end gap-3 p-4">
+          <form method="get" className="card mt-6 p-4">
+            <p className="text-base font-bold text-navy">Filter</p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
             <div>
               <label className="field-label">Bulan</label>
               <SearchableSelect
@@ -246,9 +266,10 @@ export default async function PredikatKinerjaPage({
               <label className="field-label">Cari nama atau NIP</label>
               <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
             </div>
-            <button type="submit" className="btn btn-primary">
-              Terapkan
-            </button>
+              <button type="submit" className="btn btn-primary">
+                Terapkan
+              </button>
+            </div>
           </form>
 
           {/*
@@ -287,47 +308,60 @@ export default async function PredikatKinerjaPage({
                 );
               })}
             </div>
+
+            {/* Sebaran periode yang sedang dibuka. Satu baris, di kartu yang
+                sama - ini keterangan TENTANG periode terpilih, bukan blok
+                terpisah yang berdiri sendiri. */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-2 pt-3">
+              <span className="text-xs font-bold uppercase tracking-wide text-muted">Sebaran {namaPeriode}</span>
+              {sebaran.length === 0 && <span className="text-sm text-muted">belum ada data</span>}
+              {sebaran.map((s) => (
+                <span key={s.predikat} className="inline-flex items-center gap-1.5">
+                  <ChipPredikat predikat={s.predikat} />
+                  <span className="font-mono text-sm font-extrabold text-ink">{s._count._all}</span>
+                </span>
+              ))}
+              {jumlahManual > 0 && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="chip chip-wait">Input manual</span>
+                  <span className="font-mono text-sm font-extrabold text-ink">{jumlahManual}</span>
+                </span>
+              )}
+              {/* Yang BELUM punya predikat sengaja ikut di sini: inilah yang
+                  menentukan siapa dilewati kalkulasi Tukin. Ditampilkan
+                  walau nol supaya "sudah lengkap" terbaca sebagai jawaban,
+                  bukan sebagai panel yang lupa dirender. */}
+              {perluPilihSatker ? (
+                // Tanpa satuan kerja terpilih, angka ini akan menghitung
+                // SELURUH kementerian dan tidak berarti apa-apa. Bentuk lama
+                // menuliskannya sebagai "-" begitu saja - tanda hubung yang
+                // tidak menjelaskan kenapa kosong dan apa yang harus dilakukan.
+                <span className="text-sm text-muted">
+                  Pilih satuan kerja di filter untuk melihat siapa yang belum punya predikat.
+                </span>
+              ) : (
+                <span
+                  className={`inline-flex items-center gap-1.5 ${
+                    totalBelumPunya > 0 ? "text-gold-deep" : "text-muted"
+                  }`}
+                >
+                  <span className="text-sm font-semibold">Belum punya predikat</span>
+                  <span className="font-mono text-sm font-extrabold">{totalBelumPunya}</span>
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Konteks data yang sedang dibuka - menjawab "ini data bulan/unit apa". */}
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="card px-4 py-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted">Periode dibuka</p>
-              <p className="mt-1 text-lg font-extrabold text-ink">{namaPeriode || "-"}</p>
-            </div>
-            <div className="card px-4 py-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted">Unit kerja</p>
-              <p className="mt-1 truncate text-sm font-bold text-ink" title={satkerEfektif ?? "Semua satuan kerja"}>
-                {satkerEfektif ?? "Semua satuan kerja"}
-              </p>
-            </div>
-            <div className="card px-4 py-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted">Pegawai berpredikat</p>
-              <p className="mt-1 text-lg font-extrabold text-ink">{jumlahBaris}</p>
-            </div>
-            <div className="card px-4 py-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted">Belum punya predikat</p>
-              <p className={`mt-1 text-lg font-extrabold ${totalBelumPunya > 0 ? "text-gold-deep" : "text-ink"}`}>
-                {perluPilihSatker ? "-" : totalBelumPunya}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            {sebaran.map((s) => (
-              <div key={s.predikat} className="card flex items-center gap-2 px-4 py-3">
-                <ChipPredikat predikat={s.predikat} />
-                <span className="text-lg font-extrabold text-ink">{s._count._all}</span>
-              </div>
-            ))}
-            {jumlahManual > 0 && (
-              <div className="card flex items-center gap-2 px-4 py-3">
-                <span className="chip chip-wait">Input manual</span>
-                <span className="text-lg font-extrabold text-ink">{jumlahManual}</span>
-              </div>
-            )}
-          </div>
-
+          {/*
+            SEBARAN digabung ke dalam kartu periode di atas, bukan kartu
+            sendiri-sendiri. Sebelumnya ada TIGA blok bertumpuk yang
+            menjawab pertanyaan yang sama ("ini data apa"), dan empat tile
+            di tengahnya semuanya mengulang yang sudah terlihat: "Periode
+            dibuka" = chip yang sedang tersorot, "Pegawai berpredikat" =
+            angka dalam kurung di chip itu, "Unit kerja" = isi filter di
+            atasnya. Yang benar-benar menambah keterangan cuma dua: sebaran
+            predikat dan jumlah yang BELUM punya predikat.
+          */}
           {adaPeriode && (
             <TambahPredikatForm
               periodeBulan={periodeBulan!}
@@ -359,8 +393,8 @@ export default async function PredikatKinerjaPage({
           <div className="card mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-                  <th className="px-4 py-2.5">Pegawai</th>
+                <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+                  <th className="col-nama px-4 py-2.5">Pegawai</th>
                   <th className="px-4 py-2.5">Predikat</th>
                   <th className="px-4 py-2.5">Nilai kinerja</th>
                   <th className="px-4 py-2.5">Sumber</th>
@@ -377,7 +411,7 @@ export default async function PredikatKinerjaPage({
                 )}
                 {barisList.map((b) => (
                   <tr key={b.id} className="border-b border-line-2 align-top">
-                    <td className="px-4 py-2.5">
+                    <td className="col-nama px-4 py-2.5">
                       <Link href={`/pegawai?q=${encodeURIComponent(b.pegawai.nip)}`} className="font-semibold text-ink underline">
                         {b.pegawai.nama}
                       </Link>

@@ -57,18 +57,18 @@ export function UploadBasisDataGajiForm() {
           </p>
           <table className="mt-2 w-full text-xs">
             <thead>
-              <tr className="text-left text-muted">
+              <tr className="text-muted">
                 <th className="py-1 pr-3 font-semibold">NIP</th>
-                <th className="py-1 pr-3 font-semibold">SIAP</th>
-                <th className="py-1 font-semibold">Web Gaji (dipakai ADK)</th>
+                <th className="col-nama py-1 pr-3 font-semibold">SIAP</th>
+                <th className="col-nama py-1 font-semibold">Web Gaji (dipakai ADK)</th>
               </tr>
             </thead>
             <tbody>
               {r.contohBedaNama.map((c) => (
                 <tr key={c.nip} className="border-t border-line-2">
                   <td className="py-1 pr-3 font-mono text-muted">{c.nip}</td>
-                  <td className="py-1 pr-3 text-muted line-through">{c.siap}</td>
-                  <td className="py-1 font-semibold text-ink">{c.webGaji}</td>
+                  <td className="col-nama py-1 pr-3 text-muted line-through">{c.siap}</td>
+                  <td className="col-nama py-1 font-semibold text-ink">{c.webGaji}</td>
                 </tr>
               ))}
             </tbody>

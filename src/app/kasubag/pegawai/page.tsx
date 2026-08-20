@@ -115,8 +115,8 @@ export default async function RosterPegawaiUnitPage({
       <div className="card mt-4 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-              <th className="px-4 py-2.5">Nama</th>
+            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+              <th className="col-nama px-4 py-2.5">Nama</th>
               <th className="px-4 py-2.5">NIP</th>
               <th className="px-4 py-2.5">Jabatan</th>
               <th className="px-4 py-2.5">Golongan</th>
@@ -134,7 +134,7 @@ export default async function RosterPegawaiUnitPage({
             )}
             {pegawaiList.map((p) => (
               <tr key={p.id} className="border-b border-line-2">
-                <td className="px-4 py-2.5 font-semibold text-ink">{p.nama}</td>
+                <td className="col-nama px-4 py-2.5 font-semibold text-ink">{p.nama}</td>
                 <td className="px-4 py-2.5 font-mono text-xs text-muted">{p.nip}</td>
                 <td className="px-4 py-2.5 text-ink-2">{p.jabatan ?? "-"}</td>
                 <td className="px-4 py-2.5 text-ink-2">{p.golongan ?? "-"}</td>

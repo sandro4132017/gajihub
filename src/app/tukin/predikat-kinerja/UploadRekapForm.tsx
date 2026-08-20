@@ -19,22 +19,14 @@ export function UploadRekapForm() {
   const [state, formAction, pending] = useActionState(uploadRekapPredikatAction, INITIAL_STATE);
 
   return (
-    <div className="card mt-4 p-4">
-      <h2 className="text-sm font-bold text-ink">Upload Rekap Penilaian e-Kinerja BKN</h2>
+    <div className="card mt-4 p-5">
+      <h2 className="text-base font-bold text-navy">Upload Rekap Penilaian e-Kinerja BKN</h2>
       <p className="mt-1 text-sm text-muted">
-        Unduh <span className="font-semibold">Rekap Penilaian</span> periode <span className="font-semibold">Bulanan</span>{" "}
-        dari portal e-Kinerja BKN, lalu upload filenya di sini. Periode diambil dari isi file, jadi tidak perlu dipilih
-        manual. Kalau satu file berisi beberapa sheet bulan (Januari, Februari, dst),{" "}
-        <span className="font-semibold">semuanya diproses sekaligus</span> - tidak perlu dipisah per bulan.
-      </p>
-      <p className="mt-1.5 text-sm text-muted">
-        <span className="font-semibold text-ink-2">Bisa pilih beberapa file sekaligus.</span> Satu satuan kerja sering
-        dinilai lebih dari satu penilai (mis. Subbagian Tata Usaha dan Biro), masing-masing punya file sendiri berisi
-        orang yang berbeda - pilih semuanya dalam satu kali upload. Unit penilainya dibaca dari isi file, tidak perlu
-        kamu tandai sendiri.
+        Unggah file Rekap Penilaian e-Kinerja BKN untuk memproses predikat kinerja pegawai. Periode dan unit penilai
+        dibaca otomatis dari file.
       </p>
 
-      <form action={formAction} className="mt-4 space-y-3">
+      <form action={formAction} className="mt-3">
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="file"
@@ -45,22 +37,48 @@ export function UploadRekapForm() {
             className="field-input py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-ink-2"
           />
           <button type="submit" disabled={pending} className="btn btn-primary">
-            {pending ? "Memproses..." : "Upload & proses"}
+            {pending ? "Memproses..." : "Upload dan Proses"}
           </button>
         </div>
       </form>
 
-      <p className="mt-2 text-xs text-muted">
-        File-nya sendiri TIDAK disimpan - yang masuk database cuma NIP, periode, dan predikatnya. Predikat yang labelnya
-        tidak dikenali akan dilewati dan dilaporkan, bukan ditebak. Kalau ada typo, cukup perbaiki di Excel lalu upload
-        ulang: nilainya tertimpa berdasarkan NIP + periode, tidak perlu menghapus siapa pun dulu.
-      </p>
-      <p className="mt-1 text-xs text-muted">
-        Upload ulang file yang sama <span className="font-semibold text-ink-2">tidak menghapus apa pun</span>: pegawai
-        yang sudah punya predikat nilainya ditulis ulang dengan isi yang sama, pegawai yang belum punya ditambahkan, dan
-        pegawai yang tidak ada di file tidak disentuh. Jadi file penilai kedua bisa menyusul kapan saja.
+      <p className="mt-2 text-sm text-muted">
+        Upload ulang akan memperbarui data yang sesuai dan menambahkan data baru tanpa menghapus data yang sudah ada.
       </p>
 
+      {/*
+        Keterangan rinci DILIPAT, bukan dihapus. Isinya menjelaskan perilaku
+        yang tidak bisa ditebak dari tampilan (beberapa sheet bulan diproses
+        sekaligus, beberapa penilai per unit, file tidak disimpan, predikat
+        asing dilewati) - kalau hilang, orang menebaknya sendiri. Pakai
+        <details> bawaan HTML supaya tetap jalan tanpa JavaScript, pola yang
+        sama dengan "Cara lain mengisi presensi" di /tukin/presensi.
+      */}
+      <details className="group mt-3">
+        <summary className="cursor-pointer list-none text-sm font-semibold text-teal-deep underline underline-offset-2">
+          Selengkapnya soal cara upload ini bekerja
+        </summary>
+        <div className="mt-2 space-y-2 text-sm text-muted">
+          <p>
+            Unduh <span className="font-semibold">Rekap Penilaian</span> periode{" "}
+            <span className="font-semibold">Bulanan</span> dari portal e-Kinerja BKN. Kalau satu file berisi beberapa
+            sheet bulan (Januari, Februari, dst), <span className="font-semibold">semuanya diproses sekaligus</span> -
+            tidak perlu dipisah per bulan.
+          </p>
+          <p>
+            <span className="font-semibold text-ink-2">Bisa pilih beberapa file sekaligus.</span> Satu satuan kerja
+            sering dinilai lebih dari satu penilai (mis. Subbagian Tata Usaha dan Biro), masing-masing punya file
+            sendiri berisi orang yang berbeda - pilih semuanya dalam satu kali upload. Unit penilainya dibaca dari isi
+            file, tidak perlu kamu tandai sendiri.
+          </p>
+          <p>
+            File-nya sendiri <span className="font-semibold text-ink-2">tidak disimpan</span> - yang masuk database cuma
+            NIP, periode, dan predikatnya. Predikat yang labelnya tidak dikenali akan dilewati dan dilaporkan, bukan
+            ditebak. Kalau ada typo, cukup perbaiki di Excel lalu upload ulang: nilainya tertimpa berdasarkan NIP +
+            periode, tidak perlu menghapus siapa pun dulu.
+          </p>
+        </div>
+      </details>
       {state.error && <p className="mt-3 text-sm font-medium text-red">{state.error}</p>}
       {state.success && <p className="mt-3 text-sm font-semibold text-green">{state.success}</p>}
 

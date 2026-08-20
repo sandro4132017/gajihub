@@ -115,11 +115,11 @@ export default async function RekeningPage({
       <div className="card mt-4 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-              <th className="px-4 py-2.5">Pegawai</th>
+            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+              <th className="col-nama px-4 py-2.5">Pegawai</th>
               <th className="px-4 py-2.5">Bank</th>
               <th className="px-4 py-2.5">Nomor Rekening</th>
-              <th className="px-4 py-2.5">Nama Rekening</th>
+              <th className="col-nama px-4 py-2.5">Nama Rekening</th>
             </tr>
           </thead>
           <tbody>
@@ -132,7 +132,7 @@ export default async function RekeningPage({
             )}
             {list.map((r) => (
               <tr key={r.id} className="border-b border-line-2">
-                <td className="px-4 py-2.5">
+                <td className="col-nama px-4 py-2.5">
                   <span className="font-semibold text-ink">{r.pegawai.nama}</span>
                   <span className="block font-mono text-xs text-muted">{r.pegawai.nip}</span>
                 </td>
@@ -141,7 +141,7 @@ export default async function RekeningPage({
                   <span className="block font-mono text-xs text-muted">{r.kodeBankSpan}</span>
                 </td>
                 <td className="px-4 py-2.5 font-mono text-ink-2">{r.nomorRekening}</td>
-                <td className="px-4 py-2.5 text-ink-2">{r.namaRekening ?? "-"}</td>
+                <td className="col-nama px-4 py-2.5 text-ink-2">{r.namaRekening ?? "-"}</td>
               </tr>
             ))}
           </tbody>

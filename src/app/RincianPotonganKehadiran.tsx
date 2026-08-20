@@ -90,13 +90,13 @@ export function RincianPotonganKehadiran({
       )}
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-y border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
+          <tr className="border-y border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
             <th className="px-3 py-2.5">Jenis pelanggaran</th>
             <th className="px-3 py-2.5">Dasar</th>
-            <th className="px-3 py-2.5 text-right">Jumlah</th>
-            <th className="px-3 py-2.5 text-right">Tarif</th>
-            <th className="px-3 py-2.5 text-right">Potongan</th>
-            <th className="px-3 py-2.5 text-right">Rupiah</th>
+            <th className="px-3 py-2.5">Jumlah</th>
+            <th className="px-3 py-2.5">Tarif</th>
+            <th className="px-3 py-2.5">Potongan</th>
+            <th className="px-3 py-2.5">Rupiah</th>
           </tr>
         </thead>
         <tbody>
@@ -106,14 +106,14 @@ export function RincianPotonganKehadiran({
               <tr key={`${r.jenis}-${r.dasarHukum}`} className={`border-b border-line-2 ${dikecualikan ? "text-muted" : ""}`}>
                 <td className="px-3 py-2.5 text-ink">{r.jenis}</td>
                 <td className="px-3 py-2.5 text-xs text-muted">{r.dasarHukum}</td>
-                <td className="px-3 py-2.5 text-right font-mono">
+                <td className="px-3 py-2.5 font-mono">
                   {r.jumlah} {r.satuan}
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono text-muted">{persen(r.tarifPersen, 2)}</td>
-                <td className={`px-3 py-2.5 text-right font-mono ${dikecualikan ? "line-through" : ""}`}>
+                <td className="px-3 py-2.5 font-mono text-muted">{persen(r.tarifPersen, 2)}</td>
+                <td className={`px-3 py-2.5 font-mono ${dikecualikan ? "line-through" : ""}`}>
                   {persen(r.totalPersen, 2)}
                 </td>
-                <td className={`px-3 py-2.5 text-right font-mono ${dikecualikan ? "line-through" : ""}`}>
+                <td className={`px-3 py-2.5 font-mono ${dikecualikan ? "line-through" : ""}`}>
                   {rp === null ? "-" : rupiah(rp)}
                 </td>
               </tr>
@@ -123,8 +123,8 @@ export function RincianPotonganKehadiran({
             <td className="px-3 py-2.5 text-ink" colSpan={4}>
               Total potongan {dikecualikan && <span className="font-normal text-muted">(dikecualikan)</span>}
             </td>
-            <td className="px-3 py-2.5 text-right font-mono">{persen(totalPersenDiterapkan, 2)}</td>
-            <td className="px-3 py-2.5 text-right font-mono">{totalRupiah === null ? "-" : rupiah(totalRupiah)}</td>
+            <td className="px-3 py-2.5 font-mono">{persen(totalPersenDiterapkan, 2)}</td>
+            <td className="px-3 py-2.5 font-mono">{totalRupiah === null ? "-" : rupiah(totalRupiah)}</td>
           </tr>
           {bobotKehadiranPenuh !== null && (
             <>
@@ -132,13 +132,13 @@ export function RincianPotonganKehadiran({
                 <td className="px-3 py-2.5" colSpan={5}>
                   Bobot kehadiran penuh (30%)
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono">{rupiah(bobotKehadiranPenuh)}</td>
+                <td className="px-3 py-2.5 font-mono">{rupiah(bobotKehadiranPenuh)}</td>
               </tr>
               <tr className="font-bold text-ink">
                 <td className="px-3 py-2.5" colSpan={5}>
                   Komponen kehadiran yang dibayar
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono">{sisa === null ? "-" : rupiah(sisa)}</td>
+                <td className="px-3 py-2.5 font-mono">{sisa === null ? "-" : rupiah(sisa)}</td>
               </tr>
             </>
           )}

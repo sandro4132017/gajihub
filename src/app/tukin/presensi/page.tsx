@@ -6,6 +6,7 @@ import {
   canBukaHalamanPredikatKinerja,
   canKelolaKendalaEpresensi,
   canKelolaHariLibur,
+  canUploadRekapPresensi,
   type AuthUser,
 } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
@@ -16,6 +17,7 @@ import { UploadPresensiForm } from "./UploadPresensiForm";
 import { UploadPresensiPdfForm } from "./UploadPresensiPdfForm";
 import { SinkronisasiPresensi } from "./SinkronisasiPresensi";
 import { PencarianDebounce } from "../../PencarianDebounce";
+import { Paginasi, hitungPaginasi } from "../../Paginasi";
 import { BadgePejabatEselon } from "../../BadgePejabatEselon";
 import { uraiJenisCuti, LABEL_JENIS_CUTI } from "../../../business-logic/jenisCuti";
 import { SumberAcuan } from "../../SumberAcuan";
@@ -29,14 +31,20 @@ export const dynamic = "force-dynamic";
  * berjalan).
  */
 
-const MAKS_BARIS_TAMPIL = 200;
+/*
+ * Batas tampil lama (200 teratas) DIGANTI paginasi ber-URL: dengan potongan
+ * keras, baris ke-201 dan seterusnya tidak bisa dijangkau sama sekali kecuali
+ * lewat pencarian - padahal PPABP/Admin memang melihat ribuan pegawai lintas
+ * satker sekaligus. Nomor & ukuran halaman ikut query string (`hal`, `per`),
+ * jadi tetap jalan tanpa JavaScript dan tautannya bisa dibagikan.
+ */
 
 export default async function PresensiTukinPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bulan?: string; tahun?: string; q?: string; satker?: string }>;
+  searchParams: Promise<{ bulan?: string; tahun?: string; q?: string; satker?: string; hal?: string; per?: string }>;
 }) {
-  const { bulan, tahun, q, satker } = await searchParams;
+  const { bulan, tahun, q, satker, hal, per } = await searchParams;
 
   const akun = await getSessionAccount();
   const authUser: AuthUser | null =
@@ -44,6 +52,10 @@ export default async function PresensiTukinPage({
   if (!authUser || !canBukaHalamanPredikatKinerja(authUser)) {
     return <AksesDitolak pesan="Role kamu tidak berwenang mengelola data presensi." />;
   }
+
+  // Kasubag TU ikut boleh (unitnya sendiri) - cakupan per pegawai dicek ulang
+  // di action rekonsiliasinya, jadi berkas lintas unit tetap tersaring.
+  const bolehRekonsiliasi = canUploadRekapPresensi(authUser, authUser.satuanKerja ?? "");
 
   const satkerWajib = authUser.role === "KASUBAG_TU" ? authUser.satuanKerja : null;
   // Halaman ini isinya rekap presensi, jadi periode defaultnya diambil dari
@@ -89,11 +101,25 @@ export default async function PresensiTukinPage({
     },
   });
 
-  const [jumlahBaris, rekapList, satuanKerjaRows] = await Promise.all([
-    prisma.rekapPresensiPeriode.count({ where }),
+  // Jumlah baris dihitung DULU supaya paginasi tahu total halamannya; sesudah
+  // itu yang ditarik dari database HANYA satu halaman (skip/take), bukan
+  // ribuan baris yang lalu dipotong di memori.
+  const jumlahBaris = await prisma.rekapPresensiPeriode.count({ where });
+  const paginasi = hitungPaginasi(jumlahBaris, hal, per);
+
+  // Filter yang sedang berlaku WAJIB ikut terbawa saat pindah halaman -
+  // kalau tidak, halaman 2 diam-diam menampilkan periode/satker yang berbeda.
+  const paramPaginasi = new URLSearchParams();
+  if (periodeBulan) paramPaginasi.set("bulan", String(periodeBulan));
+  if (periodeTahun) paramPaginasi.set("tahun", String(periodeTahun));
+  if (satker && !satkerWajib) paramPaginasi.set("satker", satker);
+  if (q?.trim()) paramPaginasi.set("q", q.trim());
+
+  const [rekapList, satuanKerjaRows] = await Promise.all([
     prisma.rekapPresensiPeriode.findMany({
       where,
-      take: MAKS_BARIS_TAMPIL,
+      skip: paginasi.mulai,
+      take: paginasi.perHalaman,
       orderBy: { pegawai: { nama: "asc" } },
       include: { pegawai: { select: { nip: true, nama: true, satuanKerja: true, kelasJabatan: true } } },
     }),
@@ -231,11 +257,6 @@ export default async function PresensiTukinPage({
             </span>
           </span>
         </div>
-        {jumlahBaris > MAKS_BARIS_TAMPIL && (
-          <p className="mt-2 text-xs text-muted">
-            Ditampilkan {MAKS_BARIS_TAMPIL} teratas - persempit dengan filter satuan kerja atau pencarian.
-          </p>
-        )}
       </div>
 
       {/* ------------------------------------------------------------------
@@ -256,110 +277,148 @@ export default async function PresensiTukinPage({
 
           Urutannya: siapa -> berapa hari kerjanya -> hadir di mana -> yang
           tidak masuk hitungan hadir. */}
-      <div className="card mt-3 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-              <th className="px-3 py-2.5">Pegawai</th>
-              <th className="px-3 py-2.5">Hari kerja</th>
-              <th className="px-3 py-2.5">WFO</th>
-              <th className="px-3 py-2.5">WFH/WFA</th>
-              <th className="px-3 py-2.5">Dinas luar</th>
-              <th className="px-3 py-2.5">Alpha</th>
-              <th className="px-3 py-2.5">Lupa absen</th>
-              <th className="px-3 py-2.5">Telat</th>
-              <th className="px-3 py-2.5">Plg cepat</th>
-              <th className="px-3 py-2.5">Cuti</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rekapList.length === 0 && (
-              <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-muted">
-                  Belum ada rekap presensi untuk periode ini. Tarik dulu di panel Sinkronisasi di atas - tanpa
-                  presensi, kalkulasi Tukin akan melewati pegawai yang bersangkutan.
-                </td>
+      
+      {/* 
+        ========================================================
+        BAGIAN YANG DIPERBAIKI (PEMISAHAN OVERFLOW & PAGINASI)
+        ======================================================== 
+      */}
+      <div className="card mt-3 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max text-sm">
+            <thead>
+              <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+                <th className="col-nama px-3 py-2.5">Pegawai</th>
+                <th className="px-3 py-2.5">Hari kerja</th>
+                <th className="px-3 py-2.5">WFO</th>
+                <th className="px-3 py-2.5">WFH/WFA</th>
+                <th className="px-3 py-2.5">Dinas luar</th>
+                <th className="px-3 py-2.5">Alpha</th>
+                <th className="px-3 py-2.5">Lupa absen</th>
+                <th className="px-3 py-2.5">Telat</th>
+                <th className="px-3 py-2.5">Plg cepat</th>
+                <th className="px-3 py-2.5">Cuti</th>
               </tr>
-            )}
-            {rekapList.map((r) => {
-              // Nol ditampilkan pucat, bukan dihilangkan: kolom kosong tidak
-              // bisa dibedakan dari data yang belum masuk.
-              const kosong = (n: number) => (n === 0 ? "text-line" : "text-ink-2");
-              const cuti = uraiJenisCuti(r.jenisCutiAktif);
-              const bulanCuti = cuti?.bulanKeberapa ?? r.bulanCutiKeberapa;
-              const labelCuti = cuti
-                ? `${LABEL_JENIS_CUTI[cuti.jenis]}${bulanCuti ? ` (bln ke-${bulanCuti})` : ""}`
-                : null;
-              return (
-                <tr key={r.id} className="border-b border-line-2">
-                  <td className="px-3 py-2.5">
-                    <Link
-                      href={`/tukin/presensi/${r.pegawai.nip}?bulan=${periodeBulan}&tahun=${periodeTahun}`}
-                      className="font-semibold text-teal-deep underline"
-                    >
-                      {r.pegawai.nama}
-                    </Link>
-                    <BadgePejabatEselon kelasJabatan={r.pegawai.kelasJabatan} />
-                    <span className="block font-mono text-xs text-muted">{r.pegawai.nip}</span>
-                    <span className="block text-xs text-muted">{r.sourceSystem}</span>
-                  </td>
-                  <td className="px-3 py-2.5 font-mono font-bold text-ink">{r.jumlahHariKerja}</td>
-                  <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariWfo)}`}>{r.jumlahHariWfo}</td>
-                  <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariWfhWfa)}`}>{r.jumlahHariWfhWfa}</td>
-                  <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariDinasLuar)}`}>
-                    {r.jumlahHariDinasLuar}
-                    {/* Diklat digabung ke sel yang sama, bukan kolom sendiri -
-                        perlakuannya identik (hadir, tapi tidak dapat uang
-                        makan) dan angkanya jarang terisi. */}
-                    {r.jumlahHariDiklat > 0 && (
-                      <span className="block text-xs text-muted">+{r.jumlahHariDiklat} diklat</span>
-                    )}
-                  </td>
-                  <td className={`px-3 py-2.5 font-mono ${r.jumlahHariAlpha > 0 ? "font-bold text-red" : "text-line"}`}>
-                    {r.jumlahHariAlpha}
-                  </td>
-                  <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahTidakPresensi)}`}>
-                    {r.jumlahTidakPresensi}x
-                  </td>
-                  <td className={`px-3 py-2.5 font-mono ${kosong(r.totalMenitTerlambat)}`}>
-                    {r.totalMenitTerlambat} mnt
-                  </td>
-                  <td className={`px-3 py-2.5 font-mono ${kosong(r.totalMenitPulangCepat)}`}>
-                    {r.totalMenitPulangCepat} mnt
-                  </td>
-                  <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariCuti)}`}>
-                    {r.jumlahHariCuti}
-                    {/* Jenisnya ikut disebut - "3 hari cuti" tidak cukup buat
-                        menilai, karena Pasal 14 memotong berbeda-beda per
-                        jenis (cuti tahunan 0%, CLTN 100%). */}
-                    {labelCuti && <span className="block text-xs text-muted">{labelCuti}</span>}
+            </thead>
+            <tbody>
+              {rekapList.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="px-3 py-6 text-center text-muted">
+                    Belum ada rekap presensi untuk periode ini. Tarik dulu di panel Sinkronisasi di atas - tanpa
+                    presensi, kalkulasi Tukin akan melewati pegawai yang bersangkutan.
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+              {rekapList.map((r) => {
+                // Nol ditampilkan pucat, bukan dihilangkan: kolom kosong tidak
+                // bisa dibedakan dari data yang belum masuk.
+                const kosong = (n: number) => (n === 0 ? "text-line" : "text-ink-2");
+                const cuti = uraiJenisCuti(r.jenisCutiAktif);
+                const bulanCuti = cuti?.bulanKeberapa ?? r.bulanCutiKeberapa;
+                const labelCuti = cuti
+                  ? `${LABEL_JENIS_CUTI[cuti.jenis]}${bulanCuti ? ` (bln ke-${bulanCuti})` : ""}`
+                  : null;
+                return (
+                  <tr key={r.id} className="border-b border-line-2">
+                    <td className="col-nama px-3 py-2.5">
+                      <Link
+                        href={`/tukin/presensi/${r.pegawai.nip}?bulan=${periodeBulan}&tahun=${periodeTahun}`}
+                        className="font-semibold text-teal-deep underline"
+                      >
+                        {r.pegawai.nama}
+                      </Link>
+                      <BadgePejabatEselon kelasJabatan={r.pegawai.kelasJabatan} />
+                      <span className="block font-mono text-xs text-muted">{r.pegawai.nip}</span>
+                      <span className="block text-xs text-muted">{r.sourceSystem}</span>
+                    </td>
+                    <td className="px-3 py-2.5 font-mono font-bold text-ink">{r.jumlahHariKerja}</td>
+                    <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariWfo)}`}>{r.jumlahHariWfo}</td>
+                    <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariWfhWfa)}`}>{r.jumlahHariWfhWfa}</td>
+                    <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariDinasLuar)}`}>
+                      {r.jumlahHariDinasLuar}
+                      {/* Diklat digabung ke sel yang sama, bukan kolom sendiri -
+                          perlakuannya identik (hadir, tapi tidak dapat uang
+                          makan) dan angkanya jarang terisi. */}
+                      {r.jumlahHariDiklat > 0 && (
+                        <span className="block text-xs text-muted">+{r.jumlahHariDiklat} diklat</span>
+                      )}
+                    </td>
+                    <td className={`px-3 py-2.5 font-mono ${r.jumlahHariAlpha > 0 ? "font-bold text-red" : "text-line"}`}>
+                      {r.jumlahHariAlpha}
+                    </td>
+                    <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahTidakPresensi)}`}>
+                      {r.jumlahTidakPresensi}x
+                    </td>
+                    <td className={`px-3 py-2.5 font-mono ${kosong(r.totalMenitTerlambat)}`}>
+                      {r.totalMenitTerlambat} mnt
+                    </td>
+                    <td className={`px-3 py-2.5 font-mono ${kosong(r.totalMenitPulangCepat)}`}>
+                      {r.totalMenitPulangCepat} mnt
+                    </td>
+                    <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariCuti)}`}>
+                      {r.jumlahHariCuti}
+                      {/* Jenisnya ikut disebut - "3 hari cuti" tidak cukup buat
+                          menilai, karena Pasal 14 memotong berbeda-beda per
+                          jenis (cuti tahunan 0%, CLTN 100%). */}
+                      {labelCuti && <span className="block text-xs text-muted">{labelCuti}</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="border-t border-line-2 px-4 py-3 sm:px-6">
+          <Paginasi
+            basePath="/tukin/presensi"
+            params={paramPaginasi}
+            info={paginasi}
+            totalBaris={jumlahBaris}
+            labelBaris="pegawai"
+          />
+        </div>
       </div>
+      {/* ======================================================== */}
 
-      <p className="mt-2 text-xs text-muted">
-        <strong>Lupa absen</strong> = tidak melakukan presensi masuk atau pulang. <strong>Dinas luar</strong> &amp;
-        diklat tetap dihitung hadir, tapi tidak dapat uang makan. <strong>Cuti</strong> adalah total hari dari semua
-        jenis - jenisnya disebut di bawah angkanya karena Pasal 14 memotong berbeda per jenis. Meninggalkan kantor
-        &amp; tidak ikut upacara tidak punya kolom di sini (e-Presensi tidak mencatatnya - isinya selalu 0 kecuali
-        diisi lewat template Excel), tapi tetap dihitung. Klik nama pegawai untuk rincian per tanggal.
-      </p>
-
-      {jumlahBaris > rekapList.length && (
-        <p className="mt-2 text-xs text-muted">
-          Menampilkan {rekapList.length} dari {jumlahBaris} baris - persempit dengan pencarian nama/NIP.
+      {/*
+        KETERANGAN KOLOM - dulu satu paragraf padat lima baris di bawah tabel.
+        Dijadikan daftar istilah karena isinya memang definisi per kolom, dan
+        yang dicari orang cuma SATU di antaranya. Bentuk paragraf juga
+        memunculkan dua cacat spasi yang benar-benar terlihat di layar
+        ("Dinas luar& diklat", "Cutiadalah"): JSX memangkas spasi di ujung
+        baris, jadi teks panjang yang dibungkus manual gampang menempel ke
+        elemen sebelahnya. Bentuk pendek per item tidak punya masalah itu.
+      */}
+      <div className="mt-3 rounded-xl border border-line-2 bg-surface-2 p-3.5">
+        <p className="text-xs font-bold uppercase tracking-wide text-muted">Keterangan kolom</p>
+        <dl className="mt-2 grid gap-x-8 gap-y-1.5 text-xs text-muted sm:grid-cols-2">
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-bold text-ink-2">Lupa absen</dt>
+            <dd>tidak melakukan presensi masuk atau pulang</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-bold text-ink-2">Dinas luar &amp; diklat</dt>
+            <dd>tetap dihitung hadir, tapi tidak dapat uang makan</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-bold text-ink-2">Cuti</dt>
+            <dd>total hari semua jenis - jenisnya disebut di bawah angkanya, karena Pasal 14 memotong berbeda per jenis</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-bold text-ink-2">Tidak berkolom</dt>
+            <dd>meninggalkan kantor &amp; tidak ikut upacara tetap dihitung, tapi e-Presensi tidak mencatatnya (selalu 0 kecuali diisi lewat template Excel)</dd>
+          </div>
+        </dl>
+        <p className="mt-2.5 border-t border-line-2 pt-2 text-xs text-muted">
+          Klik nama pegawai untuk melihat rincian per tanggal.
         </p>
-      )}
+      </div>
 
       {/* ------------------------------------------------------------------
           PENGATURAN PERIODE - dibuka beberapa kali setahun, bukan tiap hari
           ------------------------------------------------------------------ */}
-      {(canKelolaKendalaEpresensi(authUser) || canKelolaHariLibur(authUser)) && (
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+      {(canKelolaKendalaEpresensi(authUser) || canKelolaHariLibur(authUser) || bolehRekonsiliasi) && (
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {/* Pasal 10 ayat (2) - kalau e-Presensi bermasalah, kegagalan
               mencatat presensi bukan kelalaian pegawainya. */}
           {canKelolaKendalaEpresensi(authUser) && (
@@ -436,6 +495,27 @@ export default async function PresensiTukinPage({
               </Link>
             </div>
           )}
+
+          {/* Alat masa TRANSISI: selama petugas masih merekap di Excel,
+              berkas itulah yang menentukan pembayaran. Kartu ini yang membuat
+              kedua sumber bisa diadu per hari sebelum jalur manualnya
+              dimatikan. */}
+          {bolehRekonsiliasi && (
+            <div className="card flex flex-col p-5">
+              <p className="text-base font-extrabold text-navy">Bandingkan Rekap Petugas</p>
+              <p className="mt-1 flex-1 text-sm leading-relaxed text-muted">
+                Unggah berkas rekap absensi manual yang masih dipakai petugas, lalu lihat baris mana yang berbeda
+                dari data Gajihub beserta perkiraan dampak rupiahnya. Tidak mengubah data apa pun.
+              </p>
+              <Link href="/tukin/presensi/rekonsiliasi" className="btn btn-secondary mt-4 self-start">
+                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 7H7a4 4 0 0 0-4 4M3 17h14a4 4 0 0 0 4-4" />
+                  <path d="m17 3 4 4-4 4M7 21l-4-4 4-4" />
+                </svg>
+                Bandingkan Rekap
+              </Link>
+            </div>
+          )}
         </div>
       )}
 
@@ -498,13 +578,20 @@ export default async function PresensiTukinPage({
                 lembur yang diisi harus sudah mengecualikan hari-hari itu.
               </li>
               <li>
+                <strong>Di hari kerja, lembur dihitung sejak jam kerja berakhir</strong> - pukul 16.00 (Jumat 16.30),
+                tanpa jeda. Pulang pukul 20.00 berarti 4 jam lembur; jam 16.00-17.00 sudah ikut terhitung. Pegawai yang
+                pulang tepat pukul 16.00 mendapat 0 jam lembur. Di hari libur tidak ada jam pulang wajib - dihitung
+                penuh sejak jam masuk.
+              </li>
+              <li>
                 <strong>Jam lembur hari libur / tanggal merah diisi di kolom terpisah</strong> - tarifnya dibayar 2x
                 tarif per jam biasa.
               </li>
               <li>
                 <strong>Hari makan lembur</strong> = jumlah hari yang lemburnya mencapai 2 jam{" "}
                 <em>berturut-turut</em> (SBM 2026 hal. 51, penjelasan item 23.2), paling banyak 1 kali per hari. Lembur
-                1 jam pagi + 1 jam sore TIDAK memenuhi syarat walau totalnya 2 jam.
+                1 jam pagi + 1 jam sore TIDAK memenuhi syarat walau totalnya 2 jam. <strong>Diukur dari jam pulang
+                wajib</strong> - pulang pukul 17.00 berarti 1 jam lembur dan belum berhak; berhak mulai pukul 18.00.
               </li>
             </ul>
           </div>

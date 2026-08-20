@@ -11,6 +11,16 @@ import { RincianPotonganKehadiran } from "../../../RincianPotonganKehadiran";
 import { dikecualikanPotonganKehadiran } from "../../../../business-logic/pejabatPimpinanTinggi";
 import { BadgePejabatEselon } from "../../../BadgePejabatEselon";
 import { KoreksiJamForm } from "./KoreksiJamForm";
+import { TabelRincianJamKerja, type BarisTabelRincianJamKerja } from "./TabelRincianJamKerja";
+import { TabelBandingEpresensi } from "./TabelBandingEpresensi";
+import { bandingkanPotongan, type HasilBandingPotongan } from "../../../../business-logic/bandingPotonganEpresensi";
+import { ambilPotonganEpresensi, pegawaiIdEpresensiUntukNip } from "../../../../adapters/potonganEpresensi";
+import { muatHariLiburPeriode } from "../../../../lib/hariLibur";
+import {
+  kejadianTidakPresensiHari,
+  potonganHarianPersen,
+  rincianJamKerjaHari,
+} from "../../../../business-logic/rincianJamKerjaHarian";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +59,18 @@ const LABEL_STATUS: Record<string, string> = {
 /** Status yang berhak uang makan (SBM 2026 item 22.1). */
 const BERHAK_UANG_MAKAN = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
 
+/**
+ * Status yang punya kewajiban jam kerja kantor - cerminan
+ * KATEGORI_WAJIB_JAM_KERJA di presensiPdfKeRekap.ts, dalam kosakata yang
+ * TERSIMPAN (WFH_WFA -> "WFH"). Nilai lama HADIR/TERLAMBAT/WFA ikut karena
+ * masih ada di baris hasil impor terdahulu.
+ *
+ * "TIDAK_PRESENSI" ikut HANYA untuk Pasal 13 ayat (2) - hari itu memang tidak
+ * punya jam untuk diukur terlambat/pulang cepatnya.
+ */
+const WAJIB_JAM_KERJA = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
+const WAJIB_PRESENSI = [...WAJIB_JAM_KERJA, "TIDAK_PRESENSI"];
+
 function jamTeks(waktu: Date | null): string {
   if (!waktu) return "-";
   const jam = String(waktu.getUTCHours()).padStart(2, "0");
@@ -61,10 +83,22 @@ export default async function RincianPresensiPegawaiPage({
   searchParams,
 }: {
   params: Promise<{ nip: string }>;
-  searchParams: Promise<{ bulan?: string; tahun?: string; dari?: string; satker?: string }>;
+  searchParams: Promise<{
+    bulan?: string;
+    tahun?: string;
+    dari?: string;
+    satker?: string;
+    rinci?: string;
+    banding?: string;
+  }>;
 }) {
   const { nip } = await params;
-  const { bulan, tahun, dari, satker } = await searchParams;
+  const { bulan, tahun, dari, satker, rinci, banding } = await searchParams;
+  // Tampilan disimpan di URL, bukan state klien - konsisten dengan filter
+  // periode & toggle rincian di /kasubag/kalkulasi, jadi tetap jalan tanpa
+  // JavaScript dan tautannya bisa dibagikan.
+  const modeJamKerja = rinci === "1" && banding !== "1";
+  const modeBanding = banding === "1";
 
   const akun = await getSessionAccount();
   const authUser: AuthUser | null =
@@ -109,7 +143,7 @@ export default async function RincianPresensiPegawaiPage({
   // Tanggal yang dinyatakan bermasalah (Pasal 10 ayat (2)) + koreksi jam yang
   // sudah dibuat petugas absensi. Keduanya ditampilkan DI SAMPING jam asli,
   // bukan menggantikannya - data mentah e-Presensi tetap kelihatan apa adanya.
-  const [kendalaPeriode, koreksiPeriode] = await Promise.all([
+  const [kendalaPeriode, koreksiPeriode, hariLiburPeriode] = await Promise.all([
     prisma.kendalaEpresensi.findMany({
       where: {
         tanggal: { gte: awal, lt: akhir },
@@ -121,6 +155,10 @@ export default async function RincianPresensiPegawaiPage({
       where: { pegawaiId: pegawai.id, tanggal: { gte: awal, lt: akhir } },
       include: { dikoreksiOleh: { select: { nama: true } } },
     }),
+    // Tanggal merah dipakai tabel rincian jam kerja: di hari libur tidak ada
+    // kewajiban jam kerja, jadi seluruh kolom kewajibannya kosong - keputusan
+    // yang sama dengan yang dipegang mesin potongan.
+    muatHariLiburPeriode(periodeBulan, periodeTahun),
   ]);
 
   // Koreksi & penanda kendala baru berpengaruh SETELAH presensi ditarik ulang
@@ -142,6 +180,80 @@ export default async function RincianPresensiPegawaiPage({
 
   const totalTelat = harian.reduce((a, h) => a + h.menitTerlambat, 0);
   const totalPulangCepat = harian.reduce((a, h) => a + h.menitPulangCepat, 0);
+
+  // --- Bahan tabel rincian jam kerja (bentuk rekap petugas) -------------------
+  // Menit-menitnya DIBACA dari kolom tersimpan, bukan dihitung ulang - kecuali
+  // cacah kejadian Pasal 13 ayat (2), yang memang tidak punya kolom sendiri di
+  // PresensiHarian dan karena itu direkonstruksi. Rekonstruksi bisa menyimpang,
+  // jadi jumlah sebulannya diadu ke RekapPresensiPeriode di bawah dan
+  // selisihnya dikatakan apa adanya.
+  const menitDariWaktu = (w: Date | null) => (w === null ? null : w.getUTCHours() * 60 + w.getUTCMinutes());
+
+  const barisJamKerja: BarisTabelRincianJamKerja[] = harian.map((h) => {
+    const iso = h.tanggal.toISOString().slice(0, 10);
+    const keteranganLibur = hariLiburPeriode.get(iso) ?? null;
+    const rincian = rincianJamKerjaHari({
+      tanggalIso: iso,
+      indeksHari: h.tanggal.getUTCDay(),
+      hariLibur: keteranganLibur !== null,
+      jamMasukMenit: menitDariWaktu(h.jamMasuk),
+      jamKeluarMenit: menitDariWaktu(h.jamKeluar),
+    });
+
+    const kejadianTidakPresensi = kejadianTidakPresensiHari({
+      wajibPresensi: WAJIB_PRESENSI.includes(h.statusKehadiran),
+      hariLibur: rincian.hariLibur,
+      jamMasukMenit: rincian.jamMasukMenit,
+      jamKeluarMenit: rincian.jamKeluarMenit,
+      dikecualikanKendala: tanggalKendala.has(iso),
+      dikoreksiManual: petaKoreksi.has(iso),
+    });
+
+    return {
+      tanggal: h.tanggal,
+      statusLabel: LABEL_STATUS[h.statusKehadiran] ?? h.statusKehadiran,
+      rincian,
+      potonganPersen: potonganHarianPersen({
+        // "ALPHA" di akhir pekan / tanggal merah bukan alpha - tidak ada
+        // kewajiban hadir yang dilanggar (lihat hitung.akhirPekan di mesinnya).
+        hariAlpha: h.statusKehadiran === "ALPHA" && !rincian.hariLibur,
+        kejadianTidakPresensi,
+        menitTerlambat: h.menitTerlambat,
+        menitPulangCepat: h.menitPulangCepat,
+        menitMeninggalkanKantor: h.menitMeninggalkanKantor,
+        tidakIkutUpacara: h.tidakIkutUpacara,
+      }),
+      keteranganLibur,
+      dikoreksiManual: petaKoreksi.has(iso),
+      kejadianTidakPresensi,
+    };
+  });
+
+  // Cek silang per komponen. Yang diperiksa BUKAN totalnya saja: dua selisih
+  // berlawanan arah bisa saling menutup dan tabelnya terlihat benar.
+  const jumlahHarian = {
+    jumlahHariAlpha: harian.filter(
+      (h) => h.statusKehadiran === "ALPHA" && !hariLiburPeriode.has(h.tanggal.toISOString().slice(0, 10)) && ![0, 6].includes(h.tanggal.getUTCDay())
+    ).length,
+    jumlahTidakPresensi: barisJamKerja.reduce((a, b) => a + b.kejadianTidakPresensi, 0),
+    totalMenitTerlambat: totalTelat,
+    totalMenitPulangCepat: totalPulangCepat,
+    totalMenitMeninggalkanKantor: harian.reduce((a, h) => a + h.menitMeninggalkanKantor, 0),
+    jumlahTidakIkutUpacara: harian.filter((h) => h.tidakIkutUpacara).length,
+  };
+  const selisihKomponen =
+    rekap && harian.length > 0
+      ? (
+          [
+            ["Hari alpha", jumlahHarian.jumlahHariAlpha, rekap.jumlahHariAlpha],
+            ["Kejadian tidak presensi", jumlahHarian.jumlahTidakPresensi, rekap.jumlahTidakPresensi],
+            ["Menit terlambat", jumlahHarian.totalMenitTerlambat, rekap.totalMenitTerlambat],
+            ["Menit pulang cepat", jumlahHarian.totalMenitPulangCepat, rekap.totalMenitPulangCepat],
+            ["Menit meninggalkan kantor", jumlahHarian.totalMenitMeninggalkanKantor, rekap.totalMenitMeninggalkanKantor],
+            ["Tidak ikut upacara", jumlahHarian.jumlahTidakIkutUpacara, rekap.jumlahTidakIkutUpacara],
+          ] as const
+        ).filter(([, dariHarian, dariRekap]) => dariHarian !== dariRekap)
+      : [];
 
   // Bahan tabel "kenapa potongan saya segini": bobot kehadiran penuh (30% x
   // tarif kelas jabatan) + komponen kehadiran yang benar-benar tersimpan, biar
@@ -174,6 +286,66 @@ export default async function RincianPresensiPegawaiPage({
           href: `/tukin/presensi?bulan=${periodeBulan}&tahun=${periodeTahun}`,
         };
 
+  /** Tautan ke halaman ini dengan tampilan tabel yang lain - parameter lain dibawa serta. */
+  const hrefMode = (mode: "presensi" | "jamKerja" | "banding") => {
+    const q = new URLSearchParams({ bulan: String(periodeBulan), tahun: String(periodeTahun) });
+    if (dari) q.set("dari", dari);
+    if (satker) q.set("satker", satker);
+    if (mode === "jamKerja") q.set("rinci", "1");
+    if (mode === "banding") q.set("banding", "1");
+    return `/tukin/presensi/${encodeURIComponent(pegawai.nip)}?${q.toString()}`;
+  };
+
+  // --- Banding ke e-Presensi -------------------------------------------------
+  // DUA sistem luar dihubungi di sini (SIAP untuk memetakan NIP -> id_pegawai,
+  // lalu e-Presensi untuk membaca keputusan potongannya), jadi SENGAJA hanya
+  // dijalankan kalau tampilannya memang sedang dibuka - bukan di tiap kunjungan
+  // halaman ini. Keduanya READ-ONLY.
+  //
+  // Kegagalan koneksi TIDAK boleh merobohkan halaman: SIAP ada di segmen
+  // jaringan yang berbeda dan pernah tidak terjangkau. Yang muncul penjelasan,
+  // bukan galat mentah.
+  let hasilBanding: HasilBandingPotongan | null = null;
+  let galatBanding: string | null = null;
+  if (modeBanding) {
+    try {
+      const idEpresensi = await pegawaiIdEpresensiUntukNip(pegawai.nip);
+      if (idEpresensi === null) {
+        galatBanding =
+          "NIP ini tidak ketemu di SIAP, jadi id pegawai e-Presensi-nya tidak bisa ditentukan. Perbandingan tidak bisa dibuat.";
+      } else {
+        const potonganEpresensi = await ambilPotonganEpresensi(idEpresensi, periodeBulan, periodeTahun);
+        hasilBanding = bandingkanPotongan({
+          epresensi: potonganEpresensi,
+          // Menitnya dari KOLOM TERSIMPAN (yang dipakai membayar), bukan dari
+          // rumus tampilan tabel rincian jam kerja - supaya yang dibandingkan
+          // benar-benar angka Gajihub, bukan turunannya. Satu-satunya yang
+          // direkonstruksi adalah cacah kejadian ayat (2), yang memang tidak
+          // punya kolom sendiri; panel peringatan di atas sudah menyalakan
+          // tanda kalau rekonstruksi itu tidak menjumlah ke rekap bulanan.
+          gajihub: harian.map((h, i) => {
+            const libur = barisJamKerja[i].rincian.hariLibur;
+            return {
+              tanggalIso: barisJamKerja[i].rincian.tanggalIso,
+              hariAlpha: h.statusKehadiran === "ALPHA" && !libur,
+              kejadianTidakPresensi: barisJamKerja[i].kejadianTidakPresensi,
+              menitTerlambat: h.menitTerlambat,
+              menitPulangCepat: h.menitPulangCepat,
+              menitMeninggalkanKantor: h.menitMeninggalkanKantor,
+              tidakIkutUpacara: h.tidakIkutUpacara,
+            };
+          }),
+          bobotKehadiranRupiah: bobotKehadiranPenuh,
+        });
+      }
+    } catch (e) {
+      galatBanding =
+        "Tidak bisa menghubungi SIAP atau e-Presensi: " +
+        (e instanceof Error ? e.message : String(e)) +
+        ". Perbandingan ini membaca kedua sistem itu langsung (read-only), jadi butuh jaringan kantor.";
+    }
+  }
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <Link href={asal.href} className="text-sm font-semibold text-teal-deep underline">
@@ -198,6 +370,11 @@ export default async function RincianPresensiPegawaiPage({
       </p>
 
       <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
+        {/* Tampilan yang sedang dibuka ikut terbawa - mengganti periode tidak
+            boleh diam-diam melempar orang kembali ke tabel yang satunya. */}
+        {modeJamKerja && <input type="hidden" name="rinci" value="1" />}
+        {dari && <input type="hidden" name="dari" value={dari} />}
+        {satker && <input type="hidden" name="satker" value={satker} />}
         <div>
           <label className="field-label">Bulan</label>
           <SearchableSelect
@@ -298,10 +475,75 @@ export default async function RincianPresensiPegawaiPage({
         </div>
       )}
 
-      <div className="card mt-4 overflow-x-auto">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold text-ink">Rincian harian</h2>
+        {/* Tautan GET biasa, bukan tombol berstate - tetap jalan tanpa
+            JavaScript dan tautannya bisa dibagikan, pola yang sama dengan
+            toggle ringkas/rinci di /kasubag/kalkulasi. */}
+        <div className="flex gap-0.5 rounded-lg border border-line bg-surface-2 p-0.5 text-xs font-semibold">
+          {(
+            [
+              ["presensi", "Presensi", !modeJamKerja && !modeBanding],
+              ["jamKerja", "Rincian jam kerja", modeJamKerja],
+              ["banding", "Banding e-Presensi", modeBanding],
+            ] as const
+          ).map(([mode, label, aktif]) => (
+            <Link
+              key={mode}
+              href={hrefMode(mode)}
+              aria-current={aktif ? "page" : undefined}
+              className={`rounded-md px-2.5 py-1.5 ${
+                aktif ? "bg-white text-teal-deep shadow-sm" : "text-ink-2 hover:text-ink"
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {modeJamKerja && selisihKomponen.length > 0 && (
+        <div className="card mt-3 border-gold/40 bg-gold-tint p-4">
+          <p className="text-sm font-bold text-ink">Angka harian tidak menjumlah ke rekap bulanan</p>
+          <p className="mt-1 text-xs text-ink-2">
+            Kolom <strong>% Potongan</strong> disusun dari baris harian, sementara yang dipakai membayar adalah rekap
+            bulanan. Keduanya berbeda pada:
+          </p>
+          <ul className="mt-1.5 space-y-0.5 text-xs text-ink-2">
+            {selisihKomponen.map(([label, dariHarian, dariRekap]) => (
+              <li key={label}>
+                <strong>{label}</strong>: rincian harian {dariHarian}, rekap bulanan {dariRekap}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-xs text-ink-2">
+            Penyebab yang paling sering: rekap bulanannya pernah ditimpa lewat template Excel (menit meninggalkan
+            kantor & jumlah tidak ikut upacara memang hanya bisa diisi dari sana), atau presensinya berubah setelah
+            rekap terakhir dihitung. <strong>Yang membayar tetap rekap bulanan.</strong>
+          </p>
+        </div>
+      )}
+
+      {modeBanding ? (
+        <div className="mt-3">
+          {galatBanding !== null ? (
+            <div className="card border-gold/40 bg-gold-tint p-4">
+              <p className="text-sm font-bold text-ink">Perbandingan tidak bisa dibuat</p>
+              <p className="mt-1 text-xs text-ink-2">{galatBanding}</p>
+            </div>
+          ) : hasilBanding !== null ? (
+            <TabelBandingEpresensi hasil={hasilBanding} bobotKehadiranRupiah={bobotKehadiranPenuh} />
+          ) : null}
+        </div>
+      ) : modeJamKerja ? (
+        <div className="mt-3">
+          <TabelRincianJamKerja baris={barisJamKerja} />
+        </div>
+      ) : (
+      <div className="card mt-3 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
+            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
               <th className="px-3 py-2.5">Tanggal</th>
               <th className="px-3 py-2.5">Status</th>
               <th className="px-3 py-2.5">Masuk</th>
@@ -356,7 +598,7 @@ export default async function RincianPresensiPegawaiPage({
                     )}
                   </td>
                   {bolehKoreksi && (
-                    <td className="px-3 py-2 align-top">
+                    <td className="px-3 py-2">
                       {kendala ? (
                         <KoreksiJamForm
                           nip={pegawai.nip}
@@ -391,11 +633,45 @@ export default async function RincianPresensiPegawaiPage({
           </tbody>
         </table>
       </div>
+      )}
 
-      <p className="mt-3 text-xs text-muted">
-        Potongan dihitung ulang oleh Gajihub sesuai Pasal 13 Permenaker 15/2024 - kolom &quot;Potongan&quot; di PDF
-        e-Presensi tidak dipakai. Jam kerja acuan: masuk 07:30, pulang 16:00 (Senin-Kamis) / 16:30 (Jumat).
-      </p>
+      {modeBanding ? (
+        <p className="mt-3 text-xs text-muted">
+          Membaca <strong>SIAP</strong> (memetakan NIP ke id pegawai e-Presensi) dan tabel{" "}
+          <span className="font-mono">potongan_tukin</span> di <strong>e-Presensi</strong> secara langsung - keduanya
+          READ-ONLY, tidak ada yang ditulis. Hanya tanggal yang berbeda yang ditampilkan.
+        </p>
+      ) : modeJamKerja ? (
+        <div className="card mt-3 p-4 text-xs text-ink-2">
+          <p className="font-bold text-ink">Cara membaca tabel ini</p>
+          <p className="mt-1.5">
+            Bentuknya mengikuti rekap absensi yang selama ini disusun petugas, supaya keduanya bisa diadu baris per
+            baris. Istirahat yang dipotong dari rentang masuk-pulang: <strong>60 menit</strong> Senin-Kamis,{" "}
+            <strong>90 menit</strong> Jumat (Pasal 9 ayat (2)) - karena itu 07:30-16:00 menghasilkan tepat 450 menit
+            kerja, yaitu 7,5 jam Pasal 9 ayat (1).
+          </p>
+          <p className="mt-2 rounded-lg bg-gold-tint px-3 py-2">
+            <strong>&quot;Kekurangan jam kerja&quot; BUKAN &quot;pulang cepat&quot;, dan tidak memotong apa pun.</strong>{" "}
+            Pulang cepat diukur ke jam pulang tetap (16:00 / 16:30) dan itulah yang dipotong Pasal 13 ayat (3).
+            Kekurangan jam kerja diukur ke <em>jam harus pulang</em> yang ikut bergeser kalau orangnya datang terlambat
+            - dibatasi jam toleransi pulang. Contohnya: masuk 09:00 lalu pulang 16:00 menghasilkan pulang cepat{" "}
+            <strong>0 menit</strong> tapi kekurangan jam kerja <strong>60 menit</strong>. Kolom{" "}
+            <strong>% Potongan</strong> memakai angka yang dipotong, bukan kolom kekurangan.
+          </p>
+          <p className="mt-2">
+            &quot;Jam toleransi pulang&quot; di sini batas atas kewajiban checkout, <em>bukan</em> jam mulai lembur -
+            angkanya kebetulan sama (jam pulang + 60 menit). Kolom{" "}
+            <strong>Menit kerja</strong> juga memakai rumus berkas petugas (rentang masuk-pulang dikurangi istirahat,
+            tanpa batas atas), jadi angkanya bisa melebihi 450 dan tidak sama dengan kolom{" "}
+            <span className="font-mono">menit_kerja</span> milik e-Presensi yang dibatasi 7,5 jam.
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-muted">
+          Potongan dihitung ulang oleh Gajihub sesuai Pasal 13 Permenaker 15/2024 - kolom &quot;Potongan&quot; di PDF
+          e-Presensi tidak dipakai. Jam kerja acuan: masuk 07:30, pulang 16:00 (Senin-Kamis) / 16:30 (Jumat).
+        </p>
+      )}
     </main>
   );
 }

@@ -257,12 +257,27 @@ describe("koreksi jam oleh petugas absensi", () => {
   });
 
   it("koreksi jam MASUK menggantikan ketukan sore yang bikin telat ratusan menit", () => {
-    // Kasus nyata 15 Juli 2026: masuk tercatat 19:32 -> telat 662 menit,
-    // padahal orangnya lupa absen pagi. Petugas mengoreksi jadi 07:20.
+    // Kasus nyata 15 Juli 2026: masuk tercatat 19:32, padahal orangnya lupa
+    // absen pagi. Petugas mengoreksi jadi 07:20.
+    //
+    // DULU baris ini menghasilkan 662 menit terlambat (19:32 dibaca sebagai
+    // kedatangan), dan koreksi petugas adalah SATU-SATUNYA cara membatalkannya.
+    // Sekarang mesin menolak sendiri ketukan yang jatuh sesudah jam pulang
+    // wajib, jadi angkanya 0 bahkan tanpa koreksi - lihat blok "ketukan yang
+    // mustahil sebagai jam masuk" di presensiPdfKeRekap.test.ts. Yang berubah
+    // BUKAN maksud test ini, tapi titik berangkatnya.
     const sore = [baris("15-07-2026", "Rabu", "19:32", "23:59", "WFO")];
     const tanpaKoreksi = rekapDariLaporanPdf(laporan(sore), JADWAL_KERJA_DEFAULT, KENDALA);
-    expect(tanpaKoreksi.rekap.totalMenitTerlambat).toBe(662);
+    expect(tanpaKoreksi.rekap.totalMenitTerlambat).toBe(0);
 
+    // Tanpa penanda kendala, hari itu TIDAK lolos gratis: ketukan masuk yang
+    // ditolak berarti tap masuknya memang tidak ada - Pasal 13 ayat (2), 1%.
+    const tanpaKendala = rekapDariLaporanPdf(laporan(sore), JADWAL_KERJA_DEFAULT, new Set());
+    expect(tanpaKendala.rekap.totalMenitTerlambat).toBe(0);
+    expect(tanpaKendala.rekap.jumlahTidakPresensi).toBe(1);
+
+    // Koreksi petugas tetap yang paling kuat: jam yang sudah diverifikasi
+    // manusia dipercaya apa adanya, dan 07:20 memang tepat waktu.
     const koreksi = new Map([["2026-07-15", { jamMasukMenit: 7 * 60 + 20, jamKeluarMenit: 16 * 60 }]]);
     const hasil = rekapDariLaporanPdf(laporan(sore), JADWAL_KERJA_DEFAULT, KENDALA, koreksi);
     expect(hasil.rekap.totalMenitTerlambat).toBe(0);

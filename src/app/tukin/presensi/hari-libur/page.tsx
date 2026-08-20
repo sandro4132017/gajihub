@@ -235,7 +235,7 @@ export default async function HariLiburPage({
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-muted">
+                <tr className="text-muted">
                   <th className="py-1 pr-3 font-medium">Tanggal</th>
                   <th className="py-1 pr-3 font-medium">Hari</th>
                   <th className="py-1 pr-3 font-medium">Keterangan</th>
