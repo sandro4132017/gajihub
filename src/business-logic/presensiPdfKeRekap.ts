@@ -101,6 +101,10 @@ export interface JadwalKerja {
 
 const MENIT = (jam: number, menit: number) => jam * 60 + menit;
 
+/** Kebalikan MENIT - buat catatan yang dibaca manusia, mis. 1020 -> "17:00". */
+const jamTeks = (menit: number) =>
+  `${String(Math.floor(menit / 60)).padStart(2, "0")}:${String(menit % 60).padStart(2, "0")}`;
+
 /**
  * TOLERANSI KETERLAMBATAN 60 MENIT PER HARI.
  *
@@ -141,6 +145,50 @@ const MENIT = (jam: number, menit: number) => jam * 60 + menit;
  * manual Biro Keuangan.
  */
 export const TOLERANSI_TERLAMBAT_MENIT = 60;
+
+/**
+ * Jam keluar TEPAT 23:59 - isian OTOMATIS e-Presensi ketika tap pulang tidak
+ * pernah masuk, bukan ketukan sungguhan.
+ *
+ * Dibuktikan sebarannya: 3.320 baris jatuh persis di menit yang sama
+ * sementara 456 tersebar di 59 menit lain sepanjang jam 23. Manusia tidak
+ * menekan tombol serentak di satu menit.
+ *
+ * SENGAJA 23:59 PERSIS, bukan "jam 23 ke atas": 23:50-23:58 masih mungkin
+ * kepulangan sungguhan (lembur), dan Juli 2026 memang ada 54 baris di sana.
+ * Nilai ini sudah lebih dulu diperlakukan begitu di jalur rekap manual &
+ * pembandingnya - konstantanya disatukan di sini supaya tidak ada dua ambang.
+ */
+export const JAM_TAP_PULANG_HILANG = 23 * 60 + 59;
+
+/**
+ * Selisih maksimal (menit) antara jam masuk & jam keluar yang masih dibaca
+ * sebagai SATU ketukan tersalin ke dua kolom, bukan hari kerja sungguhan.
+ *
+ * Dipakai bareng jalur rekap manual (dulu punya salinan sendiri di
+ * `rekapAbsensiManual.ts`). Dua ambang untuk satu hal cepat atau lambat
+ * berbeda, dan bedanya baru ketahuan setelah angkanya dipakai membayar.
+ */
+export const AMBANG_KETUKAN_GANDA_MENIT = 2;
+
+/**
+ * TIDAK ADA JEDA SEBELUM LEMBUR - JANGAN DIPASANG LAGI TANPA DASAR BARU.
+ *
+ * Lembur di hari kerja dihitung TEPAT dari jam pulang wajib. Keterangan user
+ * (2026-08-19), dengan contohnya sendiri: "semisal pegawai absen pulang jam
+ * 16:00 terus dia mau lembur sampai jam 20:00, dari jam 16 ke 17 itu udah
+ * kehitung 1 jam lembur" - jadi 16:00-20:00 = 4 jam, bukan 3.
+ *
+ * Sempat dipasang jeda 1 jam pada 2026-08-18 (JEDA_SEBELUM_LEMBUR_MENIT = 60,
+ * "jam 4-5 nya tidak termasuk") lalu DICABUT sehari kemudian setelah user
+ * memberi contoh di atas. Dicatat di sini karena keduanya sama-sama datang dari
+ * keterangan lisan dan gampang tertukar lagi - dasar tertulisnya SAMA-SAMA
+ * belum ada (lihat C1 di docs/permintaan-data-dan-konfirmasi-osdma.md).
+ *
+ * Akibat yang perlu disadari: syarat 2 jam berturut-turut untuk uang makan
+ * lembur (SBM 2026 item 23.2) ikut diukur dari jam pulang wajib, jadi pulang
+ * 18:00 sudah memenuhi - sewaktu ada jeda, batas itu baru tercapai pukul 19:00.
+ */
 
 export const JADWAL_KERJA_DEFAULT: JadwalKerja = {
   jamMasukWajibMenit: MENIT(7, 30),
@@ -486,6 +534,81 @@ export function rekapDariLaporanPdf(
       const keluarDikoreksi = koreksi?.jamKeluarMenit != null;
       if (koreksi) adaKoreksiJam.add(iso);
 
+      // --- KETUKAN YANG MUSTAHIL SEBAGAI JAM MASUK --------------------------
+      // Jam masuk yang jatuh PADA ATAU SESUDAH jam pulang wajib tidak mungkin
+      // kedatangan: hari kerjanya sudah berakhir. Yang sebenarnya terjadi
+      // adalah tap masuknya HILANG, dan yang tercatat cuma satu ketukan nyasar
+      // di sore/malam hari - e-Presensi menyimpannya di kolom jam masuk.
+      //
+      // Dibaca mentah, ini menghasilkan angka yang tidak bisa dipertahankan.
+      // Terukur di Juli 2026 se-kementerian: 559 baris dipotong LEBIH BESAR
+      // daripada tarif alpha 3%/hari (Pasal 13 ayat (1)) - artinya datang
+      // terlambat jadi lebih mahal daripada tidak masuk sama sekali - dan
+      // TIDAK SATU PUN dari 559 baris itu jam masuknya sebelum pukul 12:00.
+      // Yang terparah 898 menit = 8,98%, dari tap pukul 23:26. Ini juga 52,6%
+      // dari SELURUH menit keterlambatan yang tercatat bulan itu.
+      //
+      // Aturan ini SUDAH ADA sebelumnya, tapi terkunci syarat tambahan: tap
+      // sore baru ditolak kalau barisnya bertanda "lupa presensi" dari kolom
+      // Potongan e-Presensi. Penanda itu TIDAK PERNAH menyala lewat jalur
+      // sinkronisasi database - 0 dari 99.065 baris Juli 2026 - jadi
+      // praktisnya aturannya mati. Syarat itu DICABUT; yang tersisa murni uji
+      // kemustahilan, dan itu berlaku dengan atau tanpa penanda dari sumber.
+      //
+      // BUKAN mengoreksi Permenaker, dan bukan batas maksimal potongan: ini menolak
+      // mempercayai data yang tidak mungkin. Batas atas potongan per hari
+      // (usulan batas 3%) adalah keputusan KEBIJAKAN yang terpisah dan belum
+      // diambil - lihat TODO(confirm) di docs/permintaan-data-dan-konfirmasi-osdma.md.
+      //
+      // Koreksi petugas selalu menang: jam yang sudah diverifikasi manusia
+      // terhadap foto & geotag bukan tebakan atas ketukan yang hilang.
+      const masukMustahil =
+        !masukDikoreksi &&
+        jamMasukEfektif !== null &&
+        jamPulangWajib !== null &&
+        jamMasukEfektif >= jamPulangWajib;
+
+      // --- KETUKAN YANG MUSTAHIL SEBAGAI JAM PULANG -------------------------
+      // Cerminan aturan di atas, dan sebelumnya TIDAK ADA di jalur ini -
+      // sisi pulang cuma bersandar pada penanda "lupa presensi" dari sumber,
+      // yang lewat sinkronisasi database praktis tidak pernah menyala.
+      // Akibatnya asimetris: ketukan nyasar di kolom masuk ditolak, ketukan
+      // nyasar di kolom pulang dipercaya.
+      //
+      // Dua bentuk, keduanya nyata di data Juli 2026 se-kementerian:
+      //   1. jam keluar TEPAT 23:59 - isian otomatis e-Presensi (11 baris
+      //      yang `menit_kerja`-nya TIDAK dinolkan, jadi lolos aturan lama).
+      //   2. jam keluar pada/sebelum jam masuk wajib - orang tidak bisa
+      //      pulang sebelum jam kerjanya dimulai (1 baris: keluar 06:15).
+      const keluarMustahil =
+        !keluarDikoreksi &&
+        jamKeluarEfektif !== null &&
+        (jamKeluarEfektif === JAM_TAP_PULANG_HILANG || jamKeluarEfektif <= jadwal.jamMasukWajibMenit);
+
+      // --- SATU KETUKAN TERSALIN KE DUA KOLOM -------------------------------
+      // Jam masuk & pulang berselisih semenit-dua: yang terjadi cuma SATU tap,
+      // dan sisi mana yang hilang TIDAK BISA DITEBAK - ketukannya bisa pagi
+      // maupun sore. Karena itu KEDUA sisinya tidak dipercaya, bukan cuma satu.
+      //
+      // Ini bukan kehati-hatian berlebihan. Terukur Juli 2026: 359 baris
+      // berpola ini, dan 16 di antaranya LOLOS dari `masukMustahil` karena
+      // ketukannya jatuh beberapa menit SEBELUM jam pulang wajib (15:58,
+      // 15:59, 16:29 di hari Jumat). Dibaca sebagai kedatangan, satu tap sore
+      // itu menagih ~4,5% keterlambatan sehari - lebih mahal daripada tidak
+      // masuk sama sekali (3%, ayat (1)) - untuk hari yang bukti kehadirannya
+      // justru ADA.
+      //
+      // Aturan yang sama sudah lama dipakai jalur rekap manual Excel; yang
+      // dilakukan di sini memindahkannya ke mesin, supaya kedua jalur tidak
+      // memperlakukan pola yang sama secara berbeda.
+      const ketukanGanda =
+        !masukDikoreksi &&
+        !keluarDikoreksi &&
+        jamMasukEfektif !== null &&
+        jamKeluarEfektif !== null &&
+        jamKeluarEfektif >= jamMasukEfektif &&
+        jamKeluarEfektif - jamMasukEfektif <= AMBANG_KETUKAN_GANDA_MENIT;
+
       // TIDAK ADA potongan apa pun di hari yang memang bukan hari kerja.
       // Pasal 13 memotong pelanggaran terhadap KEWAJIBAN jam kerja - kalau
       // hari itu tidak ada kewajibannya, tidak ada yang dilanggar. Ini nyata
@@ -542,8 +665,29 @@ export function rekapDariLaporanPdf(
         // dinyatakan hilang oleh e-Presensi sudah digantikan keterangan yang
         // diverifikasi manusia. Tanpa pengecualian ini, koreksi jam tidak
         // ada gunanya - potongannya tetap terhitung.
+        //
+        // `masukMustahil` masuk ke daftar penanda yang sama, dan memang di
+        // sinilah tempatnya: tap masuk yang tidak ada persis bunyi ayat (2).
+        // Tanpa ini, menolak ketukannya di blok bawah membuat harinya lolos
+        // TANPA potongan apa pun - lebih murah daripada lupa absen biasa, dan
+        // itu justru insentif yang salah.
         const sudahDiperbaiki = masukDikoreksi || keluarDikoreksi;
-        if (tidakPresensi === 0 && !sudahDiperbaiki && (lupa || b.menitKerja === 0)) tidakPresensi++;
+        // `keluarMustahil` & `ketukanGanda` masuk ke daftar yang sama dan
+        // dengan alasan yang sama seperti `masukMustahil`: kalau ketukannya
+        // cuma ditolak di blok bawah tanpa menyalakan ayat (2), harinya lolos
+        // TANPA potongan apa pun - lebih murah daripada lupa absen biasa.
+        //
+        // Tetap MAKSIMAL 1 kejadian di cabang ini, walau beberapa penanda
+        // menyala bersamaan. Pada ketukan ganda yang hilang memang cuma SATU
+        // sisi (satu tap terbukti ada), jadi menagih 2% berarti menagih
+        // ketukan yang sebenarnya dilakukan.
+        if (
+          tidakPresensi === 0 &&
+          !sudahDiperbaiki &&
+          (lupa || b.menitKerja === 0 || masukMustahil || keluarMustahil || ketukanGanda)
+        ) {
+          tidakPresensi++;
+        }
       }
 
       if (!hariLibur && KATEGORI_WAJIB_JAM_KERJA.includes(kategori)) {
@@ -557,10 +701,9 @@ export function rekapDariLaporanPdf(
         // Jam hasil KOREKSI petugas selalu dipercaya: itu keterangan yang
         // sudah diverifikasi manusia terhadap bukti (foto, geotag, jam),
         // bukan tebakan atas ketukan yang hilang.
-        const masukDipercaya =
-          jamMasukEfektif !== null &&
-          (masukDikoreksi || !lupa || jamPulangWajib === null || jamMasukEfektif < jamPulangWajib);
-        const keluarDipercaya = jamKeluarEfektif !== null && (keluarDikoreksi || !lupa);
+        const masukDipercaya = jamMasukEfektif !== null && !masukMustahil && !ketukanGanda;
+        const keluarDipercaya =
+          jamKeluarEfektif !== null && !keluarMustahil && !ketukanGanda && (keluarDikoreksi || !lupa);
 
         // Keterlambatan MENTAH (tanpa toleransi) dipakai HANYA buat deteksi
         // anomali di bawah. Ambangnya soal "ini jelas bukan ketukan pagi",
@@ -578,6 +721,25 @@ export function rekapDariLaporanPdf(
         }
         // Peringatan "jam masuk janggal" tidak perlu muncul lagi kalau jamnya
         // memang sudah diperbaiki manusia - itu justru penyelesaiannya.
+        if (masukMustahil) {
+          catatan.push(
+            `${iso}: jam masuk ${b.jamMasukTeks ?? "-"} jatuh sesudah jam pulang wajib (${jamTeks(jamPulangWajib!)}) - tidak mungkin kedatangan, jadi TIDAK ditagih sebagai keterlambatan. Dihitung 1 kejadian tidak melakukan presensi masuk (Pasal 13 ayat (2)). Kalau pegawai punya bukti jam sebenarnya, perbaiki lewat koreksi jam.`
+          );
+        }
+        if (keluarMustahil) {
+          catatan.push(
+            `${iso}: jam keluar ${b.jamKeluarTeks ?? "-"} tidak mungkin kepulangan (${
+              jamKeluarEfektif === JAM_TAP_PULANG_HILANG
+                ? "isian otomatis e-Presensi saat tap pulang tidak masuk"
+                : `lebih pagi dari jam masuk wajib ${jamTeks(jadwal.jamMasukWajibMenit)}`
+            }) - TIDAK ditagih sebagai pulang cepat. Dihitung 1 kejadian tidak melakukan presensi pulang (Pasal 13 ayat (2)). Kalau pegawai punya bukti jam sebenarnya, perbaiki lewat koreksi jam.`
+          );
+        }
+        if (ketukanGanda) {
+          catatan.push(
+            `${iso}: jam masuk ${b.jamMasukTeks ?? "-"} dan jam keluar ${b.jamKeluarTeks ?? "-"} cuma berselisih ${(jamKeluarEfektif ?? 0) - (jamMasukEfektif ?? 0)} menit - satu ketukan tersalin ke dua kolom, dan sisi mana yang hilang tidak bisa ditebak. Keduanya TIDAK dipakai menghitung keterlambatan/pulang cepat; hari ini dihitung 1 kejadian tidak melakukan presensi (Pasal 13 ayat (2)).`
+          );
+        }
         if (!masukDikoreksi && menitTerlambatMentah > AMBANG_TERLAMBAT_JANGGAL_MENIT) {
           catatan.push(
             `${iso}: jam masuk ${b.jamMasukTeks} menghasilkan keterlambatan ${menitTerlambatMentah} menit - angkanya janggal, cek apakah pegawai lupa presensi pagi.`
@@ -716,11 +878,47 @@ export function rekapDariLaporanPdf(
           }
           continue;
         }
-        // Di hari kerja, lembur baru dihitung setelah jam pulang wajib. Di
-        // hari libur tidak ada jam kerja yang harus dilewati dulu.
-        const mulai = jamPulangWajib === null ? b.jamMasukMenit : Math.max(b.jamMasukMenit, jamPulangWajib);
+        // Di hari kerja lembur dihitung dari JAM PULANG WAJIB, tanpa jeda -
+        // jam pulang wajib 16:00 lalu pulang 20:00 = 4 jam. Lihat catatan
+        // "TIDAK ADA JEDA SEBELUM LEMBUR" di kepala file.
+        //
+        // Di hari libur tidak ada jam kerja yang harus diselesaikan dulu, jadi
+        // lembur dihitung penuh dari jam masuk.
+        //
+        // TODO(confirm) - BATASNYA JAM DINDING, BUKAN "7,5 JAM SUDAH TERPENUHI".
+        // Bedanya cuma terasa kalau pegawainya datang terlambat: yang masuk
+        // 10:00 lalu lembur sampai 20:00 dapat 3 jam lembur, SAMA PERSIS
+        // dengan yang masuk 07:30 dan lembur di rentang yang sama, padahal
+        // jam kerja hariannya masih kurang 2,5 jam. Yang pertama tetap kena
+        // potongan Pasal 13 ayat (3) atas keterlambatannya - tapi potongan itu
+        // di TUNJANGAN KINERJA, sementara uang lemburnya utuh.
+        //
+        // SENGAJA TIDAK diperbaiki sepihak: Permenaker 15/2024 tidak mengatur
+        // lembur sama sekali, dan SBM 2026 cuma menetapkan TARIF (Pasal 4-nya
+        // melempar tata cara ke PMK Pelaksanaan Anggaran). Jadi aturan "tutup
+        // dulu jam kerja harian" ada di dokumen yang memang belum kami punya -
+        // dokumen YANG SAMA yang dibutuhkan buat pengali 2x hari libur dan
+        // batas 40 jam/bulan. Lihat C1 di
+        // docs/permintaan-data-dan-konfirmasi-osdma.md.
+        //
+        // Sekarang DORMAN: dari 1.109 hari lembur di database, NOL yang juga
+        // punya keterlambatan (1.088 di antaranya akhir pekan, tempat jam
+        // pulang wajib memang null). Bangun lagi begitu jalur SPL ada -
+        // di ADK asli Rokeu Juni 2026, 109 dari 111 entri lembur justru
+        // jatuh di HARI KERJA.
+        const mulai =
+          jamPulangWajib === null ? b.jamMasukMenit : Math.max(b.jamMasukMenit, jamPulangWajib);
         const durasi = Math.max(0, b.jamKeluarMenit - mulai);
-        if (durasi === 0) continue;
+        if (durasi === 0) {
+          // Ada surat perintah lemburnya, tapi nol jam yang dibayar. Tanpa
+          // catatan ini pegawainya cuma melihat lembur Rp 0 tanpa sebab.
+          if (jamPulangWajib !== null && b.jamKeluarMenit <= jamPulangWajib) {
+            catatan.push(
+              `${iso}: ada baris Lembur, tapi jam pulangnya ${b.jamKeluarTeks ?? "-"} - belum melewati jam pulang wajib ${jamTeks(jamPulangWajib)}. Jam lembur yang dibayar 0.`
+            );
+          }
+          continue;
+        }
         jamHariIni += durasi / 60;
         // Syarat SBM 2026 item 23.2: minimal 2 jam BERTURUT-TURUT. Satu baris
         // = satu rentang masuk-pulang, jadi durasinya memang berturut-turut.

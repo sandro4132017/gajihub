@@ -4,9 +4,25 @@ import { pilihPeriodeDefault, periodeSekarang, resolvePeriode } from "../periode
 const P = (bulan: number, tahun: number) => ({ bulan, tahun });
 
 describe("pilihPeriodeDefault", () => {
-  it("memakai periode berjalan kalau datanya memang sudah ada", () => {
+  it("MELEWATI bulan berjalan walau datanya sudah ada", () => {
+    // Bulan berjalan belum selesai - presensinya baru terisi sampai hari ini,
+    // jadi potongan & uang makan masih akan berubah. Yang dibuka bawaan harus
+    // periode yang sudah tutup.
     const tersedia = [P(5, 2026), P(7, 2026), P(8, 2026)];
-    expect(pilihPeriodeDefault(tersedia, P(8, 2026))).toEqual(P(8, 2026));
+    expect(pilihPeriodeDefault(tersedia, P(8, 2026))).toEqual(P(7, 2026));
+  });
+
+  it("tetap memakai bulan berjalan kalau CUMA itu yang ada datanya", () => {
+    // Server baru yang baru sekali menarik presensi - halaman kosong tanpa
+    // penjelasan lebih buruk daripada angka yang belum final.
+    expect(pilihPeriodeDefault([P(8, 2026)], P(8, 2026))).toEqual(P(8, 2026));
+  });
+
+  it("melewati bulan berjalan lintas tahun", () => {
+    // Januari berjalan -> jatuh ke Desember tahun sebelumnya, bukan ke bulan
+    // lain di tahun yang sama.
+    const tersedia = [P(11, 2025), P(12, 2025), P(1, 2026)];
+    expect(pilihPeriodeDefault(tersedia, P(1, 2026))).toEqual(P(12, 2025));
   });
 
   it("jatuh ke periode terbaru yang ada datanya kalau bulan berjalan kosong", () => {

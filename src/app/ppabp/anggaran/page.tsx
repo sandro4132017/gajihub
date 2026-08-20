@@ -34,8 +34,8 @@ export default async function AnggaranRealisasiPage() {
       <div className="card mt-6 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-              <th className="px-4 py-2.5">Satuan Kerja</th>
+            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+              <th className="col-nama px-4 py-2.5">Satuan Kerja</th>
               <th className="px-4 py-2.5">Periode</th>
               <th className="px-4 py-2.5">Pagu</th>
               <th className="px-4 py-2.5">Realisasi</th>
@@ -52,7 +52,7 @@ export default async function AnggaranRealisasiPage() {
             )}
             {anggaranList.map((a) => (
               <tr key={a.id} className="border-b border-line-2">
-                <td className="px-4 py-2.5 font-semibold text-ink">{a.satuanKerja}</td>
+                <td className="col-nama px-4 py-2.5 font-semibold text-ink">{a.satuanKerja}</td>
                 <td className="px-4 py-2.5 text-ink-2">
                   {a.periodeBulan}/{a.periodeTahun}
                 </td>

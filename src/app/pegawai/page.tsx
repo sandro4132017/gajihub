@@ -321,7 +321,7 @@ function RiwayatPredikatKinerja({
         <>
           <table className="mt-2 w-full text-sm">
             <thead>
-              <tr className="border-b border-line text-left text-xs font-bold uppercase tracking-wide text-muted">
+              <tr className="border-b border-line text-xs font-bold uppercase tracking-wide text-muted">
                 <th className="py-1.5 pr-3">Periode</th>
                 <th className="py-1.5 pr-3">Predikat</th>
                 <th className="py-1.5 pr-3">Nilai kinerja</th>

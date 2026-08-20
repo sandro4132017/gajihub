@@ -313,7 +313,7 @@ export default async function DataSayaPage() {
                 {pegawai.presensi.map((p) => (
                   <tr key={p.id} className="border-t border-line-2">
                     <td className="py-1.5 text-muted">{formatTanggal(p.tanggal)}</td>
-                    <td className="py-1.5 text-right font-semibold text-ink">{p.statusKehadiran}</td>
+                    <td className="py-1.5 font-semibold text-ink">{p.statusKehadiran}</td>
                   </tr>
                 ))}
               </tbody>
@@ -334,7 +334,7 @@ export default async function DataSayaPage() {
                     <td className="py-1.5 text-muted">
                       {pk.periodeBulan}/{pk.periodeTahun}
                     </td>
-                    <td className="py-1.5 text-right font-semibold text-ink">
+                    <td className="py-1.5 font-semibold text-ink">
                       {pk.predikat} ({pk.nilaiAngka}%)
                     </td>
                   </tr>

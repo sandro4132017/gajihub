@@ -170,7 +170,7 @@ export default async function SlipGajiPage({
         )}
 
         {/* --- IDENTITAS --- */}
-        <table className="mt-5 w-full text-sm">
+        <table data-tabel="dokumen" className="mt-5 w-full text-sm">
           <tbody>
             <tr>
               <td className="w-56 py-0.5 align-top text-ink-2">Nama</td>
@@ -215,7 +215,7 @@ export default async function SlipGajiPage({
         <p className="mt-5 text-sm text-ink-2">Keterangan</p>
 
         {gaji ? (
-          <table className="mt-1 w-full text-sm">
+          <table data-tabel="dokumen" className="mt-1 w-full text-sm">
             <tbody>
               <tr>
                 <td colSpan={4} className="pb-1 pl-2 font-bold uppercase text-ink underline">
@@ -261,7 +261,7 @@ export default async function SlipGajiPage({
               Data gaji induk (gaji pokok &amp; tunjangan melekat) periode ini belum diunggah PPABP, jadi slip ini baru
               memuat komponen yang dihitung Gajihub.
             </div>
-            <table className="mt-2 w-full text-sm">
+            <table data-tabel="dokumen" className="mt-2 w-full text-sm">
               <tbody>
                 <BarisNilai label="Tunjangan Kinerja" nilai={tukin?.tukinBersih ?? 0} />
                 <BarisNilai label="Uang Makan" nilai={uangMakan?.totalUangMakan ?? 0} />

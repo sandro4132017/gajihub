@@ -1727,6 +1727,522 @@ golongan tiap pegawai.
 Hari WFO, Hari WFH/WFA, Hari Diklat, Hari Dinas Luar, Jam Lembur, Hari Makan
 Lembur.
 
+**TIDAK ADA jeda sebelum lembur - lembur dihitung sejak jam pulang wajib.**
+Keterangan user 2026-08-19 beserta contohnya: *"semisal pegawai absen pulang
+jam 16:00 terus dia mau lembur sampai jam 20:00, dari jam 16 ke 17 itu udah
+kehitung 1 jam lembur"*. Jadi 16:00-20:00 = **4 jam**.
+
+- **Jeda 1 jam sempat dipasang 2026-08-18 lalu DICABUT 2026-08-19.** Keterangan
+  pertama berbunyi *"lembur berlaku 1 jam setelah jam kerja... jam 4-5 nya tidak
+  termasuk"*; contoh susulan di atas membantahnya. Dicatat di kode
+  (`presensiPdfKeRekap.ts`, blok "TIDAK ADA JEDA SEBELUM LEMBUR") supaya tidak
+  dipasang lagi tanpa dasar baru - keduanya datang dari keterangan lisan dan
+  gampang tertukar.
+- **Syarat 2 jam uang makan lembur (SBM item 23.2) ikut diukur dari jam pulang
+  wajib.** Pulang 17:00 = 1 jam, belum berhak; pulang 18:00 = 2 jam, berhak.
+  Sewaktu jeda terpasang, batas itu baru tercapai pukul 19:00. Karena
+  `adaBlokDuaJam` memakai `durasi` yang sama dengan yang dibayar, tampilan dan
+  kas tidak bisa berbeda.
+- **Di hari libur tidak ada jam pulang wajib**, jadi patokannya jam masuk -
+  lembur dihitung penuh. Ada test yang menguncinya.
+- **Nol jam lembur punya sebab tertulis.** Baris Lembur yang jam pulangnya belum
+  melewati jam pulang wajib menghasilkan catatan eksplisit ("belum melewati jam
+  pulang wajib 16:00") - tanpa itu yang terbaca cuma lembur Rp 0 tanpa
+  penjelasan.
+- **TODO(confirm) - DASARNYA BELUM ADA SALINANNYA**, sama persis dengan pengali
+  2x dan batas 40 jam. Seluruh PMK 32/2025 dicek `pdftotext` + grep:
+  **"1 (satu) jam" 0x, "setelah jam kerja" 0x, "di luar jam kerja" 0x,
+  "istirahat" 0x**. SBM cuma menetapkan TARIF (Pasal 4-nya melempar tata cara
+  ke PMK Pelaksanaan Anggaran). Satu dokumen menjawab semuanya - lihat C1 di
+  `docs/permintaan-data-dan-konfirmasi-osdma.md`.
+
+#### Berkas "Jam Absensi.xlsx" - ALAT YANG DIPAKAI PETUGAS SEKARANG
+
+**Ini yang Gajihub gantikan.** Keterangan user: berkas ini rekapan manual
+absensi yang **masih dipakai petugas** tiap periode - jadi bukan percobaan
+pribadi, dan bukan dokumen sejarah. Setiap perbedaan antara berkas ini dan
+Gajihub adalah calon selisih pembayaran, dan harus bisa dijelaskan.
+
+`Excel/Jam Absensi.xlsx`, 2 sheet. **Master Presensi** = **48 pegawai Biro
+Keuangan, Juli 2026, 1.133 baris** - unit & periode yang SAMA dengan rincian
+tunkin manual, jadi bisa diadu tiga arah. (Sheet **Rekap Hadir** kepalanya
+"PERIODE BULAN JUNI TAHUN 2024" - template lama, periode lain, jangan dipakai.)
+
+Formulanya dibongkar dan diuji ke seluruh 1.133 baris:
+
+| Formula | Cocok |
+|---|---|
+| `Jumlah Menit Kekurangan Harian = Terlambat + Kekurangan` | **1.133/1.133** |
+| `Terlambat = checkin − Toleransi Masuk (08:30)` | 1.125/1.133 |
+| `Menit Kerja = (checkout − checkin) − istirahat` | 1.124/1.133 |
+| `Kekurangan = min(max(harusCheckout, jamPulang), tolPulang) − checkout` | 1.099/1.133 |
+| `Jam Harus Checkout = checkin + 7,5 jam + istirahat` | 1.092/1.133 |
+
+**TIGA hal yang MENGUATKAN keputusan yang sudah dipegang Gajihub:**
+
+1. **`Jam Toleransi Pulang` = 17:00 (Jumat 17:30) = jam pulang + 60 menit** -
+   sumber kedua yang bebas untuk toleransi 60 menit Pasal 9 ayat (3). **JANGAN
+   dibaca sebagai jam mulai lembur**: di berkas itu 17:00 adalah BATAS ATAS
+   kewajiban checkout (flexible time). Lembur mulai berjalan di jam pulang
+   wajib (16:00 / Jumat 16:30), bukan di sini.
+2. **Istirahat Senin-Kamis 60 menit, Jumat 90 menit** - persis Pasal 9 ayat (2),
+   dan membuktikan jendela jam dinding Gajihub (07:30-16:00 / 16:30) memang
+   sudah memuat istirahat di dalamnya: 510 − 60 = 450 = 7,5 jam; 540 − 90 = 450.
+   Jadi nol hasil grep "istirahat" di `src/` itu BENAR, bukan celah.
+3. **Toleransi masuk 08:30** - sumber keempat untuk toleransi 60 menit.
+
+**DUA hal yang HARUS DITOLAK dari berkas ini** - keduanya diuji ke rincian
+tunkin resmi Juli 2026 (48 pegawai yang sama):
+
+| | Berkas Jam Absensi | Rincian tunkin RESMI |
+|---|---|---|
+| Model potongan | tabel berjenjang 0,5 / 1 / 1,5 / **2% maksimal per hari** | **0,01% per menit** |
+| Cocok ke rincian resmi | **0/48** | **47/48** |
+
+Sisa 1 baris (Naeli Istianah, %Pot 50) ternyata **cuti sakit bulan II 15 hari**
+= Pasal 14 huruf d, bukan potongan kehadiran - jadi **48/48 terjelaskan** dan
+model per-menit Gajihub benar.
+
+**PENYARINGAN STATUS ITU LANGKAH MANUAL PETUGAS - dan Gajihub sudah
+mengotomatiskannya dengan benar.** Kolom `Terlambat` di berkas dihitung pada
+SEMUA status, termasuk Dinas Luar & Diklat (Irma Puspita **1.200 menit** di
+situ lawan **0** di rincian resmi). Yang sampai ke rincian ternyata versi yang
+sudah disaring:
+
+| Kolom "Terlambat (Menit)" rincian resmi, dihitung ulang dari berkas petugas | Cocok |
+|---|---|
+| tanpa saring status | **3/48** |
+| disaring ke WFO + WFH/WFA (persis `KATEGORI_WAJIB_JAM_KERJA` Gajihub) | **46/48** |
+
+Jadi berkas ini memang SUMBER angkanya, dan penyaringan status yang selama ini
+dikerjakan petugas dengan tangan sudah persis sama dengan yang dilakukan
+Gajihub otomatis. Dua sisa: Irma Puspita (pengecualian JPT, sudah
+diimplementasi) dan Dian Pratiwi (6 menit, belum terjelaskan).
+
+#### Adu tiga arah: berkas petugas vs database Gajihub (Juli 2026, 1.133 baris)
+
+| | Cocok |
+|---|---|
+| **Status kehadiran** | **1.117/1.133 (98,6%)** |
+| Jam masuk | 1.057/1.133 (93,3%) |
+| Jam keluar | 1.053/1.133 (92,9%) |
+
+**Mesinnya sudah sepakat; sisanya perkara DATA.** Seluruh 16 beda status
+terdaftar habis:
+
+| Pola | Jumlah | Akibat |
+|---|---|---|
+| WFO → WFH | 9 | **tidak ada** - keduanya `KATEGORI_WAJIB_JAM_KERJA` & sama-sama berhak uang makan |
+| WFO → DINAS_LUAR | 4 | **ADA** - Gajihub membebaskan Dinas Luar dari keterlambatan. Ini yang membuat Dian Nurlita 2 menit di Gajihub lawan 99 di rincian (14 Juli: berkas "WFO" masuk 10:07, e-Presensi "Dinas Luar") |
+| CUTI → ALPHA | 2 | **ADA & MAHAL** - alpha 3%/hari lawan cuti tahunan 0%. Keduanya pada Naeli Istianah |
+| WFO → LEMBUR | 1 | kecil |
+
+**15 JULI 2026 AKHIRNYA TERBUKTI GANGGUAN.** Ini menutup TODO(confirm) lama
+("belum dipastikan ke pengelola e-Presensi; sebelumnya sempat dikatakan tidak
+ada gangguan"). Dari 17 tanggal Juli yang punya jam keluar `23:59` di Gajihub,
+**HANYA 15 Juli yang jam pulangnya diperbaiki tangan oleh petugas** (4 dari 6
+baris, diisi 16:05-16:09); 16 tanggal lain dibiarkan apa adanya sebagai lupa
+absen sungguhan. Petugasnya sendiri memperlakukan tanggal itu berbeda - dan itu
+persis alur yang sudah disiapkan Gajihub (tandai kendala + koreksi jam per
+hari), cuma **belum diterapkan ke periode 7/2026**.
+
+**Kesimpulan**: berkas ini sah sebagai sumber & pembanding, dan Gajihub sudah
+mereproduksi cara kerjanya. Yang JANGAN ditiru cuma kolom persentase
+berjenjangnya - itu memang tidak dipakai membayar.
+
+#### Banding potongan e-Presensi di `/tukin/presensi/[nip]?banding=1`
+
+Alat masa TRANSISI. Keterangan user: e-Presensi dibangun **pihak ketiga
+yang kini TIDAK BISA DIHUBUNGI**, dan rumus potongannya salah paham terhadap
+Permenaker. Karena tidak akan diperbaiki di sumbernya, selisihnya **permanen** -
+pegawai melihat satu angka di web e-Presensi dan angka lain di slip, dan itu
+pasti ditanyakan. Halaman ini yang dipakai menjawabnya per TANGGAL, dengan
+pasalnya, supaya petugas tidak perlu berdebat dari ingatan.
+
+**Tampilan KETIGA di halaman rincian per pegawai** (Presensi / Rincian jam kerja
+/ Banding e-Presensi), tautan GET biasa seperti dua yang lain.
+
+- **`src/business-logic/bandingPotonganEpresensi.ts`** (PURE, 11 unit test) -
+  membandingkan per tanggal & mengklasifikasi sebabnya. Sisi Gajihub dihitung
+  lewat `hitungPotonganKehadiranPersen` - **fungsi yang SAMA yang membayar**.
+  Kalau lapisan ini punya rumus sendiri, perbandingannya tidak berarti: beda
+  hasil bisa datang dari beda rumus, bukan beda kebijakan.
+- **`src/adapters/potonganEpresensi.ts`** - READ-ONLY, dua sistem:
+  SIAP (memetakan `NIP -> PEGAWAIID`) lalu e-Presensi (tabel `potongan_tukin`).
+  e-Presensi TIDAK menyimpan NIP sama sekali, jadi SIAP wajib dilewati -
+  pencocokannya HARUS PERSIS, jangan menambah/membuang nol di depan.
+- **SENGAJA tidak menyimpan pemetaan id-nya ke database Gajihub.** Menambah
+  kolom berarti migrasi + backfill, sementara yang dibutuhkan cuma satu pegawai
+  per kali buka. Kalau nanti perbandingannya dijalankan massal, barulah kolom
+  itu layak.
+- **Kedua sistem luar hanya dihubungi kalau tampilannya memang dibuka.**
+  Terukur: mode Presensi 96 ms, Rincian jam kerja 75 ms, Banding 140 ms.
+- **Kegagalan koneksi tidak merobohkan halaman** - SIAP ada di segmen jaringan
+  berbeda dan pernah tidak terjangkau. Yang muncul penjelasan, bukan galat
+  mentah.
+
+**Empat penyimpangan yang diklasifikasi otomatis**, semuanya sudah terukur:
+
+| Sebab | Isinya |
+|---|---|
+| `TARIF_LUPA_ABSEN` | e-Presensi 2% flat lawan **1% setiap kali** (ayat 2) |
+| `KLASIFIKASI_LUPA_ABSEN` | `menit_kerja < 450` dilabeli lupa presensi walau kedua tap ADA |
+| `TARIF_TERLAMBAT` | berjenjang `min(2%, ceil((telat-60)/30) x 0,5%)` lawan **0,01%/menit** (ayat 3) |
+| `BATAS_HARIAN_EPRESENSI` | e-Presensi berhenti di 2%/hari; Pasal 13 tidak punya batas |
+
+**Bukti bahwa 2% itu memang anomali, bukan 2 x 1%**: pada 5.106 baris
+ber-potongan 2% di Juli 2026, **jam masuknya TIDAK PERNAH kosong (0 dari
+5.106)** - jadi yang hilang paling banyak satu ketukan. Ayat (2) sendiri
+memisahkan "presensi kehadiran **atau** kepulangan".
+
+**Yang TIDAK sampai ke pembayaran** (penting, supaya tidak panik): rincian tunkin
+resmi Juli 2026 sudah memakai **1%** dan **per menit** - petugas menghitung ulang
+sendiri. Yang benar-benar diwarisi dari e-Presensi cuma **klasifikasinya**
+(ambang `< 450`), dan itu yang jadi pertanyaan B-lupa-absen ke OSDMA.
+
+**Diverifikasi terhadap data nyata** (David Casidi, Juli 2026, production build):
+web e-Presensi **12,5%** lawan Gajihub **4,77%**, selisih **Rp 90.811**, 17
+tanggal berbeda. 17 Juli terklasifikasi `TARIF_LUPA_ABSEN` (2% lawan 1%), 16
+sisanya `TARIF_TERLAMBAT` - dan angkanya saling cocok: keterangan e-Presensi
+"Keterlambatan 134 menit" berpasangan dengan 74 menit di Gajihub, yaitu 134
+dikurangi toleransi 60 (Pasal 9 ayat 3).
+
+#### Ketukan yang MUSTAHIL sebagai jam masuk ditolak (2026-08-19)
+
+Dipicu pertanyaan user kenapa web e-Presensi menampilkan potongan 2% untuk David
+Casidi pada 17 Juli 2026. Penelusurannya membuka dua hal sekaligus.
+
+**Sumber angka di web e-Presensi akhirnya ketemu: tabel `potongan_tukin`**
+(670.797 baris), yang selama ini tidak pernah disentuh. Isinya buku besar
+keputusan per hari, mis. `"Potongan lupa presensi 2%"` dan
+`"Potongan tukin harian 1.5%. Keterlambatan 134 menit."`. Dua temuan dari situ:
+
+- **Ambang `menit_kerja < 450` itu milik e-Presensi, bukan karangan petugas.**
+  Catatan lama di bagian di atas yang menyebutnya "ambang petugas" KELIRU dan
+  sudah diperbaiki di `docs/permintaan-data-dan-konfirmasi-osdma.md`. Terukur
+  Juli 2026 (WFO/WFH/WFA): baris ber-`menit_kerja` 1-449 ditandai "lupa
+  presensi" **98,8%**, yang >= 450 **0,0%** (6 dari 94.884). Tarifnya juga **2%**,
+  bukan 1% seperti bunyi ayat (2).
+- **Model keterlambatannya BERJENJANG** - `ceil((telat - 60) / 30) x 0,5%` -
+  tabel yang sama dengan berkas Excel petugas, dan yang sudah diadu ke rincian
+  tunkin resmi Juli 2026 dengan hasil **cocok 0/48** (per-menit 0,01% cocok
+  47/48). Jadi angka di web e-Presensi memang bukan angka yang dibayarkan.
+  Prinsip lama tetap berlaku dan justru menguat: dari e-Presensi diambil FAKTA
+  (tanggal, status, jam), TIDAK PERNAH angka potongannya.
+
+**Temuan yang lebih penting ada di sisi Gajihub sendiri.** Baris 17 Juli itu
+berbunyi `WFH masuk 23:26 keluar 23:59 menit_kerja 240`, dan Gajihub
+membacanya sebagai kedatangan **896 menit terlambat = 8,96%**. Diukur ke seluruh
+Juli 2026 se-kementerian:
+
+| | |
+|---|---|
+| Baris kena potongan keterlambatan | 6.104 |
+| Melebihi 100 menit (tarif ayat (2)) | 924 - **74,3% dari SELURUH menit** |
+| **Melebihi 300 menit (tarif alpha ayat (1))** | **559** - lebih mahal daripada tidak masuk sama sekali |
+| Terparah | 898 menit = **8,98%**, tiga kali tarif alpha |
+
+Dan penyebabnya bukan orang yang benar-benar telat: dari 559 baris itu, **446
+jam masuknya sesudah 16:00, 113 antara 12:01-16:00, dan NOL yang sebelum 12:00**.
+Semuanya ketukan sampah.
+
+**Aturannya sekarang**: jam masuk yang jatuh **pada atau sesudah jam pulang
+wajib** (16:00, Jumat 16:30) tidak dipercaya sebagai kedatangan. Hari itu
+ditagih **Pasal 13 ayat (2) - 1%**, bukan keterlambatan per menit.
+
+- **BUKAN mengoreksi Permenaker dan bukan batas potongan** - ini menolak mempercayai
+  data yang mustahil. Orang tidak memulai hari kerja pukul 23:26; yang
+  sebenarnya terjadi adalah tap masuknya hilang, persis bunyi ayat (2).
+- **Aturannya SUDAH ADA, cuma terkunci syarat yang salah pasang.** Tap sore dulu
+  baru ditolak kalau barisnya bertanda "lupa presensi" dari kolom Potongan
+  e-Presensi - dan penanda itu **tidak pernah menyala** lewat jalur sinkronisasi
+  (0 dari 99.065 baris Juli 2026). Syarat `!lupa ||` dicabut; sisanya murni uji
+  kemustahilan.
+- **Hari itu tidak lolos gratis.** `masukMustahil` sengaja ikut menyalakan
+  penghitung ayat (2). Kalau cuma ketukannya ditolak tanpa itu, harinya
+  menghasilkan potongan NOL - lebih murah daripada lupa absen biasa, dan itu
+  insentif yang justru terbalik.
+- **Koreksi petugas selalu menang** - jam yang sudah diverifikasi manusia
+  terhadap foto & geotag bukan tebakan atas ketukan yang hilang.
+- **Penolakannya dikatakan ke layar**, bukan hilang diam-diam: catatan hasil
+  rekap menyebut jam aslinya, jam pulang wajibnya, dan bahwa hari itu dihitung
+  1 kejadian ayat (2).
+- Baris jam masuk **12:01-16:00 TIDAK disentuh** - masih mungkin kedatangan
+  sungguhan, jadi tetap ditagih per menit.
+
+Dampaknya terukur (Juli 2026 se-kementerian): potongan keterlambatan
+**Rp 75.397.439 -> Rp 41.671.456**, selisih **Rp 33.725.983** pada **448 baris**.
+
+**Diverifikasi lewat mesin yang sama dengan data e-Presensi ASLI** (David
+Casidi, 25 baris Juli 2026): total menit terlambat **1.273 -> 377** (16 hari
+lainnya memang benar-benar telat dan tetap ditagih), kejadian tidak presensi
+**0 -> 1**, potongan 17 Juli **8,96% -> 1,00%**, sebulan **12,73% -> 4,77%**.
+8 unit test baru menguncinya, termasuk batas inklusif (tap tepat 16:00 ditolak),
+jadwal Jumat yang berbeda, koreksi petugas yang menang, dan **penjaga bahwa
+keterlambatan SUNGGUHAN tidak ikut hilang** (Abie 22 Juli tetap 246 menit).
+
+Satu test lama di `kendalaEpresensi.test.ts` ikut diperbarui - premisnya
+("tanpa koreksi hasilnya 662 menit") memang sudah tidak berlaku. Maksud test-nya
+dipertahankan, ditambah penegasan bahwa tanpa penanda kendala hari itu tetap
+kena 1%.
+
+#### Sisi jam PULANG ikut dijaga (2026-08-19) - aturannya jadi simetris
+
+Pertanyaan user: *"kalau tidak diberi batas kita gak tahu kalau dia lupa absen
+atau telat absen kan?"* - dan ternyata batas itu cuma dipasang di **satu sisi**.
+Sisi pulang masih bersandar pada penanda "lupa presensi" dari e-Presensi, yang
+lewat sinkronisasi database praktis tidak pernah menyala. Jadi ketukan nyasar
+di kolom masuk ditolak, ketukan nyasar di kolom pulang dipercaya.
+
+Dua aturan baru, keduanya diukur dulu ke Juli 2026 se-kementerian (hari kerja,
+WFO/WFH/WFA, baris yang `menit_kerja`-nya TIDAK nol sehingga lolos aturan lama):
+
+| Aturan | Baris | Yang diperbaiki |
+|---|---|---|
+| Jam keluar **TEPAT 23:59** | **11** | Isian otomatis e-Presensi saat tap pulang tidak masuk. Sebelumnya harinya lolos **tanpa potongan apa pun** |
+| Jam keluar <= jam masuk wajib (07:30) | **1** | Keluar 06:15 - orang tidak pulang sebelum kerjanya dimulai |
+| **Satu ketukan tersalin ke dua kolom** (selisih <= 2 menit) | **359**, 16 di antaranya BARU | Lihat di bawah |
+
+**Yang 16 baris itu paling penting**, dan justru tidak tertangkap aturan sisi
+masuk: tap tunggalnya jatuh beberapa menit **SEBELUM** jam pulang wajib (15:58,
+15:59, dan 16:29 di hari Jumat). Dibaca sebagai kedatangan, satu tap sore itu
+menagih `958 - 450 - 60` = **448 menit = 4,48%** sehari - lebih mahal daripada
+tidak masuk sama sekali (3%, ayat (1)) - untuk hari yang bukti kehadirannya
+justru ADA.
+
+- **Pada ketukan ganda, KEDUA sisi tidak dipercaya.** Sisi mana yang hilang
+  memang tidak bisa ditebak - ketukannya bisa pagi maupun sore. Ini bukan
+  aturan baru: jalur rekap manual Excel sudah lama memakainya, yang dilakukan
+  memindahkannya ke MESIN supaya kedua jalur tidak memperlakukan pola yang
+  sama secara berbeda.
+- **Tetap MAKSIMAL 1 kejadian**, walau beberapa penanda menyala bersamaan -
+  pada ketukan ganda satu tap terbukti ADA, jadi menagih 2% berarti menagih
+  ketukan yang sebenarnya dilakukan.
+- **Hari itu tidak lolos gratis** (alasan yang sama dengan sisi masuk) dan
+  **koreksi petugas tetap menang**. Keduanya dikunci test.
+- **Ambangnya 23:59 PERSIS, bukan "jam 23 ke atas"**: 23:50-23:58 masih mungkin
+  kepulangan sungguhan dan Juli 2026 ada **54 baris** di sana. Ada test yang
+  menjaga 23:58 tetap lolos.
+
+**Konstanta disatukan**: `JAM_TAP_PULANG_HILANG` & `AMBANG_KETUKAN_GANDA_MENIT`
+sekarang hidup di `presensiPdfKeRekap.ts` dan di-import `rekapAbsensiManual.ts`
++ `rincianJamKerjaHarian.ts` - sebelumnya ada **tiga salinan** di tiga modul.
+Dua ambang untuk satu hal cepat atau lambat berbeda, dan bedanya baru ketahuan
+setelah angkanya dipakai membayar.
+
+Satu test lama diperbarui (premisnya "23:59 tidak mengubah jalur PDF" memang
+sudah tidak berlaku - PDF-nya berasal dari e-Presensi yang sama). Maksud aslinya
+dipertahankan lewat contoh lain: `menitKerja: null` tetap berarti "tidak tahu",
+bukan nol. 6 test baru, total **557**.
+
+**Berlaku setelah presensi periode itu DITARIK ULANG**, seperti perubahan mesin
+lainnya.
+
+**TODO(confirm) BARU - TIDAK ADA BATAS MAKSIMAL POTONGAN HARIAN.** Sisa **113 baris** (jam masuk
+12:01-16:00) masih bisa dipotong di atas tarif alpha 3%. Pertanyaannya ada di
+**B-batas-maksimal** `docs/permintaan-data-dan-konfirmasi-osdma.md` - dampaknya ~Rp 1,4
+juta/bulan pada 111 baris. Ada test yang mengunci ketiadaan batas ini supaya
+tidak ditambahkan diam-diam. Usulan lain (batas 1% / "lewat 100 menit dianggap
+lupa absen") DITOLAK: ayat (2) berbunyi "tidak melakukan presensi" sementara
+pegawainya jelas melakukan presensi, dan batas 1% menghapus gradien sesudah 100
+menit sehingga datang 09:15 sama mahalnya dengan datang 15:00.
+
+**Perubahan ini baru berlaku setelah presensi periode itu DITARIK ULANG**, lalu
+Tukin dihitung ulang - rekap yang sudah tersimpan tetap memuat angka lama.
+
+#### AMBANG "LUPA ABSEN": petugas pakai `menit_kerja < 450`, Gajihub `= 0`
+
+Ketemu waktu user menanyakan satu kasus: *"abie di tanggal 22 juli itu dia kena
+potongan lupa absen? kena potongan 1%"*. Ditelusuri ke e-Presensi ASLI
+(`id_pegawai 00009087`, Juli 2026, 24 baris) - dan jawabannya YA, tapi bukan
+karena tapnya hilang:
+
+```
+2026-07-22  WFO  masuk 12:36  keluar 20:06  menit_kerja = 240   <- satu-satunya
+23 hari lain                                menit_kerja = 450
+```
+
+Kedua tapnya ADA. Yang kurang jam kerjanya. Rincian tunkin resmi menulis
+`Terlambat 268 menit` + `Lupa Absen 1` -> `% Pot 3,68` = 268 x 0,01% + 1 x 1%.
+Gajihub menghitung **268 menit terlambat (COCOK PERSIS)** tapi **lupa absen 0**.
+Dan memang satu-satunya hari ber-`menit_kerja` kurang dari 450 adalah 22 Juli -
+jumlahnya tepat satu, sama dengan angka di rincian.
+
+**Jadi ambang petugas adalah `menit_kerja < 450` (kurang dari 7,5 jam), bukan
+`= 0`.** Ini BUKAN bug yang kelewat - `= 0` dipilih SENGAJA (lihat komentar
+panjang di `presensiPdfKeRekap.ts`): hari yang jam kerjanya kurang tapi bukan
+nol itu **pulang cepat / terlambat**, Pasal 13 ayat (3), bertarif PER MENIT dan
+sudah ditagih dari jamnya. Kasus Abie memperlihatkan akibatnya terang-terangan:
+petugas menagih **hari yang sama dua kali** - 246 menit keterlambatan (dari tap
+12:36) DAN 1% lupa absen. Secara teks, ayat (2) berbunyi "tidak melakukan
+presensi kehadiran atau kepulangan", sementara Abie melakukan keduanya.
+
+Skalanya terukur (Juli 2026, hari WFO/WFH/WFA se-kementerian):
+
+| `menit_kerja` | Baris | Pegawai | Diperlakukan |
+|---|---|---|---|
+| 450 (penuh) | 94.883 | 5.075 | tidak ada potongan ayat (2) di kedua sisi |
+| **0** | 3.590 | 2.138 | **kedua sisi sepakat** lupa absen |
+| **1-449** | **592** | **402** | **petugas menagih 1%, Gajihub TIDAK** |
+
+**TODO(confirm) - JANGAN diubah sepihak ke `< 450`.** Selisihnya menyentuh 402
+pegawai, dan mengubahnya berarti menagih dua kali untuk satu hari dengan dua
+dasar hukum. Yang perlu ditanyakan ke OSDMA/Biro Hukum: apakah "kurang dari 7,5
+jam padahal kedua tap ada" termasuk Pasal 13 ayat (2), atau cukup ditagih lewat
+ayat (3) seperti yang Gajihub lakukan sekarang.
+
+### Halaman Rekonsiliasi rekap absensi petugas (`/tukin/presensi/rekonsiliasi`)
+
+Alat masa TRANSISI, dibangun setelah terbukti berkas Excel petugas masih jadi
+penentu pembayaran. Mematikan berkas itu tanpa membuktikan dulu kedua sumber
+sepakat berarti memindahkan dasar pembayaran ribuan orang atas dasar keyakinan.
+Halaman ini membuat pembuktiannya bisa dikerjakan **per hari**, bukan ditebak
+dari total - dua total yang kebetulan sama bisa menyembunyikan dua kesalahan
+yang saling menutup.
+
+**TIDAK ADA TULISAN KE DATABASE di seluruh alur ini** - nol `create`/`update`/
+`delete`, dan berkasnya tidak disimpan (dibaca di memori lalu dibuang, pola
+yang sama dengan gaji induk & predikat kinerja). Tidak ada migrasi. Perbaikan
+tetap lewat jalur yang sudah ada: tandai kendala + koreksi jam, atau betulkan
+di e-Presensi lalu tarik ulang.
+
+- **`src/business-logic/rekapAbsensiManual.ts`** (PURE, 21 test) - membaca
+  sheet "Master Presensi" jadi `LaporanPresensiPdf`, **tipe yang SAMA dengan
+  hasil parsing PDF**, supaya rekapnya dihitung `rekapDariLaporanPdf()` yang
+  itu-itu juga. Kalau modul ini punya mesin hitung sendiri, perbandingannya
+  tidak berarti - beda hasil bisa datang dari beda mesin, bukan beda data.
+  - **Judul kolom status BERGESER SATU** di berkas asli: di baris judul kolom
+    sesudah "Hari" kosong dan "Keterangan Cuti" ada di kolom berikutnya, di
+    baris data justru sebaliknya. Status dicari lewat POSISI, bukan judul.
+  - **Kolom hitungan berkas TIDAK dipakai** (Terlambat, Menit Kerja,
+    Kekurangan Jam Kerja, Persentase Potongan Harian). Yang diambil cuma fakta
+    mentah: tanggal, status, jam masuk, jam keluar.
+  - **"Cuti tahunan" disisipi tanda hubung** jadi "Cuti - Cuti tahunan":
+    `kategoriDariStatus()` mengambil jenis cuti SESUDAH tanda hubung, dan tanpa
+    ini jenis cutinya hilang - artinya Pasal 14 tidak berjalan.
+  - **Jam keluar yang mustahil dikosongkan**, dua bentuk: selisihnya semenit-dua
+    dari jam masuk (satu ketukan tersalin ke dua kolom - 31 baris, ketukannya
+    bisa pagi maupun sore jadi tidak boleh ditebak), atau **lebih pagi dari jam
+    masuk wajib** (orang tidak bisa pulang sebelum jam kerjanya dimulai).
+    Ambangnya diturunkan dari `JadwalKerja`, bukan angka baru. TANPA ini, tap
+    pulang yang hilang terbaca sebagai pulang cepat ratusan menit - Nurul
+    Apriyanah 594, Yusfrida 640 - padahal rincian resmi cuma menagih Nurul 8
+    menit sebulan. Penanda "lupa presensi" dititipkan lewat `potonganTeks`
+    supaya mesin memakai penanganan yang SUDAH ada, bukan aturan baru.
+- **`src/business-logic/bandingRekapPresensi.ts`** (PURE, 17 test) - menyusun
+  daftar beda per hari + per angka rekap + perkiraan rupiah (tarif kelas x 30%
+  x selisih persen; **null kalau kelas jabatan tidak diketahui**, tidak ditebak).
+  - **Beda dipisah "berdampak" vs "tidak"**: WFO lawan WFH/WFA tidak menggeser
+    rupiah sepeser pun (sama-sama wajib jam kerja, sama-sama berhak uang makan
+    tarif sama), jadi ditandai supaya yang benar-benar penting tidak tenggelam.
+  - **23:59 disamakan dengan kolom kosong** sebelum dibanding: dua sumber
+    menuliskan "tap pulang hilang" dengan cara berbeda, dan itu KESEPAKATAN,
+    bukan selisih.
+  - Total rupiah dijumlah **MUTLAK** - dua selisih berlawanan arah tidak boleh
+    menghasilkan "nol masalah".
+- Otorisasi dicek **PER PEGAWAI** terhadap satuan kerjanya (`canUploadRekapPresensi`),
+  bukan sekali per berkas - satu berkas memuat seluruh unit.
+
+**Diverifikasi terhadap berkas & database ASLI** (Biro Keuangan, Juli 2026):
+48 pegawai / 1.133 hari terbaca, 0 baris dilewati. **18 pegawai cocok
+sepenuhnya**; 14 beda berdampak + 42 tidak berdampak; taruhan rupiah
+Rp 414.990. Tiga yang teratas semuanya sudah punya penjelasan: Naeli Istianah
+(2 hari CUTI di berkas lawan ALPHA di Gajihub), Hario & John Pieter (ambang
+lupa absen `< 450` lawan `= 0` - lihat bagian di atas).
+
+### Tabel "Rincian jam kerja" di `/tukin/presensi/[nip]`
+
+Diminta user: bentuk tabel yang SAMA dengan rekap petugas, sebagai tampilan
+kedua di halaman rincian per pegawai. Tombol pemindahnya di kanan atas tabel
+(`?rinci=1`) - tautan GET biasa, bukan state klien, jadi tetap jalan tanpa
+JavaScript dan tautannya bisa dibagikan.
+
+Dua tabel itu menjawab pertanyaan BERBEDA, dan itu alasan keduanya ada:
+
+| | Menjawab |
+|---|---|
+| **Presensi** (bawaan) | apa yang dilanggar - telat, pulang cepat, hak uang makan, koreksi |
+| **Rincian jam kerja** | jam kerja hari itu terpenuhi atau tidak |
+
+`src/business-logic/rincianJamKerjaHarian.ts` (PURE, 26 unit test) menyusun
+kolomnya. **Rumusnya dibongkar dari berkas petugas, bukan dikarang** - lihat
+"Berkas Jam Absensi.xlsx" di atas. Istirahat Senin-Kamis 60 menit, Jumat 90
+(Pasal 9 ayat (2)); toleransi masuk (08:30) DAN toleransi pulang (17:00 /
+17:30) sama-sama diturunkan dari `jadwal.toleransiTerlambatMenit`, bukan dua
+konstanta terpisah.
+
+**Diadu ke berkas asli petugas**, 1.019 baris hari kerja yang kedua tapnya ada:
+
+| Kolom | Cocok |
+|---|---|
+| Jam Masuk, Jam Toleransi Masuk | **1.019/1.019** |
+| Terlambat | 1.016/1.019 |
+| Menit Kerja | 1.015/1.019 |
+| Jam Harus Checkout | 990/1.024 (971 persis + 19 setelah lipatan tengah malam Excel dibuka) |
+| Kekurangan Jam Kerja | 994/1.024 |
+
+Bentuk `min(max(harusPulang, jamPulang), tolPulang)` diuji lawan dua kandidat
+lain dan menang: bentuk **step** ("telat sedikit langsung wajib sampai 17:00")
+cocok 958, `max` tanpa cap cocok 822.
+
+**TIGA CACAT DI BERKAS PETUGAS yang ketemu dari pengadauan ini** - semuanya di
+berkas mereka, bukan di rumusnya:
+1. **80 baris ketukannya kosong** dan berkas menghitungnya dari **0**, jadi
+   keluar angka seperti "Menit Kerja −60" dan "Kekurangan 960". Gajihub
+   memakai `null` - sel kosong bukan tengah malam.
+2. **5 baris memakai jadwal hari yang salah** (Jumat diberi jam pulang 16:00,
+   Senin diberi 16:30) - semuanya pada Galih Febian Azhar.
+3. **34 baris "Jam Harus Checkout"-nya merujuk sel yang salah**, terpusat di
+   **4 pegawai** (Galih 16, Muh Kholiq 9, Fericky 6, Abie 3). Enam di antaranya
+   persis nilai baris tetangganya - formula yang tergeser saat baris
+   disisipkan/dihapus. Bukan aturan berbeda: 44 pegawai lain nol cacat.
+
+**Kolom `% Potongan` memakai angka yang DIBAYARKAN**, bukan kolom kekurangan -
+tarifnya diambil dari `TARIF_POTONGAN_PASAL_13`, tidak ditulis ulang. Diuji ke
+Abie Juli 2026: 2,46% + 0,01% + 0,21% dari tiga hari, dan menit
+penyusunnya (246 + 1 + 21) **berjumlah tepat 268** - sama persis dengan kolom
+Terlambat di rincian tunkin resmi.
+
+**Cacah kejadian Pasal 13 ayat (2) DIREKONSTRUKSI**, karena `PresensiHarian`
+tidak menyimpannya (`kejadianTidakPresensiHari`). Rekonstruksi bisa menyimpang,
+jadi halaman **mengadu jumlah sebulannya ke `RekapPresensiPeriode` per
+komponen** dan menyalakan panel kuning yang menyebut komponen mana yang beda -
+bukan cuma totalnya, karena dua selisih berlawanan arah bisa saling menutup.
+Ketelitiannya terukur ke seluruh periode 7/2026 (117.906 baris, 5.089 pegawai):
+**cocok 5.062 (99,5%)**, total 2.809 lawan 2.819 kejadian. Panel diuji menyala
+benar pada David Casidi (masuk 23:26 & keluar 23:59 di hari yang sama - mesinnya
+membacanya kedatangan sangat terlambat, aturan rekonstruksi membacanya tap
+pulang hilang).
+
+**TIGA hal yang WAJIB tidak tertukar** - ketiganya disebut di panel penjelas
+halamannya, bukan cuma di komentar kode:
+- **"Kekurangan jam kerja" BUKAN "pulang cepat".** Pulang cepat diukur ke jam
+  pulang TETAP (16:00 / 16:30) dan itu yang dipotong Pasal 13 ayat (3);
+  kekurangan diukur ke *jam harus pulang* yang bergeser ikut jam kedatangan.
+  Masuk 09:00 lalu pulang 16:00 = pulang cepat **0 menit**, kekurangan **60
+  menit**. Kolom itu tidak memotong apa pun - pernah masuk mesin potongan
+  2026-08-06 dan dicabut sehari kemudian.
+- **"Jam toleransi pulang" BUKAN jam mulai lembur.** Angkanya sama (jam pulang
+  + 60), artinya beda: di sini batas atas kewajiban checkout, di mesin lembur
+  titik mulai jam yang dibayar.
+- **Kolom "Menit kerja" BUKAN `menit_kerja` e-Presensi.** Yang di sini rumus
+  berkas petugas (tanpa batas atas, bisa > 450 dan bisa negatif); milik
+  e-Presensi dibatasi 7,5 jam.
+
+Jam yang melewati tengah malam ditulis `08:26 +1`, bukan `32:26` maupun `08:26`
+polos - Excel membungkusnya diam-diam jadi bentuk terakhir dan itu terbaca
+seperti pagi hari yang sama.
+
+**TODO(confirm) yang TETAP terbuka - batasnya JAM DINDING, bukan "7,5 jam sudah
+terpenuhi".** Pegawai yang masuk 10:00 lalu lembur sampai 20:00 dapat **3 jam**
+lembur, sama persis dengan yang masuk 07:30 dan lembur di rentang yang sama,
+padahal jam kerja hariannya masih kurang 2,5 jam. Yang pertama tetap kena
+potongan Pasal 13 ayat (3) atas keterlambatannya (90 menit setelah toleransi =
+0,9% bobot kehadiran) - tapi potongan itu ada di **Tunjangan Kinerja**,
+sementara **uang lemburnya utuh**. SENGAJA tidak diperbaiki sepihak: itu
+kebijakan, dan dokumennya sama dengan yang di atas. Sekarang DORMAN - nol dari
+1.109 hari lembur yang juga punya keterlambatan.
+
 **Lembur hari libur & pengecualian WFH/WFA** (permintaan susulan user):
 - Jam lembur dipisah **hari kerja vs hari libur/tanggal merah**; yang hari
   libur dibayar `PENGALI_LEMBUR_HARI_LIBUR` = **2x** tarif per jam.
@@ -3233,9 +3749,27 @@ mendarat di halaman kosong. Ini pernah benar-benar menyesatkan: *"saya udah
 kalkulasi unit, kok belum ada angka data nya di tabel?"* - kalkulasinya
 berhasil, yang terbuka bulan yang berbeda.
 
-Sekarang: **bulan berjalan tetap diutamakan kalau datanya memang ada**, kalau
-tidak jatuh ke periode TERBARU yang ada datanya. Begitu periode berjalan mulai
-terisi, perilakunya kembali seperti dulu tanpa mengubah apa pun.
+~~Sekarang: **bulan berjalan tetap diutamakan kalau datanya memang ada**~~
+**DIUBAH 2026-08-18 (permintaan user)**: bawaannya sekarang **periode TERBARU
+yang datanya ada DAN bulannya sudah lewat** - bulan berjalan sengaja
+DILEWATI.
+
+Alasannya bukan selera: bulan berjalan itu periode yang **belum selesai**. Per
+18 Agustus, rekap Agustus cuma memuat kehadiran sampai tanggal itu, jadi
+potongan Pasal 13, hari uang makan, dan jam lembur semuanya masih akan
+berubah sampai bulannya tutup. Menyodorkannya sebagai tampilan bawaan membuat
+angka setengah jadi terbaca seperti angka final - dan itu angka yang dipakai
+orang memutuskan pembayaran.
+
+- **Bergerak sendiri, tidak ada bulan yang di-hardcode**: begitu masuk
+  September, bawaannya jadi Agustus.
+- **Kalau yang ada CUMA bulan berjalan** (mis. server baru yang baru sekali
+  menarik presensi), bulan itu tetap dipakai - halaman kosong tanpa penjelasan
+  lebih buruk daripada angka yang belum final.
+- Bulan berjalan tetap bisa dibuka lewat filter - jadi pilihan sadar, bukan
+  yang kebetulan terbuka.
+- 3 unit test baru (melewati bulan berjalan, satu-satunya periode, dan lintas
+  tahun Januari -> Desember tahun sebelumnya).
 
 - **Periode yang dipilih user TIDAK PERNAH dipindahkan diam-diam**, termasuk ke
   periode kosong. Kalau dia membuka Agustus dan Agustus memang kosong, itu
@@ -3464,6 +3998,19 @@ terjawab" supaya tidak ditanyakan dua kali.
 kalau tidak, daftarnya jadi basi dan orang kembali menelusuri komentar kode
 satu per satu.
 
+## Perbedaan e-Presensi vs Gajihub: `docs/perbedaan-hitungan-epresensi-vs-gajihub.md`
+
+Tabel ringkas **enam titik penyimpangan** rumus e-Presensi dari Pasal 13,
+beserta angka terukurnya, plus daftar hal yang justru SAMA di kedua sistem
+(toleransi 60 menit, jam kerja, fakta presensi) supaya tidak dikira beda.
+Dokumen ini yang dilampirkan kalau ada yang bertanya kenapa angka di web
+e-Presensi tidak sama dengan slip - isinya sama dengan yang ditampilkan
+halaman `/tukin/presensi/[nip]?banding=1`, cuma dalam bentuk yang bisa
+dikirim.
+
+Memuat juga tiga usulan yang sudah **diuji dan DITOLAK** (ambang 100 menit,
+batas 1%, ambang jam masuk) - baca dulu sebelum mengusulkannya lagi.
+
 ## Teks peraturan: `docs/permenaker-15-2024-tunjangan-kinerja.md`
 
 Salinan teks Permenaker 15/2024 disimpan di repo. **Kalau kode dan file itu
@@ -3567,6 +4114,71 @@ Kasubag TU / unit lain / NULL): Kasubag TU melihat **hanya** baris unitnya
 PPABP melihat ketiganya; PEGAWAI dapat **403** dan tombolnya tidak dirender;
 tanpa login **307 ke /login** - tidak pernah sampai ke handler. Semua baris uji
 sudah dihapus.
+
+### Perataan isi tabel: tengah-menengah, kecuali kolom nama
+
+Permintaan user: **seluruh tabel di project ini** rata tengah mendatar dan
+menengah tegak, **kecuali kolom nama** yang rata kiri (tetap menengah).
+
+Diterapkan lewat **SATU aturan di `globals.css`**, bukan ditempel per sel -
+ada 31 tabel / 201 `<th>` / 214 `<td>` di 22 berkas, dan aturan yang harus
+ditempel manual pasti terlewat di tabel yang dibuat nanti.
+
+```css
+@layer base      { table:not([data-tabel="dokumen"]) :is(th, td) { text-align: center; vertical-align: middle } }
+@layer components{ .col-nama { @apply text-left align-middle } }
+```
+
+**KENAPA HARUS DI DALAM `@layer`, dan kenapa urutannya penting.** Di Tailwind
+v4 urutan layernya `properties, theme, base, components, utilities`, dan CSS
+**tanpa layer selalu menang atas semuanya**. Kalau aturan tabel ditulis di luar
+layer, `.col-nama` tidak akan pernah berlaku dan satu-satunya jalan keluar
+tinggal `!important` di ratusan sel. Perhatikan juga bahwa `.col-nama` (0,1,0)
+sebenarnya KALAH spesifisitas dari `table:not([data-tabel="dokumen"])
+:is(th,td)` (0,1,2) - yang membuatnya menang **hanya** urutan layer. Jangan
+pindahkan salah satunya ke layer lain. Diverifikasi di CSS hasil `next build`:
+base mulai byte 3955, `.col-nama` di 7745 (di dalam components yang mulai
+7727), `.text-left` di 26827 (utilities).
+
+**Yang DIKECUALIKAN cuma slip gaji** (`data-tabel="dokumen"`, 3 tabel di
+`/saya/slip-gaji/[bulan]/[tahun]`). Berkas itu memakai `<table>` sebagai tata
+letak DOKUMEN - blok identitas "Nama : nilai", daftar penghasilan bernomor,
+kolom rupiah rata kanan, `align-top` di mana-mana - bukan grid data. Slip itu
+ditandatangani PPABP; meratakan tengah di situ merusak bentuk cetaknya.
+
+**Utility perataan DICABUT dari sel tabel data**, karena layer utilities
+menang dan sel yang masih memakainya akan sendirian tidak ikut aturan:
+- `text-right` di kolom angka (`RincianPotonganKehadiran`, `RincianUangMakan`,
+  `/saya`, `RekonsiliasiForm`) - 25 sel.
+- `align-top` di sel form (`/tukin/presensi/[nip]`).
+- `text-left` di konstanta `th` dua halaman - yang **paling penting**, karena
+  itu satu baris yang mematikan aturan untuk SELURUH tabelnya:
+  `kasubag/kalkulasi` (tabel rinci 40 kolom, juga `align-bottom`) dan
+  `tukin/presensi/kendala`.
+- `text-left` di `<tr>` thead (24 tempat) - sebenarnya sudah inert begitu
+  `th` punya `text-align` sendiri, tapi kelas mati yang bertentangan dengan
+  perilaku nyata bikin orang berikutnya mencari bug yang tidak ada.
+
+**Kolom yang ditandai `col-nama`** (selalu BERPASANGAN `<th>` + `<td>`-nya -
+itu yang paling gampang terlewat): Nama/Nama Pegawai di 3 tabel
+`kasubag/kalkulasi`, Nama di `kasubag/pegawai`, Satuan Kerja di
+`ppabp/anggaran`, Nama di SIAP & Nama di Web Gaji di `ppabp/basis-data-gaji`
+(halaman + form unggahnya), Pegawai di `ppabp/gaji-induk`, Pegawai & Nama
+Rekening di `ppabp/rekening`, Pegawai di `tukin/predikat-kinerja`, Pegawai di
+`UploadPresensiPdfForm`, Pegawai di `tukin/presensi`, Sistem Eksternal di
+`admin/sistem`, dan kolom Nama sticky di `GridAdkHarian`.
+
+**Diverifikasi lewat production build** terhadap 16 halaman yang benar-benar
+dirender: **nol** sel dengan `text-left`/`text-right`/`align-top` tersisa di
+seluruh tabel data, sementara slip gaji tetap memegang 34 `align-top` + 4
+`text-right` dan kedua tabelnya bertanda `data-tabel="dokumen"`. Jumlah
+`col-nama` cocok dengan jumlah baris yang tampil (mis. `/tukin/presensi` 201 =
+1 judul + 200 baris, `/ppabp/rekening` 402 = 2 judul + 200 baris x 2 kolom).
+
+**Kalau nanti menambah tabel**: tidak perlu melakukan apa pun untuk perataan
+tengahnya - sudah otomatis. Yang perlu diingat cuma dua: tandai kolom namanya
+`col-nama` (th DAN td), dan JANGAN memakai `text-left`/`text-right`/`align-*`
+di sel tabel data kecuali memang sengaja mengecualikannya.
 
 ### Palet & sidebar baru (2026-08-13)
 

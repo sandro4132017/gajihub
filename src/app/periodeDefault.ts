@@ -12,9 +12,20 @@ import { prisma } from "../lib/prisma";
  * kalkulasi unit, kok belum ada angka data nya di tabel?" - padahal
  * kalkulasinya berhasil, cuma untuk bulan yang berbeda dari yang terbuka.
  *
- * Bulan berjalan tetap DIUTAMAKAN kalau datanya memang sudah ada, supaya
- * begitu periode berjalan mulai terisi, perilakunya kembali seperti dulu tanpa
- * perlu mengubah apa pun.
+ * DAN KENAPA BUKAN BULAN BERJALAN WALAU DATANYA SUDAH ADA (diubah 2026-08-18):
+ * bulan berjalan itu periode yang BELUM SELESAI. Presensinya baru terisi
+ * sebagian - per 18 Agustus, rekap Agustus cuma memuat kehadiran sampai
+ * tanggal itu - jadi potongan Pasal 13, hari uang makan, dan jam lembur
+ * semuanya masih akan berubah sampai bulannya tutup. Membukanya sebagai
+ * tampilan bawaan menyodorkan angka setengah jadi sebagai kalau-kalau sudah
+ * final, dan itu angka yang dipakai orang mengambil keputusan bayar.
+ *
+ * Jadi bawaannya = periode TERBARU yang datanya ada DAN bulannya sudah lewat.
+ * Bulan berjalan tetap bisa dibuka, cuma harus dipilih sendiri lewat filter -
+ * pilihan sadar, bukan yang kebetulan terbuka.
+ *
+ * Aturannya bergerak sendiri: begitu masuk September, bawaannya jadi Agustus.
+ * TIDAK ADA bulan yang di-hardcode di sini.
  */
 export type Periode = { bulan: number; tahun: number };
 
@@ -27,14 +38,21 @@ export function pilihPeriodeDefault(
   tersedia: Periode[],
   sekarang: Periode
 ): Periode {
-  if (tersedia.some((p) => p.bulan === sekarang.bulan && p.tahun === sekarang.tahun)) {
-    return sekarang;
-  }
   // Terbaru = tahun dulu, baru bulan. Periode di masa depan TIDAK dibuang:
   // kalau ada, itu memang data yang sengaja dimasukkan lebih awal, dan
   // menyembunyikannya membuat halamannya tidak bisa dibuka lewat sidebar.
   const terurut = [...tersedia].sort((a, b) => b.tahun - a.tahun || b.bulan - a.bulan);
-  return terurut[0] ?? sekarang;
+
+  // Bulan BERJALAN dilewati - datanya masih setengah jalan sampai bulannya
+  // tutup (lihat catatan panjang di kepala file).
+  const bukanBerjalan = terurut.filter(
+    (p) => !(p.bulan === sekarang.bulan && p.tahun === sekarang.tahun)
+  );
+
+  // Kalau yang ada CUMA bulan berjalan (mis. server baru yang baru sekali
+  // menarik presensi), tetap dipakai - halaman kosong tanpa penjelasan lebih
+  // buruk daripada angka yang belum final.
+  return bukanBerjalan[0] ?? terurut[0] ?? sekarang;
 }
 
 /** Periode berjalan menurut jam server. Dipisah supaya gampang di-stub di test. */

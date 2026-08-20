@@ -4,10 +4,15 @@
       "Bash(grep -n \"LAMPIRAN I$\\\\|LAMPIRAN II\\\\|BATAS TERTINGGI\\\\|DAPAT DILAMPAUI\" pmk32.txt)",
       "Bash(grep -n \"docs/permenaker-15-2024\\\\|## Teks peraturan\\\\|src/business-logic/tarifSbm.ts\\\\` \\(BARU\\)\" CLAUDE.md)",
       "Bash(grep -v \"^\\\\s*//\")",
-      "Bash(cd \"d:/Project/gajihub-main\" && sed -n '/^model KendalaEpresensi/,/^}/p' prisma/schema.prisma | tail -20)"
+      "Bash(cd \"d:/Project/gajihub-main\" && sed -n '/^model KendalaEpresensi/,/^}/p' prisma/schema.prisma | tail -20)",
+      "Bash(cat > *)",
+      "Bash(curl -s -H 'Cookie: gajihub_session=__CMDSUB_OUTPUT__' 'http://127.0.0.1:3099/tukin/presensi/__TRACKED_VAR__?bulan=7&tahun=2026&rinci=1' -o C:/Users/User/AppData/Local/Temp/claude/d--Project-gajihub-main/80863d1d-0657-482f-b6e6-09967f5337b1/scratchpad/rinci.html -w 'rinci %{http_code}\\\\n')",
+      "Bash(curl -s -H 'Cookie: gajihub_session=__CMDSUB_OUTPUT__' 'http://127.0.0.1:3099/tukin/presensi/__TRACKED_VAR__?bulan=7&tahun=2026' -o C:/Users/User/AppData/Local/Temp/claude/d--Project-gajihub-main/80863d1d-0657-482f-b6e6-09967f5337b1/scratchpad/biasa.html -w 'biasa %{http_code}\\\\n')",
+      "Bash(curl -s -H 'Cookie: gajihub_session=__TRACKED_VAR__' 'http://127.0.0.1:3099/ppabp/gaji-induk?bulan=7&tahun=2026')"
     ],
     "additionalDirectories": [
-      "d:\\Project\\gajihub-main\\prisma"
+      "d:\\Project\\gajihub-main\\prisma",
+      "\\tmp"
     ]
   }
 }

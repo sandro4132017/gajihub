@@ -139,7 +139,7 @@ export default async function KendalaEpresensiPage({
     .filter((s): s is string => Boolean(s));
 
   const belumDitandai = janggal.filter((j) => !petaPenanda.has(j.tanggalIso));
-  const th = "px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted";
+  const th = "px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted";
   const td = "px-3 py-2.5 text-sm text-ink-2";
 
   return (

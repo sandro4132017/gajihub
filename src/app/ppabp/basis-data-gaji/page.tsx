@@ -131,10 +131,10 @@ export default async function BasisDataGajiPage({
       <div className="card mt-4 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
+            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
               <th className="px-3 py-2.5">NIP</th>
-              <th className="px-3 py-2.5">Nama di SIAP</th>
-              <th className="px-3 py-2.5">Nama di Web Gaji (dipakai ADK)</th>
+              <th className="col-nama px-3 py-2.5">Nama di SIAP</th>
+              <th className="col-nama px-3 py-2.5">Nama di Web Gaji (dipakai ADK)</th>
               <th className="px-3 py-2.5">Jenis</th>
               <th className="px-3 py-2.5">Kode satker</th>
             </tr>
@@ -154,8 +154,8 @@ export default async function BasisDataGajiPage({
               return (
                 <tr key={r.id} className="border-b border-line-2">
                   <td className="px-3 py-2.5 font-mono text-xs text-muted">{r.pegawai.nip}</td>
-                  <td className={`px-3 py-2.5 ${beda ? "text-muted" : "text-ink-2"}`}>{r.pegawai.nama}</td>
-                  <td className="px-3 py-2.5 font-semibold text-ink">{r.nama}</td>
+                  <td className={`col-nama px-3 py-2.5 ${beda ? "text-muted" : "text-ink-2"}`}>{r.pegawai.nama}</td>
+                  <td className="col-nama px-3 py-2.5 font-semibold text-ink">{r.nama}</td>
                   <td className="px-3 py-2.5 text-ink-2">{r.jenisPegawai ?? "-"}</td>
                   <td className="px-3 py-2.5 font-mono text-xs text-ink-2">
                     {r.kodeSatker ?? "-"}

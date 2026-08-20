@@ -190,8 +190,8 @@ export default async function RiwayatGajiPage({
           <div className="card mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-xs font-bold uppercase tracking-wide text-muted">
-                  <th className="px-4 py-2.5">Pegawai</th>
+                <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+                  <th className="col-nama px-4 py-2.5">Pegawai</th>
                   <th className="px-4 py-2.5">Gaji pokok</th>
                   <th className="px-4 py-2.5">Penghasilan</th>
                   <th className="px-4 py-2.5">Potongan</th>
@@ -209,7 +209,7 @@ export default async function RiwayatGajiPage({
                 )}
                 {barisList.map((b) => (
                   <tr key={b.id} className="border-b border-line-2 align-top">
-                    <td className="px-4 py-2.5">
+                    <td className="col-nama px-4 py-2.5">
                       <span className="font-semibold text-ink">{b.pegawai.nama}</span>
                       <span className="block font-mono text-xs text-muted">{b.pegawai.nip}</span>
                       <span className="block text-xs text-muted">{b.pegawai.satuanKerja}</span>
