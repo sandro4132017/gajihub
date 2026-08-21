@@ -4,25 +4,15 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { buatTokenSesi, SESSION_COOKIE_NAME } from "../../auth/session";
+import { SESSION_COOKIE_NAME } from "../../auth/session";
+// Opsi cookie & penerbitan token dipakai bareng login SSO (Route Handler)
+// - lihat src/auth/sesiCookie.ts. Dua salinan opsi cookie pasti berbeda
+// cepat atau lambat, dan gejalanya "login berhasil tapi langsung logout".
+import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../auth/sesiCookie";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { daftarRoleTersedia, LANDING_ROLE } from "../../auth/roleAktif";
 import { LABEL_ROLE } from "../../auth/roleLabel";
 
-const OPSI_COOKIE_SESI = {
-  httpOnly: true,
-  // BUKAN process.env.NODE_ENV === "production" - `next start` SELALU
-  // set NODE_ENV=production terlepas dari ada/tidaknya HTTPS, jadi kalau
-  // dipakai di situ cookie Secure bakal ke-set walau server jalan HTTP
-  // biasa (browser diam-diam MENOLAK nyimpen cookie Secure lewat koneksi
-  // non-HTTPS - user kelihatan "berhasil login" tapi langsung logout
-  // lagi di request berikutnya). COOKIE_SECURE eksplisit di .env,
-  // default false - set "true" begitu server ini sudah pakai HTTPS asli.
-  secure: process.env.COOKIE_SECURE === "true",
-  sameSite: "lax",
-  path: "/",
-  maxAge: 60 * 60 * 8,
-} as const;
 
 // TODO(legal-confirm): password = NIP itu sengaja (bukan bug) - permintaan
 // eksplisit sebagai solusi SEMENTARA sampai SSO Kemnaker tersambung. Ini
@@ -58,14 +48,7 @@ export async function loginAction(
   const pegawai = await prisma.pegawai.findUnique({ where: { nip } });
   const jabatan = pegawai?.jabatan ?? LABEL_ROLE[user.role];
 
-  const token = await buatTokenSesi({
-    userId: user.id,
-    nip: user.nip,
-    nama: user.nama,
-    role: user.role,
-    satuanKerja: user.satuanKerja,
-    jabatan,
-  });
+  const token = await buatTokenUntukUser(user, jabatan);
 
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
@@ -117,14 +100,7 @@ export async function gantiRoleAction(
     return { error: `Akun kamu tidak punya role ${LABEL_ROLE[roleTujuan] ?? roleTujuan}.` };
   }
 
-  const token = await buatTokenSesi({
-    userId: user.id,
-    nip: user.nip,
-    nama: user.nama,
-    role: roleTujuan,
-    satuanKerja: user.satuanKerja,
-    jabatan: akun.jabatan,
-  });
+  const token = await buatTokenUntukUser(user, akun.jabatan, roleTujuan);
 
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);

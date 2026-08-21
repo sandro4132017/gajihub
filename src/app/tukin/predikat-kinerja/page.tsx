@@ -116,7 +116,7 @@ export default async function PredikatKinerjaPage({
   // ikut tersaring pencarian nama/NIP, sementara yang dihapus adalah SELURUH
   // baris satuan kerja + periode itu. Kalau angka tersaring yang dipakai,
   // tombolnya bisa menulis "hapus 1 predikat" padahal 47 yang terhapus.
-  const [satuanKerjaRows, jumlahBaris, sebaran, barisList, jumlahSeUnitPeriode] = await Promise.all([
+  const [satuanKerjaRows, jumlahBaris, sebaran, barisList, jumlahSeUnitPeriode, sumberPenilaian] = await Promise.all([
     prisma.pegawai.findMany({ distinct: ["satuanKerja"], select: { satuanKerja: true }, orderBy: { satuanKerja: "asc" } }),
     prisma.predikatKinerja.count({ where }),
     prisma.predikatKinerja.groupBy({ by: ["predikat"], where, _count: { _all: true } }),
@@ -131,6 +131,26 @@ export default async function PredikatKinerjaPage({
           where: { periodeBulan: periodeBulan!, periodeTahun: periodeTahun!, pegawai: { satuanKerja: satkerEfektif } },
         })
       : Promise.resolve(0),
+    // Penilai mana saja yang filenya SUDAH masuk untuk unit + periode ini.
+    //
+    // Satu satuan kerja lazim dinilai beberapa penilai dengan file terpisah
+    // (data nyata 7/2026 Biro Keuangan: "Kasubbag TU" 25 orang, "Kepala Biro"
+    // 21, "Subbagian Tata Usaha" 1), dan yang mengupload bisa orang berbeda.
+    // Tanpa daftar ini, angka "belum punya predikat" tidak bisa dibaca: 20
+    // orang belum punya itu karena file penilai lain memang belum diupload,
+    // atau karena orangnya yang belum dinilai? Dua sebab, dua tindak lanjut.
+    //
+    // Sengaja TIDAK memakai `where` di atas - `where` ikut tersaring pencarian
+    // nama/NIP, sementara pertanyaannya soal SELURUH unit (alasan yang sama
+    // dengan `jumlahSeUnitPeriode`). Dan butuh satuan kerja terpilih: tanpa
+    // itu daftarnya jadi seluruh penilai se-kementerian.
+    adaPeriode && satkerEfektif
+      ? prisma.predikatKinerja.groupBy({
+          by: ["unitPenilaian"],
+          where: { periodeBulan: periodeBulan!, periodeTahun: periodeTahun!, pegawai: { satuanKerja: satkerEfektif } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   // --- Bahan form "tambah predikat satuan" ---
@@ -174,6 +194,15 @@ export default async function PredikatKinerjaPage({
 
   const namaPeriode = adaPeriode ? `${NAMA_BULAN[periodeBulan! - 1] ?? periodeBulan} ${periodeTahun}` : "";
   const jumlahManual = barisList.filter((b) => adalahInputManual(b.inputMethod)).length;
+
+  // Penilai yang sudah masuk, terbanyak duluan. Baris ber-`unitPenilaian` null
+  // dipisah, TIDAK dibuang: itu predikat yang diketik manual lewat form
+  // "tambah predikat satuan" (atau diupload sebelum kolom ini ada), dan
+  // menyembunyikannya membuat jumlah di daftar ini tidak menjumlah ke total.
+  const penilaiTercatat = sumberPenilaian
+    .filter((s): s is typeof s & { unitPenilaian: string } => s.unitPenilaian !== null)
+    .sort((a, b) => b._count._all - a._count._all);
+  const jumlahTanpaPenilai = sumberPenilaian.find((s) => s.unitPenilaian === null)?._count._all ?? 0;
 
   // Periode & satker ikut dibawa balik supaya Dashboard Tukin terbuka di
   // periode yang BARU SAJA dilihat di sini - kalau tidak, halaman tujuan jatuh
@@ -350,6 +379,42 @@ export default async function PredikatKinerjaPage({
                 </span>
               )}
             </div>
+
+            {/* Penilai yang filenya sudah masuk untuk unit + periode ini.
+                Sebelumnya keterangan ini CUMA muncul di hasil upload, jadi
+                orang kedua yang membuka halaman ini besoknya melihat "belum
+                punya predikat 20" tanpa bisa tahu apakah file penilai lain
+                sudah masuk atau belum - padahal datanya sudah tersimpan per
+                baris (PredikatKinerja.unitPenilaian). */}
+            {!perluPilihSatker && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-2 pt-3">
+                <span className="text-xs font-bold uppercase tracking-wide text-muted">Sumber penilaian</span>
+                {penilaiTercatat.length === 0 && jumlahTanpaPenilai === 0 && (
+                  <span className="text-sm text-muted">belum ada file yang masuk untuk periode ini</span>
+                )}
+                {penilaiTercatat.map((s) => (
+                  <span key={s.unitPenilaian} className="inline-flex items-center gap-1.5">
+                    <span className="chip chip-ok">{s.unitPenilaian}</span>
+                    <span className="font-mono text-sm font-extrabold text-ink">{s._count._all}</span>
+                  </span>
+                ))}
+                {jumlahTanpaPenilai > 0 && (
+                  <span className="inline-flex items-center gap-1.5" title="Predikat yang diketik manual, atau diupload sebelum sumber penilaian dicatat.">
+                    <span className="chip chip-wait">Tanpa sumber tercatat</span>
+                    <span className="font-mono text-sm font-extrabold text-ink">{jumlahTanpaPenilai}</span>
+                  </span>
+                )}
+                {/* Yang menentukan lengkap/tidaknya adalah kolom "Belum punya
+                    predikat" di atas, BUKAN jumlah penilai di sini - berapa
+                    penilai yang seharusnya mengirim file berbeda tiap unit dan
+                    tidak dipunyai sistem. */}
+                {penilaiTercatat.length > 1 && (
+                  <span className="text-xs text-muted">
+                    {penilaiTercatat.length} file penilai berbeda - semuanya tersimpan, tidak saling menimpa.
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/*

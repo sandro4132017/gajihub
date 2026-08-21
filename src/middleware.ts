@@ -10,9 +10,15 @@ import { LANDING_ROLE } from "./auth/roleAktif";
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const session = token ? await verifikasiTokenSesi(token) : null;
-  const isLoginPage = request.nextUrl.pathname === "/login";
+  const path = request.nextUrl.pathname;
+  const isLoginPage = path === "/login";
+  // Rute SSO (/login/sso dan /login/sso/callback) HARUS bisa diakses tanpa
+  // sesi - memang di situlah sesinya dibuat. Dipisah dari `isLoginPage`
+  // karena keduanya menjawab pertanyaan berbeda: yang ini "boleh dibuka
+  // tanpa login?", yang satunya "sudah login tapi masih di halaman login?".
+  const isRuteSso = path === "/login/sso" || path.startsWith("/login/sso/");
 
-  if (!session && !isLoginPage) {
+  if (!session && !isLoginPage && !isRuteSso) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
   if (session && isLoginPage) {
