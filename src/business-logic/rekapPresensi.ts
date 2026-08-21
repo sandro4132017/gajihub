@@ -4,34 +4,28 @@ import { parseJenisCuti, LABEL_JENIS_CUTI } from "./jenisCuti";
 // ============================================================================
 // REKAP PRESENSI BULANAN -> PresensiHarian (bobot 30% Tukin)
 //
-// Modul ini PURE (tidak ada I/O - lihat "Konvensi kode" di CLAUDE.md).
+// PURE (lihat "Konvensi kode" di CLAUDE.md).
 //
-// PENTING - ini BUKAN parser file export e-Presensi. Contoh tarikan
-// e-Presensi yang ada ("contoh tarikan data ketidakhadiran presensi.xlsx")
-// di-key oleh NAMA PEGAWAI, bukan NIP, dan penulisan namanya tidak konsisten
-// antar baris (mis. "Ayla Raffany, S.I.Kom" vs "Ayla Raffany S.I.Kom").
-// Memetakan nama itu ke NIP butuh proses rekonsiliasi tersendiri, jadi
-// menebak-nebak di sini justru berbahaya: salah orang = salah potong tukin.
+// PENTING - ini BUKAN parser file export e-Presensi. Contoh tarikan e-Presensi
+// di-key oleh NAMA PEGAWAI (bukan NIP) dengan penulisan yang tidak konsisten
+// antar baris, jadi menebak pemetaan nama->NIP di sini berbahaya: salah orang
+// = salah potong tukin.
 //
-// Yang dipakai di sini adalah FORMAT TEMPLATE GAJIHUB sendiri, di-key NIP,
-// satu baris per pegawai per periode berisi REKAP bulanan (bukan per hari).
-// Begitu adapter e-Presensi tersambung, tombol sinkronisasi mengambil alih
-// dan template ini jadi jalur cadangan (Pasal 23 Permenaker 15/2024 memang
+// Yang dipakai FORMAT TEMPLATE GAJIHUB sendiri, di-key NIP, satu baris per
+// pegawai per periode berisi REKAP bulanan. Sejak adapter e-Presensi
+// tersambung, template ini jadi jalur cadangan (Pasal 23 Permenaker 15/2024
 // mengakui penghitungan manual selama sistem informasi belum jalan).
 //
 // Kolom template (urutan bebas, header dicocokkan namanya):
 //   NIP | Hari Alpha | Tidak Presensi | Menit Terlambat | Menit Pulang Cepat |
-//   Menit Meninggalkan Kantor | Menit Kekurangan Jam Kerja |
-//   Tidak Ikut Upacara | Jenis Cuti | Bulan Cuti Ke | Hari Cuti |
-//   Hari Kerja | Hari Hadir |
-//   Hari WFO | Hari WFH/WFA | Hari Diklat | Hari Dinas Luar |
-//   Jam Lembur | Hari Makan Lembur |
-//   Jam Lembur Hari Libur | Hari Makan Lembur Hari Libur
+//   Menit Meninggalkan Kantor | Tidak Ikut Upacara | Jenis Cuti |
+//   Bulan Cuti Ke | Hari Cuti | Hari Kerja | Hari Hadir | Hari WFO |
+//   Hari WFH/WFA | Hari Diklat | Hari Dinas Luar | Jam Lembur |
+//   Hari Makan Lembur | Jam Lembur Hari Libur | Hari Makan Lembur Hari Libur
 //
-// Enam kolom pertama memetakan langsung ke tabel potongan Pasal 13 (lihat
-// hitungPotonganKehadiranPersen di tukin.ts). Kolom WFO/WFH/Diklat/Dinas
-// Luar dipakai uang makan, dan dua kolom lembur dipakai uang lembur - lihat
-// uangMakan.ts & uangLembur.ts.
+// Kolom pelanggaran memetakan langsung ke tabel Pasal 13
+// (hitungPotonganKehadiranPersen di tukin.ts); WFO/WFH/Diklat/Dinas Luar
+// dipakai uang makan; dua kolom lembur dipakai uang lembur.
 // ============================================================================
 
 export interface BarisRekapPresensi {

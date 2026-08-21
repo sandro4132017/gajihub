@@ -1,66 +1,32 @@
 // ============================================================================
 // RINCIAN JAM KERJA HARIAN - bentuk yang dipakai petugas di "Jam Absensi.xlsx"
 //
-// PURE (lihat "Konvensi kode" di CLAUDE.md). Tidak menyentuh database maupun
-// berkas; semua masukan lewat parameter.
+// PURE (lihat "Konvensi kode" di CLAUDE.md).
 //
-// KENAPA ADA
-// ----------
-// Tabel presensi Gajihub menjawab "apa yang dilanggar" (telat, pulang cepat).
-// Berkas rekap petugas menjawab pertanyaan yang BERBEDA: "jam kerja hari itu
-// terpenuhi atau tidak" - lewat kolom Jam Harus Checkout, Menit Kerja, dan
-// Kekurangan Jam Kerja. Petugas masih memakai bentuk itu tiap periode, jadi
-// selama masa transisi Gajihub harus bisa menampilkannya juga - kalau tidak,
-// tidak ada cara mengadu keduanya selain membuka Excel di sebelah layar.
+// Menjawab pertanyaan yang BERBEDA dari tabel presensi Gajihub: bukan "apa
+// yang dilanggar", tapi "jam kerja hari itu terpenuhi atau tidak". Petugas
+// masih memakai bentuk ini tiap periode, jadi selama masa transisi Gajihub
+// harus bisa menampilkannya supaya keduanya bisa diadu.
 //
-// RUMUSNYA DIBONGKAR DARI BERKAS ASLI, BUKAN DIKARANG. Diuji ke seluruh 1.133
-// baris sheet "Master Presensi" (48 pegawai Biro Keuangan, Juli 2026):
+// Rumusnya dibongkar dari berkas asli, bukan dikarang - diuji ke 1.133 baris
+// (48 pegawai Biro Keuangan, Juli 2026), kecocokan 1.092-1.133 per kolom.
+// Istirahat Senin-Kamis 60 menit, Jumat 90 menit (Pasal 9 ayat (2)).
 //
-//   Jumlah Menit Kekurangan Harian = Terlambat + Kekurangan     1.133/1.133
-//   Terlambat  = checkin - Jam Toleransi Masuk (08:30)          1.125/1.133
-//   Menit Kerja = (checkout - checkin) - istirahat              1.124/1.133
-//   Kekurangan = min(max(harusCheckout, jamPulang), tolPulang)
-//                - checkout                                     1.099/1.133
-//   Jam Harus Checkout = checkin + 7,5 jam + istirahat          1.092/1.133
-//
-// Istirahat Senin-Kamis 60 menit, Jumat 90 menit - persis Pasal 9 ayat (2),
-// dan itu juga yang membuktikan jendela jam dinding Gajihub (07:30-16:00 /
-// 16:30) memang sudah memuat istirahat di dalamnya: 510 - 60 = 450 = 7,5 jam,
-// dan 540 - 90 = 450.
-//
-// ----------------------------------------------------------------------------
-// PERINGATAN YANG MENENTUKAN: "KEKURANGAN JAM KERJA" BUKAN "PULANG CEPAT"
-// ----------------------------------------------------------------------------
-// Keduanya bersatuan menit dan terdengar mirip, tapi mengukur hal berbeda:
-//
+// PERINGATAN 1 - "KEKURANGAN JAM KERJA" BUKAN "PULANG CEPAT":
 //   Pulang cepat (Pasal 13 ayat (3), YANG DIBAYARKAN)
 //       = jam pulang wajib - checkout        <- patokan TETAP 16:00 / 16:30
 //   Kekurangan jam kerja (berkas petugas, TABEL INI)
 //       = batas kewajiban hari itu - checkout <- patokan BERGESER ikut checkin
+//   Masuk 09:00 lalu pulang 16:00 = pulang cepat 0 menit, kekurangan 60 menit.
+//   Kolom ini pernah masuk mesin potongan (2026-08-06) dan DICABUT sehari
+//   kemudian: Pasal 13 ayat (3) menyebut tepat tiga pelanggaran dan kolom ini
+//   bukan salah satunya, lagipula ia AKIBAT dari terlambat & pulang cepat -
+//   menagihnya berarti memotong menit yang sama dua kali.
+//   JANGAN mengalirkan angka dari modul ini ke tukin.ts.
 //
-// Bedanya baru muncul pada orang yang datang terlambat. Masuk 09:00 lalu
-// pulang 16:00: pulang cepat 0 menit (dia pulang tepat waktu), kekurangan jam
-// kerja 60 menit (kewajibannya bergeser ke 17:00). Yang MEMBAYAR adalah kolom
-// pulang cepat; kekurangan jam kerja di sini murni penjelas.
-//
-// Kolom "kekurangan jam kerja" pernah masuk mesin potongan pada 2026-08-06
-// dan DICABUT sehari kemudian - Pasal 13 ayat (3) menyebut tepat tiga
-// pelanggaran dan kolom itu bukan salah satunya, lagipula secara aritmatika
-// ia AKIBAT dari terlambat & pulang cepat sehingga menagihnya berarti memotong
-// menit yang sama dua kali. Lihat InputPotonganKehadiran di tukin.ts.
-// JANGAN mengalirkan angka dari modul ini ke sana.
-//
-// ----------------------------------------------------------------------------
-// "JAM TOLERANSI PULANG" BUKAN JAM MULAI LEMBUR
-// ----------------------------------------------------------------------------
-// Di berkas petugas, 17:00 adalah BATAS ATAS kewajiban checkout: orang yang
-// datang sangat terlambat tidak dituntut pulang lewat jam itu. Lembur TIDAK
-// ada hubungannya dengan kolom ini - jam lembur mulai berjalan di jam pulang
-// wajib (16:00 / Jumat 16:30), bukan di jam toleransinya.
-//
-// Sempat ada jeda 1 jam sebelum lembur (2026-08-18) yang membuat kedua angka
-// itu kebetulan sama, dan itu memang membingungkan - jedanya DICABUT
-// 2026-08-19. Lihat "TIDAK ADA JEDA SEBELUM LEMBUR" di presensiPdfKeRekap.ts.
+// PERINGATAN 2 - "JAM TOLERANSI PULANG" BUKAN JAM MULAI LEMBUR. Di berkas
+// petugas, 17:00 adalah BATAS ATAS kewajiban checkout. Lembur mulai berjalan
+// di jam pulang wajib (16:00 / Jumat 16:30).
 // ============================================================================
 
 import { JADWAL_KERJA_DEFAULT, JAM_TAP_PULANG_HILANG, type JadwalKerja } from "./presensiPdfKeRekap";

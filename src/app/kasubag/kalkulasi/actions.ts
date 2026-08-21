@@ -227,11 +227,13 @@ export async function kalkulasiMassalTukinUangMakanAction(
         continue;
       }
 
-      // Dua jalur sumber presensi (lihat model RekapPresensiPeriode di
-      // schema.prisma): rekap bulanan hasil upload manual DIUTAMAKAN, kalau
-      // tidak ada baru dihitung dari PresensiHarian (jalur sinkronisasi
-      // e-Presensi). Selama e-Presensi belum tersambung, praktis yang dipakai
-      // adalah rekap manual.
+      // Dua sumber presensi (lihat model RekapPresensiPeriode di
+      // schema.prisma): RekapPresensiPeriode DIUTAMAKAN, kalau tidak ada baru
+      // dihitung dari PresensiHarian. Sinkronisasi e-Presensi mengisi KEDUANYA,
+      // jadi jalur pertama yang biasanya terpakai.
+      // TODO(confirm): belum ada aturan mana yang menang kalau rekap hasil
+      // upload manual dan hasil sinkronisasi sama-sama ada untuk periode yang
+      // sama - sekarang yang tersimpan terakhir yang dipakai.
       const rekapManual = await prisma.rekapPresensiPeriode.findUnique({
         where: { pegawaiId_periodeBulan_periodeTahun: { pegawaiId: pegawai.id, periodeBulan, periodeTahun } },
       });

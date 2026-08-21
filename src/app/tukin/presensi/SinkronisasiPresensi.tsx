@@ -25,14 +25,9 @@ export function SinkronisasiPresensi({
             Menarik data kehadiran langsung dari e-Presensi, tanpa upload manual
           </p>
         </div>
-        {/* Pil hijau, bukan chip persegi - penanda status koneksi, sengaja
-            dibedakan bentuknya dari chip status data di tabel. */}
         <span className="chip chip-ok rounded-full px-3.5 py-1.5 text-[13px]">Tersambung</span>
       </div>
 
-      {/* Satu baris: bulan - "Tahun" <tahun> - tombol. Label di ATAS tiap field
-          sengaja dihapus; bulan sudah jelas dari isinya, dan periodenya
-          dijelaskan kalimat di bawah. */}
       <form action={formAction} className="mt-4 flex flex-wrap items-center gap-3">
         <SearchableSelect
           name="bulan"
@@ -56,10 +51,6 @@ export function SinkronisasiPresensi({
         </button>
       </form>
 
-      {/* Dua paragraf keterangan digabung jadi satu blok - keduanya menjawab
-          pertanyaan yang sama ("apa yang terjadi kalau tombol ini ditekan"),
-          dan yang soal potongan dulu terdampar di kaki kartu, jauh dari
-          tombolnya. */}
       <p className="mt-3 text-sm leading-relaxed text-muted">
         Penarikan data akan menimpa rekap pada bulan yang dipilih. Bulan lain tidak berubah. Potongan dihitung ulang oleh GajiHub sesuai <strong>Permenaker 15/2024</strong>, bukan menggunakan nilai potongan dari e-Presensi.
       </p>

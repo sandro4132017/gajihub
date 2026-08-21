@@ -143,12 +143,11 @@ export interface InputPotonganKehadiran {
  * 1 bulan. Semuanya memang bukan pelanggaran kewajiban jam kerja, jadi tidak
  * punya baris di tabel ini - bukan karena terlewat.
  *
- * Catatan: Permenaker tidak eksplisit menyebut batas maksimum potongan
- * (bisa saja > 30% jika alpha berkali-kali dalam sebulan). Engine ini
- * meng-clamp minimum ke 0 (tidak sampai negatif), tapi TIDAK meng-clamp
- * potongan itu sendiri - flag jadi anomali jika potongan > bobot kehadiran,
- * karena kebijakan pastinya (apakah bisa "minus" ke komponen kinerja) perlu
- * dikonfirmasi ke Biro Hukum/Sekjen.
+ * TIDAK ADA BATAS MAKSIMUM potongan di Pasal 13 manapun (bisa > 30% kalau
+ * alpha berkali-kali). Engine meng-clamp minimum ke 0 supaya tidak negatif,
+ * tapi TIDAK meng-clamp potongannya sendiri - ditandai anomali kalau melebihi
+ * bobot kehadiran. Apakah boleh "minus" ke komponen kinerja perlu konfirmasi
+ * Biro Hukum/Sekjen.
  */
 export function hitungPotonganKehadiranPersen(rekap: InputPotonganKehadiran): {
   totalPersen: number;
@@ -287,32 +286,18 @@ export function hitungPersenDibayarCuti(cutiAktif?: {
     /**
      * Cuti di Luar Tanggungan Negara - diatur PASAL 4 HURUF D, bukan Pasal 14.
      *
-     * "Tunjangan Kinerja sebagaimana dimaksud dalam Pasal 2 TIDAK DIBERIKAN
-     * kepada: ... d. Pegawai ... yang menjalani Cuti di luar tanggungan
-     * negara atau dalam bebas tugas untuk persiapan masa pensiun". Jadi nol
-     * di sini bukan "potongan 100%" menurut Pasal 14, tapi memang tidak
-     * diberikan - angkanya sama, dasarnya beda. Teks lengkapnya ada di
-     * docs/permenaker-15-2024-tunjangan-kinerja.md.
+     * "Tunjangan Kinerja ... TIDAK DIBERIKAN kepada: ... d. Pegawai ... yang
+     * menjalani Cuti di luar tanggungan negara atau dalam bebas tugas untuk
+     * persiapan masa pensiun". Jadi nol di sini bukan "potongan 100%" menurut
+     * Pasal 14, tapi memang tidak diberikan - angkanya sama, dasarnya beda.
      *
-     * TODO(confirm) YANG TERSISA: huruf d yang sama menyebut "bebas tugas
-     * untuk persiapan masa pensiun" (MPP) dengan akibat SAMA, dan itu BELUM
-     * ditangani - tidak ada penandanya di skema Pegawai.
+     * TODO(confirm): huruf d yang sama menyebut "bebas tugas untuk persiapan
+     * masa pensiun" (MPP) dengan akibat SAMA, dan itu BELUM ditangani - tidak
+     * ada penandanya di skema Pegawai.
      *
-     * Dasar tambahan yang dipakai sebelum teks Permenaker lengkap didapat:
-     *
-     * Dasarnya PP 11/2017 Pasal 312-313: PNS yang menjalani CLTN dibebaskan
-     * dari jabatannya dan tidak berhak menerima penghasilan. Tunjangan Kinerja
-     * melekat pada pelaksanaan jabatan (Pasal 5 Permenaker 15/2024), jadi
-     * selama jabatannya dibebaskan tidak ada yang jadi dasar pembayaran.
-     * Database e-Presensi menetapkan hal yang sama secara terpisah
-     * (`cuti.nilai_persen` = 100 untuk jenis ini).
-     *
-     * ANOMALI TETAP SELALU DINYALAKAN, tapi ALASANNYA SUDAH BERGESER. Dulu:
-     * "tidak bisa ditunjuk ke pasal Permenaker manapun". Sejak teks lengkap
-     * masuk (2026-08-07) dasarnya jelas di Pasal 4 huruf d; yang tersisa
-     * adalah beratnya akibat - ini satu-satunya jalur yang menghapus SELURUH
-     * tukin sebulan, jadi tetap tidak boleh lolos ke pembayaran tanpa dilihat
-     * manusia.
+     * ANOMALI SELALU DINYALAKAN karena beratnya akibat: ini satu-satunya jalur
+     * yang menghapus SELURUH tukin sebulan, jadi tidak boleh lolos ke
+     * pembayaran tanpa dilihat manusia.
      */
     case "CUTI_DI_LUAR_TANGGUNGAN_NEGARA":
       anomali.push(
@@ -455,43 +440,25 @@ export function hitungTukin(input: TukinInput): TukinResult {
   // --- Override cuti (Pasal 14) - berlaku atas TOTAL tukin, bukan cuma kehadiran ---
   const hasilCuti = hitungPersenDibayarCuti(input.rekapKehadiran.cutiAktif);
   const persenDibayarCuti = hasilCuti?.persenDibayar ?? null;
-  // ==========================================================================
-  // CUTI YANG TIDAK MEMOTONG TIDAK BOLEH MENIMPA APA PUN
-  // ==========================================================================
-  // Override hanya dijalankan kalau Pasal 14 memang MENGURANGI tukin.
+  // CUTI YANG TIDAK MEMOTONG TIDAK BOLEH MENIMPA APA PUN.
   //
-  // Sebelum 2026-08-07, override dijalankan untuk SETIAP jenis cuti termasuk
-  // yang persen dibayarnya 100% (cuti tahunan, melahirkan, alasan penting,
-  // cuti besar < 1 bulan). Karena override menimpa tukinPokok dengan
-  // `tarif kelas x persen`, cuti tahunan SATU HARI menghapus SELURUH potongan
-  // Pasal 13 sebulan - pegawai yang terlambat berkali-kali justru dibayar
-  // penuh begitu dia ambil cuti sehari.
+  // Override hanya dijalankan kalau Pasal 14 memang MENGURANGI tukin. Dulu
+  // dijalankan untuk SETIAP jenis cuti termasuk yang 100% - dan karena
+  // override menimpa tukinPokok dengan `tarif kelas x persen`, cuti tahunan
+  // SATU HARI menghapus SELURUH potongan Pasal 13 sebulan. Terukur: 16 dari
+  // 46 pegawai Biro Keuangan 7/2026, Rp 634.959 dalam satu unit satu bulan.
+  // Dasarnya jelas di teks: Pasal 14 mengatur BERAPA PERSEN tukin dibayarkan
+  // selama cuti; tidak ada kata yang menyatakan cuti membatalkan Pasal 13.
   //
-  // Bug ini dorman selama `cutiAktif` cuma diisi manusia lewat template.
-  // Begitu jenis cuti ditarik otomatis dari e-Presensi (2026-08-07), langsung
-  // aktif: 16 dari 46 pegawai Biro Keuangan periode 7/2026 kehilangan
-  // potongannya, total Rp 634.959 dalam satu unit satu bulan.
+  // TODO(confirm): untuk cuti yang MEMANG memotong (cuti besar, cuti sakit
+  // bulan II ke atas, CLTN), override tetap memakai `tarif kelas x persen`
+  // sehingga potongan Pasal 13 tertimpa. Apakah keduanya berlaku bersamaan
+  // belum ditegaskan Biro OSDMA/Hukum; perlakuan sekarang lebih menguntungkan
+  // pegawai dan tidak diubah tanpa konfirmasi.
   //
-  // Dibuktikan keliru lewat rincian tukin manual Rokeu: Ahmad Henda punya
-  // potongan Rp 30.604 yang terhapus oleh cuti tahunan 1 hari. Tarif kelas 8
-  // Rp 4.595.150 - Rp 30.604 = Rp 4.564.546, dan itu PERSIS angka
-  // "Dibayarkan" di rincian manual.
-  //
-  // Dasarnya juga jelas di teks: Pasal 14 mengatur BERAPA PERSEN tukin
-  // dibayarkan selama cuti. Tidak ada satu kata pun yang menyatakan cuti
-  // membatalkan Pasal 13.
-  //
-  // TODO(confirm) YANG TERSISA - untuk cuti yang MEMANG memotong (cuti besar,
-  // cuti sakit bulan II ke atas, CLTN), override tetap memakai `tarif kelas x
-  // persen` sehingga potongan Pasal 13 tetap tertimpa. Apakah keduanya
-  // seharusnya berlaku bersamaan (mis. cuti besar bulan I 50% DARI hasil
-  // setelah potongan kehadiran) belum ditegaskan Biro OSDMA/Hukum. Perlakuan
-  // sekarang lebih menguntungkan pegawai dan tidak diubah tanpa konfirmasi.
-  // `overrideCutiDiterapkan` sekarang berarti "override BENAR-BENAR menimpa
-  // perhitungan", bukan sekadar "pegawai sedang cuti". Pemakainya
-  // (rincianTukinTersimpan, UI) memakainya buat menjelaskan kenapa
-  // kehadiran + kinerja tidak menjumlah ke tukinPokok - dan itu cuma terjadi
-  // kalau override memang jalan.
+  // `overrideCutiDiterapkan` berarti "override BENAR-BENAR menimpa", bukan
+  // "pegawai sedang cuti" - pemakainya (UI) memakainya untuk menjelaskan
+  // kenapa kehadiran + kinerja tidak menjumlah ke tukinPokok.
   const overrideCutiDiterapkan = hasilCuti !== null && hasilCuti.persenDibayar < 1;
   if (hasilCuti) anomali.push(...hasilCuti.anomali);
   if (hasilCuti && overrideCutiDiterapkan) {

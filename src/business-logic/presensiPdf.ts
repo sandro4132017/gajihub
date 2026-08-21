@@ -1,42 +1,28 @@
 // ============================================================================
 // PARSER PDF "LAPORAN DETAIL PRESENSI HARIAN" (export e-Presensi)
 //
-// Modul ini PURE (tidak ada I/O - lihat "Konvensi kode" di CLAUDE.md). Yang
-// masuk sudah berupa item teks + KOORDINAT hasil ekstraksi PDF (lihat
-// src/lib/pdfTeks.ts yang membungkus pdfjs), yang keluar adalah laporan per
-// pegawai yang sudah terstruktur. Turunan ke rekap bulanan ada di file
-// terpisah: presensiPdfKeRekap.ts.
+// PURE. Masukannya item teks + KOORDINAT hasil ekstraksi PDF (src/lib/pdfTeks.ts
+// yang membungkus pdfjs); turunan ke rekap bulanan di presensiPdfKeRekap.ts.
 //
-// KENAPA BUTUH KOORDINAT, tidak cukup teks polos: sel yang KOSONG tidak
-// menghasilkan teks apa pun. Contoh nyata di file uji (14-05-2026): pegawai
-// presensi masuk 06:05 tapi TIDAK presensi pulang, jadi kolom "Jam Keluar"
-// kosong. Kalau baris dibaca sebagai deretan teks, "06:05" akan terbaca
-// sebagai jam keluar dan pelanggaran "tidak presensi pulang" (Pasal 13 ayat
-// (2)) hilang tanpa jejak. Dengan koordinat, kolom ditentukan dari posisi x
-// terhadap header tabel - jadi sel kosong tetap kosong.
+// KENAPA BUTUH KOORDINAT, tidak cukup teks polos: sel KOSONG tidak
+// menghasilkan teks apa pun. Contoh nyata di file uji - pegawai presensi masuk
+// 06:05 tapi TIDAK presensi pulang, jadi kolom "Jam Keluar" kosong. Kalau
+// baris dibaca sebagai deretan teks, "06:05" bergeser jadi jam keluar dan
+// pelanggaran Pasal 13 ayat (2) hilang tanpa jejak.
 //
-// BATAS KOLOM DIBACA ULANG DI TIAP HALAMAN, tidak di-hardcode. Di file uji,
-// header yang sama muncul di x=85 pada satu file dan x=86 pada file lain
-// (user sendiri bilang "kadang layout kagak konsisten").
+// BATAS KOLOM DIBACA ULANG TIAP HALAMAN, tidak di-hardcode - header yang sama
+// muncul di x berbeda antar file.
 //
-// BENTUK FILE (dibuktikan dari 3 file asli: 2 file 1 pegawai + 1 file
-// gabungan 44 pegawai / 243 halaman):
-//   - Halaman pertama tiap pegawai: judul "LAPORAN DETAIL PRESENSI HARIAN",
-//     "<Bulan> <Tahun>", blok "Informasi Pegawai" (NIP / Nama Pegawai /
-//     Jabatan), blok "Summary Presensi" (hitungan per status), blok "Summary
-//     Tunjangan Kinerja", blok "Summary Jam Kerja".
-//   - Halaman berikutnya: HANYA lanjutan tabel (header tabel diulang).
-//   - Satu file bisa memuat banyak pegawai (hasil merge) - pegawai baru
-//     ditandai munculnya lagi blok "Informasi Pegawai".
-//   - Kolom tabel: No. | Hari, Tanggal | Jam Masuk | Jam Keluar |
-//     Lokasi Keluar | Status | Potongan | Aktivitas
+// Bentuk file: halaman pertama tiap pegawai memuat blok "Informasi Pegawai" +
+// "Summary Presensi"; halaman berikutnya hanya lanjutan tabel. Satu file bisa
+// memuat banyak pegawai (hasil merge) - pegawai baru ditandai munculnya lagi
+// blok "Informasi Pegawai". Kolom tabel: No. | Hari, Tanggal | Jam Masuk |
+// Jam Keluar | Lokasi Keluar | Status | Potongan | Aktivitas
 //
-// KOLOM "POTONGAN" TIDAK DIPAKAI UNTUK MENGHITUNG UANG. Angkanya memakai
-// skema e-Presensi sendiri yang TIDAK sesuai Permenaker 15/2024 (instruksi
-// eksplisit user). Teksnya tetap dibawa apa adanya karena memuat FAKTA yang
-// tidak ada di kolom lain - khususnya penanda "lupa presensi" - dan fakta itu
-// dipakai di presensiPdfKeRekap.ts. Persentase/rupiah di kolom itu tidak
-// pernah dibaca sebagai angka.
+// KOLOM "POTONGAN" TIDAK DIPAKAI MENGHITUNG UANG - skemanya tidak sesuai
+// Permenaker 15/2024. Teksnya tetap dibawa karena memuat FAKTA yang tidak ada
+// di kolom lain (penanda "lupa presensi"); persentase/rupiahnya tidak pernah
+// dibaca sebagai angka.
 // ============================================================================
 
 /** Satu potongan teks hasil ekstraksi PDF, lengkap dengan posisinya. */

@@ -1,56 +1,30 @@
 // ============================================================================
 // PEJABAT PIMPINAN TINGGI (JPT) - pengecualian potongan kehadiran
 //
-// Modul ini PURE. Yang membaca database ada di pemanggilnya.
+// PURE. Yang membaca database ada di pemanggilnya.
 //
-// APA YANG DIATUR DI SINI
-// -----------------------
-// Pejabat Pimpinan Tinggi Pratama (setingkat Eselon II) - Kepala Biro,
-// Sekretaris Ditjen/Itjen/Badan, Direktur, Inspektur, Kepala Pusat - menerima
-// Tunjangan Kinerja komponen kehadiran (30%) SECARA PENUH, tanpa potongan
-// Pasal 13, sebagai kompensasi jabatan.
+// JPT Pratama (setingkat Eselon II) - Kepala Biro, Sekretaris Ditjen/Itjen/
+// Badan, Direktur, Inspektur, Kepala Pusat - menerima komponen kehadiran
+// (30%) SECARA PENUH tanpa potongan Pasal 13, sebagai kompensasi jabatan.
 //
 // TODO(confirm) - DASAR HUKUMNYA BELUM ADA SALINANNYA. Ini keterangan praktik
-// dari user (PPABP Rokeu), BUKAN dari Permenaker 15/2024. Seluruh teks
-// Permenaker sudah dibaca (`docs/permenaker-15-2024-tunjangan-kinerja.md`) dan
-// TIDAK ADA satu pun pengecualian JPT dari Pasal 13:
-//   - Pasal 7 ayat (2) mengecualikan penyampaian aktivitas harian HANYA untuk
-//     tugas belajar, diklat, dan cuti.
-//   - Pasal 20 ayat (2) huruf b menyebut pejabat pimpinan tinggi pratama
-//     sebagai PENANGGUNG JAWAB rekapitulasi kehadiran unit Eselon II - bukan
-//     sebagai pihak yang dikecualikan darinya.
-// Aturan ini membayar penuh ~50 orang tanpa melihat presensi, jadi WAJIB
-// diminta dasarnya (Kepsekjen/SE/nodin) ke Biro OSDMA sebelum dipakai
-// membayar sungguhan. Sampai itu ada, setiap pemakaiannya DITANDAI eksplisit
-// di hasil kalkulasi - lihat `hitungTukin`.
+// dari PPABP Rokeu, BUKAN dari Permenaker 15/2024. Teks Permenaker sudah
+// dibaca seluruhnya dan TIDAK ADA pengecualian JPT dari Pasal 13 - Pasal 20
+// ayat (2) huruf b justru menempatkan JPT Pratama sebagai PENANGGUNG JAWAB
+// rekapitulasi kehadiran unitnya. Aturan ini membayar penuh ~50 orang tanpa
+// melihat presensi, jadi WAJIB diminta dasarnya ke Biro OSDMA sebelum dipakai
+// membayar. Sampai itu ada, tiap pemakaiannya DITANDAI di hasil kalkulasi.
 //
-// BUKTI PRAKTIK yang sudah ada (rincian tukin manual Rokeu, Juli 2026):
-// Irma Puspita (Kepala Biro Keuangan dan BMN, kelas 15) dibayar
-// Rp 19.280.000 dengan kolom potongan NOL, padahal rekap presensi periode
-// yang sama mencatat terlambat 40 menit (9 Juli) dan pulang cepat 20 menit
-// (10 Juli). Toleransi 60 menit Pasal 9 ayat (3) hanya menjelaskan yang 40
-// menit; pulang cepatnya tidak - jadi ada pengecualian lain yang bekerja.
+// DITURUNKAN DARI KELAS JABATAN, bukan kolom eselon - `Pegawai` tidak punya
+// kolomnya dan SIAP tidak mengirimkannya. `kelasJabatan` untuk jabatan
+// struktural datang dari SATKER.JOBGRADE, sumber yang sama yang menentukan
+// tarif tukin pokok. Diuji ke 5.077 pegawai aktif, sebarannya jatuh persis di
+// batas eselon: kelas 17 (6 orang, JPT Madya), 16 (4, Staf Ahli), 15 (40,
+// JPT Pratama).
 //
-// KENAPA KELAS JABATAN, BUKAN KOLOM ESELON
-// ----------------------------------------
-// `Pegawai` tidak punya kolom eselon, dan SIAP tidak mengirimkannya dalam
-// bentuk itu. Yang ada `kelasJabatan`, dan untuk jabatan struktural angkanya
-// datang dari `SATKER.JOBGRADE` - sumber yang SAMA yang sudah dipercaya
-// menentukan tarif tukin pokok. Diuji ke seluruh data pegawai aktif (5.077
-// baris), sebarannya jatuh persis di batas eselon dan tidak ada jabatan lain
-// yang nyasar:
-//
-//   kelas 17 (6 orang)  Sekjen, Irjen, 3 Dirjen, Kepala Badan  -> JPT Madya
-//   kelas 16 (4 orang)  Staf Ahli (4 bidang)                   -> JPT Madya
-//   kelas 15 (40 orang) Kepala Biro, Direktur, Inspektur I-IV,
-//                       Sekretaris Ditjen/Itjen/Badan,
-//                       Kepala Pusat, Ka. Sekretariat BNSP     -> JPT Pratama
-//
-// CARA LAIN YANG SUDAH DIUJI DAN DITOLAK: `unitKerja === satuanKerja`
-// (dugaan "kepala unit Eselon II ber-SATKERID tepat 6 digit"). Kelihatan
-// masuk akal, tapi kena 3.069 dari 5.077 pegawai - seluruh staf UPT/Balai
-// ikut, karena SATKERID mereka memang berhenti di nama balainya. Mati sebagai
-// penanda.
+// CARA LAIN YANG DIUJI DAN DITOLAK: `unitKerja === satuanKerja` - kena 3.069
+// dari 5.077 pegawai karena SATKERID staf UPT/Balai memang berhenti di nama
+// balainya. Mati sebagai penanda.
 // ============================================================================
 
 /**

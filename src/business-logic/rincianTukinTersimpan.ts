@@ -1,35 +1,26 @@
 // ============================================================================
 // RINCIAN TUKIN DARI BARIS YANG SUDAH TERSIMPAN
 //
-// `TukinCalculation` di database cuma menyimpan HASIL AKHIR tiap komponen
-// (komponenKehadiran SETELAH potongan, komponenKinerja SETELAH dikali predikat,
-// tukinPokok, potonganPph, tukinBersih). Nilai PENUH tiap bobot dan besar
-// potongan Pasal 13-nya TIDAK ikut disimpan - itu cuma hidup di dalam
-// TukinResult waktu kalkulasi berjalan.
+// `TukinCalculation` cuma menyimpan HASIL AKHIR tiap komponen; nilai PENUH
+// tiap bobot dan besar potongan Pasal 13-nya tidak ikut disimpan. Modul ini
+// merekonstruksinya dari data yang ADA, supaya UI bisa menjawab "kenapa tukin
+// saya segini" tanpa menghitung ulang seluruh kalkulasi.
 //
-// Modul ini merekonstruksi angka-angka itu dari data yang ADA, supaya UI bisa
-// menjawab "kenapa tukin saya segini" tanpa menghitung ulang seluruh kalkulasi
-// (yang butuh presensi + predikat + rekap, alias query berat per baris tabel).
-//
-// Satu-satunya bahan tambahan yang dibutuhkan: tarif tukin pokok kelas jabatan
-// (TUKIN_POKOK_PER_KELAS_JABATAN). Dari situ:
-//   bobot kehadiran penuh = 30% x tarif kelas          (Pasal 5 ayat (2) huruf b)
-//   bobot kinerja penuh   = 70% x tarif kelas          (Pasal 5 ayat (2) huruf a)
+// Bahan tambahan satu-satunya: TUKIN_POKOK_PER_KELAS_JABATAN. Dari situ:
+//   bobot kehadiran penuh = 30% x tarif kelas    (Pasal 5 ayat (2) huruf b)
+//   bobot kinerja penuh   = 70% x tarif kelas    (Pasal 5 ayat (2) huruf a)
 //   potongan Pasal 13     = bobot kehadiran penuh - komponenKehadiran
 //   potongan capaian      = bobot kinerja penuh - komponenKinerja
 //
-// PENTING - INI REKONSTRUKSI, BUKAN SUMBER KEBENARAN. Kalau tarif kelas
-// jabatan pegawai berubah SETELAH baris tukin dihitung (mis. naik pangkat lalu
-// kelas jabatannya dikoreksi), angka rekonstruksi di sini tidak lagi cocok
-// dengan angka yang benar-benar dipakai waktu menghitung. Itu terdeteksi lewat
-// `selisihAritmatika` di bawah - jangan diam-diam dianggap wajar.
+// INI REKONSTRUKSI, BUKAN SUMBER KEBENARAN. Kalau tarif kelas berubah SETELAH
+// baris tukin dihitung, angkanya tidak lagi cocok dengan yang benar-benar
+// dipakai - itu terdeteksi lewat `selisihAritmatika`, jangan diam-diam
+// dianggap wajar.
 //
-// PERINGATAN KEDUA - Pasal 14 (cuti). Kalau override cuti diterapkan,
-// `hitungTukin` menimpa tukinPokok dengan `tarif kelas x persen dibayar` dan
-// TIDAK menyentuh komponenKehadiran/komponenKinerja yang sudah dihitung. Jadi
-// untuk baris seperti itu, kehadiran + kinerja SENGAJA tidak sama dengan
-// tukinPokok. Itu bukan kerusakan data, tapi juga tidak boleh ditampilkan
-// seolah-olah penjumlahan biasa - makanya dibedakan lewat `selisihAritmatika`.
+// Kalau override cuti (Pasal 14) diterapkan, `hitungTukin` menimpa tukinPokok
+// dan TIDAK menyentuh komponenKehadiran/komponenKinerja - jadi kehadiran +
+// kinerja SENGAJA tidak sama dengan tukinPokok untuk baris seperti itu. Bukan
+// kerusakan data, tapi juga tidak boleh ditampilkan seolah penjumlahan biasa.
 // ============================================================================
 
 const BOBOT_KEHADIRAN = 0.3; // Pasal 5 ayat (2) huruf b

@@ -1,67 +1,29 @@
 // ============================================================================
 // LAPORAN PDF e-Presensi -> REKAP BULANAN (BarisRekapPresensi)
 //
-// Modul ini PURE (lihat "Konvensi kode" di CLAUDE.md). Masukannya hasil
-// parsePdfPresensi(), keluarannya bentuk yang SAMA PERSIS dengan hasil upload
-// template Excel (BarisRekapPresensi di rekapPresensi.ts) - jadi jalur simpan,
-// validasi, dan kalkulasi Tukin/uang makan/uang lembur yang sudah ada tidak
-// perlu diubah sama sekali.
+// PURE (lihat "Konvensi kode" di CLAUDE.md). Keluarannya bentuk yang SAMA
+// PERSIS dengan hasil upload template Excel, jadi jalur simpan, validasi, dan
+// kalkulasi yang sudah ada tidak perlu diubah.
 //
-// -------------------------------------------------------------------------
-// KOLOM "POTONGAN" DI PDF TIDAK DIPAKAI SEBAGAI NOMINAL
-// -------------------------------------------------------------------------
-// Instruksi eksplisit user: angkanya tidak sesuai Permenaker 15/2024, jadi
-// potongan dihitung ulang di sini dari FAKTA presensi (tanggal, status, jam
-// masuk, jam keluar) memakai hitungPotonganKehadiranPersen di tukin.ts.
+// KOLOM "POTONGAN" DI PDF TIDAK DIPAKAI SEBAGAI NOMINAL - angkanya tidak
+// sesuai Permenaker 15/2024 (terukur: 238 kedatangan lewat 07:30 tanpa catatan
+// keterlambatan, termasuk yang telat 84 menit). Potongan dihitung ulang di
+// sini dari FAKTA presensi lewat hitungPotonganKehadiranPersen di tukin.ts.
+// KONSEKUENSI: potongan Gajihub akan LEBIH BESAR dari yang tertera di PDF
+// untuk sebagian pegawai. Itu memang yang diminta.
+// Yang DIAMBIL dari kolom itu hanya penanda "lupa presensi" - itu FAKTA,
+// bukan nominal, dan tidak ada di kolom lain mana pun.
 //
-// Dan memang terbukti tidak konsisten. Dari 3 file asli (46 laporan, 1.145
-// baris) ada 238 kedatangan lewat 07:30 yang TIDAK diberi catatan
-// keterlambatan sama sekali oleh e-Presensi - termasuk yang telat 84 menit -
-// sementara yang telat 1 menit justru dicatat. KONSEKUENSINYA: potongan hasil
-// hitungan Gajihub akan LEBIH BESAR dari yang tertera di PDF untuk sebagian
-// pegawai. Itu memang yang diminta, tapi jangan sampai kaget waktu diadu.
+// JADWAL_KERJA_DEFAULT bersumber Pasal 9 Permenaker 15/2024, dan ketiganya
+// cocok dengan penurunan dari data:
+//   ayat (1) 7,5 jam/hari, 37,5 jam/minggu
+//   ayat (2) Senin-Kamis 07:30-16:00, Jumat 07:30-16:30
+//   ayat (3) toleransi 60 menit
 //
-// Satu-satunya hal yang DIAMBIL dari kolom itu adalah penanda "lupa presensi"
-// - itu FAKTA (pegawai tidak menekan presensi), bukan nominal, dan tidak ada
-// di kolom lain mana pun. Lihat LUPA_PRESENSI di bawah.
-//
-// -------------------------------------------------------------------------
-// JADWAL KERJA - SEKARANG PUNYA DASAR HUKUM (Pasal 9 Permenaker 15/2024)
-// -------------------------------------------------------------------------
-// Ketiga angka di JADWAL_KERJA_DEFAULT dulu diturunkan dari DATA dan ditandai
-// TODO(confirm) "belum ada dokumen resmi jam kerja Kemnaker". Dokumennya
-// sekarang ada, dan angkanya COCOK SEMUA:
-//
-//   ayat (1) "paling sedikit 7,5 jam untuk 1 hari dan 37,5 untuk 1 minggu"
-//            -> jamKerjaPerHari = 7.5
-//   ayat (2) "Senin s.d. Kamis, hadir pukul 07.30 sampai dengan pukul 16.00;
-//             hari Jumat, hadir pukul 07.30 sampai dengan pukul 16.30"
-//            -> jamMasukWajibMenit 07:30, jamPulangWajibMenit 16:00 / 16:30
-//   ayat (3) "diberikan toleransi waktu sebanyak 60 menit"
-//            -> toleransiTerlambatMenit = 60
-//
-// Penurunan dari data (di bawah) DIBIARKAN sebagai catatan sejarah: angka
-// yang sama muncul dari dua jalan yang tidak saling menyalin, dan itu
-// menguatkan keduanya.
-//
-// TODO(confirm) YANG TERSISA - ayat (4): "Ketentuan mengenai Hari Kerja dan
-// Jam Kerja ... dapat DIKECUALIKAN sesuai dengan ketentuan peraturan
-// perundang-undangan." Jadwal di sini berlaku seragam untuk SEMUA satker;
-// kalau ada unit yang dikecualikan (mis. shift, UPT tertentu), jadwalnya
+// TODO(confirm) - Pasal 9 ayat (4): jam kerja "dapat DIKECUALIKAN sesuai
+// ketentuan peraturan perundang-undangan". Jadwal di sini berlaku seragam
+// untuk SEMUA satker; kalau ada unit shift/UPT yang dikecualikan, jadwalnya
 // harus dibedakan per satker dan JADWAL_KERJA_DEFAULT tidak lagi cukup.
-//
-// -------------------------------------------------------------------------
-// Penurunan dari data (dilakukan sebelum dokumennya didapat):
-// -------------------------------------------------------------------------
-// - Jam masuk 07:30: dicek ke 101 baris yang punya catatan "Keterlambatan N
-//   menit" di 3 file asli. 101 dari 101 cocok persis dengan
-//   (jam masuk - 07:30). Nol selisih.
-// - Jam pulang 16:00 (Senin-Kamis) & 16:30 (Jumat): dicek ke sebaran jam
-//   presensi pulang WFO. Puncaknya tepat di 16:00 untuk Senin-Kamis dan tepat
-//   di 16:30 untuk Jumat, dan hampir tidak ada yang pulang sebelum jam itu
-//   (Jumat: 2 dari 29). Pola khas orang menunggu gerbang presensi terbuka.
-// - 7,5 jam/hari: "Kewajiban Jam Kerja" di PDF selalu kelipatan 7,5
-//   (172,5 = 23 hari, 150 = 20 hari, 112,5 = 15 hari).
 // ============================================================================
 
 import type { BarisRekapPresensi } from "./rekapPresensi";
@@ -108,41 +70,16 @@ const jamTeks = (menit: number) =>
 /**
  * TOLERANSI KETERLAMBATAN 60 MENIT PER HARI.
  *
- * DASAR HUKUMNYA SUDAH ADA - Pasal 9 ayat (3) Permenaker 15/2024, dikutip
- * langsung: "Jam Kerja sebagaimana dimaksud pada ayat (2) diberikan toleransi
- * waktu sebanyak 60 (enam puluh) menit."
+ * Pasal 9 ayat (3) Permenaker 15/2024: "Jam Kerja sebagaimana dimaksud pada
+ * ayat (2) diberikan toleransi waktu sebanyak 60 (enam puluh) menit."
  *
- * Ini MENUTUP TODO(confirm) lama yang berbunyi "yang masih terbuka adalah
- * dasar hukumnya, bukan angkanya - mintakan ke Biro OSDMA/Hukum". Angka 60
- * yang dulu diturunkan dari data ternyata memang angka yang tertulis di
- * pasalnya. Yang TETAP tidak diatur pasal itu adalah BENTUK penerapannya
- * (pengurangan per hari vs ambang all-or-nothing) - itu masih dari data:
- * lihat tabel di bawah, pengurangan per hari cocok 44/48, ambang cuma 22/48.
+ * BENTUK penerapannya TIDAK diatur pasal itu, dan yang dipakai di sini
+ * (pengurangan per hari, bukan ambang all-or-nothing) diturunkan dari data:
+ * diadu ke rincian tukin manual Rokeu Juli 2026 (48 pegawai), pengurangan per
+ * hari cocok 44/48 sementara ambang cuma 22/48.
  *
- * Angkanya DIBUKTIKAN ke praktik yang berjalan, bukan diasumsikan. Rincian
- * tukin manual Biro Keuangan & BMN periode Juli 2026 (48 pegawai, file
- * "excel rincian tunkin Juli 2026 _Rokeu") diadu ke data presensi harian
- * Gajihub untuk beberapa nilai toleransi sekaligus:
- *
- *     toleransi    cocok persis    total menit
- *        0             5/48          23.325
- *       30            11/48          11.244
- *       60            44/48           4.407   <- rincian manual: 4.495
- *       90            23/48           2.364
- *
- * 60 menit menang telak, dan bentuknya PENGURANGAN per hari - bukan ambang.
- * Varian "kalau lewat 60 menit dihitung penuh" hanya cocok 22/48. Contoh yang
- * cocok sampai ke satuan menit: keterlambatan harian 67,61,59,59,59,57,42,36,35
- * menit -> (67-60) + (61-60) = 8 menit, sama persis dengan rincian manual.
- *
- * Sumbernya juga konsisten dengan kolom `sistem_kerja.toleransi` = 60 di
- * database e-Presensi untuk WFO/WFH/WFA. Dulu Gajihub memakai 0 dan karena
- * itu memotong 5,2x lebih besar dari perhitungan manual (selisih Rp 941.133
- * untuk satu unit dalam satu bulan, Gajihub membayar LEBIH KECIL).
- *
- * Jadi TIGA sumber yang saling bebas menunjuk angka yang sama: teks Pasal 9
- * ayat (3), kolom `sistem_kerja.toleransi` di e-Presensi, dan rincian tukin
- * manual Biro Keuangan.
+ * Tiga sumber bebas menunjuk angka yang sama: teks pasalnya, kolom
+ * `sistem_kerja.toleransi` di e-Presensi, dan rincian tukin manual.
  */
 export const TOLERANSI_TERLAMBAT_MENIT = 60;
 

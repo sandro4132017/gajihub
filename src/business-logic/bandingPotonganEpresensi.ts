@@ -1,10 +1,8 @@
 import { hitungPotonganKehadiranPersen } from "./tukin";
 import type { RincianPotonganKehadiran } from "../types/index";
 
-/** Satu keputusan potongan e-Presensi, sudah dinormalkan jadi POSITIF. */
 export interface PotonganEpresensiHarian {
   tanggalIso: string;
-  /** Persen yang MEMOTONG, sebagai pecahan (0,02 = 2%). Sumbernya negatif. */
   persen: number;
   keterangan: string;
 }
@@ -68,7 +66,6 @@ export interface BarisBandingPotongan {
   /** Pecahan bobot kehadiran, 0,02 = 2%. */
   epresensiPersen: number;
   gajihubPersen: number;
-  /** gajihub - epresensi. Positif berarti Gajihub memotong lebih besar. */
   selisihPersen: number;
   keteranganEpresensi: string | null;
   rincianGajihub: RincianPotonganKehadiran[];
@@ -77,19 +74,15 @@ export interface BarisBandingPotongan {
 
 export interface HasilBandingPotongan {
   baris: BarisBandingPotongan[];
-  /** Hanya yang benar-benar berbeda, urut dari selisih terbesar. */
   beda: BarisBandingPotongan[];
   totalEpresensiPersen: number;
   totalGajihubPersen: number;
-  /** Rupiah; null kalau bobot kehadiran tidak diketahui (kelas jabatan kosong). */
   selisihRupiah: number | null;
 }
 
 const RE_LUPA = /lupa presensi/i;
 const RE_TELAT = /keterlambatan|tukin harian/i;
-/** Batas maksimal harian e-Presensi - dipakai HANYA mengenali pola, bukan menghitung. */
 const BATAS_HARIAN_EPRESENSI_PERSEN = 0.02;
-/** Selisih yang dianggap nol - menghindari beda semu dari pembulatan float. */
 const EPSILON = 1e-9;
 
 function klasifikasi(
@@ -105,8 +98,6 @@ function klasifikasi(
   if (RE_LUPA.test(e.keterangan)) return gLupa ? "TARIF_LUPA_ABSEN" : "KLASIFIKASI_LUPA_ABSEN";
 
   if (RE_TELAT.test(e.keterangan) && gTelat) {
-    // Batas maksimal dicek DULU: kalau e-Presensi mentok di 2% sementara Gajihub jauh
-    // di atasnya, sebab utamanya batas itu - bukan bentuk tarifnya.
     return e.persen >= BATAS_HARIAN_EPRESENSI_PERSEN - EPSILON && gajihubPersen > BATAS_HARIAN_EPRESENSI_PERSEN + EPSILON
       ? "BATAS_HARIAN_EPRESENSI"
       : "TARIF_TERLAMBAT";
@@ -114,14 +105,6 @@ function klasifikasi(
   return "LAINNYA";
 }
 
-/**
- * Susun perbandingan per tanggal.
- *
- * Sisi Gajihub dihitung lewat `hitungPotonganKehadiranPersen` - fungsi yang
- * SAMA yang dipakai membayar. Kalau lapisan ini punya rumusnya sendiri,
- * perbandingannya tidak berarti: beda hasil bisa datang dari beda rumus, bukan
- * beda kebijakan.
- */
 export function bandingkanPotongan(input: {
   epresensi: PotonganEpresensiHarian[];
   gajihub: PelanggaranGajihubHarian[];

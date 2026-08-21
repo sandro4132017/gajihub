@@ -1,49 +1,29 @@
 // ============================================================================
 // Berkas rekap absensi MANUAL yang dipakai petugas ("Jam Absensi.xlsx")
 //
-// KENAPA ADA: sampai Gajihub dipercaya penuh, petugas masih merekap presensi
-// di Excel dan ANGKA ITULAH yang dipindahkan ke rincian tunkin - jadi berkas
-// itu, bukan Gajihub, yang menentukan pembayaran hari ini. Modul ini membaca
-// berkas tersebut supaya keduanya bisa DIADU per hari sebelum jalur manualnya
-// dimatikan. Setiap beda yang tidak bisa dijelaskan adalah calon salah bayar.
+// KENAPA ADA: sampai Gajihub dipercaya penuh, petugas masih merekap di Excel
+// dan ANGKA ITULAH yang dipindahkan ke rincian tunkin. Modul ini membacanya
+// supaya keduanya bisa DIADU per hari sebelum jalur manual dimatikan.
 //
-// PURE - tidak menyentuh berkas maupun database. Pembacaan .xlsx-nya di
-// lapisan pemanggil (Server Action), sama seperti rekapPredikatKinerja.ts dan
-// basisDataGaji.ts yang juga menerima `matriks: unknown[][]`.
+// PURE - pembacaan .xlsx-nya di lapisan pemanggil (Server Action).
 //
-// YANG SENGAJA TIDAK DILAKUKAN DI SINI
-// ------------------------------------
-// 1. TIDAK menghitung ulang Pasal 13. Keluarannya sengaja berbentuk
-//    `LaporanPresensiPdf` - tipe yang SAMA dengan hasil parsing PDF e-Presensi
-//    - supaya rekapnya dihitung `rekapDariLaporanPdf()` yang itu-itu juga.
-//    Kalau modul ini punya mesin hitung sendiri, perbandingannya jadi tidak
-//    berarti: beda hasil bisa datang dari beda mesin, bukan beda data.
-// 2. TIDAK memakai kolom "Terlambat", "Menit Kerja", "Kekurangan Jam Kerja",
-//    dan "Persentase Potongan Harian" dari berkas. Keempatnya hasil hitungan
-//    berkas itu sendiri, dan modelnya BERBEDA dari yang dibayarkan:
-//      - "Terlambat" dihitung pada SEMUA status, termasuk Dinas Luar & Diklat
-//        (Irma Puspita 1.200 menit di berkas lawan 0 di rincian resmi).
-//        Penyaringan status itu langkah manual petugas.
-//      - "Persentase Potongan Harian" memakai tabel berjenjang
-//        (0,5 / 1 / 1,5 / maksimal 2% per hari). Diadu ke rincian tunkin resmi
-//        Juli 2026: berjenjang cocok 0/48, per-menit 0,01% cocok 47/48
-//        (sisa 1 baris = potongan cuti Pasal 14).
-//    Yang diambil dari berkas HANYA FAKTA MENTAH: tanggal, status, jam masuk,
-//    jam keluar. Sisanya biar mesin Gajihub yang menyimpulkan.
+// TIDAK menghitung ulang Pasal 13. Keluarannya sengaja berbentuk
+// `LaporanPresensiPdf` - tipe yang SAMA dengan hasil parsing PDF - supaya
+// dihitung `rekapDariLaporanPdf()` yang itu-itu juga. Kalau modul ini punya
+// mesin hitung sendiri, perbandingannya tidak berarti: beda hasil bisa datang
+// dari beda mesin, bukan beda data.
 //
-// BENTUK BERKASNYA (sheet "Master Presensi", diperiksa ke 1.133 baris):
+// KOLOM HITUNGAN BERKAS TIDAK DIPAKAI ("Terlambat", "Menit Kerja",
+// "Kekurangan Jam Kerja", "Persentase Potongan Harian") - modelnya berbeda
+// dari yang dibayarkan: "Terlambat" dihitung pada SEMUA status termasuk Dinas
+// Luar & Diklat, dan persentasenya memakai tabel berjenjang yang diadu ke
+// rincian tunkin resmi Juli 2026 cocok 0/48 (per-menit 0,01% cocok 47/48).
+// Yang diambil HANYA fakta mentah: tanggal, status, jam masuk, jam keluar.
 //
-//   baris 0 : No | Nama Pegawai | NIP | Tanggal | Hari | <status> |
-//             Keterangan Cuti | Checkin | Checkout | Jam Harus Checkout | ...
-//   baris 1 : nomor kolom (1,2,3,...) - dilewati
-//   baris 2+: data
-//
-// PERHATIAN - JUDUL KOLOM STATUS BERGESER SATU. Di baris judul, kolom
-// sesudah "Hari" KOSONG dan "Keterangan Cuti" ada di kolom berikutnya; di
-// baris data justru sebaliknya - statusnya di kolom sesudah "Hari", dan kolom
-// ber-judul "Keterangan Cuti" yang kosong. Karena itu status dicari lewat
-// POSISI (tepat sesudah "Hari"), bukan lewat judulnya. Kolom lain tetap
-// dicari lewat judul.
+// PERHATIAN - JUDUL KOLOM STATUS BERGESER SATU. Di baris judul, kolom sesudah
+// "Hari" kosong dan "Keterangan Cuti" ada di kolom berikutnya; di baris data
+// justru sebaliknya. Karena itu status dicari lewat POSISI (tepat sesudah
+// "Hari"), bukan lewat judulnya. Kolom lain tetap dicari lewat judul.
 //
 // Tanggal & jam disimpan Excel sebagai angka: tanggal = serial hari sejak
 // 1899-12-30, jam = pecahan hari (0,3125 = 07:30).

@@ -45,10 +45,9 @@ function cariKalkulasi(referensiTipe: ReferensiTipe, referensiId: string) {
  * verifikasi & aturan hold-pembayaran-vs-koreksi-siklus-berikutnya TETAP
  * belum diisi di sini - itu masih TODO(confirm) kebijakan terpisah.
  *
- * TODO: baru menangani jenjang 1 (pengajuan awal). Verifikasi berjenjang
- * (Kasubag TU -> approval final OSDMA, lihat model Banding di schema.prisma)
- * belum ada action-nya - itu bagian authorization layer/UI langkah
- * berikutnya (dashboard Kasubag TU & OSDMA).
+ * Action ini hanya PENGAJUAN. Verifikasi berjenjangnya ada di tempat lain:
+ * jenjang 1 di app/kasubag/banding/actions.ts (verifikasiBandingJenjang1Action),
+ * approval final di app/osdma/banding/actions.ts (approveBandingFinalAction).
  */
 export async function ajukanBandingAction(
   _state: AjukanBandingFormState,

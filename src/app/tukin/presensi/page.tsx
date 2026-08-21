@@ -24,21 +24,6 @@ import { SumberAcuan } from "../../SumberAcuan";
 
 export const dynamic = "force-dynamic";
 
-/**
- * PRESENSI - sumber komponen 30% Tukin (Permenaker 15/2024 Pasal 5 & 13).
- * Dua jalur: sinkronisasi e-Presensi (belum tersambung) dan upload manual
- * (dipakai sekarang, sah menurut Pasal 23 selama sistem informasi belum
- * berjalan).
- */
-
-/*
- * Batas tampil lama (200 teratas) DIGANTI paginasi ber-URL: dengan potongan
- * keras, baris ke-201 dan seterusnya tidak bisa dijangkau sama sekali kecuali
- * lewat pencarian - padahal PPABP/Admin memang melihat ribuan pegawai lintas
- * satker sekaligus. Nomor & ukuran halaman ikut query string (`hal`, `per`),
- * jadi tetap jalan tanpa JavaScript dan tautannya bisa dibagikan.
- */
-
 export default async function PresensiTukinPage({
   searchParams,
 }: {
@@ -225,9 +210,6 @@ export default async function PresensiTukinPage({
         <h2 className="text-lg font-extrabold tracking-tight text-navy">
           Rekap Presensi Periode {NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} {periodeTahun}
         </h2>
-        {/* Dua keterangan yang paling sering ditanyakan waktu melihat tabel
-            ini: "ini unit mana" dan "berapa orang". Ikonnya dibedakan sesuai
-            artinya - gedung untuk unit, orang untuk jumlah pegawai. */}
         <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="inline-flex items-center gap-2 text-sm">
             <span className="grid size-7 flex-none place-items-center rounded-lg bg-teal-tint text-teal-deep">
@@ -258,31 +240,6 @@ export default async function PresensiTukinPage({
           </span>
         </div>
       </div>
-
-      {/* ------------------------------------------------------------------
-          KOLOM = VARIABEL PRESENSI SAJA (permintaan user 2026-08-13)
-          ------------------------------------------------------------------
-          Tabel ini menjawab "bagaimana kehadiran orang ini", bukan "berapa
-          yang dibayar". Yang SENGAJA TIDAK ada di sini beserta alasannya:
-
-          - Dibayar UM & total potongan -> itu HASIL hitungan, bukan variabel
-            presensi. Tempatnya di /uang-makan dan /kasubag/kalkulasi.
-          - Lembur -> ada di /uang-lembur dan di rincian per pegawai.
-          - Tinggal kantor & bolos upacara -> SELALU 0 lewat jalur
-            sinkronisasi maupun PDF (datanya memang tidak ada di e-Presensi,
-            cuma bisa diisi lewat template Excel). Kolom yang isinya nol untuk
-            ribuan baris cuma memakan lebar. Keduanya TETAP dihitung engine
-            dan tetap tampil di rincian per pegawai - yang hilang cuma
-            kolomnya di sini.
-
-          Urutannya: siapa -> berapa hari kerjanya -> hadir di mana -> yang
-          tidak masuk hitungan hadir. */}
-      
-      {/* 
-        ========================================================
-        BAGIAN YANG DIPERBAIKI (PEMISAHAN OVERFLOW & PAGINASI)
-        ======================================================== 
-      */}
       <div className="card mt-3 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-max text-sm">
@@ -378,17 +335,7 @@ export default async function PresensiTukinPage({
           />
         </div>
       </div>
-      {/* ======================================================== */}
 
-      {/*
-        KETERANGAN KOLOM - dulu satu paragraf padat lima baris di bawah tabel.
-        Dijadikan daftar istilah karena isinya memang definisi per kolom, dan
-        yang dicari orang cuma SATU di antaranya. Bentuk paragraf juga
-        memunculkan dua cacat spasi yang benar-benar terlihat di layar
-        ("Dinas luar& diklat", "Cutiadalah"): JSX memangkas spasi di ujung
-        baris, jadi teks panjang yang dibungkus manual gampang menempel ke
-        elemen sebelahnya. Bentuk pendek per item tidak punya masalah itu.
-      */}
       <div className="mt-3 rounded-xl border border-line-2 bg-surface-2 p-3.5">
         <p className="text-xs font-bold uppercase tracking-wide text-muted">Keterangan kolom</p>
         <dl className="mt-2 grid gap-x-8 gap-y-1.5 text-xs text-muted sm:grid-cols-2">

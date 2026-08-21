@@ -1,45 +1,29 @@
 // ============================================================================
 // REKAP PENILAIAN e-KINERJA BKN -> PredikatKinerja (bobot 70% Tukin)
 //
-// Modul ini PURE (tidak ada I/O - lihat "Konvensi kode" di CLAUDE.md):
-// pembacaan file XLSX-nya dilakukan di Server Action
-// (src/app/predikat-kinerja/actions.ts) dan di MockEKinerjaAdapter, yang
-// masuk ke sini cuma matriks baris yang sudah dibaca.
+// PURE - pembacaan XLSX-nya di Server Action & MockEKinerjaAdapter; yang masuk
+// ke sini cuma matriks baris yang sudah dibaca.
 //
-// MENUTUP open item lama "Format file rekap predikat dari e-Kinerja BKN -
-// belum ada contoh filenya" (CLAUDE.md). Sumber format: file asli
-// "Rekap Penilaian (45).xlsx" hasil export portal e-Kinerja BKN, 28 pegawai
-// Biro Keuangan dan BMN periode 6/2026.
-//
-// Bentuk filenya:
+// Bentuk file (export portal e-Kinerja BKN):
 //   baris 1 : "3013 - Kementerian Ketenagakerjaan"   (instansi)
 //   baris 2 : "Subbagian Tata Usaha"                 (unit penilaian)
 //   baris 3 : "Periode Bulanan 6 Tahun 2026"         (periode)
-//   baris 4 : kosong
-//   baris 5 : header tabel
-//   baris 6+: data
+//   baris 5 : header | baris 6+: data
 //   Kolom: No | NIP | Nama | Jabatan | Rating Hasil Kinerja |
 //          Rating Perilaku Kerja | Predikat Kinerja Periodik
 //
-// CATATAN PENTING soal baris "unit" di kepala file: nilainya nama SUB-unit
-// penilaian (mis. "Subbagian Tata Usaha"), BUKAN `Pegawai.satuanKerja`.
-// Jadi baris itu CUMA informasi buat ditampilkan - scoping kewenangan
-// (Kasubag TU cuma boleh unitnya sendiri) WAJIB ditentukan dari
-// `Pegawai.satuanKerja` hasil lookup NIP, jangan dari teks ini.
+// PENTING - baris "unit" di kepala file adalah nama SUB-unit penilaian, BUKAN
+// `Pegawai.satuanKerja`. Itu cuma informasi untuk ditampilkan; scoping
+// kewenangan WAJIB dari `Pegawai.satuanKerja` hasil lookup NIP. Kalau
+// tertukar, Kasubag TU bisa menulis predikat unit lain.
 //
-// TODO(confirm):
-// - Baris periode ada DUA gaya di portal BKN: angka biasa ("Periode Bulanan 6
-//   Tahun 2026") dan angka ROMAWI ("Periode Bulanan V Tahun 2026"). Keduanya
-//   didukung - lihat BULAN_ROMAWI di bawah.
-// - Baru mendukung rekap BULANAN ("Periode Bulanan N Tahun YYYY"), karena
-//   PredikatKinerja di skema ini memang per bulan. Rekap TAHUNAN ditolak
-//   dengan pesan jelas, bukan dipaksa jadi bulan tertentu.
-// - Kolom "Rating Hasil Kinerja" & "Rating Perilaku Kerja" SEKARANG DISIMPAN
-//   (kolom `hasilKerja` & `perilakuKerja` di PredikatKinerja) - dulu dibaca
-//   lalu dibuang. Keduanya TIDAK dipakai menghitung tukin: yang menentukan
-//   tetap "Predikat Kinerja Periodik" sesuai Permenaker 15/2024 + Kepsekjen
-//   82/2025. Disimpan murni supaya rincian di aplikasi sebanding dengan rekap
-//   Excel manual yang menampilkan keduanya.
+// Baris periode punya dua gaya di portal BKN: angka biasa dan ROMAWI
+// ("Periode Bulanan V Tahun 2026"). Keduanya didukung.
+// Rekap TAHUNAN DITOLAK dengan pesan jelas - skema PredikatKinerja per bulan.
+//
+// "Rating Hasil Kinerja" & "Rating Perilaku Kerja" disimpan tapi TIDAK dipakai
+// menghitung: yang menentukan tetap "Predikat Kinerja Periodik" sesuai
+// Permenaker 15/2024 + Kepsekjen 82/2025.
 // ============================================================================
 
 import { konversiPredikatKeNilaiPersen, type PredikatKinerja } from "./konversiPredikat";
