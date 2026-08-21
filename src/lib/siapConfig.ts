@@ -3,59 +3,32 @@ import type { config as SqlConfig } from "mssql";
 /**
  * SATU-SATUNYA tempat konfigurasi koneksi ke database SIAP dibentuk.
  *
- * Sebelumnya konfigurasi ini disalin di dua tempat (`src/jobs/importPegawaiSiap.ts`
- * dan `src/adapters/EpresensiAdapter.ts`). Itu berbahaya bukan karena
- * duplikasinya, tapi karena cara gagalnya: kalau salah satu diarahkan ke
- * server/instance yang berbeda, TIDAK ADA error sama sekali - importer
- * mengambil daftar pegawai dari satu database, sementara pemetaan
- * `id_pegawai -> NIP` untuk presensi mengambil dari database lain. Yang
- * muncul cuma "sekian pegawai dilewati", dan penyebabnya nyaris mustahil
- * ditebak. Makanya disatukan.
+ * Disatukan karena cara gagalnya berbahaya: kalau dua salinan diarahkan ke
+ * instance berbeda, TIDAK ADA error - importer mengambil pegawai dari satu
+ * database sementara pemetaan `id_pegawai -> NIP` mengambil dari yang lain,
+ * dan yang muncul cuma "sekian pegawai dilewati".
  *
- * READ-ONLY: seluruh pemakai modul ini hanya menjalankan SELECT. SIAP adalah
- * source of truth kepegawaian - Gajihub cuma mencerminkannya.
+ * READ-ONLY: seluruh pemakainya hanya menjalankan SELECT.
  *
- * ---------------------------------------------------------------------------
- * NAMED INSTANCE (SIAP_INSTANCE)
- * ---------------------------------------------------------------------------
- * Server SIAP `192.168.212.108` menjalankan LEBIH DARI SATU instance SQL
- * Server di satu mesin (`WIN-7NU35GEFU25`), dan isinya BERBEDA jauh:
+ * NAMED INSTANCE - server SIAP menjalankan LEBIH DARI SATU instance dengan
+ * nama database SAMA PERSIS (`simpeg_kemnaker_24102018`):
+ *   SQLEXPRESS2014 (default, 1433) - data lama, berhenti ±Agustus 2025
+ *   MSSQLDEV       (named)         - data terkini
+ * Salah pilih TIDAK menghasilkan error, cuma data lama yang terlihat wajar.
+ * Named instance portnya dinamis (ditemukan lewat SQL Server Browser, UDP
+ * 1434), jadi kalau `SIAP_INSTANCE` diisi, `SIAP_PORT` SENGAJA DIABAIKAN -
+ * mengirim keduanya membuat driver memakai port dan diam-diam menyambung ke
+ * instance yang salah.
  *
- *   SQLEXPRESS2014 (default, port 1433) - data lama, berhenti ±Agustus 2025
- *   MSSQLDEV       (named instance)     - data terkini
- *
- * Keduanya punya database bernama SAMA PERSIS (`simpeg_kemnaker_24102018`),
- * jadi salah pilih instance TIDAK menghasilkan error - cuma data lama yang
- * kelihatan wajar. Ketahuan pertama kali karena pegawai TMT 2025 (1.578
- * orang) tidak ada satu pun di instance default.
- *
- * Named instance TIDAK memakai port tetap: portnya dinamis dan ditemukan
- * lewat SQL Server Browser (UDP 1434). Karena itu, kalau `SIAP_INSTANCE`
- * diisi, `SIAP_PORT` SENGAJA DIABAIKAN - mengirim keduanya membuat driver
- * memakai port dan mengabaikan instanceName, yang artinya diam-diam
- * menyambung ke instance yang salah.
- *
- * ---------------------------------------------------------------------------
- * SIAP_ENCRYPT - kenapa ini perlu bisa dimatikan
- * ---------------------------------------------------------------------------
- * Instance MSSQLDEV memutus koneksi (`ECONNRESET`) begitu hasil query cukup
- * besar, SELAMA enkripsi menyala. Bukan timeout - server yang menutup. Query
- * kecil ke instance yang sama berjalan normal, jadi ini bukan soal
- * kredensial atau hak akses. Dibuktikan berdampingan: query importer yang
- * sama, `encrypt: true` -> ECONNRESET, `encrypt: false` -> 5.078 baris dalam
- * 8 detik. Penyebabnya hampir pasti TLS 1.0 yang memang sudah usang dan
- * dipaksa hidup lewat `cryptoCredentialsDetails` di bawah.
- *
- * KONSEKUENSINYA JUJUR SAJA: dengan `SIAP_ENCRYPT="false"`, isi tabel
- * pegawai lewat dalam keadaan TIDAK terenkripsi di jaringan kantor. Paket
- * LOGIN tetap dienkripsi oleh SQL Server sendiri, jadi passwordnya tidak
- * terbuka - tapi nama, NIP, dan jabatan iya. Ini trade-off sadar, bukan
- * kelalaian: pilihannya cuma antara TLS 1.0 (yang di sini juga rusak) atau
- * tanpa enkripsi. Perbaikan yang benar adalah menaikkan SIAP ke TLS 1.2 -
- * begitu itu terjadi, hapus `SIAP_ENCRYPT` dan `cryptoCredentialsDetails`.
- *
- * Default tetap `true` supaya tidak ada yang diam-diam kehilangan enkripsi
- * hanya karena lupa mengisi variabel.
+ * SIAP_ENCRYPT - MSSQLDEV memutus koneksi (ECONNRESET) begitu hasil query
+ * cukup besar selama enkripsi menyala; dibuktikan berdampingan dengan query
+ * yang sama (encrypt true -> ECONNRESET, false -> 5.078 baris / 8 detik).
+ * Penyebabnya TLS 1.0 yang sudah usang.
+ * KONSEKUENSINYA: dengan "false", nama/NIP/jabatan lewat TANPA enkripsi di
+ * jaringan kantor (paket login tetap dienkripsi SQL Server sendiri).
+ * Trade-off sadar. Perbaikan yang benar: naikkan SIAP ke TLS 1.2, lalu hapus
+ * SIAP_ENCRYPT dan cryptoCredentialsDetails. Default `true` supaya tidak ada
+ * yang kehilangan enkripsi karena lupa mengisi variabel.
  */
 export function konfigurasiSiap(): SqlConfig {
   const { SIAP_HOST, SIAP_PORT, SIAP_INSTANCE, SIAP_DB, SIAP_USER, SIAP_PASSWORD, SIAP_ENCRYPT } =

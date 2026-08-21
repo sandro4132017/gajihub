@@ -6,7 +6,6 @@ import {
 
 const NAMA_HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
-/** Warna chip per sebab - merah kalau Gajihub memotong lebih besar. */
 const WARNA_SEBAB: Record<SebabBeda, string> = {
   TARIF_LUPA_ABSEN: "bg-gold-tint text-gold-deep",
   KLASIFIKASI_LUPA_ABSEN: "bg-gold-tint text-gold-deep",
@@ -37,8 +36,6 @@ export function TabelBandingEpresensi({
   bobotKehadiranRupiah: number | null;
 }) {
   const rupiah = (n: number) => "Rp " + Math.round(Math.abs(n)).toLocaleString("id-ID");
-  // Legenda cuma memuat sebab yang BENAR-BENAR muncul - daftar lengkap yang
-  // sebagian tidak terpakai justru membuat orang berhenti membacanya.
   const sebabMuncul = [...new Set(hasil.beda.map((b) => b.sebab))];
 
   return (

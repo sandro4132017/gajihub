@@ -1,44 +1,28 @@
 // ============================================================================
 // ADK HARIAN - Uang Makan & Uang Lembur.
 //
-// BENTUKNYA SAMA SEKALI BEDA dari ADK Tukin (src/business-logic/adk.ts), dan
-// itu bukan variasi gaya - beda isi:
+// BENTUKNYA BEDA dari ADK Tukin (adk.ts), dan itu beda isi bukan gaya:
+//   ADK Tukin       : satu baris per PEGAWAI, berisi RUPIAH + rekening + kode
+//                     bank, ada baris TOTAL.
+//   ADK Makan/Lembur: satu baris per PEGAWAI PER HARI, TANPA rupiah, tanpa
+//                     baris total, tanpa header.
+// Web Gaji yang menghitung rupiahnya sendiri dari grade pegawai; file ini cuma
+// menyetorkan FAKTA HARIAN. Karena tidak ada perintah bayar di dalamnya, file
+// ini TIDAK perlu dipisah per bank (beda dari ADK Tukin).
 //
-//   ADK Tukin      : satu baris per PEGAWAI, berisi RUPIAH (bruto/potongan/
-//                    bersih) + rekening + kode bank, ada baris TOTAL.
-//   ADK Makan/Lembur: satu baris per PEGAWAI PER HARI, TANPA rupiah sama
-//                    sekali, tanpa baris total, tanpa header.
+// Dibuktikan dari isi 4 file template asli, bukan diasumsikan:
+//   - Sheet "hasil" di .xlsm SAMA PERSIS dengan file .txt-nya (2.097/2.097 &
+//     111/111 entri) - .txt adalah "save as text" dari sheet itu.
+//   - Pemisah TAB, akhir baris CRLF, tanpa header, tanpa baris total.
+//   - Tanggal ISO `YYYY-MM-DD`; jam lembur BILANGAN BULAT (nol pecahan di 111
+//     baris); uang makan tanpa kolom ketiga (kehadiran itu ya/tidak).
+//   - Dua kolom ringkasan sheet "depan" lembur = [jam hari KERJA, jam hari
+//     LIBUR] - diuji cocok 35/35.
+//   - LIBUR NASIONAL tidak perlu kalender: di tanggal merah e-Presensi tidak
+//     punya satupun baris WFO/WFH, jadi harinya hilang sendiri. Terbukti: 20
+//     tanggal di file asli = persis 20 hari kerja Juni.
 //
-// Web Gaji yang menghitung rupiahnya sendiri dari grade pegawai - makanya file
-// ini cuma menyetorkan FAKTA HARIAN (hari mana saja hadir / berapa jam lembur
-// tanggal berapa). Konsekuensi praktisnya: file ini TIDAK perlu dipisah per
-// bank (beda dari ADK Tukin), karena tidak ada pembayaran yang diperintahkan
-// di dalamnya.
-//
-// Sumber format: 4 file template dari user -
-//   Template-ADK-UM.xlsm     / Template-ADK-UM-TXT.txt     (137 pegawai, 2.097 baris)
-//   Template-ADK-Lembur.xlsm / Template-ADK-Lembur-txt.txt (35 pegawai, 111 baris)
-//
-// Yang dibuktikan dari isi file itu, bukan diasumsikan:
-//   - Sheet "hasil" di .xlsm ISINYA SAMA PERSIS dengan file .txt-nya
-//     (2.097/2.097 dan 111/111 entri cocok). Jadi .txt adalah "save as text"
-//     dari sheet itu, dan sheet "depan" cuma alat entri manual + makro.
-//   - Pemisah TAB, akhir baris CRLF, TANPA baris header, TANPA baris total.
-//   - Tanggal format ISO `YYYY-MM-DD`.
-//   - Jam lembur BILANGAN BULAT (nilai yang muncul: 1..6, 8, 9). Tidak ada
-//     satupun pecahan di 111 baris.
-//   - Uang makan TIDAK punya kolom ketiga - kehadiran itu ya/tidak, bukan
-//     jumlah. Di sheet "depan" pun nilainya selalu 1.
-//   - Dua kolom ringkasan di sheet "depan" lembur = [jam hari KERJA, jam hari
-//     LIBUR] - diuji dan cocok 35/35.
-//   - LIBUR NASIONAL tidak perlu kalender: di 1 & 16 Juni 2026 (Hari Lahir
-//     Pancasila & Tahun Baru Islam) e-Presensi TIDAK punya satupun baris
-//     WFO/WFH, jadi harinya hilang sendiri dari daftar uang makan. Terbukti:
-//     20 tanggal di file asli = persis 20 hari kerja Juni setelah kedua
-//     tanggal itu keluar.
-//
-// Modul ini PURE. Yang membaca database & menulis response ada di
-// src/app/ppabp/adk/*/route.ts.
+// PURE. Yang membaca database & menulis response ada di app/ppabp/adk/*/route.ts.
 // ============================================================================
 
 /**

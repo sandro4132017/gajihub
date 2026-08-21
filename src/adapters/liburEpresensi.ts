@@ -1,44 +1,24 @@
 // ============================================================================
 // TABEL `libur` e-PRESENSI - kalender hari libur nasional & cuti bersama
 //
-// READ-ONLY, hanya SELECT. Sama seperti seluruh akses ke e-Presensi.
+// READ-ONLY, hanya SELECT.
 //
-// ---------------------------------------------------------------------------
-// CATATAN LAMA YANG SALAH - "tabel `libur` ada tapi KOSONG"
-// ---------------------------------------------------------------------------
-// Itu tertulis di CLAUDE.md sejak jalur sinkronisasi dibangun, dan jadi alasan
-// kenapa kalender `HariLiburNasional` harus diisi tangan. Diperiksa ulang
-// 2026-08-13: tabelnya berisi **127 baris** (2022-2026), diperbarui terakhir
-// 15 Januari 2026 - jadi memang dirawat, bukan sisa.
-//
-// Diadu ke data kehadiran: dari 21 tanggal libur 2026 yang jatuh di hari
-// kerja, SEMUANYA ber-kehadiran WFO/WFH/WFA ~0 (satu-satunya yang bukan nol
-// adalah 1 Januari dengan 2 baris). Jadi daftarnya cocok dengan kenyataan,
-// bukan sekadar tabel referensi yang tidak dipakai.
-//
-// ---------------------------------------------------------------------------
-// KENAPA DI-IMPOR, BUKAN DIBACA LANGSUNG SAAT MENGHITUNG
-// ---------------------------------------------------------------------------
-// Sama alasannya dengan importPegawaiSiap.ts: ini SNAPSHOT, bukan live sync.
-//   1. Kalau dibaca langsung tiap kali rekap dihitung, e-Presensi yang mengubah
-//      tabelnya diam-diam mengubah angka periode yang SUDAH disetujui - tanpa
-//      jejak siapa pun.
-//   2. Kalender ini menentukan pengali lembur 2x dan batas hari uang makan.
-//      Angka yang dipakai membayar harus bisa ditelusuri ke baris di database
-//      MILIK Gajihub, lengkap dengan siapa yang memasukkannya dan kapan.
+// DI-IMPOR, BUKAN dibaca langsung saat menghitung - ini SNAPSHOT, alasan yang
+// sama dengan importPegawaiSiap.ts:
+//   1. Kalau dibaca live, e-Presensi yang mengubah tabelnya diam-diam mengubah
+//      angka periode yang SUDAH disetujui, tanpa jejak siapa pun.
+//   2. Kalender ini menentukan pengali lembur 2x dan batas hari uang makan -
+//      angka yang dipakai membayar harus bisa ditelusuri ke baris di database
+//      MILIK Gajihub, lengkap dengan siapa memasukkannya dan kapan.
 //   3. e-Presensi bisa saja tidak terjangkau saat kalkulasi berjalan.
-// Setelah diimpor, barisnya bisa diubah/dihapus manusia seperti biasa - impor
-// TIDAK menimpa tanggal yang sudah ada.
+// Impor TIDAK menimpa tanggal yang sudah ada - koreksi manusia tetap menang.
 //
-// ---------------------------------------------------------------------------
-// CUTI BERSAMA - penamaannya TIDAK konsisten antar tahun
-// ---------------------------------------------------------------------------
-// 2022-2025 memakai baris bernama "Cuti Bersama ..." (4/11/8/9 baris), TAPI
-// 2026 **nol** - cuti bersama Idul Fitri 2026 ditulis dengan nama hari
-// rayanya ("Hari Raya Idul Fitri 1447 Hijriah", 20-24 Maret). Jadi penanda
-// `cutiBersama` di sini diturunkan dari NAMANYA dan pasti kurang lengkap
-// untuk 2026 - itu disebutkan ke pemakai, bukan ditebak diam-diam. Bedanya
-// tidak mengubah pembayaran (perlakuannya sama persis), cuma pelaporan.
+// CUTI BERSAMA - penamaannya TIDAK konsisten antar tahun. 2022-2025 memakai
+// baris bernama "Cuti Bersama ...", tapi 2026 nol: cuti bersama Idul Fitri
+// ditulis dengan nama hari rayanya. Jadi penanda `cutiBersama` diturunkan dari
+// NAMA dan pasti kurang lengkap untuk 2026 - itu disebutkan ke pemakai, bukan
+// ditebak diam-diam. Tidak mengubah pembayaran (perlakuannya sama), cuma
+// pelaporan.
 // ============================================================================
 import pg from "pg";
 

@@ -1,53 +1,33 @@
 // ============================================================================
 // UANG LEMBUR CALCULATION
 //
-// Pendapatan lembur terdiri dari DUA komponen terpisah (SBM 2026 halaman -13-):
-//   1. Uang lembur       - item 23.1, satuan OJ (orang/JAM)
-//   2. Uang makan lembur - item 23.2, satuan OH (orang/HARI)
+// DUA komponen terpisah (SBM 2026 hal. -13-), dan satuannya BEDA:
+//   1. Uang lembur       - item 23.1, per JAM
+//   2. Uang makan lembur - item 23.2, per HARI
+// Karena itu total jam sebulan TIDAK CUKUP untuk menghitung uang makan
+// lembur - harus tahu berapa HARI yang memenuhi syarat.
 //
-// Satuannya BEDA, dan itu inti perhitungannya: uang lembur dikali JAM, uang
-// makan lembur dikali HARI. Karena itu total jam sebulan saja TIDAK CUKUP
-// buat menghitung uang makan lembur - harus tahu berapa HARI yang lemburnya
-// memenuhi syarat.
-//
-// SYARAT UANG MAKAN LEMBUR - ini ADA di SBM 2026 halaman -51- (penjelasan
-// item 23.2), bukan sekadar kebijakan internal:
-//   "Uang makan lembur diperuntukkan bagi Pegawai Aparatur Sipil Negara
-//    setelah bekerja lembur paling kurang 2 (dua) jam SECARA BERTURUT-TURUT
+// SYARAT UANG MAKAN LEMBUR (SBM 2026 hal. -51-, penjelasan item 23.2):
+//   "...setelah bekerja lembur paling kurang 2 (dua) jam SECARA BERTURUT-TURUT
 //    dan diberikan paling banyak 1 (satu) kali per hari."
-// Dua hal penting dari kalimat itu:
-//   1. 2 jam harus BERTURUT-TURUT, bukan akumulasi sehari. Lembur 1 jam pagi
-//      + 1 jam sore TIDAK memenuhi syarat walau totalnya 2 jam. Engine ini
-//      tidak bisa memastikannya sendiri (inputnya sudah berupa jumlah hari
-//      yang memenuhi syarat) - yang menentukan adalah pihak yang mengisi
-//      rekap, dan itu ditegaskan di template & halaman uploadnya.
-//   2. Paling banyak 1 kali per hari - otomatis terpenuhi karena satuannya
-//      memang per hari.
+// "Berturut-turut" berarti lembur 1 jam pagi + 1 jam sore TIDAK memenuhi
+// syarat walau totalnya 2 jam. Engine ini tidak bisa memastikannya sendiri
+// (inputnya sudah berupa jumlah hari yang memenuhi syarat) - yang menentukan
+// pengisi rekap, dan itu ditegaskan di template & halaman uploadnya.
 //
-// LEMBUR HARI LIBUR / TANGGAL MERAH: tarif per jamnya dikali
-// PENGALI_LEMBUR_HARI_LIBUR. PERHATIAN - pengali itu BUKAN dari SBM (kata
-// "libur" tidak muncul sama sekali di SBM 2026); lihat catatan lengkapnya di
-// tarifSbm.ts.
-//
-// WFH/WFA TIDAK DAPAT LEMBUR (aturan user 2026-07-29): pegawai yang bekerja
-// dari rumah tidak dihitung lembur walau jam absen keluarnya melewati jam
-// kerja. Engine ini tidak melihat data harian, jadi penyaringannya dilakukan
-// saat pengisian rekap (jam lembur yang dilaporkan HARUS sudah mengecualikan
-// hari WFH/WFA). Yang bisa dilakukan di sini cuma pengecekan silang: kalau
-// ada klaim jam lembur padahal hari WFO-nya nol, itu janggal dan ditandai.
+// LEMBUR HARI LIBUR: tarif per jam dikali PENGALI_LEMBUR_HARI_LIBUR.
+// WFH/WFA TIDAK DAPAT LEMBUR - penyaringannya di sisi pengisian rekap; yang
+// bisa dicek di sini cuma silang (klaim jam lembur padahal hari WFO nol).
 //
 // Tarif tidak dihardcode di sini - lihat src/business-logic/tarifSbm.ts.
 //
 // TODO(confirm):
-// - Batas maksimal jam lembur per bulan TIDAK disebut di SBM. Angka 40 jam
-//   di bawah adalah asumsi lama yang MASIH belum dikonfirmasi ke Biro
-//   Keuangan/DJA - jangan dianggap resmi.
-// - Pengali lembur hari libur (2x) BELUM punya rujukan pasal - lihat
-//   PENGALI_LEMBUR_HARI_LIBUR di tarifSbm.ts.
+// - Batas 40 jam/bulan TIDAK disebut di SBM - asumsi lama, belum dikonfirmasi
+//   ke Biro Keuangan/DJA.
+// - Pengali hari libur (2x) BELUM punya rujukan pasal - kata "libur" tidak
+//   muncul sama sekali di SBM 2026. Lihat tarifSbm.ts.
 // - Apakah uang MAKAN lembur ikut naik di hari libur belum ditegaskan;
 //   sekarang tidak (PENGALI_MAKAN_LEMBUR_HARI_LIBUR = 1).
-// - Syarat "2 jam BERTURUT-TURUT" tidak bisa diverifikasi engine ini -
-//   bergantung pada kebenaran pengisian rekap.
 // ============================================================================
 
 import type { UangLemburInput, UangLemburResult } from "../types/index";

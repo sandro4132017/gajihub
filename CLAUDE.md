@@ -4802,6 +4802,51 @@ Dokumen itu juga mendaftar aturan yang dipakai Gajihub tapi **tidak ada
 dasarnya di SBM**: batas 40 jam lembur/bulan, pengali 2x lembur hari libur
 (kata "libur" tidak muncul sama sekali di PMK ini), dan padanan golongan PPPK.
 
+## Komentar dirapikan sebelum pemeriksaan keamanan (2026-08-21)
+
+Komentar NARATIF - yang menceritakan sejarah percobaan ("sempat dipasang lalu
+dicabut", tabel hasil uji berbaris-baris, riwayat bug) - dipadatkan jadi
+pernyataan aturannya saja. **20 berkas**, 7.459 -> 6.990 baris komentar; blok
+>= 12 baris turun dari 158 (3.551 baris) jadi jauh lebih sedikit.
+
+**YANG SENGAJA TIDAK DISENTUH**, karena "Konvensi kode" di bawah mewajibkannya:
+- **336 rujukan `Pasal N`** - itu jejak yang menjawab "atas dasar apa angka ini
+  segini" kalau ditanya Itjen/auditor.
+- **98 penanda `TODO(confirm)` / `TODO(legal-confirm)`** - asumsi yang belum
+  dikonfirmasi tetap harus kelihatan.
+- **Peringatan "JANGAN ..."** yang menahan bug agar tidak dipasang lagi (mis.
+  "TIDAK ADA JEDA SEBELUM LEMBUR", "JANGAN menambah/membuang nol di depan",
+  "JANGAN mengalirkan angka dari modul ini ke tukin.ts"). Beberapa di antaranya
+  menahan kekeliruan yang PERNAH benar-benar terjadi.
+
+Yang berkurang dari hitungan hanyalah pengulangan dalam berkas yang sama dan
+penyebutan TODO yang sudah RESOLVED (mis. "dulu TODO(confirm) jam kerja - kini
+Pasal 9"). Tidak ada satu pun pertanyaan terbuka yang hilang; ini diperiksa
+per berkas dengan membandingkan ke `HEAD` sebelum commit.
+
+**Kalau menulis komentar baru**: sebutkan ATURAN dan DASARNYA, bukan riwayat
+bagaimana aturan itu ditemukan. Riwayatnya tempatnya di CLAUDE.md ini.
+
+**EMPAT KLAIM BASI ketemu saat merapikan ini** - dan itu temuan yang lebih
+berharga daripada perapiannya sendiri. Komentar yang isinya sudah tidak benar
+lebih berbahaya daripada tidak ada komentar: orang berikutnya percaya, lalu
+mencari-cari kenapa fitur yang "belum ada" ternyata dipakai orang.
+
+| Tempat | Klaim basi |
+|---|---|
+| `tukin/presensi/page.tsx` | "sinkronisasi e-Presensi (belum tersambung)" - panel itu chip hijau **Tersambung** sejak akses database didapat |
+| `kasubag/kalkulasi/actions.ts` | "selama e-Presensi belum tersambung, praktis yang dipakai rekap manual" - sinkronisasi mengisi KEDUA tabel |
+| `tukin/presensi/UploadPresensiForm.tsx` | **TEKS DI LAYAR**: "Dipakai selama e-Presensi belum tersambung" - yang terbaca pengguna, dan salah |
+| `saya/actions.ts` | "verifikasi berjenjang belum ada action-nya" - `verifikasiBandingJenjang1Action` & `approveBandingFinalAction` sudah lama ada |
+
+Keempatnya sudah diperbaiki. Yang ketiga paling parah karena bukan komentar -
+itu kalimat yang dibaca petugas di halaman upload, dan mengarahkannya memakai
+jalur cadangan seolah jalur utama belum tersedia.
+
+**Kalau nanti sebuah fitur berpindah dari "belum" jadi "sudah"**, grep dulu
+frasa itu di seluruh `src/` sebelum menutup pekerjaan - komentar & teks layar
+yang menyebut keadaan lama tidak ikut berubah sendiri.
+
 ## Konvensi kode
 
 - Business logic engine = pure functions, tidak boleh ada I/O (database,

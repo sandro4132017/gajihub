@@ -1,37 +1,19 @@
 // ============================================================================
-// Seed akun User untuk simulasi/demo stakeholder - 13 akun lintas 6 role &
-// 3+ satuan kerja. Cara pakai: npx tsx src/auth/seedUsers.ts
+// Seed akun User untuk simulasi/demo - 13 akun lintas 6 role & 3+ satuan
+// kerja. Cara pakai: npx tsx src/auth/seedUsers.ts
 //
 // Login pakai NIP sebagai username SEKALIGUS password (lihat TODO(legal-
-// confirm) di src/auth/session.ts soal kenapa ini sementara/tidak aman).
+// confirm) di src/auth/session.ts soal kenapa ini sementara & tidak aman).
 //
-// PENTING - beda dari seed sebelumnya: NIP di bawah BUKAN NIP contoh
-// (prefix "0000"), tapi NIP ASLI dari data pegawai yang sudah diimpor
-// (`prisma.pegawai`, ±5.069 baris - lihat src/jobs/importPegawaiXlsx.ts).
-// Sengaja dipilih dari data asli (bukan bikin pegawai fiktif baru) supaya
-// karakter simulasi ini punya data kepegawaian (jabatan, golongan, kelas
-// jabatan, satuan kerja) yang konsisten dan tidak mengarang data pribadi.
-// Detail kalkulasi/presensi/kinerja/banding/dst untuk akun-akun ini ada di
+// NIP di bawah adalah NIP ASLI dari data pegawai yang sudah diimpor, bukan
+// NIP contoh - supaya karakter simulasi punya data kepegawaian (jabatan,
+// golongan, kelas jabatan, satuan kerja) yang konsisten dan tidak mengarang
+// data pribadi. Detail kalkulasi/presensi/banding untuk akun-akun ini ada di
 // src/db/seedSimulasi.ts (jalankan SETELAH file ini).
 //
-// Karakter & skenario (lihat CLAUDE.md "Role matrix" untuk detail role):
-//   Biro Keuangan dan Barang Milik Negara:
-//     - Alpha Sandro Adithyaswara -> ADMIN (diminta eksplisit oleh user)
-//     - Irwan Syafril             -> PPABP (Tim PPABP Rokeu)
-//     - John Pieter                -> PEGAWAI, skenario: lagi banding
-//     - Prasetyo Muhammad Sidqi    -> PEGAWAI, skenario: uang lembur tidak biasa
-//     - Kharina Olivia             -> PEGAWAI, skenario: lancar
-//   Pusat Data dan Teknologi Informasi Ketenagakerjaan:
-//     - Ayu Puspita Sari  -> KASUBAG_TU
-//     - Firmansyah         -> PEGAWAI, skenario: Tukin ditolak jenjang 1
-//     - Farid Arif         -> PEGAWAI, skenario: belum diajukan approval
-//   Biro Umum:
-//     - Luthfi Firdaus -> KASUBAG_TU
-//     - Irvan Ganeva    -> PEGAWAI, skenario: banding (tahap 1 selesai)
-//     - Herry Susanto   -> PEGAWAI, skenario: lancar
-//   Lintas unit:
-//     - Dian Kreshnadjati (Biro OSDMA)      -> OSDMA
-//     - Cris Kuntadi (Sekretariat Jenderal) -> PIMPINAN
+// Daftar karakter & skenarionya ada di tabel CLAUDE.md, bagian "Seed data
+// simulasi" - jangan disalin ke sini supaya tidak ada dua daftar yang bisa
+// berbeda.
 // ============================================================================
 
 import { PrismaClient, type Role } from "@prisma/client";

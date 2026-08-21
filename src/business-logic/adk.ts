@@ -50,40 +50,26 @@ export interface SumberBarisAdkTukin {
 /**
  * Nilai Bruto / Potongan / Bersih untuk satu baris ADK Tukin.
  *
- * DIPERBAIKI 2026-08-10. Sebelumnya ketiganya diisi dari
- * `tukinPokok / potonganPph / tukinBersih`, dan itu keliru: `tukinPokok` di
- * `TukinCalculation` sudah nilai SETELAH potongan Pasal 13, sementara
- * `potonganPph` tidak pernah diisi (nol di seluruh baris yang ada, karena
- * kalkulasi massal tidak mengoper `tarifPphEfektif`). Hasilnya file ADK keluar
- * dengan **Nilai Bruto = Nilai Bersih dan Nilai Potongan = 0** - potongan
- * kehadiran yang justru jadi inti perhitungan tidak muncul sama sekali.
- *
- * Yang benar, dibuktikan dari sheet "Masuk ADK" pada rincian tukin manual
- * Rokeu (`Rincian Tunkin Juli 2026.xlsx`) yang cuma punya dua kolom uang:
- *
- *     NIP                  nama            pot          tukin
- *     197601091999032001   ARINI SARKOWI   44.235,12    9.851.764,88
- *
- * `tukin` = tarif penuh kelas jabatannya (9.896.000) dikurangi `pot`. Jadi:
  *   Nilai Bruto    = tarif PENUH kelas jabatan (sebelum potongan apa pun)
  *   Nilai Bersih   = yang benar-benar dibayarkan
  *   Nilai Potongan = selisih keduanya
  *
- * TIDAK ADA kolom PPh di seluruh workbook itu - jadi `potonganPph` yang selalu
- * nol memang sesuai praktik, yang salah cuma pemakaian kolomnya. Kalau suatu
- * saat PPh benar-benar dipotong, angkanya otomatis ikut terhitung di sini:
- * `tukinBersih` sudah bersih dari PPh, jadi selisihnya membesar sendiri.
+ * Dibuktikan dari sheet "Masuk ADK" rincian tukin manual Rokeu, yang cuma
+ * punya dua kolom uang (`pot` dan `tukin`) dan `tukin` = tarif penuh - `pot`.
  *
- * PEMBULATAN dilakukan pada bruto & bersih DULU, baru potongan diturunkan dari
- * selisih keduanya - supaya `bruto - potongan = bersih` tetap tepat pada
- * bilangan bulat di dalam file. Kalau potongan ikut dibulatkan sendiri-sendiri,
- * ketiga kolom bisa meleset satu rupiah dan itu yang pertama dicurigai auditor.
+ * JANGAN kembalikan ke `tukinPokok / potonganPph / tukinBersih`: `tukinPokok`
+ * sudah nilai SETELAH potongan Pasal 13 dan `potonganPph` tidak pernah diisi,
+ * jadi filenya keluar dengan Bruto = Bersih dan Potongan = 0 - seluruh
+ * potongan kehadiran hilang. Tidak ada kolom PPh di workbook manual manapun,
+ * jadi PPh nol memang sesuai praktik; kalau nanti benar-benar dipotong,
+ * angkanya ikut sendiri karena `tukinBersih` sudah bersih dari PPh.
  *
- * KALAU TARIF KELASNYA TIDAK DIKETAHUI (kelas jabatan kosong di data pegawai),
- * bruto disamakan dengan bersih dan potongan jadi nol - lebih baik melaporkan
- * "tidak ada potongan" daripada mengarang nilai bruto yang tidak punya dasar.
- * Dalam praktik ini nyaris tidak terjadi: pegawai tanpa kelas jabatan memang
- * dilewati waktu kalkulasi karena tarifnya tidak bisa dicari.
+ * PEMBULATAN pada bruto & bersih DULU, potongan diturunkan dari selisihnya -
+ * supaya `bruto - potongan = bersih` tetap tepat pada bilangan bulat.
+ *
+ * Kalau tarif kelasnya tidak diketahui, bruto disamakan dengan bersih dan
+ * potongan nol - lebih baik melaporkan "tidak ada potongan" daripada
+ * mengarang nilai bruto tanpa dasar.
  */
 export function nilaiUangAdkTukin(r: Pick<SumberBarisAdkTukin, "tarifPenuhKelasJabatan" | "tukinBersih">): {
   bruto: number;

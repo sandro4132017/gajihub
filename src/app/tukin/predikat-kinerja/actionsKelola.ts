@@ -12,38 +12,29 @@ import {
 /**
  * KELOLA PREDIKAT KINERJA SATUAN (tambah / ubah / hapus)
  *
- * Melengkapi upload massal di actions.ts. Jalur ini dipakai buat perbaikan
- * per orang: pegawai yang terlewat di file rekap, salah predikat, atau baris
- * yang memang harus dicabut.
+ * Melengkapi upload massal di actions.ts, untuk perbaikan per orang.
  *
- * ---------------------------------------------------------------------------
- * KENAPA INI TIDAK MELANGGAR "tidak ada edit langsung"
- * ---------------------------------------------------------------------------
+ * KENAPA INI TIDAK MELANGGAR "tidak ada edit langsung":
  * `canEditPresensiKinerjaLangsung` tetap `false` dan tidak dipakai di sini.
- * Izin yang dipakai adalah `canUploadRekapPredikatKinerja`, yang komposisinya
+ * Izin yang dipakai `canUploadRekapPredikatKinerja`, yang komposisinya
  * mencakup `canUploadKoreksiPredikatKinerjaUnit` - fungsi yang sejak awal
- * memang didefinisikan sebagai "upload predikat kinerja + KOREKSI LANGSUNG di
- * Gajihub kalau ada yang salah", dan disebut eksplisit di komentar
- * canEditPresensiKinerjaLangsung sebagai salah satu jalur koreksi yang SAH.
+ * didefinisikan sebagai "upload + KOREKSI LANGSUNG kalau ada yang salah".
  * Yang dilarang itu edit BEBAS tanpa scope & tanpa jejak, bukan koreksi
  * ber-scope unit yang tercatat.
  *
- * Tiga pengaman yang membuatnya tetap bisa dipertanggungjawabkan:
- *   1. Otorisasi dicek terhadap `Pegawai.satuanKerja` milik baris yang
- *      disentuh - Kasubag TU tidak bisa mengubah predikat unit lain, termasuk
- *      dengan menebak id lewat form yang dimodifikasi.
- *   2. `nilaiAngka` TIDAK PERNAH diterima dari form - selalu diturunkan ulang
- *      dari predikatnya lewat konversiPredikatKeNilaiPersen (Kepsekjen
- *      82/2025). Kalau tidak, orang bisa mengirim predikat "Kurang" dengan
- *      nilai 100% dan tukinnya ikut salah.
- *   3. Tiap perubahan menulis AuditTrail lengkap dengan nilai SEBELUM dan
- *      SESUDAH, dan barisnya ditandai sebagai input manual - jadi angka hasil
- *      ketikan manusia tidak bisa menyamar sebagai angka resmi dari BKN.
+ * Tiga pengaman:
+ *   1. Otorisasi dicek terhadap `Pegawai.satuanKerja` milik BARIS yang
+ *      disentuh - id dari form tidak dipercaya.
+ *   2. `nilaiAngka` TIDAK PERNAH diterima dari form, selalu diturunkan ulang
+ *      lewat konversiPredikatKeNilaiPersen (Kepsekjen 82/2025). Tanpa ini,
+ *      orang bisa mengirim predikat "Kurang" dengan nilai 100%.
+ *   3. Tiap perubahan menulis AuditTrail dengan nilai SEBELUM & SESUDAH, dan
+ *      ditandai input manual - angka ketikan manusia tidak bisa menyamar
+ *      sebagai angka resmi BKN.
  *
- * TIDAK ada kalkulasi Tukin yang dihitung ulang otomatis di sini - itu
- * mereset siklus approval ke DRAFT (lihat catatan kalkulasi massal di
- * CLAUDE.md), jadi keputusannya tetap di tangan user. Yang dilakukan action
- * ini cuma MEMBERI TAHU kalau ada kalkulasi yang jadi basi.
+ * TIDAK menghitung ulang Tukin otomatis - itu mereset siklus approval ke
+ * DRAFT, jadi keputusannya tetap di tangan user. Action ini cuma MEMBERI TAHU
+ * kalau ada kalkulasi yang jadi basi.
  */
 
 /** Sumber & metode yang dicatat buat baris hasil ketikan manusia. */

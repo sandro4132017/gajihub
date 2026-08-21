@@ -1,102 +1,50 @@
 // ============================================================================
-// Import data pegawai LANGSUNG dari database SIAP (SQL Server) ke tabel
-// Pegawai. Menggantikan importPegawaiXlsx.ts sebagai jalur utama - file XLSX
-// basis data pegawai tidak ada di repo (data pribadi, sengaja).
+// Import pegawai dari database SIAP (SQL Server) ke tabel Pegawai.
+// Menggantikan importPegawaiXlsx.ts sebagai jalur utama.
 //
-// BUKAN live sync: ini snapshot manual yang perlu dijalankan ULANG tiap kali
-// data SIAP dianggap sudah berubah. Akses API SIAP resmi masih informal
-// (lihat CLAUDE.md open item #5) - yang dipakai di sini adalah kredensial
-// baca ke database SIAP yang diberikan Biro Keuangan.
+// READ-ONLY terhadap SIAP - HANYA SELECT, tidak pernah menulis. SIAP adalah
+// source of truth kepegawaian, Gajihub cuma mirror-nya.
 //
-// READ-ONLY terhadap SIAP: skrip ini HANYA melakukan SELECT. Tidak ada
-// INSERT/UPDATE/CREATE apa pun ke `simpeg_kemnaker_24102018`. Jangan pernah
-// mengubah itu - SIAP adalah source of truth kepegawaian, Gajihub cuma
-// mirror-nya (prinsip proyek: "don't replace, integrate").
+// BUKAN live sync: snapshot manual, perlu dijalankan ulang tiap data SIAP
+// berubah. Kredensial dari .env (SIAP_*), JANGAN di-hardcode.
 //
-// Cara pakai:
-//   npx tsx src/jobs/importPegawaiSiap.ts                 # semua pegawai aktif
-//   npx tsx src/jobs/importPegawaiSiap.ts --satker=0101    # Sekretariat Jenderal saja
-//   npx tsx src/jobs/importPegawaiSiap.ts --dry-run        # lihat hasilnya, tanpa menulis
+//   npx tsx src/jobs/importPegawaiSiap.ts                # semua pegawai aktif
+//   npx tsx src/jobs/importPegawaiSiap.ts --satker=0101  # satu Eselon I
+//   npx tsx src/jobs/importPegawaiSiap.ts --dry-run
 //
-// Kredensial dibaca dari .env (SIAP_HOST/SIAP_PORT/SIAP_DB/SIAP_USER/
-// SIAP_PASSWORD) - JANGAN di-hardcode di file ini.
+// PEMETAAN KOLOM (hasil penelusuran ke database, bukan tebakan):
+//   nip           <- PEGAWAI.NIPBARU (18 digit; kolom NIP 9 digit TIDAK dipakai)
+//   nama          <- PEGAWAI.NAMA
+//   unitKerja     <- SATKER.SATKER pada SATKERID persis (unit terdalam)
+//   satuanKerja   <- SATKER.SATKER pada LEFT(SATKERID,6) = Eselon II.
+//                    SATKERID hirarkis: 4 digit Eselon I, 6 digit Eselon II.
+//                    INI yang dipakai SELURUH scoping kewenangan Gajihub.
+//   jabatan       <- RIWAYATJABATAN.NAMAJABATAN terbaru
+//   golongan      <- PANGKAT.KODEPANGKAT via VWPANGKATTERAKHIR
+//   tmtSkTerakhir <- VWPANGKATTERAKHIR.TMTPANGKAT
+//   kelasJabatan  <- MASTERFUNGSIONAL.JOBGRADE (fungsional/pelaksana) atau
+//                    SATKER.JOBGRADE (struktural). PEGAWAI.JOBGRADE kosong
+//                    total, jangan dipakai. Nilai di luar 1-17 dibuang jadi null.
 //
-// ---------------------------------------------------------------------------
-// PEMETAAN KOLOM - hasil penelusuran langsung ke database, bukan tebakan
-// ---------------------------------------------------------------------------
-// Pegawai.nip           <- PEGAWAI.NIPBARU        (18 digit; NIP lama 9 digit
-//                          di kolom PEGAWAI.NIP TIDAK dipakai - seluruh sistem
-//                          Gajihub, seed, dan login memakai NIP 18 digit)
-// Pegawai.nama          <- PEGAWAI.NAMA
-// Pegawai.unitKerja     <- SATKER.SATKER pada SATKERID persis milik pegawai
-//                          (unit terdalam, mis. "Kelompok Substansi ...")
-// Pegawai.satuanKerja   <- SATKER.SATKER pada LEFT(SATKERID,6) = Eselon II
-//                          (mis. "Biro Keuangan dan Barang Milik Negara").
-//                          SATKERID di SIAP hirarkis: 4 digit = Eselon I,
-//                          6 digit = Eselon II, lebih panjang = di bawahnya.
-//                          Ini yang dipakai SELURUH scoping kewenangan
-//                          Gajihub (KASUBAG_TU dikunci ke satuan kerja ini).
-// Pegawai.jabatan       <- RIWAYATJABATAN.NAMAJABATAN terbaru (TMTJABATAN max)
-// Pegawai.golongan      <- PANGKAT.KODEPANGKAT dari VWPANGKATTERAKHIR
-//                          (view bawaan SIAP, RANKING = 1 berarti terakhir)
-// Pegawai.tmtSkTerakhir <- VWPANGKATTERAKHIR.TMTPANGKAT
-// Pegawai.statusPegawai <- "AKTIF" (lihat catatan filter di bawah)
+// DATA PRIBADI TIDAK DIIMPOR (alamat, NPWP, NIK, telepon, email, rekening,
+// foto, dst) - skema tidak punya kolomnya. Rekening punya jalurnya sendiri
+// lewat /ppabp/rekening; JANGAN diambil dari sini.
 //
-// TIDAK DIIMPOR - dan ini disengaja: ALAMAT, ALAMATKTP, NPWP, NIK, TELEPON,
-// HP, EMAIL, NOREKENING, BANKID, FOTO, TEMPATLAHIR, TGLLAHIR, AGAMAID,
-// GOLDARAH, dst. Skema Pegawai tidak punya kolomnya dan sistem ini tidak
-// membutuhkannya (konvensi yang sama dengan importPegawaiXlsx.ts). Rekening
-// bank punya jalurnya sendiri lewat /ppabp/rekening - JANGAN diambil dari
-// sini tanpa keputusan eksplisit.
+// Filter aktif: STATUSPEGAWAIID IN ('1','2','23') = CPNS/PNS/PPPK.
+// Pegawai yang hilang dari daftar aktif DITANDAI (PENSIUN/BERHENTI/NONAKTIF/
+// TIDAK_DI_SIAP) lewat langkah "Rekonsiliasi status", TIDAK PERNAH dihapus -
+// yang pensiun di tengah tahun tetap berhak atas tukin bulan yang sudah
+// dikerjakannya. Penandaan ini bisa berbalik sendiri kalau SIAP dikoreksi.
 //
-// ---------------------------------------------------------------------------
-// TODO(confirm) - WAJIB dibaca sebelum angka dari sini dipakai membayar
-// ---------------------------------------------------------------------------
-// 1. KELAS JABATAN diturunkan dari JABATAN, bukan dari kolom pegawai.
-//    Kolom PEGAWAI.JOBGRADE memang ada tapi KOSONG TOTAL (0 dari 5.088 baris),
-//    begitu juga MANJAB_GRADE & MANJAB_MAPJABATAN (0 baris). Yang TERISI
-//    adalah kelas jabatan yang menempel pada jabatannya:
-//      - fungsional & pelaksana -> MASTERFUNGSIONAL.JOBGRADE (2.056/2.147 terisi)
-//      - struktural             -> SATKER.JOBGRADE (175 terisi)
-//    disambungkan lewat RIWAYATJABATAN terbaru (FUNGSIONALID / SATKERID).
-//    Cakupan terukur: 3.579 dari 3.607 pegawai aktif (99,2%) - 3.402 lewat
-//    MASTERFUNGSIONAL, 177 lewat SATKER, 28 tidak ketemu (FUNGSIONALID kosong
-//    di RIWAYATJABATAN-nya).
-//    Diadu ke kenyataan dan cocok: Sekretaris Jenderal & Dirjen 17, Staf Ahli
-//    16, Kepala Biro 15, Kepala Bagian 12, Kepala Subbagian 10.
-//    TODO(confirm) YANG TERSISA: belum ada penegasan resmi bahwa JOBGRADE di
-//    kedua tabel itu adalah kelas jabatan versi TERKINI yang dipakai membayar
-//    tukin (bisa saja tertinggal dari SK terbaru). Angka ini langsung
-//    menentukan tarif tukin pokok, jadi WAJIB dicek silang ke Biro OSDMA
-//    sebelum dipakai membayar - minta sampel beberapa pegawai lalu bandingkan.
-//    Nilai di luar 1-17 DIBUANG jadi null, bukan dipaksa masuk.
-// 2. statusPegawai diisi "AKTIF" untuk semua baris yang lolos filter
-//    STATUSPEGAWAIID IN ('1','2','23') = CPNS / PNS / PPPK. Pensiun ('3'),
-//    Pemberhentian ('8'), dan status '9' (tidak ada di tabel lookup
-//    STATUSPEGAWAI - artinya belum jelas) TIDAK diimpor. Skema Gajihub
-//    memakai statusPegawai untuk AKTIF/CUTI/MUTASI/PENSIUN, sementara
-//    STATUSPEGAWAIID di SIAP mencampur JENIS kepegawaian (PNS/PPPK/CPNS)
-//    dengan status - pemetaan yang lebih halus perlu dibicarakan.
-// 3. Cakupan PPPK: golongan PPPK di SIAP berformat angka Romawi tunggal
-//    ("IX", "XI") pada skala I-XVII, sementara PNS berformat "III/d". Sejak
-//    2026-08-06 keduanya SUDAH terhitung: kurungTarifSbm() di tarifSbm.ts
-//    memetakan jenjang PPPK ke kurung tarif SBM lewat PADANAN_GOLONGAN_PPPK.
-//    Padanan itu sendiri masih TODO(confirm) - lihat komentarnya di sana.
-//    JANGAN menormalkan golongan PPPK jadi format PNS ("IX" -> "III/a") di
-//    importer ini: sufiks huruf itulah yang membedakan keduanya, dan begitu
-//    hilang, PPPK jenjang bawah tidak bisa lagi dibedakan dari PNS.
-// 4. Pegawai yang HILANG dari hasil query SIAP (mis. karena pensiun) SEKARANG
-//    DITANDAI, bukan dibiarkan seolah masih aktif: langkah "Rekonsiliasi
-//    status" di akhir main() menanyakan status terkini mereka ke SIAP lalu
-//    mengisi `statusPegawai` jadi PENSIUN/BERHENTI/NONAKTIF/TIDAK_DI_SIAP.
-//    TIDAK ADA yang dihapus - orang yang pensiun di tengah tahun tetap
-//    berhak atas tukin bulan-bulan yang sudah dia kerjakan, dan datanya
-//    hilang kalau barisnya dibuang. Penandaan ini juga bisa berbalik:
-//    statusPegawai ikut di-set "AKTIF" pada update, jadi kalau status di SIAP
-//    dikoreksi, sync berikutnya mengembalikannya sendiri.
-//    CATATAN PENTING: kalkulasi tukin SENGAJA tidak menyaring berdasarkan
-//    statusPegawai - penyaringnya adalah ADA/TIDAKNYA presensi di periode
-//    itu, yang otomatis benar untuk orang yang berhenti di tengah tahun.
+// JANGAN menormalkan golongan PPPK ("IX") jadi format PNS ("III/a") - sufiks
+// huruf itulah yang membedakan keduanya, dan begitu hilang PPPK jenjang bawah
+// tidak bisa dibedakan lagi dari PNS.
+//
+// TODO(confirm): (1) belum ada penegasan resmi bahwa JOBGRADE adalah kelas
+// jabatan TERKINI yang dipakai membayar tukin - angka ini langsung menentukan
+// tarif, WAJIB dicek silang ke Biro OSDMA; (2) STATUSPEGAWAIID mencampur
+// JENIS kepegawaian dengan status, pemetaan yang lebih halus perlu dibahas.
+// Detail lengkap & angka terukurnya ada di CLAUDE.md.
 // ============================================================================
 
 import { PrismaClient } from "@prisma/client";

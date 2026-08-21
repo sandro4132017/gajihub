@@ -97,7 +97,6 @@ function jenisKepegawaian(golongan: string | null): string | null {
   return null;
 }
 
-/** Sel yang datanya memang belum ada di sistem - dibedakan dari nilai nol. */
 function BelumAda({ judul }: { judul: string }) {
   return (
     <span className="text-muted/60" title={judul}>
@@ -361,9 +360,6 @@ export default async function KalkulasiUnitPage({
         namaBulan={NAMA_BULAN[periodeBulan - 1] ?? String(periodeBulan)}
       />
 
-      {/* Penjelasan asal-usul angka. Ditaruh di halaman, bukan cuma di
-          dokumentasi, karena pertanyaan "tukin bersih ini dari mana" muncul
-          persis di depan tabel ini. */}
       <div className="card mt-6 p-4">
         <h2 className="text-sm font-bold text-ink">Cara membaca tabel Rincian Tukin</h2>
         <p className="mt-1.5 text-xs leading-relaxed text-muted">
@@ -597,9 +593,6 @@ export default async function KalkulasiUnitPage({
 
               return (
                 <tr key={p.id} className={`border-b border-line-2 ${basi ? "bg-gold-tint" : ""}`}>
-                  {/* Nomor urut ikut posisi di SELURUH unit, bukan di halaman
-                      ini - kalau di-reset tiap halaman, baris pertama halaman
-                      2 ikut bernomor 1 dan tidak bisa dirujuk. */}
                   <td className={`${td} text-muted`}>{paginasi.mulai + i + 1}</td>
                   <td className="col-nama whitespace-nowrap px-3 py-2">
                     <NamaPegawai

@@ -1,92 +1,42 @@
 // ============================================================================
-// ADAPTER e-PRESENSI ASLI - baca langsung dari database e-Presensi (PostgreSQL)
+// ADAPTER e-PRESENSI - baca langsung dari database e-Presensi (PostgreSQL).
+// Dipakai bareng tombol "Tarik data presensi" (/tukin/presensi) dan CLI
+// src/jobs/importPresensiEpresensi.ts.
 //
-// Ini "RealPresensiAdapter" yang selama ini ditunggu (lihat catatan di
-// src/app/tukin/presensi/SinkronisasiPresensi.tsx). Dipakai BARENG oleh:
-//   - tombol "Tarik data presensi" di /tukin/presensi (Server Action)
-//   - src/jobs/importPresensiEpresensi.ts (CLI, buat tarikan massal/terjadwal)
+// READ-ONLY terhadap e-Presensi DAN SIAP - hanya SELECT. Keduanya sistem
+// produksi yang sedang melayani pegawai; jangan pernah menulis ke sana.
 //
-// READ-ONLY terhadap e-Presensi DAN SIAP: hanya SELECT. e-Presensi adalah
-// sistem absensi yang sedang melayani pegawai sungguhan - jangan pernah
-// menulis ke sana.
+// Bentuknya BORONGAN per periode, bukan per-NIP seperti interface
+// `PresensiAdapter` - satu periode ±5.200 pegawai, jadi bentuk per-NIP berarti
+// 5.200 round-trip ke e-Presensi + 5.200 lookup ke SIAP.
 //
-// ---------------------------------------------------------------------------
-// KENAPA TIDAK MENGIMPLEMENTASIKAN interface `PresensiAdapter`
-// ---------------------------------------------------------------------------
-// `PresensiAdapter` (DataSourceAdapter.ts) berbentuk PER-NIP:
-// getRekapKehadiranPeriode(nip, bulan, tahun). Untuk satu periode ada ±5.200
-// pegawai - memakainya berarti 5.200 kali round-trip ke database e-Presensi
-// DAN 5.200 lookup ke SIAP, padahal satu query sudah cukup untuk semuanya.
-// Jadi adapter ini sengaja berbentuk BORONGAN per periode. Interface lama
-// tetap dibiarkan apa adanya (masih dipakai MockPresensiAdapter & job
-// scheduler lama) - TODO(confirm): kalau nanti job scheduler dialihkan ke
-// sumber asli, interface itu yang perlu ditinjau ulang, bukan adapter ini
-// yang dipaksa masuk ke bentuk per-NIP.
+// RANTAI PEMETAAN PEGAWAI - bagian paling rawan:
+//   e-Presensi.presensi.id_pegawai -> SIAP.PEGAWAI.PEGAWAIID -> NIPBARU
+// e-Presensi TIDAK menyimpan NIP sama sekali, jadi SIAP wajib dilewati.
+// PENCOCOKANNYA HARUS PERSIS - JANGAN menambah/membuang nol di depan:
+// normalisasi nol pernah mencocokkan "00009600" ke PEGAWAIID milik ORANG LAIN.
+// Salah orang = salah potong tukin. Pegawai ber-UUID tidak ada di SIAP dan
+// DILEWATI; TIDAK dicocokkan lewat nama (penulisannya tidak konsisten).
 //
-// ---------------------------------------------------------------------------
-// RANTAI PEMETAAN PEGAWAI - bagian paling rawan, sudah dibuktikan ke data
-// ---------------------------------------------------------------------------
-//   e-Presensi.presensi.id_pegawai -> SIAP.PEGAWAI.PEGAWAIID -> NIPBARU (NIP)
-//
-// Database e-Presensi TIDAK menyimpan NIP sama sekali (sudah dicek ke seluruh
-// information_schema - tidak ada satu pun kolom ber-NIP). Yang ada
-// `id_pegawai`, ID internal e-Presensi.
-//
-// PENCOCOKANNYA HARUS PERSIS - JANGAN menambah/membuang nol di depan. Waktu
-// verifikasi, normalisasi nol sempat mencocokkan "00009600" (Deva Dwi Septian
-// di e-Presensi) ke PEGAWAIID "000009600" milik ORANG LAIN (Afriansyah Noor).
-// Salah orang = salah potong tukin. Dengan pencocokan persis, hasil uji:
-// 150/150 cocok untuk ID 8 digit, 9 digit, dan 12 digit (nama diverifikasi
-// silang). Yang ber-UUID (36 karakter) TIDAK ada di SIAP dan DILEWATI dengan
-// alasan eksplisit - TIDAK dicocokkan lewat nama, karena penulisan nama di
-// e-Presensi tidak konsisten ("Ir ANNA YULIANA M.Si." vs "Anna Yuliana").
-//
-// ---------------------------------------------------------------------------
-// JENIS CUTI - sumber potongan Pasal 14, DAN "bulan ke berapa"-nya
-// ---------------------------------------------------------------------------
+// JENIS CUTI (sumber potongan Pasal 14, sekaligus "bulan ke berapa"-nya):
 //   presensi.id_presensi -> presensi_cuti.id_presensi -> cuti.nama_cuti
+// Diambil lewat DUA query terpisah lalu dipasangkan di memori - JANGAN diubah
+// jadi JOIN/LATERAL, alasannya di ambilBarisPresensi().
+// JANGAN ambil cuti dari SIAP: tabel CUTI di sana sudah ditinggalkan sejak
+// 2019, nol baris yang beririsan dengan periode berjalan.
 //
-// Diambil lewat DUA query terpisah lalu dipasangkan di memori - JANGAN
-// diubah jadi JOIN/LATERAL, lihat alasannya di ambilBarisPresensi().
-//
-// Tabel `cuti` (16 baris) memecah jenisnya SAMPAI KE TINGKAT BULAN - "Cuti
-// Besar I/II/III", "Cuti Sakit Bulan I/II/III", "Cuti Sakit Bulan Lebih Dari
-// 3 Bulan" - dan kolom `cuti.nilai_persen` di sana cocok PERSIS dengan tabel
-// Pasal 14 yang sudah ada di tukin.ts (50/75/90 untuk cuti besar, 0/50/75
-// untuk cuti sakit, 1%/hari untuk gugur kandungan di atas 1 bulan).
-//
-// Ini membatalkan asumsi lama bahwa "bulan ke berapa" mustahil diturunkan
-// dari data satu bulan dan harus diketik manual. Lihat bulanCutiDariLabel()
-// di business-logic/jenisCuti.ts.
-//
-// JANGAN ambil cuti dari SIAP. Tabel `CUTI` di sana memang ada, tapi sudah
-// ditinggalkan: puncaknya 2019 (304 baris), 2025 cuma 26 baris, dan NOL baris
-// yang beririsan dengan Juli 2026. Pengajuan cuti sudah pindah ke e-Presensi.
-//
-// ---------------------------------------------------------------------------
-// TODO(confirm) - PERBEDAAN ANGKA YANG HARUS DISADARI
-// ---------------------------------------------------------------------------
-// 1. TOLERANSI KETERLAMBATAN 60 MENIT (kolom sistem_kerja.toleransi untuk
-//    WFO/WFH/WFA = 60) SEKARANG DIIKUTI Gajihub - lihat
-//    TOLERANSI_TERLAMBAT_MENIT di presensiPdfKeRekap.ts untuk bukti angkanya
-//    (diadu ke rincian tukin manual Rokeu Juli 2026: 44 dari 48 pegawai cocok
-//    sampai ke satuan menit). Sebelumnya Gajihub memakai 0 dan memotong 5,2x
-//    lebih besar dari perhitungan manual.
-//    Toleransinya diterapkan di JADWAL_KERJA_DEFAULT, BUKAN di sini - supaya
-//    jalur tarikan e-Presensi dan jalur upload PDF tidak bisa berbeda.
-// 2. Kolom `potongan`, `keterangan_potongan`, dan tabel `potongan_tukin` di
-//    e-Presensi DIABAIKAN sebagai nominal - Gajihub menghitung sendiri sesuai
-//    Permenaker 15/2024. Dari kolom itu yang diambil HANYA penanda "lupa
-//    presensi", karena itu FAKTA yang tidak ada di kolom lain mana pun.
-// 3. Database e-Presensi punya baris bertanggal rusak (mis. "252026-01-22",
-//    "0003-02-28"). Filter periode di query membuangnya, tapi jangan
-//    berasumsi kolom tanggalnya selalu waras.
-// 4. NAMA JENIS CUTI BISA BERTENTANGAN DENGAN ISINYA. Ada pegawai dengan 34
-//    hari cuti berlabel "Cuti Sakit <1 bulan" di Juli 2026 - jelas bukan
-//    kurang dari sebulan. Labelnya tetap dipakai apa adanya (menebak ulang
-//    dari jumlah hari berarti menimpa keputusan pihak yang berwenang), TAPI
-//    kasus seperti ini menghasilkan potongan yang terlalu kecil. Kalau nanti
-//    ada pemeriksaan, ini salah satu tempat yang perlu diadu ke SK cutinya.
+// TODO(confirm):
+// 1. Toleransi 60 menit diterapkan di JADWAL_KERJA_DEFAULT, BUKAN di sini -
+//    supaya jalur tarikan dan jalur upload PDF tidak bisa berbeda.
+// 2. Kolom `potongan`/`keterangan_potongan`/tabel `potongan_tukin` DIABAIKAN
+//    sebagai nominal (Gajihub menghitung sendiri sesuai Permenaker 15/2024).
+//    Yang diambil dari situ HANYA penanda "lupa presensi" - itu fakta.
+// 3. Ada baris bertanggal rusak ("252026-01-22"). Filter periode membuangnya,
+//    tapi jangan berasumsi kolom tanggalnya selalu waras.
+// 4. Nama jenis cuti bisa bertentangan dengan isinya (34 hari berlabel "Cuti
+//    Sakit <1 bulan"). Label dipakai apa adanya - menebak ulang berarti
+//    menimpa keputusan pihak berwenang - tapi potongannya jadi terlalu kecil.
+// Detail & angka terukurnya di CLAUDE.md.
 // ============================================================================
 
 import pg from "pg";

@@ -22,8 +22,9 @@ export function UploadPresensiForm({
     <div className="card mt-4 p-4">
       <h2 className="text-sm font-bold text-ink">Upload rekap presensi bulanan</h2>
       <p className="mt-1 text-sm text-muted">
-        Dipakai selama e-Presensi belum tersambung. Isi template Gajihub (satu baris per pegawai, di-key NIP), lalu
-        upload di sini.
+        Untuk angka yang memang tidak ada di e-Presensi - menit meninggalkan kantor dan jumlah tidak ikut upacara.
+        Keduanya selalu nol lewat sinkronisasi maupun upload PDF. Isi template Gajihub (satu baris per pegawai,
+        di-key NIP), lalu upload di sini.
       </p>
 
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-3">

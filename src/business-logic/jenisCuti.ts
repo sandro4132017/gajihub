@@ -1,36 +1,24 @@
 // ============================================================================
 // PEMETAAN TEKS JENIS CUTI -> JenisCuti (Pasal 14 Permenaker 15/2024)
 //
-// Dipakai bareng DUA sumber yang penulisannya beda-beda:
-//   1. Template rekap manual - diisi manusia, bisa menulis "Cuti Sakit" atau
-//      langsung nilai enum "CUTI_SAKIT".
-//   2. Export e-Presensi - statusnya berbentuk "Cuti - Cuti Sakit <1 bulan".
+// Dipakai bareng dua sumber yang penulisannya berbeda: template rekap manual
+// ("Cuti Sakit" atau langsung enum) dan export e-Presensi ("Cuti - Cuti Sakit
+// <1 bulan").
 //
 // PRINSIPNYA: TIDAK PERNAH MENEBAK. Teks yang tidak dikenali mengembalikan
-// null, dan pemanggil wajib melaporkannya sebagai baris yang dilewati - salah
-// jenis cuti berarti salah tarif potongan, dan selisihnya besar (cuti besar
-// bulan pertama dipotong 50%, cuti tahunan tidak dipotong sama sekali).
+// null dan pemanggil wajib melaporkannya sebagai baris yang dilewati - salah
+// jenis cuti berarti salah tarif, dan selisihnya besar (cuti besar bulan
+// pertama dipotong 50%, cuti tahunan tidak dipotong sama sekali).
 //
-// ---------------------------------------------------------------------------
-// "BULAN KE BERAPA" TERNYATA ADA DI NAMA JENISNYA
-// ---------------------------------------------------------------------------
-// Sampai 2026-08-07 seluruh modul ini berasumsi bahwa bulan ke-berapa cuti
-// berjalan MUSTAHIL diturunkan dari data satu bulan, jadi harus diketik manual
-// lewat template. Asumsi itu SALAH: tabel `cuti` di database e-Presensi
-// memecah jenisnya sampai ke tingkat bulan -
+// "BULAN KE BERAPA" ADA DI NAMA JENISNYA. Tabel `cuti` e-Presensi memecah
+// jenisnya sampai tingkat bulan (Cuti Besar I/II/III = potongan 50/75/90%,
+// Cuti Sakit Bulan I/II/III = 0/50/75%), dan `cuti.nilai_persen` di sana cocok
+// PERSIS dengan tabel Pasal 14 di tukin.ts. Penomorannya juga terbukti dipakai
+// berurutan sungguhan lintas bulan.
 //
-//     Cuti Besar I / II / III                (potongan 50% / 75% / 90%)
-//     Cuti Sakit Bulan I / II / III          (potongan  0% / 50% / 75%)
-//     Cuti Sakit Bulan Lebih Dari 3 Bulan    (potongan 100%)
-//
-// - dan angka `cuti.nilai_persen` di sana cocok PERSIS dengan tabel Pasal 14
-// yang sudah diimplementasi di tukin.ts. Dibuktikan juga bahwa penomorannya
-// dipakai berurutan sungguhan: satu pegawai tercatat Cuti Besar I (Mei) ->
-// I lalu II (Juni) -> II lalu III (Juli).
-//
-// Karena itu `uraiJenisCuti()` mengembalikan jenis DAN bulannya sekaligus.
-// Pembacaan angkanya tetap konservatif: kalau nomornya tidak ada di teks,
-// hasilnya null (= tidak diketahui), BUKAN 1.
+// Karena itu `uraiJenisCuti()` mengembalikan jenis DAN bulannya. Pembacaan
+// angkanya konservatif: kalau nomornya tidak ada di teks, hasilnya null
+// (= tidak diketahui), BUKAN 1.
 // ============================================================================
 
 import type { JenisCuti } from "../types/index";

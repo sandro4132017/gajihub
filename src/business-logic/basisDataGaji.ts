@@ -1,38 +1,28 @@
 // ============================================================================
 // BASIS DATA GAJI KEMNAKER - identitas pembayaran versi Web Gaji Kemenkeu.
 //
-// Modul ini PURE (tidak ada I/O).
+// PURE (tidak ada I/O).
 //
-// KENAPA ADA SUMBER NAMA KEDUA
-// ----------------------------
-// `Pegawai.nama` adalah cermin SIAP dan ditimpa ulang tiap `sync:pegawai`.
-// Nama di Web Gaji Kemenkeu DITULIS BERBEDA - umumnya karena gelar. Diukur ke
-// file asli "basis data gaji_Kemnaker.xlsx": dari 4.701 NIP yang cocok ke
-// tabel Pegawai, **3.628 (77%) nama-nya berbeda**:
+// KENAPA ADA SUMBER NAMA KEDUA: `Pegawai.nama` cermin SIAP dan ditimpa ulang
+// tiap `sync:pegawai`, sementara Web Gaji menuliskan nama BERBEDA (umumnya
+// karena gelar) - terukur 3.628 dari 4.701 NIP (77%) berbeda, mis. SIAP
+// "ADE ALEXANDER" lawan Web Gaji "Ade Alexander, SH". Untuk berkas pembayaran
+// yang berlaku penulisan yang dikenali Web Gaji. Memperbaiki `Pegawai.nama`
+// BUKAN pilihan: kolom itu ditimpa tiap sinkronisasi, dan SIAP sah untuk
+// kepegawaian - bukan untuk pembayaran.
 //
-//   SIAP "ABDUL RAHMAN WAHID"  <->  Web Gaji "Abdul Rahman Wahid, A.Md.A.B"
-//   SIAP "ADE ALEXANDER"       <->  Web Gaji "Ade Alexander, SH"
-//
-// Untuk berkas pembayaran (ADK), yang berlaku adalah penulisan yang dikenali
-// Web Gaji - jadi namanya diambil dari sini, bukan dari SIAP. Memperbaiki
-// `Pegawai.nama` BUKAN pilihan: kolom itu ditimpa tiap sinkronisasi, dan SIAP
-// adalah sumber sah untuk kepegawaian - bukan untuk pembayaran.
-//
-// BENTUK FILE (dua sheet, struktur sama):
-//   data_PNS / data_P3K
-//   baris 1  : judul grup bergabung ("GAJI" di atas blok gaji, "TUKIN" di atas blok tukin)
-//   baris 2  : header sesungguhnya
-//   baris 3+ : data
+// BENTUK FILE (dua sheet berstruktur sama, data_PNS / data_P3K):
+//   baris 1 : judul grup bergabung ("GAJI" / "TUKIN")
+//   baris 2 : header sesungguhnya | baris 3+: data
 //   Kolom: No | KODE SATKER | NAMA SATUAN KERJA | NIK | NIP | NAMA PEGAWAI |
-//          JENIS PEGAWAI | <blok GAJI: kode bank SPAN, rekening, nama_rekening,
-//          nama_bank> | <blok TUKIN: idem>
+//          JENIS PEGAWAI | <blok GAJI: kode bank SPAN, rekening, nama
+//          rekening, nama bank> | <blok TUKIN: idem>
 //
-// NIK SENGAJA TIDAK DIAMBIL. Konvensi proyek ini tidak mengimpor data pribadi
-// yang tidak dibutuhkan skema (lihat importPegawaiSiap.ts), dan NIK tidak
-// dipakai di perhitungan maupun berkas pembayaran manapun.
+// NIK SENGAJA TIDAK DIAMBIL - konvensi proyek tidak mengimpor data pribadi
+// yang tidak dibutuhkan skema.
 //
-// CATATAN PII: file ini memuat nomor rekening bank ribuan pegawai - lihat
-// catatan keamanan di model RekeningPegawai (schema.prisma).
+// CATATAN PII: file ini memuat nomor rekening ribuan pegawai - lihat catatan
+// keamanan di model RekeningPegawai (schema.prisma).
 // ============================================================================
 
 export interface RekeningBasisGaji {
