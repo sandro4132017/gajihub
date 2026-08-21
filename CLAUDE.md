@@ -3282,6 +3282,47 @@ Sengaja TIDAK menghitung ulang otomatis - recalculation mereset siklus
 approval ke DRAFT (lihat catatan kalkulasi massal Kasubag TU di atas), jadi
 keputusannya diserahkan ke user. File-nya sendiri TIDAK disimpan.
 
+**Sumber penilaian menetap di halaman, bukan cuma di hasil upload**
+(2026-08-20). Satu satuan kerja lazim dinilai BEBERAPA penilai dengan file
+terpisah, dan yang mengupload bisa orang berbeda - data nyata Biro Keuangan
+7/2026: `"Kasubbag TU"` 25 orang, `"Kepala Biro"` 21, plus 1 baris input
+manual. Semuanya tersimpan berdampingan karena kunci baris adalah
+**NIP + bulan + tahun**, bukan file dan bukan unit - jadi file kedua MENAMBAH,
+tidak menimpa file pertama, dan urutan siapa mengupload duluan tidak
+berpengaruh.
+
+Yang dulu kurang cuma pelaporannya: daftar penilai yang sudah masuk HANYA
+muncul di hasil upload (`KelengkapanPredikat`), jadi orang kedua yang membuka
+halaman itu besoknya melihat "belum punya predikat 20" tanpa bisa tahu
+sebabnya - file penilai lain belum diupload, atau orangnya yang memang belum
+dinilai? Dua sebab, dua tindak lanjut. Sekarang barisnya ada tetap di kartu
+periode, di bawah Sebaran.
+
+- **Diturunkan dari `PredikatKinerja.unitPenilaian`** yang sudah lama
+  tersimpan per baris - tidak ada kolom/migrasi baru.
+- **SENGAJA tidak memakai `where` halaman** (yang ikut tersaring pencarian
+  nama/NIP): pertanyaannya soal SELURUH unit, alasan yang sama dengan
+  `jumlahSeUnitPeriode`. Diverifikasi: mencari "Irwan" tidak mengubah
+  angkanya (25/21/1 tetap).
+- **Butuh satuan kerja terpilih** - tanpa itu daftarnya jadi seluruh penilai
+  se-kementerian. Barisnya tidak dirender sama sekali, dan pesan "Pilih
+  satuan kerja di filter" yang sudah ada yang menjelaskan.
+- **Baris ber-`unitPenilaian` NULL dipisah sebagai "Tanpa sumber tercatat",
+  bukan dibuang** - itu predikat hasil ketik manual (`TambahPredikatForm`).
+  Kalau disembunyikan, angka di daftar ini tidak menjumlah ke total unit, dan
+  selisihnya jadi misteri. Diverifikasi 25 + 21 + 1 = 47 = jumlah baris unit
+  itu.
+- **Jumlah penilai BUKAN penentu lengkap/tidaknya** - berapa penilai yang
+  seharusnya mengirim file berbeda tiap unit dan tidak dipunyai sistem. Yang
+  menentukan tetap kolom "Belum punya predikat" di atasnya.
+
+**Celah yang MASIH terbuka**: kalau NIP yang SAMA muncul di dua file dengan
+predikat BERBEDA, yang terakhir diupload menang tanpa peringatan apa pun
+(upsert). Ini satu-satunya jalur saling-timpa yang tersisa - sama mekanismenya
+dengan duplikat dalam satu file yang sudah tercatat di bawah. TODO(confirm):
+perlu diputuskan apakah predikat yang bentrok ditolak, atau ditulis dengan
+peringatan eksplisit.
+
 **Riwayat predikat di `/pegawai`**: halaman detail Data Pegawai sekarang
 punya panel "Riwayat predikat kinerja" (periode, predikat, nilai persen,
 sumber, cara input) - READ-ONLY, dengan link ke `/predikat-kinerja` buat
@@ -3923,6 +3964,28 @@ pegawai per unit ~80.
   (role + satuan kerja), Buat Akun Baru, form eksekusi usulan role, dan
   form edit Data Pegawai.
 
+**JANGAN `npm run build` selama `npm run dev` masih jalan** (kejadian
+2026-08-20). Keduanya menulis ke folder `.next` YANG SAMA, dan hasilnya bukan
+error melainkan **404 pada sebagian route** - `.next` jadi berisi campuran
+`build/` + `dev/`, dan `.next/dev/routes-manifest.json` kehilangan cabangnya.
+Gejalanya menyesatkan karena terlihat seperti route yang rusak:
+
+```
+/tukin                    200
+/tukin/predikat-kinerja   404   <- folder & file-nya ADA di disk
+/tukin/presensi           404   <- file ini bahkan tidak disentuh sama sekali
+```
+
+Cara membedakannya dari bug sungguhan, dua-duanya cepat: (1) route yang sama
+disajikan **200 oleh production build**, (2) log `.next/dev/logs/
+next-development.log` **tidak memuat baris "Compiling ..."** untuk route itu -
+dev server tidak mencoba meng-compile karena memang tidak tahu route-nya ada.
+Kalau route benar-benar rusak, dia akan mencoba lalu gagal.
+
+Perbaikannya: hentikan dev server, `rm -rf .next`, jalankan `npm run dev`
+lagi. Kalau memang perlu memverifikasi production build sementara dev jalan,
+hentikan dev-nya dulu - JANGAN dijalankan berbarengan.
+
 **Catatan lingkungan dev (BUKAN bug aplikasi)**: waktu verifikasi, dev
 server Next 16 + Turbopack beberapa kali HANG total setelah POST Server
 Action ke `/pegawai` (request menggantung, GET berikutnya ikut timeout,
@@ -3997,6 +4060,37 @@ terjawab" supaya tidak ditanyakan dua kali.
 **Perbarui dokumen itu tiap ada TODO(confirm) baru atau yang terjawab** -
 kalau tidak, daftarnya jadi basi dan orang kembali menelusuri komentar kode
 satu per satu.
+
+## Rencana akses & pengamanan: dua dokumen (2026-08-21)
+
+- **`docs/rencana-akses-dan-pengamanan-gajihub.md`** - untuk tim teknis.
+  Fase, prasyarat, arsitektur tujuan, dan opsi demo di luar kantor.
+- **`docs/laporan-kesiapan-akses-untuk-pimpinan.md`** - untuk atasan. Enam
+  permintaan ke pihak luar beserta ke siapa dan apa yang ditahannya.
+
+**Pemisahan paling penting di kedua dokumen - ARAH KELUAR vs ARAH MASUK.**
+Menarik API dari sistem luar (e-Kinerja BKN, Web Gaji, SAKTI) adalah arah
+KELUAR dan **tidak butuh aplikasi ini bisa dijangkau dari internet** - server
+di balik NAT tetap bisa memanggil API luar. Yang butuh keterbukaan cuma arah
+MASUK (pegawai membuka halamannya). Keduanya sering tertukar, dan tertukarnya
+menghasilkan keputusan "berarti harus dibuka ke publik dulu" yang keliru.
+
+**Garis yang tidak boleh dilompati: SSO.** Selama password = NIP, membuka
+alamatnya ke luar sama dengan menerbitkan gaji + 9.944 nomor rekening tanpa
+kunci - NIP tercetak di SK & daftar hadir, jadi itu bukan password lemah,
+itu tidak ada password. Demo di luar kantor TIDAK perlu menunggu SSO: jalankan
+dari laptop penyaji (nol paparan, sekaligus kebal wifi tempat acara).
+
+**Angka yang menopang argumennya** (diukur 2026-08-21, bukan perkiraan):
+**2.562 dari 5.077 pegawai aktif (50,5%) ada di 29 UPT/Balai/BPVP** seluruh
+Indonesia - itu sebabnya "lokal" cuma fase, bukan tujuan akhir.
+
+**Temuan sampingan yang layak ditindak lebih cepat dari sisanya**:
+`getSecretKey()` di `src/auth/session.ts` diam-diam memakai fallback
+`"dev-only-insecure-secret-..."` kalau `SESSION_SECRET` tidak diisi - tanpa
+error, tanpa peringatan. Kalau itu yang terpakai di server yang bisa
+dijangkau publik, cookie sesi bisa dipalsukan siapa saja karena kuncinya ada
+di repo yang PUBLIK. Perlu dicek tiap deploy.
 
 ## Perbedaan e-Presensi vs Gajihub: `docs/perbedaan-hitungan-epresensi-vs-gajihub.md`
 
@@ -4179,6 +4273,163 @@ seluruh tabel data, sementara slip gaji tetap memegang 34 `align-top` + 4
 tengahnya - sudah otomatis. Yang perlu diingat cuma dua: tandai kolom namanya
 `col-nama` (th DAN td), dan JANGAN memakai `text-left`/`text-right`/`align-*`
 di sel tabel data kecuali memang sengaja mengecualikannya.
+
+### SSO Kemnaker (Naco) - OAuth 2.0 Authorization Code (2026-08-21)
+
+Dokumentasi resmi: `https://codes.kemnaker.go.id/naker-api/naco-api`
+(`README.md` + `AUTH_CODE_GRANT.md`). Endpoint:
+
+| | |
+|---|---|
+| Otorisasi | `GET https://account.kemnaker.go.id/auth?response_type=code&client_id=..&redirect_uri=..&scope=basic email` |
+| Token | `POST https://account.kemnaker.go.id/api/v1/tokens` (JSON, memuat client_secret) |
+| Identitas | `GET https://account.kemnaker.go.id/api/v1/users/me` (`Authorization: Bearer`) |
+
+**Yang berubah cuma CARA MEMBUKTIKAN IDENTITAS.** Setelah identitas terbukti,
+login SSO dan login NIP bermuara ke fungsi yang sama (`buatTokenUntukUser` di
+`src/auth/sesiCookie.ts`), dan seluruh lapisan di atasnya - peran, otorisasi
+(`permissions.ts`), scope satuan kerja, multi-role - **tidak berubah sama
+sekali**. Ini yang membuat perpindahannya kecil.
+
+- **`src/auth/sesiCookie.ts` (BARU)** - `OPSI_COOKIE_SESI` +
+  `buatTokenUntukUser()`, diekstrak dari `login/actions.ts` begitu Route
+  Handler SSO ikut menerbitkan sesi. Dua salinan opsi cookie pasti berbeda
+  cepat atau lambat, dan gejalanya "login berhasil tapi langsung logout lagi"
+  yang sangat sulit ditelusuri.
+- **`src/auth/sso.ts` (BARU, 16 unit test)** - klien Naco. Murni; tidak
+  menyentuh database.
+- **`/login/sso`** (Route Handler) memberangkatkan ke Naco;
+  **`/login/sso/callback`** menukar kode, mengambil identitas, memetakan NIP,
+  menerbitkan sesi. Keduanya GET biasa, jadi tombolnya tautan polos yang tetap
+  jalan tanpa JavaScript.
+- `src/middleware.ts` mengizinkan `/login/sso*` tanpa sesi - memang di situ
+  sesinya dibuat.
+
+**`state` DITAMBAHKAN walau tidak disebut dokumentasi Naco.** Tanpa itu,
+alamat callback bisa dipanggil siapa saja dengan kode milik orang lain (CSRF
+login) dan korbannya berakhir masuk sebagai akun penyerang. Nilainya disimpan
+di cookie httpOnly `gajihub_sso_state` lalu dicocokkan ulang. Ada test yang
+menguncinya supaya tidak dihapus "karena tidak ada di dokumentasi".
+
+**MASALAH UTAMA YANG BELUM TERTUTUP - balasan `/users/me` TIDAK
+TERDOKUMENTASI.** Dokumentasi Naco memberi contoh balasan untuk langkah token
+TAPI TIDAK untuk langkah identitas, padahal di situlah satu-satunya hal yang
+dibutuhkan Gajihub: **NIP**. Seluruh data di sistem ini berkunci NIP,
+sementara scope yang disebut cuma `basic email` - dan email BUKAN NIP.
+
+Penanganannya: `cariNipDariInfo()` **MENCARI, bukan menebak** - menelusuri
+seluruh balasan untuk nilai berbentuk NIP (**18 digit**, jadi NIK 16 digit &
+nomor telepon tidak tertukar). Kalau tidak ketemu, login **DIHENTIKAN** dan
+halaman login menampilkan **nama-nama field yang benar-benar dikirim Naco** -
+jadi satu kali percobaan login sudah cukup memastikan bentuknya. Nilainya
+sengaja TIDAK ikut ditampilkan (balasan identitas bisa memuat email/NIK/
+telepon); yang perlu cuma nama field-nya. Begitu diketahui, isi
+`NACO_FIELD_NIP` di `.env` (mis. `data.nip`) supaya pembacaannya eksplisit.
+
+**Dua hal yang SENGAJA TIDAK dilakukan callback**: (1) **tidak membuat akun
+baru** - NIP tanpa baris `User` ditolak, karena membuat akun otomatis berarti
+siapa pun yang punya Akun Kemnaker langsung masuk ke sistem penggajian;
+(2) **tidak menyimpan access/refresh token** - Gajihub tidak memanggil API
+Naco lain setelahnya, jadi menyimpannya cuma menambah rahasia yang harus
+dijaga tanpa ada yang memakainya.
+
+**Login NIP TETAP ADA berdampingan** selama masa transisi (belum tentu semua
+5.077 pegawai punya Akun Kemnaker aktif). TODO(confirm): begitu SSO terbukti
+mencakup semua pengguna, **jalur NIP WAJIB DIMATIKAN** - selama masih ada,
+seluruh alasan mengganti password = NIP belum tercapai.
+
+**JEBAKAN saat menguji - `redirect_uri` menentukan DI MESIN MANA callback
+mendarat.** Naco mengalihkan BROWSER ke alamat yang didaftarkan. Kalau
+`NACO_REDIRECT_URI` menunjuk `gajihub.rokeubmn.id` (VPS) tapi pengujian
+dimulai dari `localhost:3000`, callback-nya mendarat di VPS - sementara cookie
+`state` tersimpan di localhost, jadi hasilnya selalu "state tidak cocok".
+**Uji end-to-end di host yang sama dengan `redirect_uri`**, atau minta
+pengelola Naco mendaftarkan redirect_uri kedua untuk localhost.
+
+**Konfigurasi `.env`** (`NACO_BASE_URL`, `NACO_CLIENT_ID`,
+`NACO_CLIENT_SECRET`, `NACO_REDIRECT_URI`, `NACO_SCOPE`, `NACO_FIELD_NIP`).
+SSO **otomatis nonaktif** - tombolnya tidak dirender - selama client id/
+secret/redirect uri belum lengkap, jadi aman ditinggal kosong di lingkungan
+yang belum siap.
+
+**Diverifikasi**: production build memuat `/login/sso` & `/login/sso/callback`;
+`/login/sso` mengalihkan ke `account.kemnaker.go.id/auth` dengan seluruh
+parameter + `state`; callback dengan state palsu ditolak dengan pesan yang
+menyebut sebabnya. Jangkauan jaringan diuji **lewat Node (bukan curl)**:
+`/auth` dan `/api/v1/users/me` membalas **401 Unauthenticated** - wajar tanpa
+token, dan membuktikan jalur server-ke-server tembus. Catatan: `curl` di
+Windows gagal ke host ini dengan `SEC_E_UNSUPPORTED_FUNCTION` (schannel),
+**bukan** tanda jaringannya terblokir - Node memakai OpenSSL dan lolos.
+
+### Halaman login: dua panel (2026-08-20)
+
+Bentuknya mengikuti mockup user: panel kiri navy polos, panel kanan berisi
+logo besar, judul, deskripsi satu baris, lalu formulir.
+
+**Ini satu-satunya halaman yang bisa dibuka tanpa sesi** (middleware
+mengalihkan yang lain), jadi sekaligus wajah pertama sistem ini. Itu yang
+menentukan isi teksnya - dan kenapa sapaan gaya aplikasi konsumen
+("Hello Again!" di mockup asal) TIDAK dipakai: ruang paling menonjol di
+halaman itu sebaiknya menjawab *"ini sistem apa, punya siapa"*. Alamatnya
+sekarang masih `gajihub.rokeubmn.id` (domain pribadi, bukan subdomain resmi
+Kemnaker), jadi orang yang menerima tautannya punya alasan wajar untuk ragu -
+baris `Kementerian Ketenagakerjaan Republik Indonesia` di kaki halaman yang
+menjawabnya.
+
+**Deskripsinya menyebut yang BENAR-BENAR dihitung**: *"Perhitungan Tunjangan
+Kinerja, Uang Makan, dan Uang Lembur - dari Presensi sampai ADK"*. Kata
+"gaji" atau "pembayaran" sengaja dihindari - gaji pokok & tunjangan keluarga
+datang dari Web Gaji lewat upload, pembayarannya di SAKTI, jadi menyebutnya
+overclaim dan akan ditagih di forum yang salah.
+
+**`src/app/GajihubLogo.tsx` (BARU)** - mark-nya diekstrak dari `AppShell.tsx`
+begitu pemakainya jadi dua. Lambang merek yang disalin ke dua berkas pasti
+berbeda cepat atau lambat, dan bedanya baru kelihatan waktu keduanya terbuka
+berdampingan. Dua rupa, dan bedanya BUKAN selera - keduanya soal latar:
+`sidebar` tile BIRU (tile navy di atas sidebar navy tidak terlihat),
+`login` tile NAVY (biru di atas latar terang terbaca lebih lemah). Lingkaran
+kecil di dalamnya ikut bertukar warna karena alasan yang sama.
+
+**Cabang "belum login" di `AppShell.tsx` sekarang `return <>{children}</>`** -
+bar wordmark tipis yang dulu ada di situ DIHAPUS. Bar itu memotong panel navy
+di bagian atas, dan wordmark-nya juga mengulang logo yang sekarang berdiri
+besar di tengah halaman.
+
+**Placeholder BERPERAN SEBAGAI LABEL** (tidak ada label kasat mata), dan itu
+punya dua akibat yang ditangani, bukan diabaikan:
+- Warnanya **tidak boleh `text-muted`** (#5F7085): di atas latar kabut
+  (#DBE2EF) rasionya cuma **3,90:1**, di bawah AA. Dipakai `text-ink-2`
+  (#3A5A7D) = **5,49:1**. Ini persis alasan yang sama dengan penolakan abu
+  terang di acuan desain sidebar.
+- Label tetap ADA di DOM (`sr-only`) - placeholder tidak dibacakan sebagai
+  nama field, dan begitu orang mengetik, placeholder-nya hilang.
+
+`inputMode="numeric"` **bukan `type="number"`**: yang kedua membuang nol di
+depan, dan sebagian NIP diawali nol.
+
+**Panel kiri disembunyikan di bawah `lg`** dan masih kosong - rencananya
+slideshow. Kalau nanti diisi: (1) jangan taruh keterangan yang HANYA ada di
+situ, karena di HP panel itu tidak dirender sama sekali; (2) kalau animasinya
+butuh JavaScript, formulir di kanan harus tetap bisa dipakai tanpa itu.
+
+**Nama merek ditulis `Gajihub`**, bukan `GajiHub` seperti di mockup - seluruh
+aplikasi (metadata `layout.tsx`, wordmark sidebar, CLAUDE.md) memakai bentuk
+itu, dan merek yang tidak seragam di halaman depan lebih buruk daripada
+menyimpang dari satu detail mockup.
+
+Diverifikasi lewat production build: seluruh kelas yang dipakai benar-benar
+ada di CSS hasil build (`.size-\[84px\]`, `.rounded-\[22px\]`,
+`.lg\:grid-cols-2`, `.placeholder\:text-ink-2::placeholder`,
+`.fill-biru`/`.fill-navy`/`.stroke-white`), urutan teksnya benar, nol
+`data-sidebar` di halaman itu, dan kontras seluruh pasangan warnanya lulus AA
+(judul navy 9,86:1, deskripsi biru 4,64:1, teks di field 8,08:1, putih di
+tombol navy 10,52:1).
+
+**CATATAN cara memeriksa CSS**: JANGAN mengadu kelas ke CSS dev server -
+chunk-nya sebagian, dan kelas yang sudah lama dipakai pun bisa terlihat
+"hilang" di situ (`size-[30px]` milik sidebar ikut tidak ketemu). Yang sahih
+CSS hasil `next build`. Dan waktu meng-grep, ingat selektornya di-escape:
+yang tertulis di berkas `.size-\[84px\]`, bukan `.size-[84px]`.
 
 ### Palet & sidebar baru (2026-08-13)
 

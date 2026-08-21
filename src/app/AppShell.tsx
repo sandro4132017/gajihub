@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AccountMenu } from "./AccountMenu";
 import { PanelKabar } from "./PanelKabar";
+import { GajihubLogo } from "./GajihubLogo";
 import { labelRole } from "../auth/roleLabel";
 import type { Role } from "@prisma/client";
 
@@ -308,22 +309,6 @@ const MENU_PEGAWAI = [
   },
 ];
 
-function GajihubLogo() {
-  // Mark PUTIH di atas tile beraksen. Tile-nya SEKARANG biru #3F72AF, bukan
-  // navy: sidebar sudah navy, jadi tile navy di atas navy tidak terlihat sama
-  // sekali. Aksen kedua palet dipakai persis untuk keperluan seperti ini -
-  // memisahkan blok merek dari latarnya tanpa keluar dari palet.
-  return (
-    <div className="grid size-11 flex-none place-items-center rounded-xl bg-biru shadow-[0_6px_16px_rgba(0,0,0,0.28)]">
-      <svg viewBox="0 0 64 64" fill="none" className="size-[30px]">
-        <path d="M45 16 A 21 21 0 1 0 45 48" stroke="#ffffff" strokeWidth="10.5" strokeLinecap="round" />
-        <path d="M31 31 L45 31" stroke="#ffffff" strokeWidth="10.5" strokeLinecap="round" />
-        <circle cx="45.5" cy="45.5" r="8" fill="#13416B" />
-      </svg>
-    </div>
-  );
-}
-
 /**
  * Satu baris sidebar. `anak` = grup yang bisa dilipat; kalau ada, `href`
  * TIDAK dipakai (grupnya sendiri bukan halaman).
@@ -365,20 +350,17 @@ export function AppShell({
   const [open, setOpen] = useState(false);
 
   if (!account) {
-    // Belum login (halaman /login) - jangan render shell sidebar sama
-    // sekali, cukup wordmark tipis di atas. Kalau grid 2 kolom tetap
-    // dipasang tanpa sidebar-nya, kolom 264px bakal nyisain ruang kosong
-    // dan bikin form login ketarik ke kanan di layar desktop.
-    return (
-      <div className="min-h-screen">
-        <div className="flex items-center border-b border-line bg-surface px-4 py-2.5 sm:px-6">
-          <span className="text-sm font-extrabold text-ink">
-            Gaji<span className="font-semibold text-muted">hub</span>
-          </span>
-        </div>
-        {children}
-      </div>
-    );
+    // Belum login. Satu-satunya halaman yang bisa sampai ke sini adalah
+    // /login - middleware mengalihkan yang lain (lihat src/middleware.ts),
+    // jadi cabang ini memang khusus halaman itu.
+    //
+    // TIDAK ADA pembungkus apa pun di sini, dan itu disengaja: halaman login
+    // memakai tata letak dua panel setinggi layar penuh. Bar wordmark tipis
+    // yang dulu ada di sini akan memotong panel navy-nya di bagian atas, dan
+    // wordmark itu juga jadi mengulang logo yang sudah berdiri besar di tengah
+    // halaman. Shell sidebar tetap tidak dirender - grid 2 kolom tanpa
+    // sidebar cuma menyisakan kolom 264px kosong.
+    return <>{children}</>;
   }
 
   const menu =

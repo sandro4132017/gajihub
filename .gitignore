@@ -20,3 +20,16 @@ docs/
 # Export "Laporan Detail Presensi Harian" e-Presensi - nama pegawai + jam
 # masuk/pulang per tanggal.
 rekap-presensi-*
+
+# Dump/backup database Gajihub. Isinya SELURUH data pegawai se-kementerian -
+# nama, NIP, nominal gaji, DAN nomor rekening bank - jadi ini berkas paling
+# berbahaya yang bisa ada di folder ini, dan repo ini publik.
+# Dipakai waktu memindahkan database ke laptop lain (lihat CLAUDE.md).
+*.dump
+*.backup
+*.tar
+*.sql
+# KECUALI migrasi Prisma - itu memang kode, wajib ikut ter-commit. Tanpa baris
+# ini `*.sql` di atas membuat migrasi BARU tidak pernah ikut `git add`, dan
+# deploy berikutnya gagal karena tabelnya tidak pernah dibuat di server.
+!prisma/migrations/**/*.sql
