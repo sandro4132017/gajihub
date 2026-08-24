@@ -168,3 +168,22 @@ describe("asalPublik", () => {
     expect(asalPublik(new Headers(), "http://localhost:3000/x")).toBe("http://localhost:3000");
   });
 });
+
+describe("ringkasFieldInfo - bentuk field", () => {
+  it("melaporkan panjang dan jumlah digit, tanpa nilainya", () => {
+    // Inti gunanya: membedakan "NIP tidak dikirim" dari "NIP dikirim tapi
+    // berformat lain". 21 karakter dengan 18 digit = NIP berspasi.
+    const r = ringkasFieldInfo({ data: { username: "19900101 201503 1 001", email: "a@b.go.id" } });
+    const u = r.find((x) => x.jalur === "data.username")!;
+    expect(u.panjang).toBe(21);
+    expect(u.jumlahDigit).toBe(18);
+    expect(u.berbentukNip).toBe(false);
+    expect(JSON.stringify(r)).not.toContain("19900101");
+  });
+
+  it("angka ikut terhitung, bukan cuma teks", () => {
+    const r = ringkasFieldInfo({ id: 12345 });
+    expect(r[0].panjang).toBe(5);
+    expect(r[0].jumlahDigit).toBe(5);
+  });
+});

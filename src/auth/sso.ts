@@ -253,13 +253,30 @@ function ambilJalur(sumber: unknown, jalur: string): unknown {
  * identitas bisa memuat data pribadi (email, nomor telepon, NIK). Yang
  * dibutuhkan untuk memperbaiki konfigurasi cuma NAMA field-nya.
  */
-export function ringkasFieldInfo(info: unknown): { jalur: string; tipe: string; berbentukNip: boolean }[] {
-  const hasil: { jalur: string; tipe: string; berbentukNip: boolean }[] = [];
+/**
+ * Ringkasan BENTUK tiap field - nama, tipe, panjang, dan berapa digit yang
+ * dikandungnya. NILAINYA TIDAK PERNAH IKUT, di jalur mana pun.
+ *
+ * `panjang` dan `jumlahDigit` ditambahkan setelah percobaan login dengan akun
+ * PEGAWAI ternyata menghasilkan daftar field yang sama persis dengan akun
+ * publik - tidak ada satu pun nilai 18 digit. Dua angka itu yang membedakan
+ * "NIP-nya memang tidak dikirim" dari "NIP-nya dikirim tapi berformat lain",
+ * mis. `19900101 201503 1 001` (21 karakter, 18 digit) yang ditolak
+ * berbentukNip() karena ada spasinya. Tanpa keduanya, kedua kemungkinan itu
+ * terlihat sama dan tidak bisa dibedakan tanpa membocorkan isinya.
+ */
+export function ringkasFieldInfo(
+  info: unknown
+): { jalur: string; tipe: string; berbentukNip: boolean; panjang: number; jumlahDigit: number }[] {
+  const hasil: { jalur: string; tipe: string; berbentukNip: boolean; panjang: number; jumlahDigit: number }[] = [];
   telusuri(info, (jalur, nilai) => {
+    const teks = typeof nilai === "string" || typeof nilai === "number" ? String(nilai) : "";
     hasil.push({
       jalur,
       tipe: Array.isArray(nilai) ? "array" : nilai === null ? "null" : typeof nilai,
       berbentukNip: berbentukNip(nilai),
+      panjang: teks.length,
+      jumlahDigit: (teks.match(/\d/g) ?? []).length,
     });
   });
   return hasil;

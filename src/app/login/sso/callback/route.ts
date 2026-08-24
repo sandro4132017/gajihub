@@ -84,11 +84,16 @@ export async function GET(req: NextRequest) {
     // tetap terbaca saat menyetel NACO_FIELD_NIP (`pm2 logs gajihub`), dan
     // hanya ikut ke layar kalau NACO_DEBUG="true" dinyalakan sengaja.
     if (!nip) {
-      const daftar = ringkasFieldInfo(info)
-        .map((f) => f.jalur)
-        .slice(0, 40)
-        .join(", ");
-      console.warn(`[sso] balasan /users/me tanpa nilai berbentuk NIP. Field: ${daftar || "(kosong)"}`);
+      const ringkas = ringkasFieldInfo(info).slice(0, 40);
+      const daftar = ringkas.map((f) => f.jalur).join(", ");
+      // Bentuk tiap field, TANPA nilainya. Kalau ada baris ber-jumlahDigit 18,
+      // NIP-nya sebenarnya dikirim - cuma berformat lain (mis. berspasi) -
+      // dan berbentukNip() yang perlu dilonggarkan, bukan scope-nya yang
+      // perlu diminta ke Naco.
+      console.warn(
+        "[sso] balasan /users/me tanpa nilai berbentuk NIP (18 digit polos). Bentuk field:" +
+          ringkas.map((f) => `\n      ${f.jalur}: ${f.tipe}, panjang ${f.panjang}, digit ${f.jumlahDigit}`).join("")
+      );
       const rinci =
         process.env.NACO_DEBUG?.trim() === "true"
           ? `Field yang dikirim: ${daftar || "(kosong)"}`
