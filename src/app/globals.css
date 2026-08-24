@@ -216,3 +216,319 @@ html {
     @apply mt-1 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none transition focus:border-teal focus:bg-white focus:shadow-[0_0_0_3px_rgba(63,114,175,0.14)];
   }
 }
+
+/* --------------------------------------------------------------------------
+   SLIDE FITUR DI PANEL KIRI HALAMAN LOGIN
+   --------------------------------------------------------------------------
+   Pergantian slide dijalankan MURNI CSS (@keyframes), bukan state React.
+   Halaman login adalah satu-satunya halaman yang bisa dibuka tanpa sesi, dan
+   seluruh aplikasi ini memegang janji "tetap jalan tanpa JavaScript" (filter
+   GET, form approval, <details> di sidebar) - panel promosi bukan tempat yang
+   pantas untuk melanggarnya.
+
+   Konsekuensinya yang harus disadari: titiknya PENANDA, bukan tombol. Tanpa
+   JS tidak ada cara memindah slide dengan klik. Ditukar dengan nol byte
+   JavaScript di halaman terdepan - lihat catatan di SlideFitur.tsx.
+
+   Satu siklus = JUMLAH_SLIDE x DURASI. Kalau slidenya ditambah/dikurangi,
+   --gj-siklus di komponennya WAJIB ikut diubah, kalau tidak urutannya
+   melenceng dan dua slide bisa tampil bersamaan.
+   -------------------------------------------------------------------------- */
+/* Naik-turun perlahan. Jaraknya lewat variabel supaya tiap bentuk bisa
+   berbeda tanpa menggandakan keyframes.
+
+   MEMAKAI PROPERTI `translate`, BUKAN `transform` - dan itu menentukan.
+   Kartu komposisi punya `rotate` sendiri-sendiri; kalau keyframe ini menulis
+   `transform`, seluruh nilai transform elemen itu tertimpa dan rotasinya
+   hilang selama animasi berjalan. `translate` dan `rotate` adalah properti
+   terpisah yang disusun browser sendiri, jadi keduanya bisa hidup bersama
+   tanpa satu pun perlu mengulang nilai yang lain.
+
+   Sama-sama dijalankan di compositor seperti transform - tidak memicu layout
+   ulang tiap frame. */
+@keyframes gj-apung {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 calc(var(--gj-jarak, 12px) * -1);
+  }
+}
+
+/* Hanyut - untuk bentuk besar berkabut di latar. Tiga titik henti, bukan dua,
+   supaya jalurnya tidak terbaca sebagai bolak-balik lurus. */
+@keyframes gj-hanyut {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(4%, -6%, 0) scale(1.07);
+  }
+  66% {
+    transform: translate3d(-3%, 4%, 0) scale(0.96);
+  }
+}
+
+@keyframes gj-slide {
+  /* Persentase disetel untuk 3 slide: tiap slide memegang 1/3 siklus.
+
+     URUTAN KEYFRAME SENGAJA TERBALIK dari yang biasa - slide MASUK di ekor
+     (93,333%-100%), bukan di kepala. Itu yang membuat swipe-nya bersambung:
+     slide berikutnya sudah bergerak masuk dari kanan pada saat yang PERSIS
+     sama slide sekarang keluar ke kiri. Kalau masuknya ditaruh di 0%, ada
+     jeda kosong di antara keduanya dan gerakannya terbaca sebagai kedipan,
+     bukan geseran.
+
+     Konsekuensinya: gilirannya diatur dengan animation-delay NEGATIF - lihat
+     jeda() di SlideFitur.tsx. Delay positif membuat slide yang belum dapat
+     giliran menampilkan nilai 0% (= di tengah, terlihat), sehingga ketiganya
+     menumpuk di detik pertama. */
+  0%,
+  26.667% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  33.333% {
+    opacity: 0;
+    transform: translateX(-3rem) scale(0.94);
+  }
+  /* Diparkir di luar layar sebelah KANAN selama menunggu giliran. Loncatan
+     kiri-ke-kanan terjadi di 33,334%, saat opacity sudah 0. */
+  33.334%,
+  93.333% {
+    opacity: 0;
+    transform: translateX(3rem) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes gj-slide-diam {
+  /* Kembaran gj-slide TANPA translateX - dipakai waktu pengguna meminta
+     gerakan dikurangi. Irama & persentasenya WAJIB sama persis dengan
+     gj-slide, kalau tidak urutan slidenya berbeda antara dua keadaan. */
+  0%,
+  26.667% {
+    opacity: 1;
+  }
+  33.333%,
+  93.333% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes gj-titik {
+  /* Ikut irama yang sama: melebar di ekor siklus, bersamaan dengan slide yang
+     sedang bergerak masuk - bukan sesudahnya. */
+  0%,
+  26.667% {
+    width: 22px;
+    opacity: 1;
+  }
+  33.333%,
+  93.333% {
+    width: 6px;
+    opacity: 0.34;
+  }
+  100% {
+    width: 22px;
+    opacity: 1;
+  }
+}
+
+@layer components {
+  /* Panggung komposisi kartu. Rasionya dikunci supaya posisi kartu bisa
+     ditulis dalam persen - kartu yang diposisikan dengan px akan berantakan
+     begitu lebar panelnya berubah. */
+  .gj-panggung {
+    position: relative;
+    width: 100%;
+    /* Ikut tinggi layar, bukan cuma lebar panel. Tanpa 46vh, komposisi kartu
+       tetap 420px di laptop berlayar pendek dan mendorong teks keluar dari
+       viewport - persis penyebab scrollbar yang dihilangkan di sini. */
+    max-width: min(420px, 46vh);
+    aspect-ratio: 4 / 3.4;
+  }
+
+  .gj-slide {
+    position: absolute;
+    inset: 0;
+    /* Nilai dasar = keadaan TERSEMBUNYI. Slide ke-2 dan ke-3 belum
+       teranimasi selama giliran slide ke-1, jadi tanpa ini ketiganya
+       menumpuk di detik pertama. */
+    opacity: 0;
+    animation: gj-slide var(--gj-siklus) ease-in-out infinite both;
+  }
+
+  /* --- Isi kartu -----------------------------------------------------
+     Ukuran teks memakai satuan CONTAINER (cqw), bukan px atau rem. Panggungnya
+     menyusut mengikuti tinggi layar - min(420px, 46vh) - jadi kartu di laptop
+     berlayar pendek bisa 40% lebih kecil daripada di layar besar. Dengan px,
+     butirnya berubah dari nyaman jadi tidak terbaca; dengan cqw, seluruh isi
+     kartu ikut menyusut sebanding dan tata letaknya tidak pernah pecah.
+
+     KARTU FITUR: berkas PNG-nya BUKAN sekadar ilustrasi - itu kartunya utuh,
+     lengkap dengan bidang krem di atas, badan putih di bawah, dan sudut
+     membulatnya sendiri. Jadi elemen ini SENGAJA tidak memakai .gj-kartu-terang
+     (putih + sudut + box-shadow): dua badan kartu bertumpuk akan saling
+     mengintip di tepinya. Bayangannya pakai drop-shadow, bukan box-shadow -
+     box-shadow menggambar persegi di sekeliling kotak, sementara sisi luar
+     PNG-nya transparan, jadi yang muncul bayangan persegi di belakang kartu
+     yang sudutnya membulat. */
+  .gj-kartu-fitur {
+    container-type: inline-size;
+    background-position: center;
+    background-repeat: no-repeat;
+    /* 100% 100% - bukan contain: kotak elemennya sudah disetel sebangun dengan
+       gambarnya, dan dengan meregang penuh, letak teks di bawah bisa ditulis
+       dalam persen terhadap kotak itu dan pasti jatuh di badan putihnya. */
+    background-size: 100% 100%;
+    filter: drop-shadow(0 16px 26px rgb(4 20 36 / 0.42));
+  }
+
+  /* Ditumpangkan di badan putih PNG-nya. */
+  .gj-kartu-teks {
+    position: absolute;
+    left: 9%;
+    right: 7%;
+    top: 44%;
+    bottom: 6%;
+    display: flex;
+    flex-direction: column;
+    gap: 3cqw;
+  }
+  .gj-kartu-judul {
+    font-size: 9cqw;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--color-navy);
+  }
+  .gj-kartu-butir {
+    display: flex;
+    flex-direction: column;
+    gap: 2.6cqw;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .gj-kartu-butir li {
+    position: relative;
+    padding-left: 5.5cqw;
+    font-size: 5.8cqw;
+    line-height: 1.3;
+    color: var(--color-ink-2);
+  }
+  .gj-kartu-butir li::before {
+    content: "";
+    position: absolute;
+    left: 1cqw;
+    top: 0.6em;
+    width: 1.9cqw;
+    height: 1.9cqw;
+    border-radius: 50%;
+    background: var(--color-ink-2);
+  }
+
+  /* Kartu yang isinya ilustrasi lepas berlatar transparan - ini yang memang
+     butuh badan kartu putih dari .gj-kartu-terang. */
+  .gj-kartu-foto {
+    overflow: hidden;
+    padding: 7%;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    /* Tanpa ini, `contain` mengukur ke tepi luar kartu dan padding di atas
+       tidak berarti apa-apa - gambarnya menempel ke sudut. */
+    background-origin: content-box;
+  }
+
+  .gj-kartu {
+    position: absolute;
+    border-radius: 18px;
+    /* Melayang naik-turun. Durasi & jarak diatur per kartu lewat variabel di
+       komponennya - lihat catatan soal irama di SlideFitur.tsx. */
+    animation: gj-apung var(--gj-durasi, 6.5s) ease-in-out infinite;
+  }
+  .gj-kartu-terang {
+    background: #ffffff;
+    box-shadow: 0 18px 40px -12px rgb(4 20 36 / 0.45);
+  }
+  .gj-kartu-redup {
+    background: var(--color-line);
+    box-shadow: 0 14px 32px -14px rgb(4 20 36 / 0.4);
+  }
+
+  /* --- Hiasan latar --------------------------------------------------
+     Murni ambience. Semuanya transform-only supaya murah dijalankan, dan
+     semuanya di-aria-hidden di komponennya - tidak ada keterangan yang
+     hilang kalau ini tidak tampil. */
+  .gj-latar {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(42px);
+    animation: gj-hanyut var(--gj-durasi, 26s) ease-in-out infinite;
+  }
+
+  .gj-hias {
+    position: absolute;
+    animation: gj-apung var(--gj-durasi, 7s) ease-in-out infinite;
+  }
+  .gj-hias-bulat {
+    border-radius: 999px;
+  }
+  .gj-hias-kotak {
+    border-radius: 30%;
+  }
+  .gj-hias-cincin {
+    border-radius: 999px;
+    background: none !important;
+    border: 3px solid currentColor;
+  }
+
+  .gj-titik {
+    height: 6px;
+    border-radius: 999px;
+    background: #ffffff;
+    opacity: 0.34;
+    animation: gj-titik var(--gj-siklus) ease-in-out infinite both;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   GERAKAN DIKURANGI
+   --------------------------------------------------------------------------
+   Yang dimatikan GERAKANNYA, bukan isinya. Versi pertama membekukan panel di
+   slide pertama - akibatnya dua dari tiga keterangan tidak pernah bisa dibaca
+   oleh orang yang justru menyalakan pengaturan ini. Itu kebalikan dari
+   maksudnya.
+
+   Jadi siklusnya tetap berjalan dengan irama yang sama, hanya geserannya yang
+   dicabut: tinggal pudar-timbul di tempat. Perubahan opacity bukan gerakan
+   yang dihindari pengaturan ini - yang dihindari perpindahan posisi,
+   penskalaan, dan parallax.
+
+   Titik penandanya dibiarkan apa adanya: yang berubah lebarnya 16px, tidak
+   memindahkan apa pun.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .gj-slide {
+    animation-name: gj-slide-diam;
+  }
+  /* Hiasan berhenti TOTAL - beda dari slide. Slide membawa keterangan yang
+     harus tetap sampai, sementara ini murni hiasan: mematikannya tidak
+     menghilangkan apa pun, dan gerakan ambient tanpa henti persis yang
+     dihindari pengaturan ini. */
+  .gj-latar,
+  .gj-hias,
+  .gj-kartu {
+    animation: none;
+  }
+}

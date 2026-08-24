@@ -35,5 +35,18 @@ export const config = {
   // login juga (browser minta favicon terlepas dari status auth) - kelewatan
   // waktu file itu ditambahkan, ketahuan karena browser yang belum login
   // dapat redirect ke /login (HTML) bukan gambar ikonnya.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  //
+  // BERKAS DI public/ JUGA DIKECUALIKAN, dan itu masalah yang sama persis
+  // berulang: middleware ini berjalan untuk SEMUA permintaan, termasuk
+  // gambar. Ilustrasi di halaman login sempat dibalas 307 ke /login - halaman
+  // login tidak bisa memuat gambarnya sendiri karena harus login dulu.
+  //
+  // Dikecualikan LEWAT DAFTAR EKSTENSI, bukan "apa pun yang mengandung
+  // titik": seluruh rute aplikasi ini tidak berekstensi (termasuk Route
+  // Handler seperti /ppabp/adk/tukin yang mengalirkan berkas ADK), jadi
+  // daftar yang sempit ini tidak bisa tanpa sengaja membuka halaman berdata
+  // gaji kalau nanti ada rute baru.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|.*\.(?:png|jpg|jpeg|gif|svg|webp|avif|ico|woff2?)$).*)",
+  ],
 };

@@ -24,11 +24,11 @@ export function GajihubLogo({ rupa = "sidebar" }: { rupa?: "sidebar" | "login" }
     <div
       className={
         login
-          ? "grid size-[84px] flex-none place-items-center rounded-[22px] bg-navy shadow-[0_10px_28px_rgba(19,65,107,0.28)]"
+          ? "grid size-[clamp(58px,8.5vh,84px)] flex-none place-items-center rounded-[22px] bg-navy shadow-[0_10px_28px_rgba(19,65,107,0.28)]"
           : "grid size-11 flex-none place-items-center rounded-xl bg-biru shadow-[0_6px_16px_rgba(0,0,0,0.28)]"
       }
     >
-      <svg viewBox="0 0 64 64" fill="none" className={login ? "size-[52px]" : "size-[30px]"} aria-hidden="true">
+      <svg viewBox="0 0 64 64" fill="none" className={login ? "size-[clamp(36px,5.3vh,52px)]" : "size-[30px]"} aria-hidden="true">
         <path d="M45 16 A 21 21 0 1 0 45 48" className="stroke-white" strokeWidth="10.5" strokeLinecap="round" />
         <path d="M31 31 L45 31" className="stroke-white" strokeWidth="10.5" strokeLinecap="round" />
         <circle cx="45.5" cy="45.5" r="8" className={login ? "fill-biru" : "fill-navy"} />
