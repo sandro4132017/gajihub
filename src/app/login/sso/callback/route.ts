@@ -70,20 +70,30 @@ export async function GET(req: NextRequest) {
     const info = await ambilInfoPengguna(cfg, token.accessToken);
     const nip = cariNipDariInfo(info, cfg.fieldNip);
 
-    // Bentuk balasan /users/me belum terdokumentasi (lihat komentar panjang di
-    // src/auth/sso.ts). Kalau NIP tidak ketemu, jangan menebak - tunjukkan
-    // nama-nama field yang benar-benar dikirim supaya konfigurasinya bisa
-    // dibetulkan sekali jalan.
+    // NIP tidak ketemu. JANGAN menebak - salah orang berarti salah data gaji.
+    //
+    // Sebab yang jauh lebih sering di produksi BUKAN salah konfigurasi:
+    // Akun Kemnaker (SIAP ID) terbuka untuk masyarakat umum, dan akun publik
+    // memang tidak memuat NIP sama sekali. Terbukti dari balasan nyata sebuah
+    // akun publik - field-nya cuma id, username, name, roles[], status, email
+    // (lihat CLAUDE.md, bagian SSO Kemnaker).
+    //
+    // DAFTAR NAMA FIELD TIDAK DITAMPILKAN KE PENGUNJUNG. Halaman login
+    // terbuka dari internet, dan itu diagnosis pengembang, bukan keterangan
+    // yang berguna bagi orang yang salah akun. Ditulis ke log server supaya
+    // tetap terbaca saat menyetel NACO_FIELD_NIP (`pm2 logs gajihub`), dan
+    // hanya ikut ke layar kalau NACO_DEBUG="true" dinyalakan sengaja.
     if (!nip) {
       const daftar = ringkasFieldInfo(info)
         .map((f) => f.jalur)
         .slice(0, 40)
         .join(", ");
-      return keLogin(
-        req,
-        "tanpa-nip",
-        `Balasan Naco tidak memuat nilai berbentuk NIP (18 digit). Field yang dikirim: ${daftar || "(kosong)"}`
-      );
+      console.warn(`[sso] balasan /users/me tanpa nilai berbentuk NIP. Field: ${daftar || "(kosong)"}`);
+      const rinci =
+        process.env.NACO_DEBUG?.trim() === "true"
+          ? `Field yang dikirim: ${daftar || "(kosong)"}`
+          : undefined;
+      return keLogin(req, "bukan-pegawai", rinci);
     }
 
     const user = await prisma.user.findUnique({ where: { nip } });

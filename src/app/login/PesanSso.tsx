@@ -12,7 +12,7 @@ const JUDUL: Record<string, string> = {
   "belum-dikonfigurasi": "SSO belum dikonfigurasi",
   ditolak: "Naco menolak permintaan masuk",
   gagal: "Login lewat Akun Kemnaker gagal",
-  "tanpa-nip": "Akun Kemnaker tidak mengirimkan NIP",
+  "bukan-pegawai": "Akun ini bukan akun pegawai Kemnaker",
   "tidak-terdaftar": "NIP belum terdaftar di Gajihub",
   nonaktif: "Akun dinonaktifkan",
 };
@@ -23,8 +23,11 @@ const LANGKAH: Record<string, string> = {
   ditolak: "Coba lagi, atau hubungi pengelola Akun Kemnaker kalau terus ditolak.",
   gagal:
     "Sebab paling sering: redirect_uri yang didaftarkan ke Naco tidak SAMA PERSIS dengan yang dipakai server ini.",
-  "tanpa-nip":
-    "Perlu ditanyakan ke pengelola Naco: scope mana yang memuat NIP. Sementara itu, masuk memakai NIP di bawah.",
+  // Akun Kemnaker (SIAP ID) terbuka untuk masyarakat umum, dan akun publik
+  // memang tidak memuat NIP. Jadi pesannya bicara soal itu - bukan soal scope
+  // atau konfigurasi, yang tidak berarti apa-apa bagi orang yang membacanya.
+  "bukan-pegawai":
+    "Gajihub hanya untuk pegawai Kementerian Ketenagakerjaan. Kalau kamu pegawai Kemnaker dan tetap melihat pesan ini, masuk memakai NIP di bawah lalu laporkan ke Admin Gajihub.",
   "tidak-terdaftar": "Minta Admin membuatkan akun lewat menu Kelola Assignment Role.",
   nonaktif: "Hubungi Admin untuk mengaktifkan kembali.",
 };

@@ -4311,20 +4311,41 @@ login) dan korbannya berakhir masuk sebagai akun penyerang. Nilainya disimpan
 di cookie httpOnly `gajihub_sso_state` lalu dicocokkan ulang. Ada test yang
 menguncinya supaya tidak dihapus "karena tidak ada di dokumentasi".
 
-**MASALAH UTAMA YANG BELUM TERTUTUP - balasan `/users/me` TIDAK
-TERDOKUMENTASI.** Dokumentasi Naco memberi contoh balasan untuk langkah token
-TAPI TIDAK untuk langkah identitas, padahal di situlah satu-satunya hal yang
-dibutuhkan Gajihub: **NIP**. Seluruh data di sistem ini berkunci NIP,
-sementara scope yang disebut cuma `basic email` - dan email BUKAN NIP.
+#### Bentuk balasan `/users/me` - diukur, bukan dari dokumentasi
+
+Dokumentasi Naco memberi contoh balasan untuk langkah token TAPI TIDAK untuk
+langkah identitas, padahal di situlah satu-satunya hal yang dibutuhkan Gajihub:
+**NIP**. Bentuknya akhirnya diketahui dari percobaan login sungguhan
+(2026-08-24) memakai **akun publik**:
+
+```
+data.id           data.roles[0].id      data.status       meta.version
+data.username     data.roles[0].name    data.email        meta.hostname
+data.name         data.roles[0].label   data.updated_at   meta.client_ip
+```
+
+**TEMUAN YANG MENGUBAH CARA MEMBACANYA: Akun Kemnaker (SIAP ID) TERBUKA UNTUK
+MASYARAKAT UMUM**, bukan cuma pegawai - dan akun publik **tidak memuat NIP sama
+sekali**. Jadi "balasan tanpa NIP" di produksi hampir selalu berarti *bukan
+pegawai*, BUKAN *konfigurasi salah*. Pesan di layar harus bicara soal itu.
+
+Dua hal dari daftar di atas yang berguna untuk langkah berikutnya:
+- **`data.roles[]` ada**, artinya Naco memang membedakan jenis akun. Belum
+  diketahui nilai apa yang menandai akun pegawai.
+- **`data.username`** patut dicurigai sebagai NIP pada akun pegawai (lazim di
+  SIAP). Kalau benar, `cariNipDariInfo()` akan menemukannya sendiri tanpa
+  `NACO_FIELD_NIP` perlu diisi - penelusurannya tidak bergantung nama field.
+  BELUM DIUJI: butuh sekali login memakai akun pegawai sungguhan.
 
 Penanganannya: `cariNipDariInfo()` **MENCARI, bukan menebak** - menelusuri
 seluruh balasan untuk nilai berbentuk NIP (**18 digit**, jadi NIK 16 digit &
-nomor telepon tidak tertukar). Kalau tidak ketemu, login **DIHENTIKAN** dan
-halaman login menampilkan **nama-nama field yang benar-benar dikirim Naco** -
-jadi satu kali percobaan login sudah cukup memastikan bentuknya. Nilainya
-sengaja TIDAK ikut ditampilkan (balasan identitas bisa memuat email/NIK/
-telepon); yang perlu cuma nama field-nya. Begitu diketahui, isi
-`NACO_FIELD_NIP` di `.env` (mis. `data.nip`) supaya pembacaannya eksplisit.
+nomor telepon tidak tertukar). Kalau tidak ketemu, login **DIHENTIKAN**.
+
+**Nama field TIDAK LAGI ditampilkan ke pengunjung.** Halaman login terbuka dari
+internet, dan daftar itu diagnosis pengembang - bukan keterangan yang berguna
+bagi orang yang sekadar salah jenis akun. Sekarang ditulis ke log server
+(`pm2 logs gajihub`), dan hanya ikut ke layar kalau `NACO_DEBUG="true"`
+dinyalakan sengaja. Nilainya tidak pernah ikut, di jalur mana pun.
 
 **Dua hal yang SENGAJA TIDAK dilakukan callback**: (1) **tidak membuat akun
 baru** - NIP tanpa baris `User` ditolak, karena membuat akun otomatis berarti
