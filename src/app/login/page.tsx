@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { GajihubLogo } from "../GajihubLogo";
 import { LoginForm } from "./LoginForm";
 import { ssoAktif } from "../../auth/sso";
@@ -43,14 +42,29 @@ export default async function LoginPage({
 
           {adaSso && (
             <div className="mt-7">
-              {/* Tautan biasa, bukan tombol berscript: alurnya memang
-                  perpindahan halaman, jadi tetap jalan tanpa JavaScript. */}
-              <Link
-                href="/login/sso"
-                className="btn btn-primary w-full rounded-xl py-3.5 text-base"
-              >
+              {/*
+                WAJIB <a> BIASA, JANGAN <Link> DARI next/link.
+
+                <Link> menyulap kliknya jadi navigasi sisi-klien: Next
+                mengambil rutenya lewat fetch() (alamatnya berimbuhan
+                `?_rsc=...`), lalu browser mengikuti redirect 307 kita ke
+                account.kemnaker.go.id sebagai permintaan LINTAS-ORIGIN -
+                dan diblokir CORS:
+
+                  "Response to preflight request doesn't pass access control
+                   check: No 'Access-Control-Allow-Origin' header"
+
+                Naco memang tidak akan pernah mengirim header CORS; halaman
+                otorisasi OAuth ditujukan untuk perpindahan halaman, bukan
+                fetch. <a> polos membuat browser berpindah di tingkat atas,
+                sehingga redirect lintas-origin sah dan CORS tidak berlaku.
+
+                Sekaligus menepati janji "jalan tanpa JavaScript" - <Link>
+                tidak pernah benar-benar menepatinya di sini.
+              */}
+              <a href="/login/sso" className="btn btn-primary w-full rounded-xl py-3.5 text-base">
                 Masuk dengan Akun SIAP ID
-              </Link>
+              </a>
               <div className="mt-6 flex items-center gap-3">
                 <span className="h-px flex-1 bg-line" />
                 <span className="text-xs font-semibold text-muted">atau NIP</span>
