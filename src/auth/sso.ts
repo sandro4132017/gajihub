@@ -49,6 +49,47 @@ export interface KonfigurasiSso {
 /** Panjang NIP baru ASN. Dipakai mengenali NIP di balasan yang belum diketahui bentuknya. */
 const PANJANG_NIP = 18;
 
+/**
+ * Alamat PUBLIK aplikasi ini - yang dilihat browser, bukan yang dilihat server.
+ *
+ * WAJIB dipakai untuk setiap redirect yang keluar dari Route Handler. Di
+ * belakang proxy, `req.url` berisi alamat INTERNAL (http://localhost:3002),
+ * sehingga `new URL("/login", req.url)` menghasilkan Location yang tidak bisa
+ * dijangkau browser siapa pun. Terbukti di server: callback SSO membalas
+ * `307 -> http://localhost:3002/login?...`, dan redirect SESUDAH login
+ * berhasil pun kena hal yang sama.
+ *
+ * (Redirect di middleware TIDAK kena karena Next menormalkannya jadi relatif.)
+ *
+ * Urutan sumbernya disengaja:
+ *   1. Asal NACO_REDIRECT_URI - alamat publik yang paling sahih, karena nilai
+ *      itu HARUS sama persis dengan yang didaftarkan ke Naco.
+ *   2. Header X-Forwarded-* dari proxy.
+ *   3. Asal permintaan - jalur terakhir, benar saat jalan tanpa proxy.
+ */
+export function asalPublik(headers: Headers, asalPermintaan: string): string {
+  const dariRedirect = process.env.NACO_REDIRECT_URI?.trim();
+  if (dariRedirect) {
+    try {
+      return new URL(dariRedirect).origin;
+    } catch {
+      // Nilainya bukan URL sah - jatuh ke sumber berikutnya, jangan melempar.
+      // Route yang melempar di sini membalas 500 pada halaman login.
+    }
+  }
+  const host = headers.get("x-forwarded-host") ?? headers.get("host");
+  if (host) {
+    const proto = headers.get("x-forwarded-proto")?.split(",")[0].trim();
+    if (proto) return `${proto}://${host}`;
+    try {
+      return `${new URL(asalPermintaan).protocol}//${host}`;
+    } catch {
+      /* jatuh ke bawah */
+    }
+  }
+  return new URL(asalPermintaan).origin;
+}
+
 export function konfigurasiSso(): KonfigurasiSso | null {
   const clientId = process.env.NACO_CLIENT_ID?.trim();
   const clientSecret = process.env.NACO_CLIENT_SECRET?.trim();

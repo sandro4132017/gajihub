@@ -113,7 +113,7 @@ export function SlideFitur() {
         }
         .animate-float {
           animation: float-image 4s ease-in-out infinite; /* Durasi 4 detik, gerakan lembut */
-        }
+        }s
       `}</style>
 
       {/* Latar Belakang Gelembung / Asap */}

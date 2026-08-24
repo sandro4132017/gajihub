@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { konfigurasiSso, urlOtorisasi } from "../../../auth/sso";
+import { NextResponse, type NextRequest } from "next/server";
+import { asalPublik, konfigurasiSso, urlOtorisasi } from "../../../auth/sso";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +15,13 @@ export const dynamic = "force-dynamic";
 export const COOKIE_STATE_SSO = "gajihub_sso_state";
 const UMUR_STATE_DETIK = 10 * 60;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const cfg = konfigurasiSso();
   if (!cfg) {
-    return NextResponse.redirect(
-      new URL("/login?sso=belum-dikonfigurasi", process.env.NACO_REDIRECT_URI ?? "http://localhost:3000")
-    );
+    // `??` TIDAK menangkap string kosong, dan `new URL(path, "")` melempar -
+    // versi sebelumnya membalas 500 di server yang NACO_REDIRECT_URI-nya
+    // sengaja dikosongkan. asalPublik() menutup keduanya.
+    return NextResponse.redirect(new URL("/login?sso=belum-dikonfigurasi", asalPublik(req.headers, req.url)));
   }
 
   // `state` menahan CSRF login: tanpa ini, alamat callback bisa dipanggil

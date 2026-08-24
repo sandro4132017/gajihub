@@ -6,6 +6,7 @@ import { LANDING_ROLE } from "../../../../auth/roleAktif";
 import { LABEL_ROLE } from "../../../../auth/roleLabel";
 import {
   ambilInfoPengguna,
+  asalPublik,
   cariNipDariInfo,
   konfigurasiSso,
   ringkasFieldInfo,
@@ -36,7 +37,7 @@ export const dynamic = "force-dynamic";
  */
 
 function keLogin(req: NextRequest, alasan: string, detail?: string) {
-  const url = new URL("/login", req.url);
+  const url = new URL("/login", asalPublik(req.headers, req.url));
   url.searchParams.set("sso", alasan);
   if (detail) url.searchParams.set("pesan", detail.slice(0, 300));
   const res = NextResponse.redirect(url);
@@ -98,7 +99,7 @@ export async function GET(req: NextRequest) {
 
     // Sama seperti login NIP: selalu mulai dari role UTAMA akun, bukan role
     // tambahan yang terakhir dipakai.
-    const res = NextResponse.redirect(new URL(LANDING_ROLE[user.role], req.url));
+    const res = NextResponse.redirect(new URL(LANDING_ROLE[user.role], asalPublik(req.headers, req.url)));
     res.cookies.set(SESSION_COOKIE_NAME, sesi, OPSI_COOKIE_SESI);
     res.cookies.delete(COOKIE_STATE_SSO);
     return res;

@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { berbentukNip, cariNipDariInfo, ringkasFieldInfo, urlOtorisasi, type KonfigurasiSso } from "../sso";
+import { describe, it, expect, afterEach } from "vitest";
+import {
+  asalPublik,
+  berbentukNip,
+  cariNipDariInfo,
+  ringkasFieldInfo,
+  urlOtorisasi,
+  type KonfigurasiSso,
+} from "../sso";
 
 const CFG: KonfigurasiSso = {
   baseUrl: "https://account.kemnaker.go.id",
@@ -115,5 +122,49 @@ describe("ringkasFieldInfo", () => {
     const r = ringkasFieldInfo({ email: "irwan@kemnaker.go.id", phone: "081234567890" });
     expect(JSON.stringify(r)).not.toContain("irwan@kemnaker.go.id");
     expect(JSON.stringify(r)).not.toContain("081234567890");
+  });
+});
+
+describe("asalPublik", () => {
+  const simpan = process.env.NACO_REDIRECT_URI;
+  afterEach(() => {
+    if (simpan === undefined) delete process.env.NACO_REDIRECT_URI;
+    else process.env.NACO_REDIRECT_URI = simpan;
+  });
+
+  it("memakai asal NACO_REDIRECT_URI - alamat publik yang paling sahih", () => {
+    process.env.NACO_REDIRECT_URI = "https://gajihub.kemnaker.go.id/login/sso/callback";
+    expect(asalPublik(new Headers(), "http://localhost:3002/login/sso")).toBe("https://gajihub.kemnaker.go.id");
+  });
+
+  it("TIDAK PERNAH memakai alamat internal kalau proxy mengirim X-Forwarded-*", () => {
+    // Inti bugnya: di belakang proxy, req.url berisi http://localhost:3002 -
+    // Location ke situ tidak bisa dijangkau browser siapa pun.
+    delete process.env.NACO_REDIRECT_URI;
+    const h = new Headers({ "x-forwarded-proto": "https", "x-forwarded-host": "gajihub.kemnaker.go.id" });
+    expect(asalPublik(h, "http://localhost:3002/login/sso/callback")).toBe("https://gajihub.kemnaker.go.id");
+  });
+
+  it("mengambil proto pertama kalau X-Forwarded-Proto berantai", () => {
+    delete process.env.NACO_REDIRECT_URI;
+    const h = new Headers({ "x-forwarded-proto": "https, http", host: "contoh.go.id" });
+    expect(asalPublik(h, "http://localhost:3002/x")).toBe("https://contoh.go.id");
+  });
+
+  it("jatuh ke asal permintaan kalau tidak ada petunjuk apa pun", () => {
+    delete process.env.NACO_REDIRECT_URI;
+    expect(asalPublik(new Headers(), "http://localhost:3000/login/sso")).toBe("http://localhost:3000");
+  });
+
+  it("NACO_REDIRECT_URI kosong TIDAK melempar - itu yang dulu membalas 500", () => {
+    // `??` tidak menangkap string kosong, dan new URL(path, "") melempar.
+    process.env.NACO_REDIRECT_URI = "";
+    const h = new Headers({ host: "gajihub.kemnaker.go.id", "x-forwarded-proto": "https" });
+    expect(asalPublik(h, "http://localhost:3002/login/sso")).toBe("https://gajihub.kemnaker.go.id");
+  });
+
+  it("NACO_REDIRECT_URI yang bukan URL sah juga tidak melempar", () => {
+    process.env.NACO_REDIRECT_URI = "bukan-url";
+    expect(asalPublik(new Headers(), "http://localhost:3000/x")).toBe("http://localhost:3000");
   });
 });
