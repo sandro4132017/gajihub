@@ -3,6 +3,8 @@ import {
   asalPublik,
   berbentukNip,
   cariNipDariInfo,
+  nipRusakKarenaAngka,
+  normalkanNip,
   ringkasFieldInfo,
   urlOtorisasi,
   type KonfigurasiSso,
@@ -41,9 +43,40 @@ describe("urlOtorisasi", () => {
 });
 
 describe("berbentukNip", () => {
-  it("menerima NIP 18 digit, sebagai teks maupun angka", () => {
+  it("menerima NIP 18 digit sebagai teks", () => {
     expect(berbentukNip("197303072005011001")).toBe(true);
-    expect(berbentukNip(197303072005011001)).toBe(true);
+  });
+
+  // Test ini DIBALIK (dulu mengunci `berbentukNip(197303072005011001) === true`),
+  // bukan dihapus - supaya kalau ada yang "melonggarkan" lagi supaya angka
+  // ikut diterima, test inilah yang jatuh duluan dan menjelaskan sebabnya.
+  //
+  // Literal di baris di bawah membuktikan sendiri kenapa: 18 digit melebihi
+  // presisi float64, jadi angka yang ditulis `...001` sudah menjadi `...000`
+  // sebelum satu baris kode pun berjalan.
+  it("MENOLAK NIP bertipe angka - nilainya sudah rusak sebelum sampai ke sini", () => {
+    expect(String(197303072005011001)).toBe("197303072005011000");
+    expect(berbentukNip(197303072005011001)).toBe(false);
+    expect(nipRusakKarenaAngka(197303072005011001)).toBe(true);
+    // Dan lewat jalur yang sebenarnya - JSON.parse dari balasan Naco.
+    const dariNaco = JSON.parse('{"nip": 197303072005011001}');
+    expect(cariNipDariInfo(dariNaco, null)).toBeNull();
+  });
+
+  it("menerima NIP berpemisah spasi/titik/strip - bentuk tulisan manusia", () => {
+    expect(berbentukNip("19730307 200501 1 001")).toBe(true);
+    expect(normalkanNip("19730307 200501 1 001")).toBe("197303072005011001");
+    expect(normalkanNip("19730307.200501.1.001")).toBe("197303072005011001");
+    expect(normalkanNip("19730307-200501-1-001")).toBe("197303072005011001");
+    expect(normalkanNip("  197303072005011001  ")).toBe("197303072005011001");
+  });
+
+  // Yang menahan pembersihan pemisah supaya tidak berubah jadi tebakan:
+  // membuang SEMUA non-digit bisa menyambung dua angka tak berhubungan.
+  it("TIDAK membuang sembarang non-digit - hanya spasi, titik, strip", () => {
+    expect(normalkanNip("08123456789 / 2024001")).toBeNull();
+    expect(normalkanNip("197303072005011001@kemnaker.go.id")).toBeNull();
+    expect(normalkanNip("197303072005011001, 3175012345678901")).toBeNull();
   });
 
   it("menolak NIK 16 digit - panjangnya yang membedakan", () => {
@@ -173,12 +206,29 @@ describe("ringkasFieldInfo - bentuk field", () => {
   it("melaporkan panjang dan jumlah digit, tanpa nilainya", () => {
     // Inti gunanya: membedakan "NIP tidak dikirim" dari "NIP dikirim tapi
     // berformat lain". 21 karakter dengan 18 digit = NIP berspasi.
+    //
+    // Assertion `berbentukNip` DIBALIK dari false jadi true: dulu bentuk
+    // berspasi memang tidak dikenali - dan komentar di atas ini justru sedang
+    // MENCATAT keterbatasan itu, bukan menetapkannya sebagai aturan. Sejak
+    // normalkanNip() membersihkan spasi/titik/strip, NIP seperti ini dipakai
+    // dan login-nya berhasil, bukan lagi jatuh ke jalur diagnosis.
     const r = ringkasFieldInfo({ data: { username: "19900101 201503 1 001", email: "a@b.go.id" } });
     const u = r.find((x) => x.jalur === "data.username")!;
     expect(u.panjang).toBe(21);
     expect(u.jumlahDigit).toBe(18);
-    expect(u.berbentukNip).toBe(false);
+    expect(u.berbentukNip).toBe(true);
     expect(JSON.stringify(r)).not.toContain("19900101");
+  });
+
+  it("field 18 digit yang TETAP ditolak tetap terbaca di ringkasan - itu gunanya", () => {
+    // Yang sekarang jadi kasus diagnosis utama: NIP dikirim sebagai ANGKA.
+    // Ringkasannya harus tetap menunjukkan "digit 18" supaya sebabnya bisa
+    // dibedakan dari "NIP memang tidak dikirim sama sekali".
+    const r = ringkasFieldInfo(JSON.parse('{"data":{"nip": 197303072005011001}}'));
+    const n = r.find((x) => x.jalur === "data.nip")!;
+    expect(n.tipe).toBe("number");
+    expect(n.jumlahDigit).toBe(18);
+    expect(n.berbentukNip).toBe(false);
   });
 
   it("angka ikut terhitung, bukan cuma teks", () => {

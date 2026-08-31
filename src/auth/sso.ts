@@ -200,10 +200,54 @@ function isObjek(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** Bentuk NIP baru ASN: 18 digit, tanpa pemisah. */
+/**
+ * Membaca sebuah nilai sebagai NIP baru ASN (18 digit), atau `null`.
+ *
+ * DUA KEPUTUSAN DI SINI, keduanya soal SALAH ORANG - bukan soal kerapian.
+ *
+ * 1. **Pemisah dibersihkan, TAPI hanya spasi, titik, dan strip.** NIP lazim
+ *    ditulis "19870323 201503 1 002", dan menolak bentuk itu berarti NIP yang
+ *    sebenarnya DIKIRIM Naco terbaca sebagai tidak ada - pegawainya ditolak
+ *    login untuk data yang sebetulnya lengkap. Yang dibersihkan sengaja cuma
+ *    tiga karakter itu: membuang SEMUA non-digit bisa menyambung dua angka
+ *    yang tidak berhubungan (mis. `"08123456789 / 2024"`) jadi 18 digit palsu.
+ *
+ * 2. **Tipe `number` DITOLAK, walau digitnya pas 18.** NIP 18 digit melebihi
+ *    presisi bilangan JSON (float64 aman sampai 9007199254740991 - 16 digit),
+ *    jadi begitu Naco mengirimnya sebagai angka, digit terakhirnya sudah
+ *    berubah jadi nol SEBELUM kode ini melihatnya:
+ *
+ *        JSON.parse('{"nip": 197303072005011001}').nip  ->  197303072005011000
+ *
+ *    Nilainya tidak bisa dipulihkan dari mana pun, dan menerimanya berarti
+ *    menerbitkan sesi atas NIP yang bukan milik siapa pun - atau, lebih buruk,
+ *    milik orang lain yang NIP-nya kebetulan berakhir `000`. Ini jebakan yang
+ *    SAMA PERSIS dengan 46 baris ber-NIP `...000` di `basis data
+ *    gaji_Kemnaker.xlsx`, cuma lewat pintu yang berbeda. Yang benar: minta
+ *    Naco mengirimkan NIP sebagai STRING, dan sampai itu terjadi login
+ *    dihentikan dengan sebab yang disebutkan.
+ */
+export function normalkanNip(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.replace(/[ .\-]/g, "").trim();
+  return s.length === PANJANG_NIP && /^\d+$/.test(s) ? s : null;
+}
+
+/** Bentuk NIP baru ASN: 18 digit, pemisah spasi/titik/strip boleh. */
 export function berbentukNip(v: unknown): v is string {
-  const s = typeof v === "number" ? String(v) : typeof v === "string" ? v.trim() : "";
-  return s.length === PANJANG_NIP && /^\d+$/.test(s);
+  return normalkanNip(v) !== null;
+}
+
+/**
+ * Apakah nilai ini SEHARUSNYA NIP tapi datang sebagai angka (jadi sudah rusak)?
+ *
+ * Dipakai HANYA untuk menjelaskan kegagalan ke log - supaya "tidak ketemu NIP"
+ * bisa dibedakan dari "NIP dikirim, tapi tipenya salah". Dua sebab itu punya
+ * tindak lanjut yang berbeda: yang pertama urusan scope ke Naco, yang kedua
+ * cukup minta mereka mengubah tipe field-nya.
+ */
+export function nipRusakKarenaAngka(v: unknown): boolean {
+  return typeof v === "number" && Number.isFinite(v) && String(v).length === PANJANG_NIP;
 }
 
 /**
@@ -224,12 +268,13 @@ export function berbentukNip(v: unknown): v is string {
  */
 export function cariNipDariInfo(info: unknown, fieldNip: string | null): string | null {
   if (fieldNip) {
-    const nilai = ambilJalur(info, fieldNip);
-    return berbentukNip(nilai) ? String(nilai).trim() : null;
+    return normalkanNip(ambilJalur(info, fieldNip));
   }
   let ketemu: string | null = null;
   telusuri(info, (_jalur, nilai) => {
-    if (ketemu === null && berbentukNip(nilai)) ketemu = String(nilai).trim();
+    if (ketemu !== null) return;
+    const normal = normalkanNip(nilai);
+    if (normal) ketemu = normal;
   });
   return ketemu;
 }

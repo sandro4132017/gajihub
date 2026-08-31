@@ -34,6 +34,64 @@ const nextConfig = {
       ],
     },
   },
+  // Sembunyikan header 'X-Powered-By: Next.js' untuk mencegah information disclosure
+  poweredByHeader: false,
+
+  // Konfigurasi HTTP Security Headers (HSTS, X-Frame-Options, X-Content-Type-Options, dll.)
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains; preload",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+          {
+            key: "X-DNS-Prefetch-Control",
+            value: "on",
+          },
+        ],
+      },
+    ];
+  },
+
+  // Redirect variasi URL admin agar tidak 404 jika diketik berbeda
+  async redirects() {
+    return [
+      {
+        source: "/admin/assignment-role",
+        destination: "/admin/role-assignment",
+        permanent: false,
+      },
+      {
+        source: "/admin/asingment-role",
+        destination: "/admin/role-assignment",
+        permanent: false,
+      },
+      {
+        source: "/admin/kelola-assignment-role",
+        destination: "/admin/role-assignment",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

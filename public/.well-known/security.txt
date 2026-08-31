@@ -1,0 +1,6 @@
+# Security Contact Information for Gajihub Kemnaker
+Contact: mailto:pusdatik@kemnaker.go.id
+Expires: 2027-12-31T23:59:59.000Z
+Preferred-Languages: id, en
+Canonical: https://gajihub.kemnaker.go.id/.well-known/security.txt
+

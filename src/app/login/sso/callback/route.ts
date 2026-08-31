@@ -86,12 +86,29 @@ export async function GET(req: NextRequest) {
     if (!nip) {
       const ringkas = ringkasFieldInfo(info).slice(0, 40);
       const daftar = ringkas.map((f) => f.jalur).join(", ");
-      // Bentuk tiap field, TANPA nilainya. Kalau ada baris ber-jumlahDigit 18,
-      // NIP-nya sebenarnya dikirim - cuma berformat lain (mis. berspasi) -
-      // dan berbentukNip() yang perlu dilonggarkan, bukan scope-nya yang
-      // perlu diminta ke Naco.
+
+      // Bentuk tiap field, TANPA nilainya - plus SATU baris vonis, supaya yang
+      // membaca log tidak perlu memindai tabel untuk menyimpulkan sendiri.
+      // Tiga sebab ini punya tindak lanjut yang BERBEDA, dan itu sebabnya
+      // dibedakan:
+      const berdigit18 = ringkas.filter((f) => f.jumlahDigit === 18);
+      const angka18 = berdigit18.filter((f) => f.tipe === "number");
+      const vonis =
+        angka18.length > 0
+          ? `NIP DIKIRIM SEBAGAI ANGKA di ${angka18.map((f) => f.jalur).join(", ")} - ` +
+            `nilainya SUDAH RUSAK sebelum sampai ke sini (18 digit melebihi presisi ` +
+            `bilangan JSON, tiga digit terakhir jadi nol) dan SENGAJA ditolak. ` +
+            `Minta Naco mengirim field itu sebagai STRING.`
+          : berdigit18.length > 0
+            ? `Ada field berisi 18 digit (${berdigit18.map((f) => f.jalur).join(", ")}) tapi ` +
+              `berformat lain. Periksa pemisahnya - normalkanNip() cuma membersihkan ` +
+              `spasi, titik, dan strip.`
+            : `TIDAK ADA field berisi 18 digit sama sekali. NIP memang tidak dikirim ` +
+              `pada scope "${cfg.scope}" - ini pertanyaan ke Naco (scope/endpoint mana ` +
+              `yang memuat NIP), BUKAN yang bisa diperbaiki dari sisi Gajihub.`;
+
       console.warn(
-        "[sso] balasan /users/me tanpa nilai berbentuk NIP (18 digit polos). Bentuk field:" +
+        `[sso] /users/me tanpa NIP yang bisa dipakai. VONIS: ${vonis}\n    Bentuk field:` +
           ringkas.map((f) => `\n      ${f.jalur}: ${f.tipe}, panjang ${f.panjang}, digit ${f.jumlahDigit}`).join("")
       );
       const rinci =

@@ -5,22 +5,6 @@ import { loginAction, type LoginFormState } from "./actions";
 
 const INITIAL_STATE: LoginFormState = {};
 
-/**
- * Kotak isian login.
- *
- * Placeholder-nya BERPERAN SEBAGAI LABEL (tidak ada label kasat mata di
- * atasnya), dan itu punya dua akibat yang harus ditangani - bukan pilihan
- * gaya belaka:
- *
- * 1. Warnanya tidak boleh `text-muted` (#5F7085). Di atas latar kabut
- *    (#DBE2EF) rasionya cuma 3,90:1 - di bawah 4,5:1 WCAG AA. Untuk teks
- *    hiasan itu masih bisa ditawar, untuk teks yang MERANGKAP nama field
- *    tidak. Dipakai `text-ink-2` (#3A5A7D) = 5,49:1.
- * 2. Labelnya tetap harus ADA di DOM buat pembaca layar, cuma disembunyikan
- *    secara visual (`sr-only`). Placeholder saja tidak dibacakan sebagai nama
- *    field, dan begitu orang mulai mengetik, placeholder-nya hilang - jadi
- *    nama field-nya ikut hilang buat siapa pun.
- */
 const KELAS_FIELD =
   "w-full rounded-xl border border-transparent bg-line py-3.5 pl-4 pr-12 text-sm font-semibold text-ink " +
   "outline-none transition placeholder:font-semibold placeholder:text-ink-2 " +
@@ -30,7 +14,7 @@ export function LoginForm() {
   const [state, formAction, pending] = useActionState(loginAction, INITIAL_STATE);
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} autoComplete="off" className="space-y-4">
       <div>
         <label htmlFor="nip" className="sr-only">
           NIP
@@ -42,7 +26,7 @@ export function LoginForm() {
             required
             autoFocus
             placeholder="NIP"
-            autoComplete="username"
+            autoComplete="off"
             // NIP itu 18 angka - `inputMode` memunculkan papan tombol angka di
             // HP. SENGAJA bukan `type="number"`: itu membuang nol di depan,
             // dan sebagian NIP diawali nol.
@@ -64,7 +48,7 @@ export function LoginForm() {
             type="password"
             required
             placeholder="Password"
-            autoComplete="current-password"
+            autoComplete="off"
             className={KELAS_FIELD}
           />
           <IkonGembok />
