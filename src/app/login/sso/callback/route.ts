@@ -7,11 +7,13 @@ import { LABEL_ROLE } from "../../../../auth/roleLabel";
 import {
   ambilInfoPengguna,
   asalPublik,
+  cariNikDariInfo,
   cariNipDariInfo,
   konfigurasiSso,
   ringkasFieldInfo,
   tukarKodeKeToken,
 } from "../../../../auth/sso";
+import { kunciSidikNik, sidikNik } from "../../../../auth/sidikNik";
 import { COOKIE_STATE_SSO } from "../route";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +70,41 @@ export async function GET(req: NextRequest) {
   try {
     const token = await tukarKodeKeToken(cfg, kode);
     const info = await ambilInfoPengguna(cfg, token.accessToken);
-    const nip = cariNipDariInfo(info, cfg.fieldNip);
+
+    // JALUR 1 - NIP langsung. Selalu dicoba duluan: kalau Naco suatu saat
+    // mengirimkan NIP, itu padanan langsung dan tidak perlu perantara apa pun.
+    let nip = cariNipDariInfo(info, cfg.fieldNip);
+    let lewatSidikNik = false;
+
+    // JALUR 2 - padanan NIK. Ini yang benar-benar dipakai sekarang: diukur dua
+    // kali pada 2026-08-31 (akun publik DAN akun pegawai), balasan /users/me
+    // berisi `data.username` = NIK 16 digit dan TIDAK PERNAH memuat NIP.
+    //
+    // Yang dicocokkan SIDIK-nya (HMAC), bukan NIK-nya - database Gajihub tidak
+    // pernah menyimpan NIK. Lihat src/auth/sidikNik.ts.
+    if (!nip) {
+      const nik = cariNikDariInfo(info, cfg.fieldNik);
+      if (nik) {
+        try {
+          const sidik = sidikNik(nik, kunciSidikNik());
+          if (sidik) {
+            // `sidik_nik` UNIK di database, jadi findUnique tidak akan pernah
+            // mengembalikan dua orang - dan NIK ganda memang sengaja tidak
+            // pernah diberi sidik oleh importer.
+            const pegawai = await prisma.pegawai.findUnique({ where: { sidikNik: sidik } });
+            if (pegawai) {
+              nip = pegawai.nip;
+              lewatSidikNik = true;
+            }
+          }
+        } catch (e) {
+          // SIDIK_NIK_SECRET belum diisi. Bukan alasan merobohkan halaman -
+          // login NIP tetap jalan - tapi harus terbaca, karena kalau tidak,
+          // gejalanya cuma "semua pegawai ditolak" tanpa sebab.
+          console.error(`[sso] jalur NIK tidak aktif: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+    }
 
     // NIP tidak ketemu. JANGAN menebak - salah orang berarti salah data gaji.
     //
@@ -93,6 +129,9 @@ export async function GET(req: NextRequest) {
       // dibedakan:
       const berdigit18 = ringkas.filter((f) => f.jumlahDigit === 18);
       const angka18 = berdigit18.filter((f) => f.tipe === "number");
+      const adaNik = cariNikDariInfo(info, cfg.fieldNik) !== null;
+      const jumlahBersidik = await prisma.pegawai.count({ where: { sidikNik: { not: null } } });
+
       const vonis =
         angka18.length > 0
           ? `NIP DIKIRIM SEBAGAI ANGKA di ${angka18.map((f) => f.jalur).join(", ")} - ` +
@@ -103,9 +142,19 @@ export async function GET(req: NextRequest) {
             ? `Ada field berisi 18 digit (${berdigit18.map((f) => f.jalur).join(", ")}) tapi ` +
               `berformat lain. Periksa pemisahnya - normalkanNip() cuma membersihkan ` +
               `spasi, titik, dan strip.`
-            : `TIDAK ADA field berisi 18 digit sama sekali. NIP memang tidak dikirim ` +
-              `pada scope "${cfg.scope}" - ini pertanyaan ke Naco (scope/endpoint mana ` +
-              `yang memuat NIP), BUKAN yang bisa diperbaiki dari sisi Gajihub.`;
+            : !adaNik
+              ? `Balasan tidak memuat NIP (18 digit) MAUPUN NIK (16 digit). Tidak ada ` +
+                `yang bisa dipakai mengenali pegawai - periksa NACO_FIELD_NIK ` +
+                `(sekarang "${cfg.fieldNik}") terhadap daftar field di bawah.`
+              : jumlahBersidik === 0
+                ? `NIK ditemukan, TAPI belum ada satu pun pegawai yang punya sidik NIK ` +
+                  `di database. Isi SIDIK_NIK_SECRET di .env lalu jalankan ` +
+                  `\`npm run sync:pegawai\` - tanpa itu tidak ada yang bisa dicocokkan.`
+                : `NIK ditemukan dan ${jumlahBersidik} pegawai sudah bersidik, tapi TIDAK ADA ` +
+                  `yang cocok. Tiga sebab yang mungkin: (a) orangnya memang bukan pegawai ` +
+                  `Kemnaker, (b) NIK-nya di SIAP kosong/ganda sehingga sengaja tidak ` +
+                  `diberi sidik, atau (c) SIDIK_NIK_SECRET berubah sejak sync terakhir - ` +
+                  `kalau (c), SELURUH sidik jadi basi dan sync harus diulang.`;
 
       console.warn(
         `[sso] /users/me tanpa NIP yang bisa dipakai. VONIS: ${vonis}\n    Bentuk field:` +
@@ -128,6 +177,14 @@ export async function GET(req: NextRequest) {
 
     const pegawai = await prisma.pegawai.findUnique({ where: { nip } });
     const sesi = await buatTokenUntukUser(user, pegawai?.jabatan ?? LABEL_ROLE[user.role]);
+
+    // Jalan mana yang dipakai mengenali orang ini DICATAT. Selama NIP tidak
+    // pernah dikirim Naco, praktis semua login SSO lewat padanan NIK - dan
+    // kalau suatu saat Naco mulai mengirim NIP, pergeserannya kelihatan di sini
+    // tanpa perlu menebak. NIK-nya sendiri tidak ikut dicatat.
+    console.info(
+      `[sso] login berhasil NIP ${nip} lewat ${lewatSidikNik ? "padanan sidik NIK" : "NIP langsung dari Naco"}`
+    );
 
     // Sama seperti login NIP: selalu mulai dari role UTAMA akun, bukan role
     // tambahan yang terakhir dipakai.

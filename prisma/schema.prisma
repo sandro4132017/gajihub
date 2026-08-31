@@ -39,6 +39,37 @@ model Pegawai {
   kelasJabatan  Int?      @map("kelas_jabatan")
   tmtSkTerakhir DateTime? @map("tmt_sk_terakhir")
 
+  /// Sidik NIK - HMAC-SHA256 dari NIK, BUKAN NIK-nya.
+  ///
+  /// KENAPA ADA: SSO Naco tidak mengirimkan NIP. Diukur dua kali (akun publik
+  /// DAN akun pegawai, 2026-08-31), balasan `/users/me` pada scope
+  /// `basic email` berisi `data.username` = **NIK 16 digit** dan tidak ada
+  /// satu pun nilai 18 digit. Tanpa padanan NIK->NIP, tidak ada pegawai yang
+  /// bisa masuk lewat SSO.
+  ///
+  /// KENAPA SIDIK, BUKAN NIK: proyek ini dua kali menolak mengimpor NIK
+  /// (`importPegawaiSiap.ts`, `basisDataGaji.ts`) karena data pribadi yang
+  /// tidak dibutuhkan skema tidak diambil. Yang dibutuhkan di sini cuma
+  /// MENCOCOKKAN, tidak pernah MEMBACA - dan sidik berkunci melakukan persis
+  /// itu. Kalau database ini bocor (dump, backup, salah unggah), yang ikut
+  /// bocor bukan NIK 5.000 pegawai.
+  ///
+  /// KENAPA UNIQUE: di SIAP ada 2 NIK yang dipakai lebih dari satu NIP.
+  /// Constraint ini yang menjamin satu sidik tidak pernah menunjuk dua orang -
+  /// dan `importPegawaiSiap.ts` melewatkan NIK ganda supaya sync tidak gagal.
+  /// Pegawai yang dilewati tetap bisa masuk lewat login NIP.
+  ///
+  /// TERIKAT KUNCI: dihitung dengan `SIDIK_NIK_SECRET`. Kalau kunci itu
+  /// diganti, SELURUH kolom ini jadi tidak ada artinya dan WAJIB diisi ulang
+  /// lewat `npm run sync:pegawai` - kalau tidak, semua login SSO berhenti
+  /// cocok tanpa pesan galat apa pun.
+  ///
+  /// TODO(legal-confirm): mencocokkan lewat NIK berarti sesi penggajian
+  /// diberikan kepada siapa pun yang memegang Akun Kemnaker ber-NIK itu -
+  /// jadi ketelitian verifikasi NIK di sisi Naco ikut menentukan keamanan
+  /// sistem ini. Belum ada pernyataan resmi bahwa NIK di Naco terverifikasi.
+  sidikNik      String?   @unique @map("sidik_nik")
+
   sourceSystem   String   @default("SIAP") @map("source_system")
   sourceSyncedAt DateTime @map("source_synced_at")
 

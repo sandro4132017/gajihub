@@ -86,12 +86,76 @@ pegawai*, BUKAN *konfigurasi salah*. Pesan di layar harus bicara soal itu.
 Dua hal dari daftar di atas yang berguna untuk langkah berikutnya:
 - **`data.roles[]` ada**, artinya Naco memang membedakan jenis akun. Belum
   diketahui nilai apa yang menandai akun pegawai.
-- ~~**`data.username`** patut dicurigai sebagai NIP pada akun pegawai.~~
-  **TERBANTAH 2026-08-31.** Akun pegawai SUNGGUHAN sudah dicoba dan tetap
-  ditolak "Akun ini bukan akun pegawai Kemnaker". Karena `telusuri()` menyisir
-  SELURUH balasan termasuk isi array dan objek bersarang, kegagalan itu
-  berarti **tidak ada satu pun nilai berbentuk 18 digit polos** di sana -
-  jadi `username` BUKAN NIP polos.
+- **`data.username` adalah tempat NOMOR IDENTITAS berada** - diukur, bukan
+  diduga. Log bentuk field dari akun publik (2026-08-31):
+
+  ```
+  data.username: string, panjang 16, digit 16     <- NIK, 16 digit, tanpa pemisah
+  data.id:       string, panjang 36, digit 25     <- UUID
+  data.name:     string, panjang 23, digit 0
+  data.roles[0].name:  string, panjang 4          <- penanda jenis akun
+  ```
+
+  Warga mendaftar dengan NIK dan NIK-nya muncul di `username`. Padanan
+  wajarnya untuk pegawai adalah NIP 18 digit di field yang SAMA - dan kalau
+  begitu, `cariNipDariInfo()` menemukannya sendiri tanpa `NACO_FIELD_NIP`
+  perlu diisi.
+
+  **TERJAWAB 2026-08-31 - balasan akun PEGAWAI sudah tertangkap log, dan
+  bentuknya IDENTIK dengan akun publik**: `data.username` tetap **16 digit**
+  (NIK), dan tidak ada satu pun nilai 18 digit. `data.roles[0].name` juga
+  sama-sama 4 karakter, jadi payload ini bahkan tidak membedakan pegawai dari
+  warga.
+
+  Kesimpulan yang sekarang berlaku: **Naco tidak pernah mengirim NIP pada
+  scope `basic email`.** Dokumentasi resminya (`AUTH_CODE_GRANT.md`)
+  menegaskan `/users/me` satu-satunya endpoint identitas dan `basic email`
+  satu-satunya scope yang disebut - dan memang tidak pernah memberi contoh
+  balasan untuk langkah itu.
+
+  **Catatan koreksi**: sempat ditulis di sini bahwa dugaan `username = NIP`
+  TERBANTAH. Itu keliru - kesimpulannya diambil dari percobaan login yang
+  ternyata memakai akun luar. Yang benar: `username` memang tempat nomor
+  identitas, cuma isinya NIK, bukan NIP.
+
+#### Padanan NIK -> pegawai lewat SIDIK (HMAC), bukan NIK tersimpan
+
+Karena NIP tidak pernah dikirim, pegawai dikenali lewat **NIK**. Diukur
+read-only ke SIAP (`PEGAWAI.NIK`, varchar 25):
+
+| | |
+|---|---|
+| Pegawai aktif ber-NIP 18 digit | 5.074 |
+| Punya NIK rapi 16 digit | **5.072 (99,96%)** |
+| NIK kosong | 2 |
+| **NIK dipakai lebih dari satu NIP** | **2** |
+
+- **Kolom `Pegawai.sidikNik`** (migrasi `20260831120000_sidik_nik_untuk_sso`)
+  menyimpan **HMAC-SHA256 dari NIK**, bukan NIK-nya. Proyek ini dua kali
+  menolak mengimpor NIK; yang dibutuhkan alur login cuma MENCOCOKKAN, tidak
+  pernah MEMBACA - dan sidik berkunci melakukan persis itu. Kalau database
+  bocor, NIK 5.000 pegawai tidak ikut bocor.
+- **HMAC, bukan hash polos**: NIK 16 digit berstruktur diketahui, jadi SHA-256
+  telanjang bisa dibalik dengan tabel pelangi.
+- **`kunciSidikNik()` MELEMPAR kalau `SIDIK_NIK_SECRET` kosong** - sengaja
+  tidak punya nilai cadangan, pelajaran dari `getSecretKey()` di `session.ts`
+  yang diam-diam memakai cadangan yang ada di repo PUBLIK.
+- **Kolom UNIK + NIK ganda sengaja tidak diberi sidik.** Satu sidik tidak
+  boleh menunjuk dua orang. Yang dilewati (4 orang) tetap masuk lewat login NIP.
+- **`sync:pegawai` tetap jalan tanpa kunci** - memblokir sinkronisasi pegawai
+  gara-gara SSO belum siap jelas keliru; yang terjadi cuma login SSO belum
+  cocok, dan itu dilaporkan di akhir sync.
+
+**KALAU `SIDIK_NIK_SECRET` DIGANTI, SELURUH sidik jadi basi** dan semua login
+SSO berhenti cocok **tanpa pesan galat**. Tiap penggantian kunci WAJIB diikuti
+`npm run sync:pegawai`.
+
+**TODO(legal-confirm)**: mencocokkan lewat NIK berarti sesi penggajian
+diberikan kepada siapa pun yang memegang Akun Kemnaker ber-NIK itu - ketelitian
+verifikasi NIK di sisi Naco ikut menentukan keamanan sistem ini, dan belum ada
+pernyataan resmi bahwa NIK di Naco terverifikasi. Kalau suatu saat Naco bisa
+mengirim NIP, jalur itu didahulukan sendiri oleh callback dan padanan NIK jadi
+tidak terpakai.
 
 #### Yang sudah diperbaiki dari sisi Gajihub (2026-08-31)
 

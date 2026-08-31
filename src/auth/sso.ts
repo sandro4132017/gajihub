@@ -1,3 +1,5 @@
+import { normalkanNik } from "./sidikNik";
+
 /**
  * SSO Kemnaker (Naco) - OAuth 2.0 Authorization Code Grant.
  *
@@ -44,6 +46,12 @@ export interface KonfigurasiSso {
   scope: string;
   /** Nama field NIP di balasan /users/me, kalau sudah diketahui. */
   fieldNip: string | null;
+  /**
+   * Nama field NIK di balasan /users/me. Default `data.username` - itu yang
+   * TERUKUR pada akun publik maupun akun pegawai (2026-08-31), dan sejauh ini
+   * satu-satunya jalan mengenali pegawai karena NIP tidak pernah dikirim.
+   */
+  fieldNik: string | null;
 }
 
 /** Panjang NIP baru ASN. Dipakai mengenali NIP di balasan yang belum diketahui bentuknya. */
@@ -106,6 +114,7 @@ export function konfigurasiSso(): KonfigurasiSso | null {
     redirectUri,
     scope: process.env.NACO_SCOPE?.trim() || "basic email",
     fieldNip: process.env.NACO_FIELD_NIP?.trim() || null,
+    fieldNik: process.env.NACO_FIELD_NIK?.trim() || "data.username",
   };
 }
 
@@ -274,6 +283,35 @@ export function cariNipDariInfo(info: unknown, fieldNip: string | null): string 
   telusuri(info, (_jalur, nilai) => {
     if (ketemu !== null) return;
     const normal = normalkanNip(nilai);
+    if (normal) ketemu = normal;
+  });
+  return ketemu;
+}
+
+/**
+ * Menemukan NIK (16 digit) di balasan `/users/me`.
+ *
+ * DIUKUR, BUKAN DIDUGA: dua kali pada 2026-08-31 - akun publik DAN akun
+ * pegawai - `data.username` berisi 16 digit polos, dan tidak ada satu pun
+ * nilai 18 digit di seluruh balasan. Karena itu `fieldNik` default-nya
+ * `data.username`, bukan hasil penelusuran.
+ *
+ * Penelusuran tetap dipakai sebagai cadangan kalau field itu berubah, dan itu
+ * AMAN di sini karena sifat langkah berikutnya: kandidat yang keliru (mis.
+ * suatu nomor lain yang kebetulan 16 digit) cuma menghasilkan sidik yang
+ * TIDAK cocok dengan baris mana pun, jadi hasilnya login ditolak - bukan
+ * login sebagai orang lain. Yang memberi akses tetap kecocokan sidik, bukan
+ * penemuan angkanya.
+ */
+export function cariNikDariInfo(info: unknown, fieldNik: string | null): string | null {
+  if (fieldNik) {
+    const langsung = normalkanNik(ambilJalur(info, fieldNik));
+    if (langsung) return langsung;
+  }
+  let ketemu: string | null = null;
+  telusuri(info, (_jalur, nilai) => {
+    if (ketemu !== null) return;
+    const normal = normalkanNik(nilai);
     if (normal) ketemu = normal;
   });
   return ketemu;

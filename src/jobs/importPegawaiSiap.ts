@@ -50,6 +50,7 @@
 import { PrismaClient } from "@prisma/client";
 import sql from "mssql";
 import { konfigurasiSiap, labelSumberSiap } from "../lib/siapConfig";
+import { kunciSidikNik, normalkanNik, sidikNik } from "../auth/sidikNik";
 
 // Prisma memuat .env sendiri buat DATABASE_URL, tapi variabel SIAP_* di
 // bawah dibaca langsung dari process.env - jadi .env perlu dimuat eksplisit.
@@ -76,6 +77,13 @@ interface BarisSiap {
   tmtPangkat: Date | null;
   kelasJabatan: string | null;
   sumberKelasJabatan: string | null;
+  /**
+   * NIK - SATU-SATUNYA data pribadi yang diambil, dan **tidak pernah
+   * disimpan**. Dipakai sekali di memori untuk menghitung `sidikNik` (HMAC),
+   * lalu dibuang. Lihat `src/auth/sidikNik.ts` untuk alasannya: Naco cuma
+   * mengirim NIK, sementara seluruh data Gajihub berkunci NIP.
+   */
+  nik: string | null;
 }
 
 /**
@@ -136,6 +144,7 @@ async function ambilDariSiap(prefixSatker: string | null): Promise<BarisSiap[]> 
         rj.NAMAJABATAN                     AS jabatan,
         pk.KODEPANGKAT                     AS golongan,
         vp.TMTPANGKAT                      AS tmtPangkat,
+        LTRIM(RTRIM(p.NIK))                AS nik,
         COALESCE(
           NULLIF(LTRIM(RTRIM(mf.JOBGRADE)), ''),
           NULLIF(LTRIM(RTRIM(sJab.JOBGRADE)), '')
@@ -234,6 +243,35 @@ async function main() {
   const waktuSync = new Date();
   let tersimpan = 0;
 
+  // --- Sidik NIK: padanan NIK -> pegawai untuk SSO Naco ---
+  //
+  // NIK-nya sendiri TIDAK PERNAH disimpan; yang masuk database cuma HMAC-nya
+  // (lihat src/auth/sidikNik.ts). Kalau SIDIK_NIK_SECRET belum diisi, sync
+  // TETAP JALAN tanpa mengisi kolom itu - memblokir sinkronisasi pegawai gara-
+  // gara SSO belum disiapkan jelas keliru; yang terjadi cuma login SSO belum
+  // cocok, dan itu dikatakan apa adanya di bawah.
+  let kunci: string | null = null;
+  try {
+    kunci = kunciSidikNik();
+  } catch (e) {
+    console.warn(`\n  ! Sidik NIK DILEWATI: ${e instanceof Error ? e.message : e}`);
+  }
+
+  // NIK yang dipakai LEBIH DARI SATU pegawai tidak boleh menghasilkan sidik
+  // sama sekali - satu sidik yang menunjuk dua orang berarti login SSO bisa
+  // mendarat di akun yang salah. Terukur di SIAP: 2 NIK bermasalah seperti ini.
+  // Mereka dilewati diam-diam? Tidak - jumlahnya dilaporkan di akhir.
+  const hitungNik = new Map<string, number>();
+  if (kunci) {
+    for (const b of siap) {
+      const n = normalkanNik(b.nik);
+      if (n) hitungNik.set(n, (hitungNik.get(n) ?? 0) + 1);
+    }
+  }
+  let sidikTerisi = 0;
+  let nikGanda = 0;
+  let nikTidakTerbaca = 0;
+
   // Ditulis per batch supaya 3.600+ upsert tidak jadi satu transaksi raksasa
   // (pola yang sama dengan upload gaji induk di /ppabp/gaji-induk).
   const UKURAN_BATCH = 100;
@@ -250,6 +288,21 @@ async function main() {
         const kelas = Number(b.kelasJabatan);
         const kelasJabatan = Number.isInteger(kelas) && kelas >= 1 && kelas <= 17 ? kelas : null;
 
+        // Sidik NIK - dihitung di memori lalu NIK-nya dibuang. `null` kalau
+        // kunci belum ada, NIK tidak terbaca, atau NIK-nya dipakai lebih dari
+        // satu pegawai. `null` berarti "SSO belum cocok untuk orang ini",
+        // BUKAN kegagalan: login NIP tetap jalan.
+        let sidik: string | null = null;
+        if (kunci) {
+          const nikBersih = normalkanNik(b.nik);
+          if (!nikBersih) nikTidakTerbaca++;
+          else if ((hitungNik.get(nikBersih) ?? 0) > 1) nikGanda++;
+          else {
+            sidik = sidikNik(nikBersih, kunci);
+            if (sidik) sidikTerisi++;
+          }
+        }
+
         const isi = {
           nama: b.nama!.trim(),
           unitKerja,
@@ -259,6 +312,10 @@ async function main() {
           kelasJabatan,
           tmtSkTerakhir: b.tmtPangkat ?? null,
           sourceSyncedAt: waktuSync,
+          // Sengaja ikut di-set walau null: kalau NIK seseorang di SIAP
+          // dikoreksi (atau jadi ganda), sidik lamanya HARUS hilang - kalau
+          // tidak, padanan basi itu tetap bisa dipakai masuk.
+          sidikNik: sidik,
         };
         return prisma.pegawai.upsert({
           where: { nip },
@@ -282,6 +339,24 @@ async function main() {
   }
 
   console.log(`\n\nImport selesai: ${tersimpan} pegawai tersimpan/diperbarui.`);
+
+  // Sidik NIK dilaporkan apa adanya - yang tidak terisi berarti orangnya belum
+  // bisa masuk lewat SSO (login NIP tetap jalan), dan itu harus kelihatan,
+  // bukan hilang diam-diam.
+  if (kunci) {
+    console.log(`\nSidik NIK (padanan SSO Naco):`);
+    console.log(`  terisi              : ${sidikTerisi}`);
+    if (nikTidakTerbaca) console.log(`  NIK tidak terbaca   : ${nikTidakTerbaca}`);
+    if (nikGanda)
+      console.log(
+        `  NIK dipakai >1 org  : ${nikGanda}  <- SENGAJA dikosongkan; satu sidik tidak boleh menunjuk dua orang`
+      );
+    if (nikTidakTerbaca || nikGanda)
+      console.log(`  (yang tidak terisi tetap bisa login memakai NIP)`);
+  } else {
+    console.log(`\nSidik NIK: TIDAK diisi - SIDIK_NIK_SECRET belum ada di .env.`);
+    console.log(`  Login SSO belum akan cocok sampai kunci itu diisi dan sync diulang.`);
+  }
 
   // --- Rekonsiliasi status: siapa yang TIDAK lagi ada di daftar aktif? ---
   //

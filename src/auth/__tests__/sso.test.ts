@@ -17,6 +17,7 @@ const CFG: KonfigurasiSso = {
   redirectUri: "http://gajihub.rokeubmn.id/login/sso/callback",
   scope: "basic email",
   fieldNip: null,
+  fieldNik: "data.username",
 };
 
 describe("urlOtorisasi", () => {
