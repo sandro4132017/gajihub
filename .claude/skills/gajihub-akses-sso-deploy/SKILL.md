@@ -146,9 +146,33 @@ read-only ke SIAP (`PEGAWAI.NIK`, varchar 25):
   gara-gara SSO belum siap jelas keliru; yang terjadi cuma login SSO belum
   cocok, dan itu dilaporkan di akhir sync.
 
+**URUTAN DEPLOY - `prisma generate` WAJIB, dan `postinstall` TIDAK menutupinya.**
+Kejadian 2026-08-31 di VPS: migrasi sukses (kolomnya ada di database), skema
+sudah ter-pull, tapi `npm run sync:pegawai` gagal dengan
+`Unknown argument 'sidikNik'` - Prisma **client** di `node_modules` masih hasil
+generate lama. `postinstall` cuma jalan saat `npm install`, dan waktu itu tidak
+ada dependency yang berubah sehingga tidak pernah terpicu.
+
+Sekarang dijaga `prebuild` + `presync:pegawai` di `package.json`, jadi
+`prisma generate` ikut jalan sendiri. Urutan yang benar tetap:
+
+```bash
+git pull origin main
+npx prisma migrate deploy     # kolomnya dibuat DULU
+npm run sync:pegawai          # baru diisi (prisma generate ikut otomatis)
+npm run build
+pm2 restart gajihub
+```
+
 **KALAU `SIDIK_NIK_SECRET` DIGANTI, SELURUH sidik jadi basi** dan semua login
 SSO berhenti cocok **tanpa pesan galat**. Tiap penggantian kunci WAJIB diikuti
 `npm run sync:pegawai`.
+
+**Pertanyaan ke Pusdatik ada di `docs/pertanyaan-sso-naco-untuk-pusdatik.md`**
+(6 butir, siap kirim). Yang paling menyelesaikan: adakah scope/endpoint yang
+memuat NIP - kalau ada, jembatan NIK dibongkar. Yang paling mendesak dari sisi
+keamanan: apakah NIK di Naco terverifikasi. **Perbarui dokumen itu tiap ada
+butir yang terjawab.**
 
 **TODO(legal-confirm)**: mencocokkan lewat NIK berarti sesi penggajian
 diberikan kepada siapa pun yang memegang Akun Kemnaker ber-NIK itu - ketelitian

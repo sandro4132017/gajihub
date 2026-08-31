@@ -46,7 +46,23 @@ export const config = {
   // Handler seperti /ppabp/adk/tukin yang mengalirkan berkas ADK), jadi
   // daftar yang sempit ini tidak bisa tanpa sengaja membuka halaman berdata
   // gaji kalau nanti ada rute baru.
+  //
+  // `.well-known/` DIKECUALIKAN dan itu memang HARUS terbuka tanpa login -
+  // RFC 8615 mendefinisikannya sebagai tempat berkas yang ditemukan pihak
+  // luar tanpa otentikasi. Dua pemakainya di sini:
+  //
+  //   security.txt (RFC 9116) - alamat lapor celah keamanan. Sempat gagal
+  //     persis karena ini: berkasnya sudah ada di public/, tapi middleware
+  //     membalas 307 ke /login, jadi pemindai keamanan tetap melaporkannya
+  //     "tidak ditemukan". Terbukti di situs hidup 2026-08-31.
+  //   acme-challenge/ - yang dipakai Let's Encrypt memverifikasi domain.
+  //     Belum dipakai (TLS masih diterminasi proxy Pusdatik), tapi kalau
+  //     suatu saat sertifikatnya diterbitkan sendiri, jalur ini WAJIB
+  //     terbuka atau penerbitannya gagal tanpa sebab yang jelas.
+  //
+  // Cakupannya sempit: HANYA di bawah `.well-known/`, bukan sembarang berkas
+  // bertitik - jadi tidak ada halaman berdata gaji yang bisa ikut terbuka.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|.*\.(?:png|jpg|jpeg|gif|svg|webp|avif|ico|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|\\.well-known/|.*\.(?:png|jpg|jpeg|gif|svg|webp|avif|ico|woff2?)$).*)",
   ],
 };

@@ -638,7 +638,11 @@ potongan Pasal 14 ikut berlaku.
 
 ## Teks peraturan: `docs/permenaker-15-2024-tunjangan-kinerja.md`
 
-Salinan teks Permenaker 15/2024 disimpan di repo. **Kalau kode dan file itu
+Salinan teks Permenaker 15/2024 ada di `docs/`. **TAPI `docs/` DIABAIKAN git**
+(`.gitignore` baris 9) - nol berkas di sana yang ter-track, jadi clone baru
+TIDAK akan memilikinya sama sekali dan setiap rujukan "lihat docs/..." di kode
+maupun skill akan menggantung. Salin manual kalau pindah mesin.
+**Kalau kode dan file itu
 berbeda, yang benar FILE ITU** - perbaiki kodenya, jangan menyesuaikan
 kutipannya supaya cocok.
 
