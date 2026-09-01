@@ -7,6 +7,7 @@ import {
   canKelolaKendalaEpresensi,
   canKelolaHariLibur,
   canUploadRekapPresensi,
+  canExportRekapUnit,
   type AuthUser,
 } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
@@ -56,6 +57,12 @@ export default async function PresensiTukinPage({
   // bukan cuma disembunyikan dropdown-nya. Role lintas satker (PPABP/ADMIN)
   // boleh memilih; kosong berarti semua unit.
   const satkerEfektif = satkerWajib ?? (satker?.trim() || null);
+
+  // Unduhan WAJIB punya satu unit yang jelas. Buat KASUBAG_TU selalu terpenuhi
+  // (unitnya dipaksa di atas); buat PPABP/ADMIN yang belum memilih unit,
+  // tombolnya tidak muncul - berkas berisi seluruh kementerian bukan yang
+  // dimaksud siapa pun, dan route-nya memang menolaknya dengan 400.
+  const bolehExport = satkerEfektif !== null && canExportRekapUnit(authUser, satkerEfektif);
 
   const filterPegawai: Prisma.PegawaiWhereInput = {};
   if (satkerEfektif) filterPegawai.satuanKerja = satkerEfektif;
@@ -207,9 +214,31 @@ export default async function PresensiTukinPage({
       </form>
 
       <div className="mt-6">
-        <h2 className="text-lg font-extrabold tracking-tight text-navy">
-          Rekap Presensi Periode {NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} {periodeTahun}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-extrabold tracking-tight text-navy">
+            Rekap Presensi Periode {NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} {periodeTahun}
+          </h2>
+          {/*
+            `<a href>` biasa, BUKAN tombol ber-JavaScript: unduhan ini Route
+            Handler, jadi cukup ditautkan. Sengaja membawa periode & satker
+            yang SEDANG DILIHAT - kalau tidak, orang mengunduh periode lain
+            daripada yang ada di layarnya tanpa sadar.
+
+            Disembunyikan kalau tabelnya kosong: berkas berisi nol baris tidak
+            menolong siapa pun, dan tombol yang menghasilkannya bikin orang
+            mengira unduhannya gagal.
+          */}
+          {jumlahBaris > 0 && bolehExport && (
+            <a
+              href={`/tukin/presensi/export?bulan=${periodeBulan}&tahun=${periodeTahun}${
+                satkerEfektif ? `&satker=${encodeURIComponent(satkerEfektif)}` : ""
+              }${q?.trim() ? `&q=${encodeURIComponent(q.trim())}` : ""}`}
+              className="btn btn-secondary"
+            >
+              Unduh Excel{q?.trim() ? " (hasil pencarian)" : ""}
+            </a>
+          )}
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="inline-flex items-center gap-2 text-sm">
             <span className="grid size-7 flex-none place-items-center rounded-lg bg-teal-tint text-teal-deep">

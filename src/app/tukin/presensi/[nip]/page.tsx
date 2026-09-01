@@ -10,6 +10,7 @@ import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../../business-logic/tarifT
 import { RincianPotonganKehadiran } from "../../../RincianPotonganKehadiran";
 import { dikecualikanPotonganKehadiran } from "../../../../business-logic/pejabatPimpinanTinggi";
 import { BadgePejabatEselon } from "../../../BadgePejabatEselon";
+import { LABEL_STATUS, NAMA_HARI, jamTeks } from "../../../presensiTampilan";
 import { KoreksiJamForm } from "./KoreksiJamForm";
 import { TabelRincianJamKerja, type BarisTabelRincianJamKerja } from "./TabelRincianJamKerja";
 import { TabelBandingEpresensi } from "./TabelBandingEpresensi";
@@ -34,28 +35,9 @@ export const dynamic = "force-dynamic";
  * dikatakan apa adanya di halaman ini.
  */
 
-const NAMA_HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-
-/** Label yang dimengerti orang untuk nilai status_kehadiran yang tersimpan. */
-const LABEL_STATUS: Record<string, string> = {
-  WFO: "WFO",
-  HADIR: "Hadir (WFO)",
-  TERLAMBAT: "Hadir (terlambat)",
-  WFH: "WFH / WFA",
-  WFA: "WFH / WFA",
-  DINAS_LUAR: "Dinas Keluar",
-  DIKLAT: "Diklat",
-  LEMBUR: "Lembur",
-  UPACARA: "Upacara Bendera",
-  CUTI: "Cuti",
-  IZIN: "Izin",
-  SAKIT: "Sakit",
-  TUGAS_BELAJAR: "Tugas Belajar",
-  ALPHA: "Tidak hadir (alpha)",
-  TIDAK_PRESENSI: "Tidak presensi",
-  TIDAK_DIKENALI: "Status tidak dikenali",
-};
-
+// NAMA_HARI, LABEL_STATUS, dan jamTeks() pindah ke src/app/presensiTampilan.ts
+// supaya halaman ini dan /saya/presensi/[bulan]/[tahun] tidak pernah menyebut
+// status yang sama dengan nama berbeda.
 /** Status yang berhak uang makan (SBM 2026 item 22.1). */
 const BERHAK_UANG_MAKAN = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
 
@@ -70,13 +52,6 @@ const BERHAK_UANG_MAKAN = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
  */
 const WAJIB_JAM_KERJA = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
 const WAJIB_PRESENSI = [...WAJIB_JAM_KERJA, "TIDAK_PRESENSI"];
-
-function jamTeks(waktu: Date | null): string {
-  if (!waktu) return "-";
-  const jam = String(waktu.getUTCHours()).padStart(2, "0");
-  const menit = String(waktu.getUTCMinutes()).padStart(2, "0");
-  return `${jam}:${menit}`;
-}
 
 export default async function RincianPresensiPegawaiPage({
   params,

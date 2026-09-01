@@ -26,6 +26,7 @@ export function AccountMenu({
   rolesTersedia,
   satuanKerja,
   initials,
+  ringkas = false,
 }: {
   nama: string;
   jabatan: string;
@@ -34,6 +35,13 @@ export function AccountMenu({
   /** Unit akun - cuma dipakai melengkapi label Kasubag TU (lihat labelRole). */
   satuanKerja: string | null;
   initials: string;
+  /**
+   * Sidebar sedang diciutkan jadi rel ikon - tombolnya menyusut jadi kotak
+   * inisial saja. Menunya sendiri TIDAK ikut menyusut: "Ganti role" dan
+   * "Logout" tetap perlu terbaca, jadi panelnya diberi lebar tetap dan
+   * dibiarkan melebar ke kanan melewati rel.
+   */
+  ringkas?: boolean;
 }) {
   const [buka, setBuka] = useState(false);
   const [state, gantiRole, pending] = useActionState(gantiRoleAction, INITIAL_STATE);
@@ -61,7 +69,11 @@ export function AccountMenu({
   return (
     <div ref={wrapperRef} className="relative">
       {buka && (
-        <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 overflow-hidden rounded-xl border border-line bg-surface shadow-[0_18px_40px_rgba(19,65,107,0.18)]">
+        <div
+          className={`absolute bottom-[calc(100%+8px)] left-0 z-50 overflow-hidden rounded-xl border border-line bg-surface shadow-[0_18px_40px_rgba(19,65,107,0.18)] ${
+            ringkas ? "w-60" : "right-0"
+          }`}
+        >
           {multiRole && (
             <>
               <div className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-[1.2px] text-muted">
@@ -111,30 +123,41 @@ export function AccountMenu({
         onClick={() => setBuka((v) => !v)}
         aria-expanded={buka}
         aria-haspopup="menu"
-        className="flex w-full items-center gap-2.5 rounded-xl border border-nav-line bg-nav-hover p-2.5 text-left transition hover:border-nav-text"
+        // Nama & role dipakai sebagai title waktu ringkas - di rel, kotak
+        // inisial sendirian tidak memberi tahu sedang masuk sebagai siapa,
+        // dan itu keterangan yang paling tidak boleh hilang di aplikasi yang
+        // sudut pandangnya bisa diganti-ganti lewat menu ini juga.
+        title={ringkas ? `${nama} - ${labelRole(role, satuanKerja)}` : undefined}
+        className={`flex w-full items-center rounded-xl border border-nav-line bg-nav-hover text-left transition hover:border-nav-text ${
+          ringkas ? "justify-center p-1.5" : "gap-2.5 p-2.5"
+        }`}
       >
         <div className="grid size-[34px] flex-none place-items-center rounded-[9px] bg-biru text-[13px] font-extrabold text-white">
           {initials}
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] font-bold leading-tight text-white">{nama}</div>
-          <div className="truncate text-[10.5px] text-nav-text">
-            {labelRole(role, satuanKerja)} &middot; {jabatan}
-          </div>
-        </div>
-        <svg
-          viewBox="0 0 24 24"
-          className={`size-4 flex-none text-nav-text transition-transform ${buka ? "rotate-180" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        >
-          <path d="m18 15-6-6-6 6" />
-        </svg>
+        {!ringkas && (
+          <>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[12.5px] font-bold leading-tight text-white">{nama}</div>
+              <div className="truncate text-[10.5px] text-nav-text">
+                {labelRole(role, satuanKerja)} &middot; {jabatan}
+              </div>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              className={`size-4 flex-none text-nav-text transition-transform ${buka ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="m18 15-6-6-6 6" />
+            </svg>
+          </>
+        )}
       </button>
 
-      {multiRole && (
+      {multiRole && !ringkas && (
         <p className="mt-1.5 px-1 text-[10px] leading-snug text-nav-text">
           Akun ini punya {rolesTersedia.length} role - klik nama di atas buat ganti sudut pandang.
         </p>

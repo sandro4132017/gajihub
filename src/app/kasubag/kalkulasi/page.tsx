@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
-import { canAjukanKalkulasiTukinMassalUnit } from "../../../auth/permissions";
+import { canAjukanKalkulasiTukinMassalUnit, canExportRekapUnit } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { FilterBar } from "../../FilterBar";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
@@ -172,6 +172,11 @@ export default async function KalkulasiUnitPage({
     return <AksesDitolak pesan="Role kamu tidak berwenang mengelola kalkulasi unit ini." />;
   }
 
+  // Dicek terpisah, tidak menumpang izin di atas: mengunduh rekap dan
+  // MENJALANKAN kalkulasi massal dua kewenangan yang berbeda, dan kalau suatu
+  // saat salah satunya digeser, yang satunya tidak boleh ikut bergeser diam-diam.
+  const bolehExportRekap = canExportRekapUnit(authUser, satkerEfektif);
+
   const { bulan: periodeBulan, tahun: periodeTahun } = resolvePeriode(
     bulan,
     tahun,
@@ -258,10 +263,28 @@ export default async function KalkulasiUnitPage({
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Kalkulasi Unit</h1>
-      <p className="mt-1 text-sm text-muted">
-        {satkerEfektif} - Periode {NAMA_BULAN[periodeBulan - 1]} {periodeTahun}
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-extrabold tracking-tight text-ink">Kalkulasi Unit</h1>
+          <p className="mt-1 text-sm text-muted">
+            {satkerEfektif} - Periode {NAMA_BULAN[periodeBulan - 1]} {periodeTahun}
+          </p>
+        </div>
+        {/*
+          Membawa periode & unit yang SEDANG DILIHAT. Berkasnya memuat SEMUA
+          status (DRAFT, SELISIH, APPROVED) - itu memang gunanya: dipakai
+          memeriksa SEBELUM menyetujui. Yang disetor ke Web Gaji tetap ADK di
+          /ppabp/adk, dan itu hanya baris APPROVED.
+        */}
+        {bolehExportRekap && (
+          <a
+            href={`/kasubag/kalkulasi/export?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}
+            className="btn btn-secondary"
+          >
+            Unduh Excel
+          </a>
+        )}
+      </div>
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={String(periodeBulan)} tahun={String(periodeTahun)} satker={satkerEfektif} />
 

@@ -155,6 +155,29 @@ export function canViewRekapUnitKerja(user: AuthUser, targetSatuanKerja: string)
   return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
 }
 
+/**
+ * Unduh rekap presensi / Tunjangan Kinerja unit sebagai berkas Excel.
+ *
+ * KOMPOSISI dari izin yang sudah ada, BUKAN aturan baru: siapa pun yang boleh
+ * MELIHAT rekap unit di layar boleh mengunduh isi yang sama. Berkasnya tidak
+ * memuat satu pun kolom yang tidak sudah tampil di halamannya, jadi kalau ini
+ * dibuat sebagai aturan tersendiri, cepat atau lambat ia akan bergeser dari
+ * `canViewRekapUnitKerja` dan menghasilkan berkas berisi lebih banyak daripada
+ * yang boleh dilihat orangnya.
+ *
+ * PPABP ikut karena jangkauannya memang lintas unit (pola sama dengan
+ * `canAjukanKalkulasiTukinMassalUnit`).
+ *
+ * INI BUKAN `canGenerateAdk`. ADK adalah berkas PEMBAYARAN yang disetor ke Web
+ * Gaji dan tetap terbatas untuk PPABP/ADMIN; yang ini rekap untuk dibaca dan
+ * diarsipkan. Menyatukan keduanya berarti memberi Kasubag TU kemampuan
+ * menerbitkan berkas pembayaran.
+ */
+export function canExportRekapUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+  if (canViewRekapUnitKerja(user, targetSatuanKerja)) return true;
+  return cekPpabpAtauAdmin(user, targetSatuanKerja);
+}
+
 /** Verifikasi (jenjang 1) banding yang masuk dari pegawai di unitnya sendiri. */
 export function canVerifikasiBandingJenjang1(user: AuthUser, banding: TargetBanding): boolean {
   if (!user.aktif) return false;

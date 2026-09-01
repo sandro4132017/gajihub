@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { prisma } from "../../lib/prisma";
-import { canViewDashboardUnit } from "../../auth/permissions";
+import { canViewDashboardUnit, canExportRekapUnit } from "../../auth/permissions";
 import { DEFAULT_TOTAL_JENJANG_APPROVAL } from "../../approval/approvalTukinService";
 import { DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_MAKAN } from "../../approval/approvalUangMakanService";
 import { DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_LEMBUR } from "../../approval/approvalUangLemburService";
 import { AksesDitolak } from "../AksesDitolak";
 import { FilterBar } from "../FilterBar";
-import { resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
+import { resolveSatuanKerjaListUntukFilter, satkerTerkunciUntukAkun } from "../dashboardScope";
 import { tallyApproval } from "../tallyApproval";
 import { ambilAksesUnit } from "./access";
+import { AngkaNaik } from "../AngkaNaik";
+import { langkahTutupBulan } from "../../business-logic/langkahTutupBulan";
+import { bulanSebelumnyaDalamTahun, deltaPersen } from "../../business-logic/deltaPeriode";
+import { tinggiBatangPersen } from "../tinggiBatang";
 
 export const dynamic = "force-dynamic";
 
@@ -39,10 +43,22 @@ function formatRupiahPenuh(nilai: number): string {
   }).format(nilai);
 }
 
-function inisialNama(nama: string): string {
-  const parts = nama.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
+/**
+ * Nama untuk sapaan - maksimal dua kata.
+ *
+ * Nama dari SIAP sering panjang dan bergelar ("IRVAN GANEVA, M.M. , S.Ds"),
+ * dan sapaan yang memuat seluruhnya justru terbaca kaku. Dua kata pertama
+ * menangani mayoritas nama Indonesia dengan wajar.
+ *
+ * HURUF BESARNYA TIDAK DIUBAH. Banyak nama di SIAP tersimpan kapital penuh,
+ * dan menurunkannya jadi Title Case akan merusak nama yang memang ditulis
+ * begitu ("LA ODE", singkatan gelar) - proyek ini sudah punya aturan bahwa
+ * nama pegawai tidak dikarang ulang.
+ */
+function sapaanNama(nama: string): string {
+  const kata = nama.trim().split(/\s+/).filter(Boolean);
+  if (kata.length === 0) return "";
+  return kata.slice(0, 2).join(" ").replace(/,$/, "");
 }
 
 export default async function KasubagDashboardPage({
@@ -55,7 +71,7 @@ export default async function KasubagDashboardPage({
   if (!akses) {
     return <AksesDitolak pesan="Kamu harus login dulu buat lihat halaman ini." />;
   }
-  const { authUser, satkerEfektif } = akses;
+  const { authUser, satkerEfektif, nama: namaSesi } = akses;
 
   const satuanKerjaRows = await prisma.pegawai.findMany({
     distinct: ["satuanKerja"],
@@ -83,6 +99,12 @@ export default async function KasubagDashboardPage({
     return <AksesDitolak pesan="Role kamu tidak berwenang melihat dashboard unit ini." />;
   }
 
+  // Dicek terpisah dari izin membuka dashboard: PIMPINAN boleh MELIHAT
+  // dashboard unit tapi tidak mengunduh rekapnya, dan kalau kedua izin ini
+  // ditumpangkan, menambah role pemantau berarti diam-diam memberi akses
+  // unduh berkas berisi nama & NIP satu unit.
+  const bolehExportRekap = canExportRekapUnit(authUser, satkerEfektif);
+
   // Default periode = periode Tukin paling baru yang ada datanya
   let periodeBulan = bulan ? Number(bulan) : undefined;
   let periodeTahun = tahun ? Number(tahun) : undefined;
@@ -108,6 +130,7 @@ export default async function KasubagDashboardPage({
     countBanding,
     countKgb,
     countHukdis,
+    countPresensi,
   ] = await Promise.all([
     prisma.pegawai.count({
       where: { satuanKerja: satkerEfektif, statusPegawai: "AKTIF" },
@@ -134,7 +157,23 @@ export default async function KasubagDashboardPage({
     prisma.uangLembur.findMany({
       where: { periodeBulan, periodeTahun, pegawai: { satuanKerja: satkerEfektif } },
     }),
-    // Data tren 12 bulan (Jan - Des) di tahun terpilih
+    // Data tren 12 bulan (Jan - Des) di tahun terpilih.
+    //
+    // SENGAJA TIDAK memfilter status: yang ditampilkan memang SELURUH
+    // kalkulasi, termasuk yang masih draft, sedang disanggah, dan yang
+    // ditolak. Judul panelnya menyebut itu apa adanya ("Kalkulasi", bukan
+    // "Realisasi") - dulu tidak, dan grafiknya terbaca sebagai uang yang
+    // sudah pasti dibayar padahal bukan.
+    //
+    // Menyaring ke yang benar-benar disetujui BUKAN sekadar menambah
+    // `where: { status }`. Yang menentukan disetujui atau belum di aplikasi
+    // ini adalah ApprovalLog lewat evaluasiApproval (lihat tallyApproval),
+    // bukan kolom `status` - kolom itu dipakai untuk rekonsiliasi dengan Web
+    // Gaji. Memakai kolom status di sini akan memunculkan definisi "disetujui"
+    // KEDUA yang berbeda dari kartu KPI di halaman yang sama. Menghitungnya
+    // dengan cara yang benar berarti menarik seluruh baris setahun beserta
+    // log-nya (unit 500 pegawai = ~18.000 baris tiap kali halaman dibuka),
+    // dan itu tidak sepadan untuk sebuah grafik ringkasan.
     prisma.tukinCalculation.groupBy({
       by: ["periodeBulan"],
       where: { periodeTahun, pegawai: { satuanKerja: satkerEfektif } },
@@ -165,6 +204,14 @@ export default async function KasubagDashboardPage({
     prisma.skHukumanDisiplin.count({
       where: { pegawai: { satuanKerja: satkerEfektif } },
     }),
+    // Kesiapan presensi - komponen 30% Tukin. Dashboard ini dulu cuma
+    // menghitung predikat (yang 70%), jadi unit yang presensinya belum ditarik
+    // tetap terlihat "siap" sampai kalkulasinya dijalankan dan hasilnya nol.
+    // Ikut menumpang Promise.all yang sudah ada - tidak menambah bolak-balik
+    // ke database, cuma satu query lagi di gelombang yang sama.
+    prisma.rekapPresensiPeriode.count({
+      where: { periodeBulan, periodeTahun, pegawai: { satuanKerja: satkerEfektif } },
+    }),
   ]);
 
   const [tallyTukin, tallyUm, tallyLembur] = await Promise.all([
@@ -189,6 +236,18 @@ export default async function KasubagDashboardPage({
   const nominalUmTotal = umRows.reduce((a, r) => a + r.totalUangMakan, 0);
   const nominalLemburTotal = lemburRows.reduce((a, r) => a + r.totalUangLembur, 0);
   const totalNominalPeriode = nominalTukinTotal + nominalUmTotal + nominalLemburTotal;
+
+  // Pembanding bulan lalu diambil dari deret tren yang SUDAH ditarik di atas -
+  // tidak ada query tambahan. Januari tidak punya pembanding karena deret itu
+  // cuma memuat satu tahun (lihat bulanSebelumnyaDalamTahun).
+  const bulanLalu = bulanSebelumnyaDalamTahun(periodeBulan);
+  const totalNominalBulanLalu =
+    bulanLalu === null
+      ? null
+      : (trendTukin.find((t) => t.periodeBulan === bulanLalu)?._sum.tukinBersih ?? 0) +
+        (trendUm.find((t) => t.periodeBulan === bulanLalu)?._sum.totalUangMakan ?? 0) +
+        (trendLembur.find((t) => t.periodeBulan === bulanLalu)?._sum.totalUangLembur ?? 0);
+  const deltaBelanja = deltaPersen(totalNominalPeriode, totalNominalBulanLalu);
 
   const totalKalkulasi = tallyTukin.total + tallyUm.total + tallyLembur.total;
   const totalApproved = tallyTukin.approved + tallyUm.approved + tallyLembur.approved;
@@ -247,6 +306,36 @@ export default async function KasubagDashboardPage({
 
   // Dokumen & Kesiapan
   const persenPredikat = totalPegawai > 0 ? Math.min(100, Math.round((countPredikat / totalPegawai) * 100)) : 0;
+  const persenPresensi = totalPegawai > 0 ? Math.min(100, Math.round((countPresensi / totalPegawai) * 100)) : 0;
+
+  // Aturan urutannya PURE & teruji di src/business-logic/langkahTutupBulan.ts -
+  // yang di sini cuma merangkainya jadi kalimat & tautan.
+  const langkah = langkahTutupBulan({
+    totalPegawai,
+    jumlahRekapPresensi: countPresensi,
+    jumlahPredikat: countPredikat,
+    jumlahKalkulasi: tukinRows.length,
+  });
+  const qPeriode = `bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`;
+  const langkahBerikutnya = !langkah
+    ? null
+    : langkah.jenis === "PRESENSI"
+      ? {
+          pesan: `Rekap presensi baru ada untuk ${langkah.sudah} dari ${langkah.dari} pegawai. Komponen kehadiran (30%) belum bisa dihitung utuh.`,
+          tautan: `/tukin/presensi?${qPeriode}`,
+          label: "Tarik presensi",
+        }
+      : langkah.jenis === "PREDIKAT"
+        ? {
+            pesan: `Predikat kinerja baru ada untuk ${langkah.sudah} dari ${langkah.dari} pegawai. Komponen kinerja (70%) belum bisa dihitung utuh.`,
+            tautan: `/tukin/predikat-kinerja?${qPeriode}`,
+            label: "Unggah predikat",
+          }
+        : {
+            pesan: `Bahan lengkap. Kalkulasi Tukin baru dibuat untuk ${langkah.sudah} dari ${langkah.dari} pegawai.`,
+            tautan: `/kasubag/kalkulasi?${qPeriode}`,
+            label: "Hitung unit",
+          };
   const bandingPending = countBanding.filter((b) => b.status === "DIAJUKAN").length;
   const bandingSelesai = countBanding.filter((b) => b.status === "DISETUJUI" || b.status === "DITOLAK").length;
 
@@ -255,19 +344,26 @@ export default async function KasubagDashboardPage({
       {/* ====================================================================
           1. HEADER & ACTION BAR
           ==================================================================== */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="gj-masuk flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-black tracking-tight text-ink">Dashboard Unit</h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-black tracking-tight text-ink sm:text-3xl">
+              Halo, {sapaanNama(namaSesi)}{" "}
+              {/* Emoji dibungkus aria-hidden: pembaca layar melafalkannya
+                  ("melambaikan tangan") di tengah kalimat sapaan, dan itu
+                  mengganggu tanpa menambah arti apa pun. */}
+              <span aria-hidden="true">👋</span>
+            </h1>
             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusSiklusBg}`}>
               {statusSiklusLabel}
             </span>
           </div>
           <p className="mt-1 text-sm font-medium text-muted">
-            {satkerEfektif} &bull; Periode{" "}
+            Ringkasan {satkerEfektif} periode{" "}
             <span className="font-semibold text-ink">
               {NAMA_BULAN_LENGKAP[periodeBulan - 1]} {periodeTahun}
             </span>
+            .
           </p>
         </div>
 
@@ -294,13 +390,36 @@ export default async function KasubagDashboardPage({
       </div>
 
       {/* ====================================================================
-          2. FILTER BAR & QUICK NAVIGATION TABS
+          2. FILTER + PINTASAN - SATU BARIS, TANPA KARTU
+
+          Dulu keduanya dibungkus kartu, dan FilterBar bentuk panjangnya
+          membawa kartu SENDIRI di dalamnya - jadi ada dua bingkai bertumpuk
+          dengan dua kali padding, plus `mt-4` yang menempel di kartu dalam.
+          Bagian ini menghabiskan ~150px tinggi cuma untuk tiga kendali,
+          padahal filter bukan pekerjaan utama di halaman ini: periodenya
+          sudah dipilihkan sistem, dan Kasubag TU tidak bisa memilih unit.
+
+          Nilai yang ditampilkan sekarang periode EFEKTIF, bukan isi query
+          string. Tanpa itu, dropdown-nya berbunyi "Semua bulan" sementara
+          judul di atasnya menyebut "periode Juli 2026" - dua keterangan yang
+          bertentangan di layar yang sama. Pola ini sudah dipakai di
+          /kasubag/kalkulasi.
           ==================================================================== */}
-      <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
-        <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
-        
-        <div className="mt-3.5 flex flex-wrap items-center gap-2 border-t border-line-2 pt-3">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted mr-1">Pintasan Layanan:</span>
+      <div
+        className="gj-masuk flex flex-wrap items-center justify-between gap-x-6 gap-y-3"
+        style={{ animationDelay: "70ms" }}
+      >
+        <FilterBar
+          ringkas
+          satkerTerkunci={satkerTerkunciUntukAkun(authUser)}
+          satuanKerjaList={satuanKerjaList}
+          bulan={String(periodeBulan)}
+          tahun={String(periodeTahun)}
+          satker={satkerEfektif}
+        />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-muted">Shortcut:</span>
           <Link
             href={`/tukin/presensi?bulan=${periodeBulan}&tahun=${periodeTahun}`}
             className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
@@ -335,13 +454,88 @@ export default async function KasubagDashboardPage({
       </div>
 
       {/* ====================================================================
+          TUTUP BULAN UNIT - satu tempat buat "apa langkah saya sekarang" dan
+          "ambil berkasnya".
+
+          Dashboard ini sebelumnya menjawab "bagaimana keadaannya" dengan
+          sangat lengkap, tapi tidak pernah menjawab "jadi saya harus apa" -
+          dan kedua berkas rekap harus dicari di dua halaman berbeda.
+
+          SENGAJA TIDAK menarik halaman kerjanya ke sini. Presensi punya
+          sinkronisasi + dua jalur unggah, Kalkulasi punya tabel 25+ kolom dan
+          tombol yang bisa membatalkan approval satu unit penuh. Yang ada di
+          sini cuma penunjuk arah dan unduhan.
+          ==================================================================== */}
+      <div
+        className="gj-masuk mt-4 rounded-2xl border border-line bg-surface p-5 shadow-xs"
+        style={{ animationDelay: "120ms" }}
+      >
+        <div className="flex items-center justify-between pb-3 border-b border-line-2">
+          <h2 className="text-sm font-bold text-ink">Penutupan Periode Unit</h2>
+          <span className="text-xs font-semibold text-muted">
+            {NAMA_BULAN_LENGKAP[periodeBulan - 1]} {periodeTahun}
+          </span>
+        </div>
+
+        {/* Panel langkah cuma muncul kalau MEMANG ada yang kurang - baris
+            "semua beres" yang selalu tampil berubah jadi hiasan yang tidak
+            dibaca lagi, lalu peringatan sungguhan ikut tidak terbaca. */}
+        {langkahBerikutnya && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gold bg-gold/10 p-3.5">
+            <div className="flex items-start gap-2.5">
+              <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-gold text-xs font-bold text-white">
+                !
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-ink">Langkah berikutnya</h3>
+                <p className="mt-0.5 text-[11px] text-ink-2">{langkahBerikutnya.pesan}</p>
+              </div>
+            </div>
+            <Link href={langkahBerikutnya.tautan} className="btn btn-secondary btn-sm text-xs">
+              {langkahBerikutnya.label}
+            </Link>
+          </div>
+        )}
+
+        {/* Unduhan tetap ada walau datanya belum lengkap - rekap separuh justru
+            yang dipakai menelusuri SIAPA yang belum masuk. Yang membedakan
+            lengkap atau tidak sudah disebut di panel di atas. */}
+        {bolehExportRekap && (
+          <div className="mt-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Unduh rekap unit</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a
+                href={`/tukin/presensi/export?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}
+                className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
+              >
+                Rekap Presensi (Excel)
+              </a>
+              <a
+                href={`/kasubag/kalkulasi/export?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}
+                className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
+              >
+                Rekap Tukin (Excel)
+              </a>
+            </div>
+            <p className="mt-2 text-[11px] text-muted">
+              Berkas untuk diperiksa &amp; diarsipkan - memuat semua status, termasuk yang belum disetujui.
+              Berkas setoran ke Web Gaji (ADK) tetap dibuat PPABP.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ====================================================================
           3. TOP SECTION: KPI METRICS (LEFT) + MONTHLY ACTIVITY CHART (RIGHT)
           ==================================================================== */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* KPI Grid (6 Cards / 2 Columns) */}
         <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:col-span-6">
           {/* Card 1: Total Pegawai */}
-          <div className="flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm">
+          <div
+            className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm"
+            style={{ animationDelay: "170ms" }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-muted">Pegawai Aktif</span>
               <div className="rounded-lg bg-teal-tint p-1.5 text-navy">
@@ -351,15 +545,25 @@ export default async function KasubagDashboardPage({
               </div>
             </div>
             <div className="mt-3">
-              <div className="font-mono text-2xl font-extrabold text-ink">{totalPegawai}</div>
+              <div className="font-mono text-2xl font-extrabold text-ink">
+                <AngkaNaik nilai={totalPegawai} tundaMs={170} />
+              </div>
               <p className="mt-0.5 text-[11px] text-muted">Tergabung di unit kerja</p>
             </div>
           </div>
 
           {/* Card 2: Total Belanja Periode */}
-          <div className="flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm">
+          <div
+            className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm"
+            style={{ animationDelay: "225ms" }}
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-muted">Total Belanja</span>
+              {/* "Belanja" diganti "Nilai Kalkulasi" karena angkanya berasal
+                  dari tukinRows/umRows/lemburRows yang TIDAK disaring status -
+                  sama dengan grafik tren, dan dalam istilah anggaran "belanja"
+                  berarti yang sudah direalisasikan. Berapa yang benar-benar
+                  disetujui dijawab kartu "Selesai Approval" di sebelahnya. */}
+              <span className="text-xs font-bold text-muted">Nilai Kalkulasi</span>
               <div className="rounded-lg bg-green-tint p-1.5 text-green">
                 <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -367,26 +571,70 @@ export default async function KasubagDashboardPage({
               </div>
             </div>
             <div className="mt-3">
-              <div className="font-mono text-2xl font-extrabold text-ink">{formatRupiah(totalNominalPeriode)}</div>
-              <p className="mt-0.5 text-[11px] text-muted" title={formatRupiahPenuh(totalNominalPeriode)}>
-                Periode {periodeBulan}/{periodeTahun}
-              </p>
+              <div className="font-mono text-2xl font-extrabold text-ink">
+                <AngkaNaik nilai={totalNominalPeriode} sebagai="rupiah-ringkas" tundaMs={225} />
+              </div>
+              {/* Penanda perubahan cuma dirender kalau MEMANG ada pembandingnya.
+                  Bulan tanpa data pembanding sengaja tidak menampilkan "0%" -
+                  itu akan terbaca "tidak berubah" padahal artinya "tidak
+                  diketahui". Lihat deltaPersen(). */}
+              {deltaBelanja ? (
+                <p className="mt-0.5 flex items-center gap-1 text-[11px]" title={formatRupiahPenuh(totalNominalPeriode)}>
+                  <span
+                    className={`font-bold ${
+                      deltaBelanja.arah === "naik"
+                        ? "text-green"
+                        : deltaBelanja.arah === "turun"
+                          ? "text-red"
+                          : "text-muted"
+                    }`}
+                  >
+                    {deltaBelanja.arah === "naik" ? "▲" : deltaBelanja.arah === "turun" ? "▼" : "="}{" "}
+                    {deltaBelanja.persen}%
+                  </span>
+                  <span className="text-muted">vs {NAMA_BULAN_LENGKAP[(bulanLalu ?? 1) - 1]}</span>
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[11px] text-muted" title={formatRupiahPenuh(totalNominalPeriode)}>
+                  Periode {periodeBulan}/{periodeTahun}
+                </p>
+              )}
             </div>
           </div>
 
           {/* Card 3: Total Selesai / Approved */}
-          <div className="flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm">
+          <div
+            className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm"
+            style={{ animationDelay: "280ms" }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-muted">Selesai Approval</span>
-              <div className="rounded-lg bg-gold-tint p-1.5 text-gold-deep">
-                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
+              {/* Gauge cincin: angka yang SAMA dengan persenTotal di baris bawah
+                  kartu ini, dalam bentuk yang terbaca sekilas. Menggantikan ikon
+                  centang yang tidak membawa keterangan apa pun - kotak ikon di
+                  kartu lain memang hiasan, tapi di kartu ini ruangnya bisa dipakai.
+
+                  Busurnya digambar dengan stroke-dashoffset di atas pathLength="1",
+                  jadi tidak ada JavaScript yang terlibat. Sisa busur = 1 - persen. */}
+              <svg className="size-9 -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
+                <circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-gold-tint)" strokeWidth="5" />
+                <circle
+                  cx="18"
+                  cy="18"
+                  r="15"
+                  fill="none"
+                  stroke="var(--color-gold)"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  pathLength="1"
+                  className="gj-cincin"
+                  style={{ "--sisa-cincin": 1 - persenTotal / 100, animationDelay: "620ms" } as React.CSSProperties}
+                />
+              </svg>
             </div>
             <div className="mt-3">
               <div className="font-mono text-2xl font-extrabold text-ink">
-                {totalApproved}
+                <AngkaNaik nilai={totalApproved} tundaMs={280} />
                 <span className="text-sm font-medium text-muted">/{totalKalkulasi}</span>
               </div>
               <p className="mt-0.5 text-[11px] text-muted">{persenTotal}% tervalidasi</p>
@@ -394,7 +642,10 @@ export default async function KasubagDashboardPage({
           </div>
 
           {/* Card 4: Progres Tukin + Sparkline */}
-          <div className="flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm">
+          <div
+            className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm"
+            style={{ animationDelay: "335ms" }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-muted">Progres Tukin</span>
               <span className="rounded-full bg-teal-tint px-2 py-0.5 text-[10px] font-bold text-navy">
@@ -402,12 +653,17 @@ export default async function KasubagDashboardPage({
               </span>
             </div>
             <div className="mt-2">
-              <div className="font-mono text-xl font-black text-ink">{persenTukin}%</div>
+              <div className="font-mono text-xl font-black text-ink">
+                <AngkaNaik nilai={persenTukin} tundaMs={335} />%
+              </div>
               {/* Mini SVG Sparkline */}
               <div className="mt-1 h-6 w-full">
                 <svg className="h-full w-full overflow-visible" viewBox="0 0 100 24" preserveAspectRatio="none">
                   <path
                     d="M0,20 Q15,18 30,12 T60,8 T100,2"
+                    pathLength="1"
+                    className="gj-garis"
+                    style={{ animationDelay: "560ms" }}
                     fill="none"
                     stroke="#13416B"
                     strokeWidth="2.5"
@@ -415,6 +671,8 @@ export default async function KasubagDashboardPage({
                   />
                   <path
                     d="M0,20 Q15,18 30,12 T60,8 T100,2 L100,24 L0,24 Z"
+                    className="gj-muncul"
+                    style={{ animationDelay: "900ms" }}
                     fill="rgba(19,65,107,0.08)"
                   />
                 </svg>
@@ -424,7 +682,10 @@ export default async function KasubagDashboardPage({
           </div>
 
           {/* Card 5: Progres Uang Makan + Sparkline */}
-          <div className="flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm">
+          <div
+            className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm"
+            style={{ animationDelay: "390ms" }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-muted">Uang Makan</span>
               <span className="rounded-full bg-biru/10 px-2 py-0.5 text-[10px] font-bold text-biru">
@@ -432,12 +693,17 @@ export default async function KasubagDashboardPage({
               </span>
             </div>
             <div className="mt-2">
-              <div className="font-mono text-xl font-black text-ink">{persenUm}%</div>
+              <div className="font-mono text-xl font-black text-ink">
+                <AngkaNaik nilai={persenUm} tundaMs={390} />%
+              </div>
               {/* Mini SVG Sparkline */}
               <div className="mt-1 h-6 w-full">
                 <svg className="h-full w-full overflow-visible" viewBox="0 0 100 24" preserveAspectRatio="none">
                   <path
                     d="M0,18 Q20,16 40,10 T80,6 T100,2"
+                    pathLength="1"
+                    className="gj-garis"
+                    style={{ animationDelay: "640ms" }}
                     fill="none"
                     stroke="#3F72AF"
                     strokeWidth="2.5"
@@ -445,6 +711,8 @@ export default async function KasubagDashboardPage({
                   />
                   <path
                     d="M0,18 Q20,16 40,10 T80,6 T100,2 L100,24 L0,24 Z"
+                    className="gj-muncul"
+                    style={{ animationDelay: "980ms" }}
                     fill="rgba(63,114,175,0.08)"
                   />
                 </svg>
@@ -454,7 +722,10 @@ export default async function KasubagDashboardPage({
           </div>
 
           {/* Card 6: Progres Uang Lembur + Sparkline */}
-          <div className="flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm">
+          <div
+            className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm"
+            style={{ animationDelay: "445ms" }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-muted">Uang Lembur</span>
               <span className="rounded-full bg-gold-tint px-2 py-0.5 text-[10px] font-bold text-gold-deep">
@@ -462,12 +733,17 @@ export default async function KasubagDashboardPage({
               </span>
             </div>
             <div className="mt-2">
-              <div className="font-mono text-xl font-black text-ink">{persenLembur}%</div>
+              <div className="font-mono text-xl font-black text-ink">
+                <AngkaNaik nilai={persenLembur} tundaMs={445} />%
+              </div>
               {/* Mini SVG Sparkline */}
               <div className="mt-1 h-6 w-full">
                 <svg className="h-full w-full overflow-visible" viewBox="0 0 100 24" preserveAspectRatio="none">
                   <path
                     d="M0,22 Q25,20 50,14 T80,6 T100,4"
+                    pathLength="1"
+                    className="gj-garis"
+                    style={{ animationDelay: "720ms" }}
                     fill="none"
                     stroke="#C8871F"
                     strokeWidth="2.5"
@@ -475,6 +751,8 @@ export default async function KasubagDashboardPage({
                   />
                   <path
                     d="M0,22 Q25,20 50,14 T80,6 T100,4 L100,24 L0,24 Z"
+                    className="gj-muncul"
+                    style={{ animationDelay: "1060ms" }}
                     fill="rgba(200,135,31,0.08)"
                   />
                 </svg>
@@ -485,11 +763,18 @@ export default async function KasubagDashboardPage({
         </div>
 
         {/* Right Column: Monthly Activity & Trend Chart */}
-        <div className="flex flex-col justify-between rounded-2xl border border-line bg-surface p-5 shadow-xs lg:col-span-6">
+        <div
+          className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-5 shadow-xs lg:col-span-6"
+          style={{ animationDelay: "200ms" }}
+        >
           <div className="flex items-center justify-between pb-3 border-b border-line-2">
             <div>
-              <h2 className="text-sm font-bold text-ink">Tren Realisasi Belanja Unit</h2>
-              <p className="text-xs text-muted">Aktivitas pengajuan sepanjang tahun {periodeTahun}</p>
+              <h2 className="text-sm font-bold text-ink">Tren Kalkulasi Belanja Unit</h2>
+              {/* Keterangan status ini WAJIB ada selama grafiknya tidak
+                  memfilter apa pun - lihat catatan di query tren di atas. */}
+              <p className="text-xs text-muted">
+                Tukin + uang makan + uang lembur {periodeTahun}, semua status
+              </p>
             </div>
             <span className="rounded-xl border border-line bg-surface-2 px-3 py-1 text-xs font-bold text-ink">
               Tahun {periodeTahun}
@@ -499,23 +784,60 @@ export default async function KasubagDashboardPage({
           {/* Bar Chart Container */}
           <div className="mt-4 flex flex-1 flex-col justify-end">
             <div className="grid h-44 grid-cols-12 items-end gap-1.5 sm:gap-2.5 pt-4">
-              {dataBulanan.map((d) => {
-                const tinggiPersen = d.nominal > 0 ? Math.max(12, Math.round((d.nominal / maxNominalBulanan) * 100)) : 6;
+              {dataBulanan.map((d, i) => {
+                const tinggiPersen = tinggiBatangPersen(d.nominal, maxNominalBulanan);
                 const isSelected = d.bulan === periodeBulan;
 
                 return (
                   <div key={d.bulan} className="group relative flex flex-col items-center h-full justify-end">
+                    {/* Garis bidik tegak - menyambungkan batang yang sedang
+                        disentuh dengan tooltipnya. Di grafik 12 kolom rapat,
+                        tooltip yang mengambang sendirian menyisakan keraguan
+                        batang mana yang sedang dibaca. */}
+                    <div className="pointer-events-none absolute inset-y-0 left-1/2 hidden w-px -translate-x-1/2 bg-biru/30 group-hover:block" />
+
                     {/* Tooltip Hover */}
                     <div className="pointer-events-none absolute -top-10 left-1/2 z-20 hidden -translate-x-1/2 rounded-lg bg-navy-deep px-2.5 py-1 text-[10px] font-bold text-white shadow-md whitespace-nowrap group-hover:block">
                       {d.namaLengkap}: {d.nominal > 0 ? formatRupiah(d.nominal) : "Rp 0"}
+                      {/* Jumlah pegawainya ikut disebut supaya bulan yang rendah
+                          bisa dibedakan: belanjanya memang kecil, atau kalkulasinya
+                          yang baru sebagian dibuat. Angkanya sudah ikut ditarik
+                          groupBy di atas (_count.id), bukan query tambahan. */}
+                      {d.pegawai > 0 && (
+                        <span className="font-medium text-white/70"> &bull; {d.pegawai} pegawai</span>
+                      )}
                     </div>
 
                     {/* Bar Background Track */}
                     <div className="relative flex h-full w-full max-w-[28px] items-end rounded-t-lg bg-line-2/70 p-0.5">
                       {/* Active Bar Fill */}
                       <div
-                        style={{ height: `${tinggiPersen}%` }}
-                        className={`w-full rounded-md transition-all duration-300 ${
+                        style={
+                          {
+                            // Tinggi dikirim lewat custom property supaya
+                            // @keyframes bisa membacanya - nilai `to` sebuah
+                            // keyframe tidak bisa mengambil dari inline style
+                            // biasa. Kelas .gj-batang yang memakainya.
+                            "--tinggi-batang": `${tinggiPersen}%`,
+                            // Berurutan kiri ke kanan. 45ms x 12 batang = 0,5
+                            // detik untuk yang terakhir - cukup terbaca sebagai
+                            // gerakan, masih jauh dari terasa lambat.
+                            //
+                            // Awalannya menunggu panel grafiknya sendiri selesai
+                            // masuk (jeda 200ms + durasi .gj-masuk 460ms): batang
+                            // yang tumbuh selagi panelnya masih bergeser naik
+                            // terbaca sebagai dua gerakan bertabrakan, bukan satu.
+                            animationDelay: `${660 + i * 45}ms`,
+                          } as React.CSSProperties
+                        }
+                        // min-h-[4px] menjaga batang yang sungguhan kecil tetap
+                        // terlihat TANPA membohongi proporsinya - beda dari lantai
+                        // 12% yang dulu dipakai, karena min-height tidak ikut naik
+                        // sebanding. Bulan bernilai nol tidak mendapatkannya sama
+                        // sekali: yang tampil tinggal jalur latarnya yang kosong.
+                        className={`gj-batang w-full rounded-md transition-all duration-300 ${
+                          d.nominal > 0 ? "min-h-[4px]" : ""
+                        } ${
                           isSelected
                             ? "bg-gradient-to-t from-navy to-biru shadow-sm ring-2 ring-biru/40"
                             : d.nominal > 0
@@ -545,7 +867,7 @@ export default async function KasubagDashboardPage({
               </div>
               <div className="flex items-center gap-2">
                 <span className="size-2.5 rounded-full bg-biru/70" />
-                <span>Realisasi Lainnya</span>
+                <span>Bulan Lainnya</span>
               </div>
             </div>
           </div>
@@ -557,7 +879,10 @@ export default async function KasubagDashboardPage({
           ==================================================================== */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Card: Progres Realisasi per Komponen Belanja */}
-        <div className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
+        <div
+          className="gj-masuk rounded-2xl border border-line bg-surface p-5 shadow-xs"
+          style={{ animationDelay: "300ms" }}
+        >
           <div className="flex items-center justify-between pb-3 border-b border-line-2">
             <h2 className="text-sm font-bold text-ink">Status Approval per Komponen</h2>
             <span className="text-xs font-semibold text-muted">Periode {periodeBulan}/{periodeTahun}</span>
@@ -583,8 +908,8 @@ export default async function KasubagDashboardPage({
               </div>
               <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-line">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-navy to-biru transition-all duration-500"
-                  style={{ width: `${persenTukin}%` }}
+                  className="gj-bar h-full rounded-full bg-gradient-to-r from-navy to-biru"
+                  style={{ "--lebar-bar": `${persenTukin}%`, animationDelay: "620ms" } as React.CSSProperties}
                 />
               </div>
               <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted font-medium">
@@ -621,8 +946,8 @@ export default async function KasubagDashboardPage({
               </div>
               <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-line">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-biru to-teal-tint transition-all duration-500"
-                  style={{ width: `${persenUm}%` }}
+                  className="gj-bar h-full rounded-full bg-gradient-to-r from-biru to-teal-tint"
+                  style={{ "--lebar-bar": `${persenUm}%`, animationDelay: "700ms" } as React.CSSProperties}
                 />
               </div>
               <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted font-medium">
@@ -659,8 +984,8 @@ export default async function KasubagDashboardPage({
               </div>
               <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-line">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-gold to-gold-tint transition-all duration-500"
-                  style={{ width: `${persenLembur}%` }}
+                  className="gj-bar h-full rounded-full bg-gradient-to-r from-gold to-gold-tint"
+                  style={{ "--lebar-bar": `${persenLembur}%`, animationDelay: "780ms" } as React.CSSProperties}
                 />
               </div>
               <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted font-medium">
@@ -681,13 +1006,42 @@ export default async function KasubagDashboardPage({
         </div>
 
         {/* Card: Kesiapan Data & Dokumen Unit */}
-        <div className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
+        <div
+          className="gj-masuk rounded-2xl border border-line bg-surface p-5 shadow-xs"
+          style={{ animationDelay: "360ms" }}
+        >
           <div className="flex items-center justify-between pb-3 border-b border-line-2">
             <h2 className="text-sm font-bold text-ink">Kesiapan Data & Dokumen Unit</h2>
             <span className="text-xs font-semibold text-muted">Persyaratan Payroll</span>
           </div>
 
           <div className="mt-4 space-y-4">
+            {/* Rekap Presensi - komponen 30%.
+                DITARUH SEBELUM predikat dengan sengaja: urutannya mengikuti
+                alur bulanan (presensi ditarik lebih dulu), dan panel ini dulu
+                melompatinya - unit yang presensinya belum masuk tetap terlihat
+                siap karena yang ditampilkan cuma predikat. */}
+            <div className="rounded-xl border border-line-2 bg-surface-2 p-3.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-8 items-center justify-center rounded-lg bg-biru text-white text-xs font-bold">
+                    RP
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-ink">Rekap Presensi e-Presensi</h3>
+                    <p className="text-[11px] text-muted">{countPresensi} dari {totalPegawai} pegawai terekap</p>
+                  </div>
+                </div>
+                <span className="font-mono text-sm font-black text-biru">{persenPresensi}%</span>
+              </div>
+              <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-line">
+                <div
+                  className="gj-bar h-full rounded-full bg-biru"
+                  style={{ "--lebar-bar": `${persenPresensi}%`, animationDelay: "620ms" } as React.CSSProperties}
+                />
+              </div>
+            </div>
+
             {/* Predikat Kinerja BKN */}
             <div className="rounded-xl border border-line-2 bg-surface-2 p-3.5">
               <div className="flex items-center justify-between">
@@ -704,8 +1058,8 @@ export default async function KasubagDashboardPage({
               </div>
               <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-line">
                 <div
-                  className="h-full rounded-full bg-green transition-all duration-500"
-                  style={{ width: `${persenPredikat}%` }}
+                  className="gj-bar h-full rounded-full bg-green"
+                  style={{ "--lebar-bar": `${persenPredikat}%`, animationDelay: "700ms" } as React.CSSProperties}
                 />
               </div>
             </div>
@@ -770,7 +1124,10 @@ export default async function KasubagDashboardPage({
           ==================================================================== */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Left Card: Status Approval Pegawai Terkini (7 Cols) */}
-        <div className="rounded-2xl border border-line bg-surface p-5 shadow-xs lg:col-span-7">
+        <div
+          className="gj-masuk rounded-2xl border border-line bg-surface p-5 shadow-xs lg:col-span-7"
+          style={{ animationDelay: "420ms" }}
+        >
           <div className="flex items-center justify-between pb-3 border-b border-line-2">
             <div>
               <h2 className="text-sm font-bold text-ink">Status Approval Pegawai Unit Terkini</h2>
@@ -814,16 +1171,11 @@ export default async function KasubagDashboardPage({
 
               return (
                 <div key={row.id} className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-biru to-navy text-xs font-black text-white shadow-2xs">
-                      {inisialNama(row.pegawai.nama)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-bold text-ink">{row.pegawai.nama}</p>
-                      <p className="truncate text-[11px] text-muted">
-                        NIP {row.pegawai.nip} &bull; Kelas {row.pegawai.kelasJabatan ?? "-"}
-                      </p>
-                    </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold text-ink">{row.pegawai.nama}</p>
+                    <p className="truncate text-[11px] text-muted">
+                      NIP {row.pegawai.nip} &bull; Kelas {row.pegawai.kelasJabatan ?? "-"}
+                    </p>
                   </div>
 
                   <div className="flex shrink-0 items-center gap-3">
@@ -842,11 +1194,23 @@ export default async function KasubagDashboardPage({
         </div>
 
         {/* Right Card: Layanan & Tindakan Cepat (5 Cols) */}
-        <div className="rounded-2xl border border-line bg-surface p-5 shadow-xs lg:col-span-5 flex flex-col justify-between">
+        <div
+          className="gj-masuk rounded-2xl border border-line bg-surface p-5 shadow-xs lg:col-span-5 flex flex-col justify-between"
+          style={{ animationDelay: "480ms" }}
+        >
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-line-2">
-              <h2 className="text-sm font-bold text-ink">Ringkasan Tindakan Unit</h2>
-              <span className="text-xs font-semibold text-muted">Tugas Kasubag TU</span>
+            {/* Kepala kartu ini HARUS dua baris seperti kartu di sebelahnya
+                ("Status Approval Pegawai Unit Terkini" + keterangannya).
+                Keduanya sebaris di grid yang sama, jadi kepala satu baris di
+                sini membuat garis pemisah dan seluruh isi kartu turun ~15px
+                lebih tinggi daripada tetangganya - selisih yang kecil tapi
+                langsung kelihatan karena dua kartunya bersebelahan. */}
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-line-2">
+              <div>
+                <h2 className="text-sm font-bold text-ink">Ringkasan Tindakan Unit</h2>
+                <p className="text-xs text-muted">Yang perlu dikerjakan periode ini</p>
+              </div>
+              <span className="shrink-0 text-xs font-semibold text-muted">Tugas Kasubag TU</span>
             </div>
 
             <div className="mt-4 space-y-3">

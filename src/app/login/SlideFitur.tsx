@@ -102,18 +102,30 @@ export function SlideFitur() {
       style={gaya}
       className="relative hidden w-full h-full select-none overflow-hidden bg-navy lg:flex lg:flex-col lg:items-center lg:justify-center"
     >
-      {/* 
-        MENYISIPKAN CSS ANIMASI MENGAPUNG (FLOATING) 
-        Tidak perlu repot edit globals.css, kita inject langsung di sini.
+      {/*
+        Animasi mengapung untuk ilustrasi slide.
+
+        Ditulis di sini, bukan di globals.css - tapi itu berarti aturan
+        `prefers-reduced-motion` di globals.css TIDAK menjangkaunya, dan
+        selama beberapa waktu animasi ini memang tetap berjalan untuk orang
+        yang sudah mematikan animasi di sistemnya. Guard-nya sekarang ikut
+        ditulis di sini juga.
+
+        Gerakan ini murni hiasan: mematikannya tidak menghilangkan keterangan
+        apa pun, jadi dihentikan TOTAL - sama perlakuannya dengan .gj-latar
+        dan .gj-hias di globals.css.
       */}
       <style>{`
         @keyframes float-image {
           0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-5px); } /* Jarak naik (bisa diatur) */
+          50% { transform: translateY(-5px); }
         }
         .animate-float {
-          animation: float-image 4s ease-in-out infinite; /* Durasi 4 detik, gerakan lembut */
-        }s
+          animation: float-image 4s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-float { animation: none; }
+        }
       `}</style>
 
       {/* Latar Belakang Gelembung / Asap */}

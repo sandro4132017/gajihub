@@ -7,6 +7,7 @@ import {
   canCetakSlipGajiSendiri,
   canDownloadBuktiPotongPajakSendiri,
   canViewRekapUnitKerja,
+  canExportRekapUnit,
   canVerifikasiBandingJenjang1,
   canApproveJenjang1,
   canMonitorRekonsiliasiUnit,
@@ -130,6 +131,44 @@ describe("KASUBAG_TU - verifikator satker", () => {
   it("canViewRekapUnitKerja: DITOLAK buat role PEGAWAI walau satuanKerja diisi sama", () => {
     const user = buatUser({ role: "PEGAWAI", satuanKerja: SETJEN });
     expect(canViewRekapUnitKerja(user, SETJEN)).toBe(false);
+  });
+
+  it("canExportRekapUnit: Kasubag TU boleh unduh unitnya sendiri, DITOLAK unit lain", () => {
+    const user = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
+    expect(canExportRekapUnit(user, SETJEN)).toBe(true);
+    expect(canExportRekapUnit(user, BIRO_UMUM)).toBe(false);
+  });
+
+  // Yang menjaga berkas unduhan tidak pernah memuat lebih banyak daripada yang
+  // boleh dilihat orangnya. Kalau suatu saat salah satunya digeser tanpa yang
+  // lain, test inilah yang jatuh.
+  it("canExportRekapUnit: mengikuti canViewRekapUnitKerja untuk seluruh role dasar", () => {
+    for (const role of ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PIMPINAN", "ADMIN"] as const) {
+      const user = buatUser({ role, satuanKerja: SETJEN });
+      if (canViewRekapUnitKerja(user, SETJEN)) {
+        expect(canExportRekapUnit(user, SETJEN)).toBe(true);
+      }
+    }
+  });
+
+  it("canExportRekapUnit: PPABP boleh lintas unit, PEGAWAI & PIMPINAN tidak", () => {
+    expect(canExportRekapUnit(buatUser({ role: "PPABP" }), BIRO_UMUM)).toBe(true);
+    expect(canExportRekapUnit(buatUser({ role: "ADMIN" }), BIRO_UMUM)).toBe(true);
+    expect(canExportRekapUnit(buatUser({ role: "PEGAWAI", satuanKerja: SETJEN }), SETJEN)).toBe(false);
+    expect(canExportRekapUnit(buatUser({ role: "PIMPINAN", satuanKerja: SETJEN }), SETJEN)).toBe(false);
+  });
+
+  it("canExportRekapUnit: akun NONAKTIF ditolak walau rolenya benar", () => {
+    const user = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN, aktif: false });
+    expect(canExportRekapUnit(user, SETJEN)).toBe(false);
+  });
+
+  // Unduh rekap BUKAN izin menerbitkan berkas pembayaran. Kalau batas ini
+  // hilang, Kasubag TU bisa menghasilkan ADK yang disetor ke Web Gaji.
+  it("canExportRekapUnit TIDAK memberi Kasubag TU kemampuan membuat ADK", () => {
+    const user = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
+    expect(canExportRekapUnit(user, SETJEN)).toBe(true);
+    expect(canGenerateAdk(user)).toBe(false);
   });
 
   it("canVerifikasiBandingJenjang1: diizinkan cuma buat banding dari unitnya", () => {

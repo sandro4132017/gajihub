@@ -22,6 +22,20 @@ export function resolveSatkerEfektif(akun: AuthUser, satkerDariQuery: string | u
  * yang memang memaksa query ke unit itu juga) - daripada nampilin semua
  * unit tapi hasil filternya selalu di-override, yang membingungkan.
  */
+/**
+ * true kalau satuan kerja TIDAK bisa dipilih pemakainya - nilainya sudah
+ * ditentukan sistem dari akunnya sendiri.
+ *
+ * Kembarannya resolveSatkerEfektif dan HARUS selalu sepakat dengannya: kalau
+ * yang satu memaksa nilai tapi yang lain masih menampilkan dropdown, yang
+ * muncul adalah dropdown yang bisa diklik tapi tidak pernah mengubah apa pun -
+ * dan itu terbaca sebagai filter yang rusak, bukan sebagai pembatasan
+ * kewenangan. Ada test yang menjaga keduanya tidak lepas satu sama lain.
+ */
+export function satkerTerkunciUntukAkun(akun: AuthUser): boolean {
+  return akun.role === "KASUBAG_TU";
+}
+
 export function resolveSatuanKerjaListUntukFilter(akun: AuthUser, semuaSatuanKerja: string[]): string[] {
   if (akun.role === "KASUBAG_TU") {
     return akun.satuanKerja ? [akun.satuanKerja] : [];

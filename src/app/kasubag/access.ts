@@ -6,6 +6,15 @@ export interface AksesUnit {
   authUser: AuthUser;
   /** undefined kalau role lintas-satker (ADMIN dkk) belum milih unit lewat ?satker=. */
   satkerEfektif: string | undefined;
+  /**
+   * Nama pemilik sesi, buat sapaan di dashboard.
+   *
+   * Ikut dikembalikan dari sini karena `getSessionAccount()` memang sudah
+   * dipanggil di dalam fungsi ini - halaman yang membutuhkannya tidak perlu
+   * memanggil sesi untuk kedua kalinya (yang berarti satu query lagi ke tabel
+   * User pada tiap muat halaman).
+   */
+  nama: string;
 }
 
 /**
@@ -25,5 +34,9 @@ export async function ambilAksesUnit(satkerDariQuery: string | undefined): Promi
   const akun = await getSessionAccount();
   if (!akun) return null;
   const authUser: AuthUser = { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
-  return { authUser, satkerEfektif: resolveSatkerEfektif(authUser, satkerDariQuery) };
+  return {
+    authUser,
+    satkerEfektif: resolveSatkerEfektif(authUser, satkerDariQuery),
+    nama: akun.nama,
+  };
 }

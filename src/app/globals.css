@@ -324,6 +324,101 @@ html {
   }
 }
 
+/* Batang grafik tren tumbuh dari nol waktu halaman dibuka, berurutan dari
+   kiri ke kanan.
+
+   TINGGINYA LEWAT CUSTOM PROPERTY, bukan `transform: scaleY()`. Scale memang
+   lebih murah, tapi ia ikut memampatkan sudut membulat batangnya - selama
+   animasi sudutnya terlihat gepeng lalu mendadak normal. Dengan 12 batang,
+   biaya menganimasikan `height` tidak terasa, dan hasilnya bersih.
+
+   `backwards` WAJIB: tanpa itu, batang dirender setinggi penuh dulu selama
+   jeda gilirannya, baru turun ke nol dan naik lagi - persis kebalikan dari
+   yang dimaksud. Dengan `backwards`, keadaan `from` sudah berlaku sejak
+   sebelum animasinya mulai. */
+@keyframes gj-batang-tumbuh {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--tinggi-batang);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   MASUKNYA ISI HALAMAN (dashboard unit)
+   --------------------------------------------------------------------------
+   Semua kelas di bawah ini SEKALI JALAN waktu halaman dimuat, tidak berulang.
+   Gunanya bukan hiasan: urutannya mengikuti urutan baca - judul, lalu ringkasan
+   angka, lalu grafik, lalu daftar - jadi mata dituntun ke pokoknya dulu alih-alih
+   disodori seluruh halaman sekaligus.
+
+   Jedanya dikirim inline lewat `animationDelay` per elemen, bukan lewat kelas
+   berjenjang (.tunda-1, .tunda-2, ...). Kartunya dirender dari `.map()` dengan
+   jumlah yang bisa berubah, dan deret kelas tunda selalu ketinggalan begitu
+   ada kartu ditambah.
+
+   SEMUANYA memakai `backwards`: tanpa itu, elemen tampil di keadaan akhirnya
+   dulu selama menunggu jedanya, baru meloncat ke keadaan awal - persis
+   kebalikan dari yang dimaksud, dan terbaca sebagai kedipan.
+   -------------------------------------------------------------------------- */
+@keyframes gj-masuk {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gj-muncul {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Bilah progres terisi dari kiri. Lebarnya lewat custom property dengan alasan
+   yang sama seperti --tinggi-batang: nilai `to` sebuah keyframe tidak bisa
+   membaca inline style biasa. */
+@keyframes gj-bar-isi {
+  from {
+    width: 0;
+  }
+  to {
+    width: var(--lebar-bar);
+  }
+}
+
+/* Garis sparkline & cincin gauge digambar dengan mencabut stroke-dashoffset.
+   Ini bekerja TANPA JavaScript karena path-nya diberi atribut `pathLength="1"`
+   di JSX - panjang path dinormalkan jadi 1, sehingga dasharray/dashoffset bisa
+   ditulis sebagai pecahan tanpa perlu getTotalLength() dari JS.
+
+   Tanpa pathLength, satu-satunya cara tahu panjang path adalah mengukurnya di
+   runtime, dan itu berarti halaman ini butuh JS cuma untuk menggambar garis. */
+@keyframes gj-garis-gambar {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes gj-cincin-isi {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: var(--sisa-cincin);
+  }
+}
+
 @keyframes gj-titik {
   /* Ikut irama yang sama: melebar di ekor siklus, bersamaan dengan slide yang
      sedang bergerak masuk - bukan sesudahnya. */
@@ -466,6 +561,43 @@ html {
     box-shadow: 0 14px 32px -14px rgb(4 20 36 / 0.4);
   }
 
+  /* Batang grafik tren. Tingginya datang dari `--tinggi-batang` yang diisi
+     inline per batang, jadi satu kelas ini cukup untuk seluruh grafik. */
+  .gj-batang {
+    height: var(--tinggi-batang);
+    animation: gj-batang-tumbuh 560ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  /* Blok isi halaman naik + pudar-masuk. Jaraknya sengaja pendek (14px):
+     gerakan masuk yang jauh membuat halaman terasa "melompat" tiap kali dibuka,
+     dan dashboard ini dibuka berkali-kali sehari oleh orang yang sama. */
+  .gj-masuk {
+    animation: gj-masuk 460ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  /* Pudar saja - untuk yang tidak boleh ikut bergeser, mis. bidang arsir di
+     bawah garis sparkline yang posisinya harus tetap menempel ke garisnya. */
+  .gj-muncul {
+    animation: gj-muncul 520ms ease-out backwards;
+  }
+
+  .gj-bar {
+    width: var(--lebar-bar);
+    animation: gj-bar-isi 760ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  .gj-garis {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    animation: gj-garis-gambar 900ms ease-out backwards;
+  }
+
+  .gj-cincin {
+    stroke-dasharray: 1;
+    stroke-dashoffset: var(--sisa-cincin);
+    animation: gj-cincin-isi 900ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
   /* --- Hiasan latar --------------------------------------------------
      Murni ambience. Semuanya transform-only supaya murah dijalankan, dan
      semuanya di-aria-hidden di komponennya - tidak ada keterangan yang
@@ -529,6 +661,25 @@ html {
   .gj-latar,
   .gj-hias,
   .gj-kartu {
+    animation: none;
+  }
+  /* Batang grafik, bilah progres, garis sparkline, cincin gauge, dan blok yang
+     masuk berjenjang LANGSUNG di keadaan akhirnya - animasinya cuma cara masuk,
+     datanya tidak berubah, jadi mematikannya tidak menghilangkan apa pun.
+     Tiap kelas menyimpan keadaan akhir itu di deklarasi dasarnya (height /
+     width dari custom property, stroke-dashoffset, opacity bawaan 1), jadi
+     mencabut `animation` saja sudah cukup - tidak ada nilai yang perlu
+     ditulis ulang di sini.
+
+     Angka yang menghitung naik (AngkaNaik.tsx) ikut dimatikan lewat
+     matchMedia di komponennya, bukan dari sini: yang berubah di situ ISI
+     teksnya, dan CSS tidak bisa menghentikan itu. */
+  .gj-batang,
+  .gj-bar,
+  .gj-garis,
+  .gj-cincin,
+  .gj-masuk,
+  .gj-muncul {
     animation: none;
   }
 }

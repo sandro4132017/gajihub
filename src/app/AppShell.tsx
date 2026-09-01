@@ -349,6 +349,22 @@ export function AppShell({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  /**
+   * Sidebar diciutkan - KHUSUS layar lebar.
+   *
+   * Terpisah dari `open` (drawer HP) dengan sengaja: di HP sidebar memang
+   * sudah tersembunyi dan `open` yang membukanya, jadi satu state untuk
+   * keduanya akan membuat "ciutkan" di desktop ikut menutup drawer HP dan
+   * sebaliknya.
+   *
+   * Tidak disimpan ke localStorage. Server merender keadaan terbuka lebih
+   * dulu, jadi memulihkan "ciut" dari penyimpanan baru bisa dilakukan setelah
+   * hidrasi - hasilnya sidebar berkedip muncul lalu hilang tiap kali halaman
+   * dimuat. Karena AppShell hidup di layout, keadaannya sudah bertahan selama
+   * berpindah halaman, dan itu yang sebenarnya dibutuhkan.
+   */
+  const [ciut, setCiut] = useState(false);
+
   if (!account) {
     // Belum login. Satu-satunya halaman yang bisa sampai ke sini adalah
     // /login - middleware mengalihkan yang lain (lihat src/middleware.ts),
@@ -379,7 +395,14 @@ export function AppShell({
                 : MENU_APPROVER;
 
   return (
-    <div className="min-h-screen print:block md:grid md:grid-cols-[264px_1fr]">
+    <div
+      className={`min-h-screen print:block md:grid ${
+        // Kelasnya ditulis UTUH di kedua cabang, bukan dirakit dari potongan -
+        // Tailwind memindai berkas sumber sebagai teks, jadi kelas hasil
+        // gabungan string tidak pernah ikut ter-generate ke CSS.
+        ciut ? "md:grid-cols-[68px_1fr]" : "md:grid-cols-[264px_1fr]"
+      }`}
+    >
       {/* Topbar mobile - logo + hamburger + penanda role yang sedang aktif,
           sidebar penuh disembunyikan jadi drawer supaya tidak makan tempat
           di HP. Logout SEKARANG ada di dalam menu akun (kaki drawer), bukan
@@ -416,23 +439,82 @@ export function AppShell({
 
       <aside
         data-sidebar
-        className={`fixed inset-y-0 left-0 z-50 flex w-[264px] -translate-x-full flex-col border-r border-nav-line bg-nav-bg text-nav-text transition-transform duration-200 print:hidden md:sticky md:top-0 md:h-screen md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[264px] -translate-x-full flex-col border-r border-nav-line bg-nav-bg text-nav-text transition-transform duration-200 print:hidden ${
           open ? "translate-x-0" : ""
+        } md:sticky md:top-0 md:h-screen md:translate-x-0 ${
+          // Diciutkan = MENYUSUT jadi rel ikon, BUKAN menghilang.
+          //
+          // Versi sebelumnya memakai md:hidden, dan itu keliru: satu klik
+          // membuat seluruh navigasi lenyap, dan satu-satunya jalan kembali
+          // adalah tombol mengambang yang menimpa judul halaman. Rel selebar
+          // 68px tetap memperlihatkan di mana orangnya berada (pil putih item
+          // aktif masih terlihat) sekaligus mengembalikan ~200px ke isi halaman.
+          //
+          // `ciut` sengaja hanya berlaku di layar lebar (md:). Di HP sidebar
+          // ini memang sudah tersembunyi dan dibuka lewat `open` - kalau `ciut`
+          // ikut campur, tombol hamburger HP jadi tidak berfungsi.
+          ciut ? "md:w-[68px]" : ""
         }`}
       >
-          <div className="flex items-center gap-3 px-[22px] pb-3 pt-[22px]">
+          {/* Kepala sidebar punya dua bentuk. Di rel, wordmark & keterangan
+              dibuang tapi LOGONYA TETAP - itu satu-satunya penanda aplikasi apa
+              yang sedang dibuka, dan rel tanpa identitas terbaca seperti bilah
+              ikon milik browser, bukan bagian dari halaman.
+
+              Tombol ciut/lebarkan ADA DI KEDUA bentuk. Di rel ia turun ke baris
+              sendiri di bawah logo: 68px tidak cukup untuk logo dan tombol
+              berdampingan tanpa keduanya jadi terlalu kecil untuk disentuh. */}
+          <div
+            className={`flex items-center pb-3 pt-[22px] ${
+              ciut ? "flex-col gap-2 px-2" : "gap-3 px-[22px]"
+            }`}
+          >
             <GajihubLogo />
-            <div>
-              <h1 className="text-[19px] font-extrabold leading-tight tracking-tight text-white">
-                Gaji<span className="font-semibold text-nav-text">hub</span>
-              </h1>
-              <span className="text-[11px] font-semibold text-nav-text">oleh Kemnaker</span>
-            </div>
+            {!ciut && (
+              <div className="min-w-0 flex-1">
+                <h1 className="text-[19px] font-extrabold leading-tight tracking-tight text-white">
+                  Gaji<span className="font-semibold text-nav-text">hub</span>
+                </h1>
+                <span className="text-[11px] font-semibold text-nav-text">oleh Kemnaker</span>
+              </div>
+            )}
+            {/* `hidden md:grid` - di HP penutupnya sudah ada dua (hamburger &
+                latar gelap), jadi tombol ketiga cuma menambah bingung. */}
+            <button
+              type="button"
+              onClick={() => setCiut((v) => !v)}
+              aria-label={ciut ? "Lebarkan menu samping" : "Ciutkan menu samping"}
+              aria-expanded={!ciut}
+              title={ciut ? "Lebarkan menu samping" : "Ciutkan menu samping"}
+              className="hidden size-8 shrink-0 place-items-center rounded-lg border border-nav-line text-nav-text transition hover:bg-nav-hover hover:text-white md:grid"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className={`size-4 transition-transform ${ciut ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M15 18l-6-6 6-6" />
+                <path d="M4 4v16" />
+              </svg>
+            </button>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-3 pb-3 pt-2">
-            {(menu as ItemMenu[]).map((item) => {
-              const pisah = item.pisah === true && <div className="my-2 border-t border-nav-line" />;
+          <nav className={`flex-1 overflow-y-auto pb-3 pt-2 ${ciut ? "px-2.5" : "px-3"}`}>
+            {(menu as ItemMenu[]).map((item, urutan) => {
+              // Item menu masuk berurutan atas ke bawah waktu halaman dimuat
+              // pertama kali. AppShell adalah layout - ia TIDAK dipasang ulang
+              // saat pindah halaman, jadi ini tidak terulang tiap klik menu.
+              const tunda = { animationDelay: `${urutan * 40}ms` };
+              // Di rel, pemisahnya dipendekkan & diberi napas lebih -
+              // garis selebar penuh di kolom 68px terbaca seperti tepi kotak,
+              // bukan seperti jeda antar kelompok.
+              const pisah = item.pisah === true && (
+                <div className={`border-t border-nav-line ${ciut ? "mx-2 my-2.5" : "my-2"}`} />
+              );
 
               // --- Grup yang bisa dilipat ---
               if (item.anak) {
@@ -440,8 +522,46 @@ export function AppShell({
                 // dalamnya - kalau tidak, item aktif jadi tak terlihat dan
                 // orang mengira menunya hilang.
                 const adaYangAktif = item.anak.some((a) => pathname === a.href);
+
+                // DI REL, kelompok tidak bisa dilipat-buka: daftar anaknya butuh
+                // label, dan label tidak muat di 68px. Ikonnya diganti tombol
+                // yang MELEBARKAN sidebar - jadi kliknya tetap membawa ke tempat
+                // yang dituju, cuma lewat satu langkah. Menyembunyikan kelompok
+                // sama sekali di rel jauh lebih buruk: di menu PPABP & Kasubag
+                // TU, dua kelompok itu memuat halaman yang tidak punya jalan
+                // masuk lain.
+                if (ciut) {
+                  return (
+                    <div key={item.label} className="gj-masuk" style={tunda}>
+                      {pisah}
+                      <button
+                        type="button"
+                        onClick={() => setCiut(false)}
+                        title={item.label}
+                        aria-label={`${item.label} - lebarkan menu untuk memilih`}
+                        className={`mb-1 grid h-11 w-full place-items-center rounded-xl transition ${
+                          adaYangAktif
+                            ? "bg-nav-hover text-white"
+                            : "text-nav-text hover:bg-nav-hover hover:text-white"
+                        }`}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="size-[19px]"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        >
+                          {item.icon}
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                }
+
                 return (
-                  <div key={item.label}>
+                  <div key={item.label} className="gj-masuk" style={tunda}>
                     {pisah}
                     <details open={adaYangAktif} className="group mb-1">
                       <summary
@@ -501,12 +621,27 @@ export function AppShell({
               // --- Item biasa ---
               const active = pathname === item.href;
               return (
-                <div key={item.href}>
+                <div key={item.href} className="gj-masuk" style={tunda}>
                   {pisah}
                   <Link
                     href={item.href!}
                     onClick={() => setOpen(false)}
-                    className={`mb-1 flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13.5px] font-bold transition ${
+                    // title = keterangan waktu diciutkan. SENGAJA memakai
+                    // tooltip bawaan browser, bukan gelembung buatan sendiri:
+                    // <nav> ini bergulir (menu terpanjang 11 item + pemisah,
+                    // dan tidak semua layar setinggi itu), dan elemen
+                    // absolute di dalam kotak yang bergulir akan TERPOTONG di
+                    // tepi kanannya. Gelembung bergaya butuh portal + hitungan
+                    // posisi dari JavaScript; itu bisa ditambahkan nanti kalau
+                    // memang diminta.
+                    //
+                    // aria-label tetap diisi supaya pembaca layar dapat nama
+                    // menunya - `title` sendirian tidak bisa diandalkan.
+                    title={ciut ? item.label : undefined}
+                    aria-label={ciut ? item.label : undefined}
+                    className={`mb-1 flex items-center rounded-xl font-bold transition ${
+                      ciut ? "h-11 justify-center" : "gap-3 px-3.5 py-2.5 text-[13.5px]"
+                    } ${
                       active
                         ? "bg-nav-active text-nav-active-text shadow-[0_8px_18px_rgba(0,0,0,0.22)]"
                         : "text-nav-text hover:bg-nav-hover hover:text-white"
@@ -522,7 +657,7 @@ export function AppShell({
                     >
                       {item.icon}
                     </svg>
-                    {item.label}
+                    {!ciut && item.label}
                   </Link>
                 </div>
               );
@@ -532,7 +667,7 @@ export function AppShell({
           {/* Tombol akun = menu (ganti role + logout), lihat AccountMenu.tsx.
               Logout SENGAJA tidak lagi berdiri sendiri di sini biar kaki
               sidebar tetap ringkas. */}
-          <div className="border-t border-nav-line p-3.5">
+          <div className={`border-t border-nav-line ${ciut ? "p-2.5" : "p-3.5"}`}>
             <AccountMenu
               nama={account.nama}
               jabatan={account.jabatan}
@@ -540,10 +675,15 @@ export function AppShell({
               satuanKerja={account.satuanKerja}
               rolesTersedia={account.rolesTersedia}
               initials={initials(account.nama)}
+              ringkas={ciut}
             />
           </div>
         </aside>
 
+      {/* Tidak perlu padding tambahan waktu diciutkan: rel ikonnya memakai
+          kolom grid sendiri (68px), jadi isi halaman tidak pernah tertimpa.
+          Dulu perlu, karena sidebar yang diciutkan benar-benar hilang dan
+          tombol pemunculnya mengambang di atas judul halaman. */}
       <div className="min-w-0">{children}</div>
 
       {/* Panel kanan Notifikasi & Aktivitas - tombolnya mengambang di kanan
