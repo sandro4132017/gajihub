@@ -70,6 +70,42 @@ model Pegawai {
   /// sistem ini. Belum ada pernyataan resmi bahwa NIK di Naco terverifikasi.
   sidikNik      String?   @unique @map("sidik_nik")
 
+  /// Status kawin apa adanya dari SIAP (PEGAWAI.STATUSKAWIN): K, B, C, J, D.
+  ///
+  /// Disimpan sebagai FAKTA, bukan sebagai kode PTKP. Penurunan ke "TK/0" atau
+  /// "K/2" dilakukan src/business-logic/ptkp.ts, karena aturannya (PMK
+  /// 168/2023) bisa berubah tanpa datanya ikut berubah - persis pola yang
+  /// dipakai untuk presensi: dari sumber diambil faktanya, angkanya dihitung
+  /// sendiri.
+  ///
+  /// 93 pegawai di SIAP tidak punya nilai yang sah (91 kosong, 2 rusak).
+  /// Untuk mereka PTKP-nya "tidak diketahui", BUKAN ditebak.
+  statusKawin   String?   @map("status_kawin")
+
+  /// L atau P dari SIAP.
+  ///
+  /// SATU-SATUNYA alasan kolom ini ada: PMK 168/2023 menetapkan PTKP pegawai
+  /// PEREMPUAN berstatus kawin sebagai TK/0 secara default, berapa pun
+  /// tanggungannya. Tanpa kolom ini, 1.830 pegawai akan dihitung di kategori
+  /// tarif yang keliru setiap bulan.
+  ///
+  /// Proyek ini menolak mengimpor data pribadi yang tidak menentukan
+  /// pembayaran (alamat, NIK, NPWP, telepon). Kolom ini lolos justru karena
+  /// ia menentukan pembayaran - dan tidak dipakai untuk hal lain.
+  jenisKelamin  String?   @map("jenis_kelamin")
+
+  /// Jumlah anak di SIAP yang kolom PEKERJAAN-nya kosong.
+  ///
+  /// BUKAN jumlah tanggungan PTKP, dan jangan diperlakukan begitu:
+  /// - PTKP juga mengakui orang tua, mertua, anak tiri, dan anak angkat -
+  ///   tabel ORANGTUA (5.330 baris) tidak ikut terhitung di sini.
+  /// - PEKERJAAN terisi cuma pada 819 dari 6.217 baris ANAK; kosong berarti
+  ///   "tidak tercatat", bukan "terbukti tidak berpenghasilan".
+  /// - PTKP ditetapkan menurut keadaan 1 Januari, sementara ini keadaan saat
+  ///   sinkronisasi dijalankan.
+  /// Karena itu hasilnya DUGAAN yang perlu dikonfirmasi pegawainya sendiri.
+  jumlahAnakTanggungan Int? @map("jumlah_anak_tanggungan")
+
   sourceSystem   String   @default("SIAP") @map("source_system")
   sourceSyncedAt DateTime @map("source_synced_at")
 

@@ -13,6 +13,12 @@ import { BandingForm } from "./BandingForm";
 import { NAMA_BULAN } from "../bulan";
 import { SearchableSelect } from "../SearchableSelect";
 import { labelStatus } from "../presensiTampilan";
+import {
+  DASAR_PENGENAAN_TER,
+  hitungPtkp,
+  tanggalAcuanPtkp,
+  tarifFinalHonorarium,
+} from "../../business-logic/ptkp";
 import { TAB_SAYA, resolveTabSaya } from "./tabs";
 import { kunciPeriode, pilihPeriode, type PeriodeSaya } from "./periodeSaya";
 
@@ -193,6 +199,24 @@ export default async function DataSayaPage({
   }
 
   const bandingTerpakai = new Set(pegawai.banding.map((b) => b.referensiId));
+
+  // DUGAAN status PTKP dari data kepegawaian SIAP - bukan status resmi DJP.
+  // Ditampilkan justru supaya pegawainya sendiri bisa mengoreksi: dialah
+  // satu-satunya yang tahu anaknya sudah bekerja atau belum, dan apakah
+  // punya surat keterangan suami tidak berpenghasilan. Aturannya di
+  // src/business-logic/ptkp.ts, lengkap dengan yang belum bisa diketahui.
+  const ptkp = hitungPtkp({
+    statusKawin: pegawai.statusKawin,
+    jenisKelamin: pegawai.jenisKelamin,
+    jumlahTanggungan: pegawai.jumlahAnakTanggungan,
+  });
+  // Tarif final honorarium = rezim yang BERBEDA dari TER. Lihat catatan
+  // panjang di ptkp.ts - keduanya sama-sama PPh Pasal 21 tapi mengenai
+  // penghasilan yang berlainan, dan menyandingkannya tanpa penjelasan
+  // membuat pegawai mengira tunjangan kinerjanya dipotong final.
+  const finalHonor = tarifFinalHonorarium(pegawai.golongan);
+  // PTKP ditetapkan menurut keadaan AWAL TAHUN KALENDER, bukan hari ini.
+  const acuanPtkp = tanggalAcuanPtkp(new Date().getFullYear());
 
   // Periode yang bisa dipilih di tab Kehadiran = periode yang rekapnya ADA.
   // Bukan 12 bulan terakhir: menawarkan bulan yang belum ditarik unitnya
@@ -441,6 +465,130 @@ export default async function DataSayaPage({
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Status PTKP (PPh Pasal 21)</h2>
+              <span className="chip chip-wait">Dugaan sistem</span>
+            </div>
+            {/* Tanggal acuan disebut di kepala kartu, bukan di catatan kaki:
+                PTKP ditetapkan menurut keadaan AWAL TAHUN, dan pembaca yang
+                melewatkan itu akan mengira angkanya menggambarkan keadaan
+                hari ini. */}
+            <p className="mt-1 text-xs text-muted">
+              Status per{" "}
+              <strong className="text-ink-2">{formatTanggal(acuanPtkp)}</strong>, diturunkan dari data keluarga di
+              SIAP menurut PMK 168/2023. <strong>Bukan status resmi</strong> - yang berlaku adalah yang terdaftar di
+              DJP dan dipakai Web Gaji.
+            </p>
+
+            {!ptkp && (
+              <p className="mt-4 text-sm text-muted">
+                Belum bisa ditentukan karena status kawin kamu belum terisi di SIAP. Perbaikannya lewat Kasubag TU
+                unit kamu, bukan di sini.
+              </p>
+            )}
+
+            {ptkp && (
+              <>
+                <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+                  <Butir label="Kode PTKP">
+                    <span className="font-mono text-base">{ptkp.kode}</span>
+                  </Butir>
+                  <Butir label="Kategori TER">{ptkp.kategoriTer}</Butir>
+                  <Butir label="PTKP setahun">{formatRupiah(ptkp.ptkpSetahun)}</Butir>
+                  <Butir label="Tanggungan dihitung">{ptkp.tanggunganDipakai}</Butir>
+                </dl>
+
+                {/* Catatan dari mesin aturannya, bukan teks tetap - yang muncul
+                    persis alasan yang berlaku untuk orang ini. */}
+                {ptkp.catatan.length > 0 && (
+                  <ul className="mt-4 space-y-1.5 rounded-xl border border-gold bg-gold/10 p-3.5">
+                    {ptkp.catatan.map((c, i) => (
+                      <li key={i} className="text-[11px] leading-relaxed text-ink-2">
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+
+            {/* ------------------------------------------------------------
+                DASAR PENGENAAN - menjawab "tunjangan saya yang mana yang kena
+                pajak". Daftarnya dari contoh kasus resmi DJP, bukan tafsiran.
+                ------------------------------------------------------------ */}
+            <div className="mt-5 border-t border-line-2 pt-4">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                Penghasilan yang menjadi dasar pengenaan
+              </p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {DASAR_PENGENAAN_TER.map((d) => (
+                  <li key={d} className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs text-ink-2">
+                    {d}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[11px] text-muted">
+                Untuk ASN yang penghasilannya dibebankan APBN, PPh Pasal 21 atas komponen di atas{" "}
+                <strong>ditanggung pemerintah</strong> - tidak mengurangi yang kamu terima. Uang makan dan uang
+                lembur belum termasuk dalam daftar ini; perlakuannya menunggu penegasan Bagian Keuangan.
+              </p>
+            </div>
+
+            {/* ------------------------------------------------------------
+                REZIM KEDUA - honorarium, tarif FINAL menurut golongan.
+                Dipisahkan dengan kotak sendiri dan diberi judul yang tegas
+                supaya tidak terbaca sebagai tarif atas tunjangan kinerja.
+                ------------------------------------------------------------ */}
+            <div className="mt-5 border-t border-line-2 pt-4">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                Honorarium APBN/APBD - dipotong final
+              </p>
+              {finalHonor ? (
+                <>
+                  <p className="mt-2 text-sm text-ink">
+                    Golongan <strong>{pegawai.golongan}</strong> dikenai tarif{" "}
+                    <strong className="font-mono">{(finalHonor.tarif * 100).toFixed(0)}%</strong> dan bersifat{" "}
+                    <strong>final</strong>.
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted">
+                    Berlaku HANYA atas honorarium atau imbalan lain yang dibebankan APBN/APBD - bukan atas gaji
+                    maupun tunjangan kinerja. Final berarti selesai di situ dan tidak digabung lagi di SPT Tahunan.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-muted">
+                  Belum bisa ditentukan untuk golongan{" "}
+                  <strong className="text-ink-2">{pegawai.golongan ?? "(belum terisi)"}</strong>. Tabel tarif final
+                  hanya menyebut PNS Golongan I sampai IV; golongan PPPK tidak tercantum, dan sistem ini tidak
+                  menebaknya.
+                </p>
+              )}
+            </div>
+
+            {/* ------------------------------------------------------------
+                ASAL & UMUR DATA - siapa pun yang membantah angka di atas akan
+                menanyakan ini lebih dulu: datanya dari mana dan kapan diambil.
+                ------------------------------------------------------------ */}
+            <div className="mt-5 border-t border-line-2 pt-4">
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-3">
+                <Butir label="Sumber data">{pegawai.sourceSystem}</Butir>
+                <Butir label="Terakhir disinkronkan">{formatTanggal(pegawai.sourceSyncedAt)}</Butir>
+                <Butir label="Status kawin tercatat">{pegawai.statusKawin ?? "(kosong)"}</Butir>
+              </dl>
+              <p className="mt-2 text-[11px] text-muted">
+                Perubahan data keluarga dicatat di SIAP, lalu masuk ke sini pada sinkronisasi berikutnya. Kalau
+                sudah diperbarui di SIAP tetapi tanggal di atas masih lama, artinya sinkronisasi belum dijalankan.
+              </p>
+            </div>
+
+            <p className="mt-5 border-t border-line-2 pt-3 text-xs text-muted">
+              Angka ini belum memperhitungkan tanggungan selain anak (orang tua, mertua, anak tiri, anak angkat),
+              dan menganggap anak tanpa catatan pekerjaan sebagai tanggungan. Kalau ada yang tidak sesuai,
+              sampaikan ke Kasubag TU unit kamu.
+            </p>
           </section>
 
           {/* Keterangan ini menjawab pertanyaan yang PASTI muncul begitu

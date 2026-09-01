@@ -22,6 +22,10 @@
 //   jabatan       <- RIWAYATJABATAN.NAMAJABATAN terbaru
 //   golongan      <- PANGKAT.KODEPANGKAT via VWPANGKATTERAKHIR
 //   tmtSkTerakhir <- VWPANGKATTERAKHIR.TMTPANGKAT
+//   statusKawin   <- PEGAWAI.STATUSKAWIN (K/B/C/J/D) - fakta, bukan kode PTKP
+//   jenisKelamin  <- PEGAWAI.JENISKELAMIN (L/P) - dibutuhkan aturan wanita
+//                    kawin PMK 168/2023, lihat src/business-logic/ptkp.ts
+//   jumlahAnakTanggungan <- COUNT(ANAK) yang kolom PEKERJAAN-nya kosong
 //   kelasJabatan  <- MASTERFUNGSIONAL.JOBGRADE (fungsional/pelaksana) atau
 //                    SATKER.JOBGRADE (struktural). PEGAWAI.JOBGRADE kosong
 //                    total, jangan dipakai. Nilai di luar 1-17 dibuang jadi null.
@@ -76,6 +80,9 @@ interface BarisSiap {
   golongan: string | null;
   tmtPangkat: Date | null;
   kelasJabatan: string | null;
+  statusKawin: string | null;
+  jenisKelamin: string | null;
+  jumlahAnakTanggungan: number | null;
   sumberKelasJabatan: string | null;
   /**
    * NIK - SATU-SATUNYA data pribadi yang diambil, dan **tidak pernah
@@ -145,6 +152,9 @@ async function ambilDariSiap(prefixSatker: string | null): Promise<BarisSiap[]> 
         pk.KODEPANGKAT                     AS golongan,
         vp.TMTPANGKAT                      AS tmtPangkat,
         LTRIM(RTRIM(p.NIK))                AS nik,
+        LTRIM(RTRIM(p.STATUSKAWIN))        AS statusKawin,
+        LTRIM(RTRIM(p.JENISKELAMIN))       AS jenisKelamin,
+        ISNULL(anakTgg.n, 0)               AS jumlahAnakTanggungan,
         COALESCE(
           NULLIF(LTRIM(RTRIM(mf.JOBGRADE)), ''),
           NULLIF(LTRIM(RTRIM(sJab.JOBGRADE)), '')
@@ -169,6 +179,16 @@ async function ambilDariSiap(prefixSatker: string | null): Promise<BarisSiap[]> 
       -- fungsional & pelaksana -> MASTERFUNGSIONAL, struktural -> SATKER.
       LEFT JOIN dbo.MASTERFUNGSIONAL mf ON mf.FUNGSIONALID = rj.FUNGSIONALID
       LEFT JOIN dbo.SATKER sJab          ON sJab.SATKERID  = rj.SATKERID
+      -- Calon tanggungan PTKP dari sisi anak: yang kolom PEKERJAAN-nya
+      -- kosong. JANGAN pakai STATUSTUNJANGAN - kolom itu mengikuti aturan
+      -- TUNJANGAN KELUARGA (maksimal 2 anak), sementara PTKP mengakui 3
+      -- tanggungan dengan syarat yang berbeda. Dua aturan, dua angka.
+      OUTER APPLY (
+        SELECT COUNT(*) AS n
+        FROM dbo.ANAK a
+        WHERE a.PEGAWAIID = p.PEGAWAIID
+          AND (a.PEKERJAAN IS NULL OR LTRIM(RTRIM(a.PEKERJAAN)) = '')
+      ) anakTgg
       WHERE p.STATUSPEGAWAIID IN ('${STATUS_AKTIF.join("','")}')
         AND p.NIPBARU IS NOT NULL
         AND LEN(LTRIM(RTRIM(p.NIPBARU))) = 18
@@ -311,6 +331,12 @@ async function main() {
           golongan: b.golongan ? b.golongan.trim() : null,
           kelasJabatan,
           tmtSkTerakhir: b.tmtPangkat ?? null,
+          // Disimpan apa adanya, termasuk nilai yang tidak dikenal seperti
+          // "(" - penyaringannya urusan hitungPtkp(), yang mengembalikan
+          // null untuk status tak dikenal alih-alih menebaknya jadi TK/0.
+          statusKawin: b.statusKawin ? b.statusKawin.trim() : null,
+          jenisKelamin: b.jenisKelamin ? b.jenisKelamin.trim() : null,
+          jumlahAnakTanggungan: b.jumlahAnakTanggungan ?? 0,
           sourceSyncedAt: waktuSync,
           // Sengaja ikut di-set walau null: kalau NIK seseorang di SIAP
           // dikoreksi (atau jadi ganda), sidik lamanya HARUS hilang - kalau
