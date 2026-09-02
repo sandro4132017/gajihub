@@ -21,6 +21,7 @@ import {
   TARIF_UANG_MAKAN_LEMBUR_PER_HARI,
   kurungTarifSbm,
 } from "../../../business-logic/tarifSbm";
+import { statusUnit } from "../../../business-logic/pengirimanUnit";
 
 const HARI_KERJA_DEFAULT = 21;
 
@@ -29,7 +30,7 @@ export interface KalkulasiMassalFormState {
   success?: string;
   /**
    * Aksinya berjalan tanpa kegagalan, TAPI tidak ada satu angka pun yang
-   * berubah - mis. semua pegawai dilewati karena sudah APPROVED. Dipisah dari
+   * berubah - mis. semua pegawai dilewati karena datanya kurang. Dipisah dari
    * `success` karena warna hijau di situ terbaca "beres" dan orang berhenti di
    * situ, padahal justru masih ada langkah yang harus diambil. Pernah terjadi
    * betulan: "Tukin terhitung untuk 0 pegawai" tampil hijau, 47 baris tetap
@@ -46,10 +47,6 @@ export interface KalkulasiMassalFormState {
      * sini datanya TERSIMPAN sebagian, bukan gagal total.
      */
     detailSebagian: string[];
-    /** Pegawai yang tidak dihitung ulang karena Tukin-nya sudah APPROVED. */
-    dilewatiKarenaApproved: number;
-    /** Approval yang benar-benar dibatalkan karena dipaksa hitung ulang. */
-    approvalDibatalkan: number;
   };
 }
 
@@ -93,7 +90,49 @@ export async function kalkulasiMassalTukinUangMakanAction(
       return { error: "Role kamu tidak berwenang mengajukan kalkulasi massal unit ini." };
     }
 
-    const pegawaiList = await prisma.pegawai.findMany({ where: { satuanKerja } });
+    // --- KUNCI PENGIRIMAN ---
+    //
+    // Unit yang rekapnya sudah dikirim ke PPABP TIDAK boleh dihitung ulang.
+    // Ini inti dari "yang dikirim terkunci": tanpa penjagaan di sini, angka
+    // yang dilihat PPABP bisa berubah di bawah kakinya sendiri - dia membuka
+    // berkas ADK dengan angka yang sudah tidak sama dengan yang disetujui
+    // Kasubag TU, dan tidak ada apa pun yang memberitahunya.
+    //
+    // Dicek di SERVER, bukan cuma dengan menyembunyikan tombolnya: tombol
+    // yang hilang tidak menghentikan permintaan yang dikirim ulang dari
+    // DevTools atau dari tab yang sudah lama terbuka sebelum unit mengirim.
+    const pengiriman = await prisma.pengirimanUnit.findUnique({
+      where: {
+        satuanKerja_periodeBulan_periodeTahun: { satuanKerja, periodeBulan, periodeTahun },
+      },
+    });
+    if (statusUnit(pengiriman).terkunci) {
+      return {
+        error:
+          "Rekap periode ini sudah dikirim ke PPABP dan terkunci, jadi tidak bisa dihitung ulang. Kalau ada yang perlu diperbaiki, minta PPABP mengembalikannya lebih dulu.",
+      };
+    }
+
+    // HANYA PEGAWAI AKTIF. Yang berstatus PENSIUN/BERHENTI/NONAKTIF tidak
+    // diproses dan tidak dilaporkan sebagai "dilewati".
+    //
+    // Sebelumnya seluruh isi unit ikut diproses, lalu pensiunan muncul di
+    // daftar "dilewati - predikat kinerja belum diupload" tiap kali kalkulasi
+    // dijalankan. Itu bukan informasi: predikat mereka memang tidak akan
+    // pernah ada lagi, jadi barisnya tidak pernah bisa hilang dan tidak ada
+    // yang bisa dikerjakan atasnya. Keluhan yang tidak bisa ditindaklanjuti
+    // membuat daftar "dilewati" berhenti dibaca - termasuk baris yang
+    // sungguhan.
+    const pegawaiList = await prisma.pegawai.findMany({
+      where: {
+        satuanKerja,
+        statusPegawai: "AKTIF",
+        // Yang dikecualikan pada periode ini tidak diproses sama sekali -
+        // bukan diproses lalu dibuang. Lihat
+        // src/business-logic/pengecualianPegawai.ts.
+        pengecualian: { none: { periodeBulan, periodeTahun } },
+      },
+    });
 
     // --- Gerbang kelengkapan predikat kinerja ---
     //
@@ -126,49 +165,16 @@ export async function kalkulasiMassalTukinUangMakanAction(
     }
 
     // ========================================================================
-    // GERBANG "SUDAH DISETUJUI" - menghitung ulang MEMBATALKAN approval
-    // ========================================================================
-    // Menghitung ulang selalu mengembalikan status ke DRAFT dan memperbarui
-    // `calculatedAt`; approval yang tercatat SEBELUM waktu itu otomatis
-    // dianggap basi oleh `evaluasiApproval`. Jadi satu klik bisa menghapus
-    // hasil kerja approval satu unit penuh - tanpa peringatan apa pun sebelum
-    // ini ada.
+    // GERBANG "SUDAH APPROVED" DICABUT (2026-09-02) bersama approval
+    // berjenjang. Dulu di sini ada pilihan lewati/hitung-ulang plus kotak
+    // konfirmasi, karena menghitung ulang membatalkan approval satu unit
+    // penuh - di Biro Keuangan periode 7/2026 itu terjadi tiga kali.
     //
-    // Kejadian nyata yang memicu pengaman ini: periode 7/2026 Biro Keuangan
-    // punya 278 baris ApprovalLog (139 jenjang 1 + 139 jenjang 2) untuk 47
-    // pegawai - siklusnya terulang sekitar TIGA kali, dan tiap kali export
-    // ADK-nya kosong lagi.
-    //
-    // Perilaku BAWAANNYA sekarang MELEWATI baris yang sudah disetujui.
-    // Menghitung ulang tetap bisa, tapi harus dipilih sadar DAN dikonfirmasi -
-    // dua langkah, sama seperti tombol "Setujui semua".
-    const perlakuanApproved = String(formData.get("perlakuanApproved") ?? "lewati");
-    const konfirmasiReset = formData.get("konfirmasiResetApproval") === "1";
-    const tukinApproved = await prisma.tukinCalculation.findMany({
-      where: {
-        pegawaiId: { in: pegawaiList.map((p) => p.id) },
-        periodeBulan,
-        periodeTahun,
-        status: "APPROVED",
-      },
-      select: { pegawaiId: true },
-    });
-    const setApproved = new Set(tukinApproved.map((t) => t.pegawaiId));
-
-    if (setApproved.size > 0 && perlakuanApproved === "hitungUlang" && !konfirmasiReset) {
-      return {
-        error:
-          `${setApproved.size} pegawai periode ${periodeBulan}/${periodeTahun} sudah berstatus APPROVED.` +
-          " Menghitung ulang akan mengembalikan mereka ke DRAFT dan membatalkan approval yang sudah selesai" +
-          " (termasuk jenjang 2), sehingga export ADK periode ini kosong lagi sampai disetujui ulang." +
-          " Centang kotak konfirmasi kalau memang itu yang dimaksud.",
-      };
-    }
-    const lewatiApproved = setApproved.size > 0 && perlakuanApproved !== "hitungUlang";
-
+    // Sekarang tidak ada approval yang bisa dibatalkan, dan penjagaannya
+    // pindah ke tempat yang lebih tegas: kunci pengiriman unit, dicek di
+    // atas. Bedanya penting - kunci itu MENOLAK seluruh kalkulasi ulang
+    // dengan alasan yang terbaca, bukan melewati sebagian baris diam-diam.
     let dihitung = 0;
-    let dilewatiKarenaApproved = 0;
-    let approvalDibatalkan = 0;
     const detailDilewati: string[] = [];
     const detailSebagian: string[] = [];
 
@@ -187,11 +193,6 @@ export async function kalkulasiMassalTukinUangMakanAction(
     for (const sk of skHukdis) skPerPegawai.set(sk.pegawaiId, [...(skPerPegawai.get(sk.pegawaiId) ?? []), sk]);
 
     for (const pegawai of pegawaiList) {
-      if (lewatiApproved && setApproved.has(pegawai.id)) {
-        dilewatiKarenaApproved++;
-        continue;
-      }
-      if (setApproved.has(pegawai.id)) approvalDibatalkan++;
       // Kelas EFEKTIF, bukan kelas di data kepegawaian - pegawai yang sedang
       // menjalani penurunan jabatan dibayar dengan tarif kelas yang turun.
       const efektif = kelasJabatanEfektif(
@@ -505,53 +506,17 @@ export async function kalkulasiMassalTukinUangMakanAction(
 
     revalidatePath("/kasubag/kalkulasi");
 
-    // Tidak ada satupun yang dihitung DAN penyebabnya cuma "sudah APPROVED":
-    // ini bukan keberhasilan, dan tidak boleh tampil hijau. Sebutkan langkah
-    // berikutnya, karena kalau tidak, penanda "angka basi" di tabel bertahan
-    // tanpa penjelasan dan terlihat seperti kerusakan.
-    if (dihitung === 0 && dilewatiKarenaApproved > 0 && detailDilewati.length === 0) {
-      return {
-        peringatan:
-          `TIDAK ADA yang dihitung ulang. Ke-${dilewatiKarenaApproved} pegawai periode` +
-          ` ${periodeBulan}/${periodeTahun} sudah berstatus APPROVED, dan pilihan yang aktif adalah` +
-          ` "Lewati yang sudah disetujui" - jadi angka Tukin mereka masih yang lama.` +
-          ` Kalau presensinya memang berubah (mis. ada koreksi jam), pilih "Hitung ulang semua"` +
-          ` lalu centang kotak konfirmasi - approval yang sudah selesai akan dibatalkan dan` +
-          ` harus disetujui ulang di Dashboard Tukin.`,
-        ringkasan: {
-          dihitung,
-          dilewati: detailDilewati.length,
-          detailDilewati,
-          detailSebagian,
-          dilewatiKarenaApproved,
-          approvalDibatalkan,
-        },
-      };
-    }
-
     return {
       success:
         `Tukin terhitung untuk ${dihitung} pegawai` +
         (detailSebagian.length > 0
           ? ` (${detailSebagian.length} di antaranya tanpa uang makan/lembur).`
-          : ", lengkap dengan uang makan/lembur.") +
-        // Dua akibat yang HARUS disebut apa adanya - keduanya mengubah apa
-        // yang bisa diekspor ke ADK, dan tidak boleh cuma terlihat dari
-        // berubahnya angka di tabel.
-        (dilewatiKarenaApproved > 0
-          ? ` ${dilewatiKarenaApproved} pegawai yang sudah APPROVED DILEWATI - approval mereka tetap utuh.`
-          : "") +
-        (approvalDibatalkan > 0
-          ? ` PERHATIAN: ${approvalDibatalkan} approval yang sudah selesai DIBATALKAN - baris itu kembali DRAFT` +
-            ` dan tidak akan masuk export ADK sampai disetujui ulang di Dashboard Tukin.`
-          : ""),
+          : ", lengkap dengan uang makan/lembur."),
       ringkasan: {
         dihitung,
         dilewati: detailDilewati.length,
         detailDilewati,
         detailSebagian,
-        dilewatiKarenaApproved,
-        approvalDibatalkan,
       },
     };
   } catch (err) {

@@ -78,7 +78,7 @@ describe("rincianUangMakan - hari hadir vs hari dibayar", () => {
 
   it("baris berjumlah nol tidak ditampilkan", () => {
     const r = rincianUangMakan(dasar);
-    expect(r.baris.map((b) => b.status)).toEqual(["WFO (kerja di kantor)", "WFH / WFA"]);
+    expect(r.baris.map((b) => b.status)).toEqual(["WFO", "WFH / WFA"]);
   });
 
   it("hari berhak melebihi hari kerja dipotong DAN dijelaskan", () => {

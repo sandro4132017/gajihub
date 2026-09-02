@@ -39,6 +39,21 @@ model Pegawai {
   kelasJabatan  Int?      @map("kelas_jabatan")
   tmtSkTerakhir DateTime? @map("tmt_sk_terakhir")
 
+  /// Nomor SK yang menetapkan kelas jabatan pegawai ini. WAJIB ADA di ADK
+  /// Tunjangan Kinerja (kolom "Nomor SK") - sebelum ini kolomnya selalu
+  /// dikirim KOSONG karena tidak ada tempat menyimpannya di sistem ini.
+  ///
+  /// Diisi & disunting petugas lewat halaman Data Pegawai, BUKAN hasil
+  /// sinkronisasi SIAP - SIAP tidak punya kolom ini. Karena itu sinkronisasi
+  /// pegawai TIDAK BOLEH menimpanya (lihat importPegawaiSiap.ts).
+  ///
+  /// TODO(confirm): nomor SK bisa berubah sewaktu-waktu, dan yang tersimpan
+  /// di sini SELALU yang terbaru. Artinya export ADK periode lama yang
+  /// diulang akan memuat nomor SK yang BERBEDA dari yang pernah dikirim.
+  /// Kalau Rokeu menuntut nomor SK per periode, ini perlu jadi tabel
+  /// riwayat bertanggal, bukan satu kolom.
+  nomorSk       String?   @map("nomor_sk")
+
   /// Sidik NIK - HMAC-SHA256 dari NIK, BUKAN NIK-nya.
   ///
   /// KENAPA ADA: SSO Naco tidak mengirimkan NIP. Diukur dua kali (akun publik
@@ -120,6 +135,8 @@ model Pegawai {
   banding           Banding[]
   skKgb             SkKgb[]
   skHukumanDisiplin SkHukumanDisiplin[]
+  skGrade           SkGrade[]
+  pengecualian      PengecualianPegawai[]
   buktiPotongPajak  BuktiPotongPajak[]
   gajiInduk         GajiInduk[]
   rekapPresensi     RekapPresensiPeriode[]
@@ -562,6 +579,12 @@ model User {
   usulanRoleDiajukan       UsulanPerubahanRole[]   @relation("UsulanRoleDiajukanOleh")
   usulanRoleDiputuskan     UsulanPerubahanRole[]   @relation("UsulanRoleDiputuskanOleh")
   UsulanPerubahanRole      UsulanPerubahanRole[]
+  pengirimanDikirim        PengirimanUnit[]        @relation("PengirimanDikirimOleh")
+  pengirimanDikembalikan   PengirimanUnit[]        @relation("PengirimanDikembalikanOleh")
+  aksesSatkerDiterima      AksesSatkerTambahan[]   @relation("AksesSatkerUntuk")
+  aksesSatkerDiberikan     AksesSatkerTambahan[]   @relation("AksesSatkerDiberikanOleh")
+  skGradeDicatat           SkGrade[]               @relation("SkGradeDicatatOleh")
+  pengecualianDitandai     PengecualianPegawai[]   @relation("PengecualianDitandaiOleh")
 
   @@index([role])
   @@index([satuanKerja])
@@ -1330,4 +1353,205 @@ model HariLiburNasional {
 
   @@index([tanggal])
   @@map("hari_libur_nasional")
+}
+
+// ---------------------------------------------------------------------------
+// PENGIRIMAN UNIT - pengganti approval berjenjang (keputusan user 2026-09-02)
+//
+// APA YANG DIGANTIKAN. Sebelumnya tiap kalkulasi disetujui SATU PER SATU lewat
+// ApprovalLog: Kasubag TU jenjang 1, PPABP jenjang final. Untuk unit berisi
+// ratusan pegawai itu berarti ratusan keputusan yang isinya sama, dan yang
+// benar-benar dinilai Kasubag TU sebetulnya cuma satu hal: "rekap unit saya
+// periode ini sudah benar". Model ini memindahkan keputusan itu ke tempatnya
+// yang sebenarnya - SATU baris per (satuan kerja, periode).
+//
+// ApprovalLog SENGAJA TIDAK DIHAPUS. Isinya jejak audit periode-periode yang
+// sudah lewat, dan alur Banding/SK KGB/SK Hukdis masih memakainya. Yang
+// dihentikan cuma pemakaiannya untuk kalkulasi Tukin/Uang Makan/Uang Lembur.
+//
+// KUNCI. Begitu dikirim, seluruh kalkulasi unit periode itu TERKUNCI: tidak
+// bisa dihitung ulang, tidak bisa disunting, dan tidak bisa ditarik kembali
+// oleh unit. Ini yang membuat angka yang dilihat PPABP sama persis dengan
+// yang dikirim.
+//
+// JALAN KELUARNYA CUMA SATU, DAN ADA DI TANGAN PPABP: "Kembalikan ke unit"
+// dengan alasan wajib. Tanpa itu satu salah kirim mengunci periode sampai ada
+// yang menyentuh database langsung - dan menyentuh database langsung adalah
+// hal yang justru sedang dihindari sistem ini.
+// ---------------------------------------------------------------------------
+model PengirimanUnit {
+  id String @id @default(uuid())
+
+  satuanKerja  String @map("satuan_kerja")
+  periodeBulan Int    @map("periode_bulan")
+  periodeTahun Int    @map("periode_tahun")
+
+  /// TERKIRIM = terkunci di PPABP. DIKEMBALIKAN = unit boleh menyunting lagi.
+  /// Tidak ada nilai "DRAFT": unit yang belum mengirim tidak punya baris di
+  /// sini sama sekali, jadi "belum kirim" tidak bisa tertukar dengan
+  /// "sudah kirim lalu di-reset".
+  status String @default("TERKIRIM")
+
+  /// Cacah pegawai & kalkulasi PADA SAAT DIKIRIM - dibekukan, bukan dihitung
+  /// ulang saat ditampilkan. Kalau nanti ada pegawai pindah unit, angka yang
+  /// dipertanggungjawabkan Kasubag TU tetap angka yang dia lihat waktu
+  /// menekan kirim.
+  jumlahPegawai   Int @map("jumlah_pegawai")
+  jumlahKalkulasi Int @map("jumlah_kalkulasi")
+
+  catatanPengirim String? @map("catatan_pengirim")
+
+  dikirimOlehId String   @map("dikirim_oleh_id")
+  dikirimOleh   User     @relation("PengirimanDikirimOleh", fields: [dikirimOlehId], references: [id])
+  dikirimPada   DateTime @default(now()) @map("dikirim_pada")
+
+  /// Wajib terisi kalau status DIKEMBALIKAN - PPABP harus menyebut apa yang
+  /// salah, karena unit tidak punya cara lain mengetahuinya.
+  alasanKembali      String?   @map("alasan_kembali")
+  dikembalikanOlehId String?   @map("dikembalikan_oleh_id")
+  dikembalikanOleh   User?     @relation("PengirimanDikembalikanOleh", fields: [dikembalikanOlehId], references: [id])
+  dikembalikanPada   DateTime? @map("dikembalikan_pada")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([satuanKerja, periodeBulan, periodeTahun])
+  @@index([periodeBulan, periodeTahun])
+  @@index([status])
+  @@map("pengiriman_unit")
+}
+
+// ---------------------------------------------------------------------------
+// AKSES SATKER TAMBAHAN - hibah akses baca lintas unit (keputusan user
+// 2026-09-02: "pegawai A di Unit A bisa lihat Unit B").
+//
+// KENAPA TABEL SENDIRI, BUKAN ROLE BARU ATAU KOLOM ARRAY DI User:
+// memberi orang akses ke data gaji unit lain adalah keputusan yang suatu saat
+// akan ditanya Itjen - siapa memberi, kepada siapa, kapan, dan atas dasar apa.
+// Kolom array tidak bisa menjawab satu pun dari pertanyaan itu. Role baru
+// menjawabnya lebih buruk lagi: daftar satkernya tetap harus disimpan di
+// suatu tempat, sementara matriks 6 role bertambah cabang di setiap guard.
+//
+// HANYA BACA. Baris di sini TIDAK PERNAH memberi wewenang menghitung,
+// mengirim, menyetujui, atau meng-export. Yang menentukan wewenang tetap
+// `User.role`; tabel ini cuma memperluas APA YANG TERLIHAT.
+// ---------------------------------------------------------------------------
+model AksesSatkerTambahan {
+  id String @id @default(uuid())
+
+  userId String @map("user_id")
+  user   User   @relation("AksesSatkerUntuk", fields: [userId], references: [id])
+
+  /// Satuan kerja yang boleh DILIHAT - bukan satker asal user.
+  satuanKerja String @map("satuan_kerja")
+
+  /// Wajib. Akses lintas unit tanpa alasan tertulis tidak bisa ditinjau ulang
+  /// oleh siapa pun, termasuk oleh yang memberikannya.
+  alasan String
+
+  /// Kosong = tanpa batas waktu. Diisi = akses berhenti sendiri, tidak
+  /// bergantung pada ada yang ingat mencabutnya.
+  berlakuSampai DateTime? @map("berlaku_sampai")
+
+  aktif Boolean @default(true)
+
+  diberikanOlehId String   @map("diberikan_oleh_id")
+  diberikanOleh   User     @relation("AksesSatkerDiberikanOleh", fields: [diberikanOlehId], references: [id])
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, satuanKerja])
+  @@index([userId])
+  @@index([satuanKerja])
+  @@map("akses_satker_tambahan")
+}
+
+// ---------------------------------------------------------------------------
+// SK GRADE - dasar kolom "Nomor SK" dan "Kode Grade" di ADK Tunjangan Kinerja.
+//
+// MASALAH YANG DISELESAIKAN: kolom "Nomor SK" di ADK selama ini dikirim
+// KOSONG (lihat src/business-logic/adk.ts) karena tidak ada tempat
+// menyimpannya, sementara "Kode Grade" diambil dari `Pegawai.kelasJabatan`
+// yang berasal dari SIAP - bukan dari SK yang menetapkannya.
+//
+// Bedanya bukan administratif. Kelas jabatan di SIAP adalah keadaan HARI INI;
+// yang menentukan tukin bulan Juli adalah SK yang berlaku PADA Juli. Pegawai
+// yang naik kelas jabatan di tengah tahun akan dibayar dengan kelas barunya
+// untuk bulan-bulan sebelumnya kalau yang dipakai keadaan hari ini.
+//
+// Karena itu `tmtBerlaku` ada, dan pemilihan SK untuk satu periode adalah
+// "SK dengan tmtBerlaku terbesar yang tidak melewati akhir periode itu".
+//
+// TODO(confirm): apakah Web Gaji memvalidasi Nomor SK terhadap basis datanya
+// sendiri, atau menerima apa adanya - belum ditanyakan ke Rokeu.
+// ---------------------------------------------------------------------------
+model SkGrade {
+  id String @id @default(uuid())
+
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  /// Masuk apa adanya ke kolom "Nomor SK" di ADK.
+  nomorSk   String   @map("nomor_sk")
+  tanggalSk DateTime @map("tanggal_sk")
+
+  /// Terhitung mulai tanggal SK ini berlaku. Inilah yang menentukan SK mana
+  /// yang dipakai untuk suatu periode - bukan tanggal SK-nya.
+  tmtBerlaku DateTime @map("tmt_berlaku")
+
+  /// Kelas jabatan menurut SK ini. Di ADK ditulis dua digit ("07", bukan "7").
+  /// Sengaja Int, bukan String: kelas jabatan dibandingkan dan diurutkan.
+  kelasJabatan Int @map("kelas_jabatan")
+
+  /// Bebas diisi - "SK Penyesuaian Kelas Jabatan", "SK Mutasi", dst.
+  keterangan String?
+
+  dicatatOlehId String   @map("dicatat_oleh_id")
+  dicatatOleh   User     @relation("SkGradeDicatatOleh", fields: [dicatatOlehId], references: [id])
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([pegawaiId, nomorSk])
+  @@index([pegawaiId, tmtBerlaku])
+  @@map("sk_grade")
+}
+
+// ---------------------------------------------------------------------------
+// PENGECUALIAN PEGAWAI - orang yang masih tercatat di unit tapi tidak ikut
+// dihitung pada periode itu (keputusan user 2026-09-02).
+//
+// Alasan lengkapnya di src/business-logic/pengecualianPegawai.ts. Ringkasnya:
+// SIAP tidak selalu diperbarui saat orang pindah/berhenti, dan satu orang yang
+// sudah tidak ada bisa mengunci seluruh unit dari mengirim rekap.
+//
+// TIDAK BOLEH jadi kolom di `Pegawai`: sinkronisasi SIAP menulis ulang baris
+// pegawai setiap kali dijalankan (termasuk memaksa statusPegawai jadi AKTIF),
+// jadi penandaan apa pun di sana hilang pada sinkronisasi berikutnya.
+// ---------------------------------------------------------------------------
+model PengecualianPegawai {
+  id String @id @default(uuid())
+
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  periodeBulan Int @map("periode_bulan")
+  periodeTahun Int @map("periode_tahun")
+
+  /// Kode dari ALASAN_PENGECUALIAN. Sengaja daftar tetap, bukan teks bebas -
+  /// rekapitulasi ke OSDMA harus bisa dijumlahkan per jenis.
+  alasanKode String @map("alasan_kode")
+
+  /// Wajib terisi kalau alasanKode = "LAINNYA".
+  penjelasan String?
+
+  ditandaiOlehId String   @map("ditandai_oleh_id")
+  ditandaiOleh   User     @relation("PengecualianDitandaiOleh", fields: [ditandaiOlehId], references: [id])
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  /// Satu pegawai hanya bisa dikecualikan sekali per periode. Menandai ulang
+  /// menimpa barisnya, bukan menumpuk - tanpa ini "berapa orang dikecualikan"
+  /// jadi angka yang lebih besar dari jumlah orangnya.
+  @@unique([pegawaiId, periodeBulan, periodeTahun])
+  @@index([periodeBulan, periodeTahun])
+  @@map("pengecualian_pegawai")
 }

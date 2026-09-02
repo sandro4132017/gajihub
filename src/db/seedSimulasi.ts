@@ -981,6 +981,62 @@ async function main() {
   });
   console.log(`  -> Usulan role ${kharina.nama}: PEGAWAI -> KASUBAG_TU, status MENUNGGU (diusulkan ${PPABP.nama}).`);
 
+  // --------------------------------------------------------------------
+  // PENGIRIMAN UNIT - pengganti approval berjenjang (2026-09-02)
+  // --------------------------------------------------------------------
+  // WAJIB ADA, bukan pemanis. Sejak approval dihapus, yang menentukan isi
+  // berkas ADK adalah baris-baris di tabel ini. Tanpa mereka, demo yang
+  // datanya terlihat lengkap tetap menghasilkan ADK KOSONG - dan kegagalan
+  // itu diam, karena berkasnya tetap terunduh.
+  //
+  // Periode LALU dikirim (histori yang sudah selesai); periode BERJALAN
+  // sengaja dibiarkan belum dikirim supaya tombol "Kirim & kunci" ada yang
+  // bisa dicoba waktu demo.
+  console.log("\n=== Pengiriman Unit ===");
+  const pengirimOleh =
+    (await prisma.user.findFirst({ where: { role: "KASUBAG_TU", aktif: true } })) ??
+    (await prisma.user.findFirstOrThrow({ where: { aktif: true } }));
+  const satkerSeed = [
+    ...new Set(
+      (await prisma.pegawai.findMany({ select: { satuanKerja: true } })).map((p) => p.satuanKerja)
+    ),
+  ];
+  for (const satuanKerja of satkerSeed) {
+    const jumlahKalkulasi = await prisma.tukinCalculation.count({
+      where: {
+        periodeBulan: PERIODE_LALU.bulan,
+        periodeTahun: PERIODE_LALU.tahun,
+        pegawai: { satuanKerja },
+      },
+    });
+    if (jumlahKalkulasi === 0) continue;
+    const jumlahPegawai = await prisma.pegawai.count({
+      where: { satuanKerja, statusPegawai: "AKTIF" },
+    });
+    await prisma.pengirimanUnit.upsert({
+      where: {
+        satuanKerja_periodeBulan_periodeTahun: {
+          satuanKerja,
+          periodeBulan: PERIODE_LALU.bulan,
+          periodeTahun: PERIODE_LALU.tahun,
+        },
+      },
+      create: {
+        satuanKerja,
+        periodeBulan: PERIODE_LALU.bulan,
+        periodeTahun: PERIODE_LALU.tahun,
+        status: "TERKIRIM",
+        jumlahPegawai,
+        jumlahKalkulasi,
+        dikirimOlehId: pengirimOleh.id,
+      },
+      update: {},
+    });
+    console.log(
+      `  -> ${satuanKerja} ${PERIODE_LALU.bulan}/${PERIODE_LALU.tahun}: TERKIRIM (${jumlahKalkulasi} kalkulasi).`
+    );
+  }
+
   await prisma.$disconnect();
   console.log("\nSelesai.");
 }

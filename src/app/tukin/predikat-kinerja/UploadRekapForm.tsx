@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { uploadRekapPredikatAction, type UploadRekapPredikatFormState } from "./actions";
 import { NAMA_BULAN } from "../../bulan";
 
@@ -17,6 +18,45 @@ const INITIAL_STATE: UploadRekapPredikatFormState = {};
  */
 export function UploadRekapForm() {
   const [state, formAction, pending] = useActionState(uploadRekapPredikatAction, INITIAL_STATE);
+
+  // ==========================================================================
+  // FILTER HALAMAN IKUT PINDAH KE PERIODE YANG BARU DIUPLOAD.
+  //
+  // Masalah yang sama dengan sinkronisasi presensi: upload Juli sementara
+  // halaman menampilkan Agustus membuat tabel di bawah tetap kosong, dan yang
+  // membacanya menyimpulkan uploadnya gagal.
+  //
+  // SYARATNYA: hasil uploadnya HANYA SATU periode. Satu file e-Kinerja bisa
+  // memuat beberapa sheet dengan periode berbeda-beda; kalau begitu, tidak ada
+  // satu periode pun yang layak dipilihkan, dan memindahkan filter ke salah
+  // satunya justru menyembunyikan yang lain.
+  // ==========================================================================
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const sudahPindah = useRef<string | null>(null);
+
+  const ringkasanPerPeriode = state.ringkasanPerPeriode;
+  useEffect(() => {
+    if (!ringkasanPerPeriode || ringkasanPerPeriode.length === 0) return;
+    const periodeUnik = [
+      ...new Set(ringkasanPerPeriode.map((r) => `${r.periodeBulan}-${r.periodeTahun}`)),
+    ];
+    if (periodeUnik.length !== 1) return;
+
+    const kunci = periodeUnik[0];
+    if (sudahPindah.current === kunci) return;
+    sudahPindah.current = kunci;
+
+    const [bulan, tahun] = kunci.split("-");
+    if (searchParams.get("bulan") === bulan && searchParams.get("tahun") === tahun) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("bulan", bulan);
+    params.set("tahun", tahun);
+    params.delete("hal");
+    router.replace(`${pathname}?${params.toString()}`);
+  }, [ringkasanPerPeriode, pathname, router, searchParams]);
 
   return (
     <div className="card mt-4 p-5">

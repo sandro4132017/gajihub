@@ -4,6 +4,9 @@ import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canGenerateAdk } from "../../../../auth/permissions";
 import type { PegawaiAdkHarian } from "../../../../business-logic/adkHarian";
 import { responseAdkHarian } from "../responseAdk";
+import { ALASAN_UANG_LEMBUR_DISEMBUNYIKAN, TAMPILKAN_ADK_LEMBUR } from "../../../tampilUangLembur";
+import { bacaJenisPegawai, labelJenisPegawai, wherePegawaiJenis } from "../jenisPegawaiAdk";
+import { slugSatker } from "../slugSatker";
 
 /**
  * Export ADK Uang Lembur - dua format (.xlsx & .txt).
@@ -33,6 +36,20 @@ import { responseAdkHarian } from "../responseAdk";
  * ada di database manapun - lihat catatan di halaman /ppabp/adk.
  */
 export async function GET(req: NextRequest) {
+  // Gerbang PALING LUAR - sebelum sesi pun dibaca.
+  //
+  // Kartu unduhnya sudah dilepas dari /ppabp/adk, tapi melepas tombol tidak
+  // menutup URL: siapa pun yang pernah mengunduh file ini punya tautannya di
+  // riwayat browser, dan tautan itu tetap bekerja. Bedanya dengan permukaan
+  // lain bukan soal kerapian - di sini yang lolos bukan angka yang salah
+  // dikutip, melainkan angka yang belum disetujui MASUK ke Web Gaji.
+  //
+  // 409 Conflict, bukan 403: yang menolak bukan wewenang orangnya, melainkan
+  // keadaan datanya. PPABP yang sama akan berhasil begitu saklarnya dibuka.
+  if (!TAMPILKAN_ADK_LEMBUR) {
+    return new Response(ALASAN_UANG_LEMBUR_DISEMBUNYIKAN, { status: 409 });
+  }
+
   const akun = await getSessionAccount();
   if (!akun) return new Response("Belum login.", { status: 401 });
   const authUser = { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
@@ -42,8 +59,22 @@ export async function GET(req: NextRequest) {
   const tahun = Number(req.nextUrl.searchParams.get("tahun"));
   if (!bulan || !tahun) return new Response("Parameter bulan dan tahun wajib diisi.", { status: 400 });
 
+  // Penyaringan PNS/P3K, sama seperti dua ADK lainnya. Gerbang isinya di
+  // sini masih `status: "APPROVED"` - route ini memang belum ikut pindah ke
+  // gerbang pengiriman unit, karena ADK Uang Lembur sedang tidak berfungsi
+  // (lihat TAMPILKAN_ADK_LEMBUR di atas).
+  const jenisPegawai = bacaJenisPegawai(req.nextUrl.searchParams.get("jenis"));
+  const satkerDiminta = req.nextUrl.searchParams.get("satker");
   const rows = await prisma.uangLembur.findMany({
-    where: { periodeBulan: bulan, periodeTahun: tahun, status: "APPROVED" },
+    where: {
+      periodeBulan: bulan,
+      periodeTahun: tahun,
+      status: "APPROVED",
+      pegawai: {
+        ...wherePegawaiJenis(jenisPegawai),
+        ...(satkerDiminta ? { satuanKerja: satkerDiminta } : {}),
+      },
+    },
     include: { pegawai: { select: { id: true, nip: true, nama: true } } },
     orderBy: { pegawai: { nama: "asc" } },
   });
@@ -92,6 +123,9 @@ export async function GET(req: NextRequest) {
         jenis: "Uang Lembur",
         periode: `${bulan}/${tahun}`,
         format: req.nextUrl.searchParams.get("format") ?? "xlsx",
+        jenisPegawai: labelJenisPegawai(jenisPegawai),
+        satuanKerja: satkerDiminta ?? "semua unit",
+        jumlahPegawai: pegawai.length,
       },
     },
   });
@@ -102,6 +136,8 @@ export async function GET(req: NextRequest) {
     periodeBulan: bulan,
     periodeTahun: tahun,
     denganJam: true,
-    namaFile: `adk-uang-lembur-${String(bulan).padStart(2, "0")}-${tahun}`,
+    namaFile: `adk-uang-lembur-${String(bulan).padStart(2, "0")}-${tahun}${slugSatker(satkerDiminta)}${
+      jenisPegawai ? `-${jenisPegawai.toLowerCase()}` : ""
+    }`,
   });
 }

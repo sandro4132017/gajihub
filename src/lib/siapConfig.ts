@@ -75,3 +75,43 @@ export function labelSumberSiap(): string {
   const lokasi = inst ? `${host}\\${inst}` : `${host}:${process.env.SIAP_PORT ?? 1433}`;
   return `${lokasi}/${process.env.SIAP_DB ?? "?"}`;
 }
+
+/**
+ * Pool SIAP BERDIRI SENDIRI untuk satu pemakaian, lalu ditutup.
+ *
+ * ==========================================================================
+ * KENAPA BUKAN `sql.connect()` - INI PENYEBAB KEGAGALAN NYATA, BUKAN TEORI.
+ * ==========================================================================
+ * `sql.connect()` di paket `mssql` mengembalikan pool GLOBAL milik seluruh
+ * proses, dan `pool.close()` menutup pool global itu - bukan cuma "punya"
+ * pemanggilnya. Di dalam server Next yang melayani banyak orang sekaligus,
+ * dua permintaan yang jalan berbarengan memakai satu objek yang sama:
+ *
+ *   Permintaan A: sql.connect()  -> pool global dibuat
+ *   Permintaan B: sql.connect()  -> DAPAT POOL YANG SAMA
+ *   Permintaan A: selesai, pool.close() -> pool global DITUTUP
+ *   Permintaan B: masih di tengah query -> "Connection is closed"
+ *
+ * Hasilnya persis seperti yang terjadi di server resmi 2026-09-01: dua orang
+ * menarik data presensi bersamaan, satu berhasil satu gagal. Yang menentukan
+ * siapa yang gagal cuma siapa yang selesai lebih dulu.
+ *
+ * Nyaris tidak pernah muncul waktu diuji sendirian di lokal - dua permintaan
+ * harus benar-benar bertumpang tindih, dan satu orang sulit melakukannya.
+ *
+ * Pool di sini dibuat dengan `new sql.ConnectionPool()`, jadi tiap pemanggil
+ * memegang miliknya sendiri dan menutup miliknya sendiri. Tidak ada keadaan
+ * bersama, jadi tidak ada yang bisa ditutup orang lain.
+ *
+ * BUKAN dibuat pool bersama yang tidak pernah ditutup: itu memang lazim, tapi
+ * berarti menahan koneksi menganggur ke server produksi SIAP milik unit lain
+ * sepanjang umur proses. Ongkos membuka koneksi (TLS 1.0, ±1 detik) dibayar
+ * per tarikan, dan tarikan presensi memang bukan hal yang dilakukan tiap
+ * detik.
+ */
+export async function bukaPoolSiap(): Promise<import("mssql").ConnectionPool> {
+  const { ConnectionPool } = await import("mssql");
+  const pool = new ConnectionPool(konfigurasiSiap());
+  await pool.connect();
+  return pool;
+}

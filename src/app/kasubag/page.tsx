@@ -1,18 +1,18 @@
 import Link from "next/link";
 import { prisma } from "../../lib/prisma";
 import { canViewDashboardUnit, canExportRekapUnit } from "../../auth/permissions";
-import { DEFAULT_TOTAL_JENJANG_APPROVAL } from "../../approval/approvalTukinService";
-import { DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_MAKAN } from "../../approval/approvalUangMakanService";
-import { DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_LEMBUR } from "../../approval/approvalUangLemburService";
 import { AksesDitolak } from "../AksesDitolak";
 import { FilterBar } from "../FilterBar";
 import { resolveSatuanKerjaListUntukFilter, satkerTerkunciUntukAkun } from "../dashboardScope";
-import { tallyApproval } from "../tallyApproval";
+import { kunciKirim, tallyKirim } from "../tallyKirim";
+import { rangkumProgres } from "../../business-logic/pengirimanUnit";
+import { PapanProgres } from "./kirim/PapanProgres";
 import { ambilAksesUnit } from "./access";
 import { AngkaNaik } from "../AngkaNaik";
 import { langkahTutupBulan } from "../../business-logic/langkahTutupBulan";
 import { bulanSebelumnyaDalamTahun, deltaPersen } from "../../business-logic/deltaPeriode";
 import { tinggiBatangPersen } from "../tinggiBatang";
+import { TAMPILKAN_MENU_LEMBUR, TAMPILKAN_NOMINAL_LEMBUR } from "../tampilUangLembur";
 
 export const dynamic = "force-dynamic";
 
@@ -167,7 +167,7 @@ export default async function KasubagDashboardPage({
     //
     // Menyaring ke yang benar-benar disetujui BUKAN sekadar menambah
     // `where: { status }`. Yang menentukan disetujui atau belum di aplikasi
-    // ini adalah ApprovalLog lewat evaluasiApproval (lihat tallyApproval),
+    // ini adalah PengirimanUnit (lihat tallyKirim),
     // bukan kolom `status` - kolom itu dipakai untuk rekonsiliasi dengan Web
     // Gaji. Memakai kolom status di sini akan memunculkan definisi "disetujui"
     // KEDUA yang berbeda dari kartu KPI di halaman yang sama. Menghitungnya
@@ -214,69 +214,107 @@ export default async function KasubagDashboardPage({
     }),
   ]);
 
-  const [tallyTukin, tallyUm, tallyLembur] = await Promise.all([
-    tallyApproval(
-      tukinRows.map((r) => ({ id: r.id, nilai: r.tukinBersih, status: r.status, calculatedAt: r.calculatedAt })),
-      "TUKIN",
-      DEFAULT_TOTAL_JENJANG_APPROVAL
-    ),
-    tallyApproval(
-      umRows.map((r) => ({ id: r.id, nilai: r.totalUangMakan, status: r.status, calculatedAt: r.calculatedAt })),
-      "UANG_MAKAN",
-      DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_MAKAN
-    ),
-    tallyApproval(
-      lemburRows.map((r) => ({ id: r.id, nilai: r.totalUangLembur, status: r.status, calculatedAt: r.calculatedAt })),
-      "UANG_LEMBUR",
-      DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_LEMBUR
-    ),
-  ]);
+  // Keadaan tiap baris = keadaan PENGIRIMAN unit ini pada periode ini.
+  // Halaman ini selalu satu unit (`satkerEfektif`), jadi seluruh baris jatuh
+  // ke keadaan yang sama - dan itu memang bentuk keputusannya sekarang, bukan
+  // penyederhanaan tampilan.
+  const barisKirim = await prisma.pengirimanUnit.findUnique({
+    where: {
+      satuanKerja_periodeBulan_periodeTahun: {
+        satuanKerja: satkerEfektif,
+        periodeBulan,
+        periodeTahun,
+      },
+    },
+    select: { status: true },
+  });
+  const kunciUnit = kunciKirim(satkerEfektif, periodeBulan, periodeTahun);
+
+  // --- Progres pengiriman SELURUH unit pada periode ini --------------------
+  //
+  // Kasubag TU sengaja melihat unit LAIN juga (permintaan user 2026-09-02).
+  // Isinya cuma nama unit + sudah kirim atau belum - tidak ada satu pun angka
+  // rupiah, jadi tidak menembus scoping data gaji yang tetap berlaku di
+  // seluruh halaman lain.
+  //
+  // Daftar unitnya dari PEGAWAI, bukan dari baris pengiriman: unit yang belum
+  // mengirim tidak punya baris, dan justru merekalah yang perlu terlihat.
+  const unitAktif = await prisma.pegawai.findMany({
+    where: { statusPegawai: "AKTIF" },
+    distinct: ["satuanKerja"],
+    select: { satuanKerja: true },
+  });
+  const pengirimanSemuaUnit = await prisma.pengirimanUnit.findMany({
+    where: { periodeBulan, periodeTahun },
+  });
+  const progresUnit = rangkumProgres(
+    unitAktif.map((u) => u.satuanKerja),
+    new Map(pengirimanSemuaUnit.map((p) => [p.satuanKerja, p]))
+  );
+  const petaKirim = new Map(barisKirim ? [[kunciUnit, barisKirim.status]] : []);
+
+  const tallyTukin = tallyKirim(tukinRows.map(() => kunciUnit), petaKirim);
+  const tallyUm = tallyKirim(umRows.map(() => kunciUnit), petaKirim);
+  const tallyLembur = tallyKirim(lemburRows.map(() => kunciUnit), petaKirim);
 
   const nominalTukinTotal = tukinRows.reduce((a, r) => a + r.tukinBersih, 0);
   const nominalUmTotal = umRows.reduce((a, r) => a + r.totalUangMakan, 0);
   const nominalLemburTotal = lemburRows.reduce((a, r) => a + r.totalUangLembur, 0);
-  const totalNominalPeriode = nominalTukinTotal + nominalUmTotal + nominalLemburTotal;
+  // Uang lembur dikeluarkan dari total selama angkanya belum ditampilkan -
+  // lihat src/app/tampilUangLembur.ts. Total yang memuat komponen tak
+  // terlihat tidak bisa dicocokkan pembacanya dan terbaca sebagai salah hitung.
+  const totalNominalPeriode =
+    nominalTukinTotal + nominalUmTotal + (TAMPILKAN_NOMINAL_LEMBUR ? nominalLemburTotal : 0);
 
   // Pembanding bulan lalu diambil dari deret tren yang SUDAH ditarik di atas -
   // tidak ada query tambahan. Januari tidak punya pembanding karena deret itu
   // cuma memuat satu tahun (lihat bulanSebelumnyaDalamTahun).
   const bulanLalu = bulanSebelumnyaDalamTahun(periodeBulan);
+  //
+  // KOMPONENNYA HARUS SAMA DENGAN `totalNominalPeriode` DI ATAS. Selama uang
+  // lembur ditahan, bulan ini dihitung tanpa lembur - kalau bulan pembandingnya
+  // tetap memuat lembur, selisihnya menunjukkan penurunan belanja yang tidak
+  // pernah terjadi. Dua angka yang dibandingkan harus dibentuk dari bahan yang
+  // sama, atau perbandingannya tidak berarti apa-apa.
   const totalNominalBulanLalu =
     bulanLalu === null
       ? null
       : (trendTukin.find((t) => t.periodeBulan === bulanLalu)?._sum.tukinBersih ?? 0) +
         (trendUm.find((t) => t.periodeBulan === bulanLalu)?._sum.totalUangMakan ?? 0) +
-        (trendLembur.find((t) => t.periodeBulan === bulanLalu)?._sum.totalUangLembur ?? 0);
+        (TAMPILKAN_NOMINAL_LEMBUR
+          ? trendLembur.find((t) => t.periodeBulan === bulanLalu)?._sum.totalUangLembur ?? 0
+          : 0);
   const deltaBelanja = deltaPersen(totalNominalPeriode, totalNominalBulanLalu);
 
   const totalKalkulasi = tallyTukin.total + tallyUm.total + tallyLembur.total;
-  const totalApproved = tallyTukin.approved + tallyUm.approved + tallyLembur.approved;
-  const totalProses = tallyTukin.prosesApproval + tallyUm.prosesApproval + tallyLembur.prosesApproval;
-  const totalBelumDiajukan = tallyTukin.belumDiajukan + tallyUm.belumDiajukan + tallyLembur.belumDiajukan;
-  const totalTertolak = tallyTukin.tertolak + tallyUm.tertolak + tallyLembur.tertolak;
+  const totalTerkirim = tallyTukin.terkirim + tallyUm.terkirim + tallyLembur.terkirim;
+  const totalBelumKirim = tallyTukin.belumKirim + tallyUm.belumKirim + tallyLembur.belumKirim;
+  const totalDikembalikan = tallyTukin.dikembalikan + tallyUm.dikembalikan + tallyLembur.dikembalikan;
 
-  // Persentase Progres Approval
-  const persenTukin = tallyTukin.total > 0 ? Math.round((tallyTukin.approved / tallyTukin.total) * 100) : 0;
-  const persenUm = tallyUm.total > 0 ? Math.round((tallyUm.approved / tallyUm.total) * 100) : 0;
-  const persenLembur = tallyLembur.total > 0 ? Math.round((tallyLembur.approved / tallyLembur.total) * 100) : 0;
-  const persenTotal = totalKalkulasi > 0 ? Math.round((totalApproved / totalKalkulasi) * 100) : 0;
+  // Persentase progres pengiriman. CATATAN: karena unit dikirim UTUH, nilai
+  // ini praktis cuma 0 atau 100 - tidak ada keadaan "60% terkirim". Kartunya
+  // dipertahankan atas permintaan user; yang dibuang cuma blok "Status
+  // Approval per Komponen".
+  const persenTukin = tallyTukin.total > 0 ? Math.round((tallyTukin.terkirim / tallyTukin.total) * 100) : 0;
+  const persenUm = tallyUm.total > 0 ? Math.round((tallyUm.terkirim / tallyUm.total) * 100) : 0;
+  const persenLembur = tallyLembur.total > 0 ? Math.round((tallyLembur.terkirim / tallyLembur.total) * 100) : 0;
 
   // Status Siklus
   let statusSiklusLabel = "Belum dihitung";
   let statusSiklusBg = "bg-line text-muted";
   if (totalKalkulasi > 0) {
-    if (totalApproved === totalKalkulasi) {
-      statusSiklusLabel = "Selesai Disetujui";
+    if (totalTerkirim === totalKalkulasi) {
+      statusSiklusLabel = "Terkirim & terkunci";
       statusSiklusBg = "bg-green-tint text-green font-bold";
-    } else if (totalTertolak > 0) {
-      statusSiklusLabel = `${totalTertolak} Ditolak`;
+    } else if (totalDikembalikan > 0) {
+      statusSiklusLabel = "Dikembalikan PPABP";
       statusSiklusBg = "bg-red-tint text-red font-bold";
-    } else if (totalBelumDiajukan > 0) {
-      statusSiklusLabel = "Menunggu Diajukan";
-      statusSiklusBg = "bg-gold-tint text-gold-deep font-bold";
     } else {
-      statusSiklusLabel = "Proses Approval";
-      statusSiklusBg = "bg-teal-tint text-navy font-bold";
+      // Tidak ada keadaan antara lagi: rekap unit itu sudah dikirim atau
+      // belum. Dulu ada "Proses Approval" karena jenjang 1 bisa selesai
+      // sementara jenjang 2 belum - jenjangnya sudah tidak ada.
+      statusSiklusLabel = "Belum dikirim ke PPABP";
+      statusSiklusBg = "bg-gold-tint text-gold-deep font-bold";
     }
   }
 
@@ -287,10 +325,12 @@ export default async function KasubagDashboardPage({
     const itemUm = trendUm.find((u) => u.periodeBulan === bulanIndex);
     const itemLembur = trendLembur.find((l) => l.periodeBulan === bulanIndex);
 
+    // Deret tren mengikuti aturan yang sama dengan total di atas - kalau
+    // tidak, grafiknya dan angka besarnya bercerita hal yang berbeda.
     const nominalBulan =
       (itemTukin?._sum.tukinBersih ?? 0) +
       (itemUm?._sum.totalUangMakan ?? 0) +
-      (itemLembur?._sum.totalUangLembur ?? 0);
+      (TAMPILKAN_NOMINAL_LEMBUR ? itemLembur?._sum.totalUangLembur ?? 0 : 0);
     const pegawaiBulan = itemTukin?._count.id ?? 0;
 
     return {
@@ -463,7 +503,7 @@ export default async function KasubagDashboardPage({
 
           SENGAJA TIDAK menarik halaman kerjanya ke sini. Presensi punya
           sinkronisasi + dua jalur unggah, Kalkulasi punya tabel 25+ kolom dan
-          tombol yang bisa membatalkan approval satu unit penuh. Yang ada di
+          tombol yang mengunci pengiriman satu unit penuh. Yang ada di
           sini cuma penunjuk arah dan unduhan.
           ==================================================================== */}
       <div
@@ -561,8 +601,8 @@ export default async function KasubagDashboardPage({
               {/* "Belanja" diganti "Nilai Kalkulasi" karena angkanya berasal
                   dari tukinRows/umRows/lemburRows yang TIDAK disaring status -
                   sama dengan grafik tren, dan dalam istilah anggaran "belanja"
-                  berarti yang sudah direalisasikan. Berapa yang benar-benar
-                  disetujui dijawab kartu "Selesai Approval" di sebelahnya. */}
+                  berarti yang sudah direalisasikan. Sudah dikirim ke PPABP
+                  atau belum dijawab lencana status di kepala halaman. */}
               <span className="text-xs font-bold text-muted">Nilai Kalkulasi</span>
               <div className="rounded-lg bg-green-tint p-1.5 text-green">
                 <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -602,44 +642,16 @@ export default async function KasubagDashboardPage({
             </div>
           </div>
 
-          {/* Card 3: Total Selesai / Approved */}
-          <div
-            className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm"
-            style={{ animationDelay: "280ms" }}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-muted">Selesai Approval</span>
-              {/* Gauge cincin: angka yang SAMA dengan persenTotal di baris bawah
-                  kartu ini, dalam bentuk yang terbaca sekilas. Menggantikan ikon
-                  centang yang tidak membawa keterangan apa pun - kotak ikon di
-                  kartu lain memang hiasan, tapi di kartu ini ruangnya bisa dipakai.
+          {/* KARTU "Unit sudah kirim" DIHAPUS (2026-09-02, koreksi user).
+              Isinya persis sama dengan donat "Ringkasan" di samping papan
+              Progres pengiriman unit beberapa baris di bawah: pembilang yang
+              sama, penyebut yang sama, cincin yang sama. Dua gambar untuk satu
+              angka bukan penegasan - yang terjadi orang membandingkan keduanya
+              mencari bedanya, lalu ragu waktu tidak menemukan apa-apa.
 
-                  Busurnya digambar dengan stroke-dashoffset di atas pathLength="1",
-                  jadi tidak ada JavaScript yang terlibat. Sisa busur = 1 - persen. */}
-              <svg className="size-9 -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
-                <circle cx="18" cy="18" r="15" fill="none" stroke="var(--color-gold-tint)" strokeWidth="5" />
-                <circle
-                  cx="18"
-                  cy="18"
-                  r="15"
-                  fill="none"
-                  stroke="var(--color-gold)"
-                  strokeWidth="5"
-                  strokeLinecap="round"
-                  pathLength="1"
-                  className="gj-cincin"
-                  style={{ "--sisa-cincin": 1 - persenTotal / 100, animationDelay: "620ms" } as React.CSSProperties}
-                />
-              </svg>
-            </div>
-            <div className="mt-3">
-              <div className="font-mono text-2xl font-extrabold text-ink">
-                <AngkaNaik nilai={totalApproved} tundaMs={280} />
-                <span className="text-sm font-medium text-muted">/{totalKalkulasi}</span>
-              </div>
-              <p className="mt-0.5 text-[11px] text-muted">{persenTotal}% tervalidasi</p>
-            </div>
-          </div>
+              Yang dipertahankan yang di bawah, karena ia menyebut KETIGA
+              keadaan (terkirim / dikembalikan / belum kirim) berikut jumlah &
+              persennya, sementara kartu ini cuma menyebut yang terkirim. */}
 
           {/* Card 4: Progres Tukin + Sparkline */}
           <div
@@ -677,7 +689,7 @@ export default async function KasubagDashboardPage({
                   />
                 </svg>
               </div>
-              <p className="text-[10px] text-muted">{tallyTukin.approved} dari {tallyTukin.total} pegawai</p>
+              <p className="text-[10px] text-muted">{tallyTukin.terkirim} dari {tallyTukin.total} pegawai</p>
             </div>
           </div>
 
@@ -717,11 +729,17 @@ export default async function KasubagDashboardPage({
                   />
                 </svg>
               </div>
-              <p className="text-[10px] text-muted">{tallyUm.approved} dari {tallyUm.total} pegawai</p>
+              <p className="text-[10px] text-muted">{tallyUm.terkirim} dari {tallyUm.total} pegawai</p>
             </div>
           </div>
 
-          {/* Card 6: Progres Uang Lembur + Sparkline */}
+          {/* Card 6: Progres Uang Lembur - tunduk saklar di
+              src/app/tampilUangLembur.ts. Grid menata ulang sendiri. */}
+          {/* Kartu ini mengukur PROGRES PENGIRIMAN, bukan rupiah - tidak ada
+              satu pun angka uang di dalamnya, cuma "berapa dari berapa
+              pegawai". Karena itu ia ikut saklar MENU, bukan NOMINAL: menahan
+              rupiah bukan alasan menyembunyikan progres pengumpulan jamnya. */}
+          {TAMPILKAN_MENU_LEMBUR && (
           <div
             className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-xs transition hover:shadow-sm"
             style={{ animationDelay: "445ms" }}
@@ -757,9 +775,11 @@ export default async function KasubagDashboardPage({
                   />
                 </svg>
               </div>
-              <p className="text-[10px] text-muted">{tallyLembur.approved} dari {tallyLembur.total} pegawai</p>
+              <p className="text-[10px] text-muted">{tallyLembur.terkirim} dari {tallyLembur.total} pegawai</p>
             </div>
           </div>
+          )}
+
         </div>
 
         {/* Right Column: Monthly Activity & Trend Chart */}
@@ -874,137 +894,22 @@ export default async function KasubagDashboardPage({
         </div>
       </div>
 
+      {/* Papan yang menjawab "unit mana saja yang sudah kirim bulan ini".
+          Read-only di sini: tombol "Kembalikan ke unit" hanya untuk PPABP,
+          dan `bolehKembalikan={false}` menutupnya di sisi tampilan sementara
+          Server Action-nya tetap menolak siapa pun selain PPABP. */}
+      <PapanProgres
+        progres={progresUnit}
+        periodeBulan={periodeBulan}
+        periodeTahun={periodeTahun}
+        bolehKembalikan={false}
+        satkerSorot={satkerEfektif}
+      />
+
       {/* ====================================================================
-          4. MIDDLE SECTION: PROGRESS PER KOMPONEN & KESIAPAN DATA UNIT
+          4. MIDDLE SECTION: KESIAPAN DATA UNIT
           ==================================================================== */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* Card: Progres Realisasi per Komponen Belanja */}
-        <div
-          className="gj-masuk rounded-2xl border border-line bg-surface p-5 shadow-xs"
-          style={{ animationDelay: "300ms" }}
-        >
-          <div className="flex items-center justify-between pb-3 border-b border-line-2">
-            <h2 className="text-sm font-bold text-ink">Status Approval per Komponen</h2>
-            <span className="text-xs font-semibold text-muted">Periode {periodeBulan}/{periodeTahun}</span>
-          </div>
-
-          <div className="mt-4 space-y-4">
-            {/* Tukin */}
-            <div className="rounded-xl border border-line-2 bg-surface-2 p-3.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-navy text-white text-xs font-extrabold">
-                    TK
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-ink">Tunjangan Kinerja</h3>
-                    <p className="text-[11px] text-muted">{formatRupiah(nominalTukinTotal)}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="font-mono text-sm font-black text-ink">{persenTukin}%</span>
-                  <p className="text-[10px] text-muted">Disetujui</p>
-                </div>
-              </div>
-              <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-line">
-                <div
-                  className="gj-bar h-full rounded-full bg-gradient-to-r from-navy to-biru"
-                  style={{ "--lebar-bar": `${persenTukin}%`, animationDelay: "620ms" } as React.CSSProperties}
-                />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted font-medium">
-                <span className="text-green font-bold">{tallyTukin.approved} Disetujui</span>
-                <span>&bull;</span>
-                <span className="text-navy">{tallyTukin.prosesApproval} Proses</span>
-                <span>&bull;</span>
-                <span className="text-gold-deep">{tallyTukin.belumDiajukan} Draft</span>
-                {tallyTukin.tertolak > 0 && (
-                  <>
-                    <span>&bull;</span>
-                    <span className="text-red font-bold">{tallyTukin.tertolak} Ditolak</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Uang Makan */}
-            <div className="rounded-xl border border-line-2 bg-surface-2 p-3.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-biru text-white text-xs font-extrabold">
-                    UM
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-ink">Uang Makan Pegawai</h3>
-                    <p className="text-[11px] text-muted">{formatRupiah(nominalUmTotal)}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="font-mono text-sm font-black text-ink">{persenUm}%</span>
-                  <p className="text-[10px] text-muted">Disetujui</p>
-                </div>
-              </div>
-              <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-line">
-                <div
-                  className="gj-bar h-full rounded-full bg-gradient-to-r from-biru to-teal-tint"
-                  style={{ "--lebar-bar": `${persenUm}%`, animationDelay: "700ms" } as React.CSSProperties}
-                />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted font-medium">
-                <span className="text-green font-bold">{tallyUm.approved} Disetujui</span>
-                <span>&bull;</span>
-                <span className="text-navy">{tallyUm.prosesApproval} Proses</span>
-                <span>&bull;</span>
-                <span className="text-gold-deep">{tallyUm.belumDiajukan} Draft</span>
-                {tallyUm.tertolak > 0 && (
-                  <>
-                    <span>&bull;</span>
-                    <span className="text-red font-bold">{tallyUm.tertolak} Ditolak</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Uang Lembur */}
-            <div className="rounded-xl border border-line-2 bg-surface-2 p-3.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-gold text-white text-xs font-extrabold">
-                    UL
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-ink">Uang Lembur Pegawai</h3>
-                    <p className="text-[11px] text-muted">{formatRupiah(nominalLemburTotal)}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="font-mono text-sm font-black text-ink">{persenLembur}%</span>
-                  <p className="text-[10px] text-muted">Disetujui</p>
-                </div>
-              </div>
-              <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-line">
-                <div
-                  className="gj-bar h-full rounded-full bg-gradient-to-r from-gold to-gold-tint"
-                  style={{ "--lebar-bar": `${persenLembur}%`, animationDelay: "780ms" } as React.CSSProperties}
-                />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted font-medium">
-                <span className="text-green font-bold">{tallyLembur.approved} Disetujui</span>
-                <span>&bull;</span>
-                <span className="text-navy">{tallyLembur.prosesApproval} Proses</span>
-                <span>&bull;</span>
-                <span className="text-gold-deep">{tallyLembur.belumDiajukan} Draft</span>
-                {tallyLembur.tertolak > 0 && (
-                  <>
-                    <span>&bull;</span>
-                    <span className="text-red font-bold">{tallyLembur.tertolak} Ditolak</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 gap-6">
         {/* Card: Kesiapan Data & Dokumen Unit */}
         <div
           className="gj-masuk rounded-2xl border border-line bg-surface p-5 shadow-xs"
@@ -1223,9 +1128,9 @@ export default async function KasubagDashboardPage({
                 <div className="flex-1 min-w-0">
                   <h3 className="text-xs font-bold text-ink">Kalkulasi Massal Periode Ini</h3>
                   <p className="text-[11px] text-muted">
-                    {totalBelumDiajukan > 0
-                      ? `${totalBelumDiajukan} kalkulasi siap diajukan ke jenjang approval.`
-                      : "Semua kalkulasi telah diproses untuk periode ini."}
+                    {totalBelumKirim > 0
+                      ? `${totalBelumKirim} kalkulasi belum dikirim ke PPABP.`
+                      : "Semua kalkulasi periode ini sudah dikirim."}
                   </p>
                   <Link
                     href={`/kasubag/kalkulasi?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}

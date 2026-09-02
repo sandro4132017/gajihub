@@ -73,6 +73,35 @@ export function SearchableSelect({
   onValueChange?: (value: string) => void;
 }) {
   const [value, setValue] = useState(defaultValue);
+
+  // ==========================================================================
+  // MENGIKUTI `defaultValue` KETIKA PROP-nya BERUBAH.
+  //
+  // `useState(defaultValue)` cuma membaca nilainya SEKALI, saat komponen
+  // pertama dipasang. Kalau halamannya berpindah tanpa remount - navigasi
+  // lunak Next, mis. setelah tarikan presensi memindahkan periode dari
+  // Agustus ke Juli - server merender ulang dengan defaultValue baru,
+  // sementara dropdown ini tetap menampilkan yang lama.
+  //
+  // Akibatnya persis yang terjadi 2026-09-02: judul dan tabel sudah "Juli",
+  // dropdown filternya masih "Agustus". Yang membacanya harus menebak mana
+  // yang benar.
+  //
+  // Pola ini yang dianjurkan React untuk "menyetel ulang state saat prop
+  // berubah": dibandingkan SAAT RENDER, bukan di useEffect. Bedanya penting -
+  // useEffect akan menampilkan satu frame berisi nilai lama dulu, dan itu
+  // terlihat sebagai kedipan.
+  //
+  // Yang disetel ulang HANYA saat defaultValue-nya sendiri berganti, jadi
+  // pilihan yang sedang diketik pemakai tidak ikut tersapu oleh render ulang
+  // yang tidak ada hubungannya.
+  // ==========================================================================
+  const [defaultTerakhir, setDefaultTerakhir] = useState(defaultValue);
+  if (defaultValue !== defaultTerakhir) {
+    setDefaultTerakhir(defaultValue);
+    setValue(defaultValue);
+  }
+
   const [query, setQuery] = useState("");
   const [buka, setBuka] = useState(false);
   const [sorotan, setSorotan] = useState(0);

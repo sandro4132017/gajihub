@@ -16,8 +16,16 @@
 // pengisi rekap, dan itu ditegaskan di template & halaman uploadnya.
 //
 // LEMBUR HARI LIBUR: tarif per jam dikali PENGALI_LEMBUR_HARI_LIBUR.
-// WFH/WFA TIDAK DAPAT LEMBUR - penyaringannya di sisi pengisian rekap; yang
-// bisa dicek di sini cuma silang (klaim jam lembur padahal hari WFO nol).
+//
+// LEMBUR HARI KERJA HANYA UNTUK HARI BERSTATUS WFO (aturan user 2026-09-02).
+// WFH/WFA, cuti, diklat, dinas luar, tugas belajar, sakit, dan izin semuanya
+// TIDAK berhak. Penyaringan sesungguhnya terjadi PER HARI di
+// presensiPdfKeRekap.ts - jam lembur pada hari yang bukan WFO tidak pernah
+// sampai ke sini. Yang bisa dicek di modul ini cuma silang tingkat bulan:
+// ada klaim jam lembur padahal hari WFO sebulan itu nol.
+//
+// Syarat WFO TIDAK berlaku di hari libur - lihat alasan lengkapnya di
+// presensiPdfKeRekap.ts blok "4. Lembur".
 //
 // Tarif tidak dihardcode di sini - lihat src/business-logic/tarifSbm.ts.
 //
@@ -86,12 +94,14 @@ export function hitungUangLembur(input: UangLemburInput): UangLemburResult {
   if ((input.totalJamLemburHariLibur ?? 0) < 0) {
     anomali.push("totalJamLemburHariLibur tidak boleh negatif.");
   }
-  // WFH/WFA tidak dapat lembur - lihat catatan di kepala file. Klaim jam
-  // lembur tanpa satu pun hari WFO berarti lemburnya diklaim dari hari
-  // WFH/WFA, yang memang tidak diakui.
-  if (input.jumlahHariWfo !== undefined && input.jumlahHariWfo === 0 && input.totalJamLembur + (input.totalJamLemburHariLibur ?? 0) > 0) {
+  // Silang tingkat bulan - lihat catatan di kepala file. Klaim lembur HARI
+  // KERJA tanpa satu pun hari WFO berarti lemburnya diklaim dari hari yang
+  // tidak berhak. Sengaja hanya menguji `totalJamLembur` (hari kerja):
+  // lembur HARI LIBUR memang tidak mensyaratkan WFO, jadi memasukkannya ke
+  // sini akan menuduh anomali pada pegawai yang cuma lembur di akhir pekan.
+  if (input.jumlahHariWfo !== undefined && input.jumlahHariWfo === 0 && input.totalJamLembur > 0) {
     anomali.push(
-      "Ada klaim jam lembur padahal pegawai ini tidak punya hari WFO sama sekali pada periode ini - lembur dari hari WFH/WFA tidak diakui. Periksa ulang rekapnya."
+      "Ada klaim jam lembur HARI KERJA padahal pegawai ini tidak punya hari WFO sama sekali pada periode ini - lembur hari kerja hanya untuk pegawai yang WFO. Periksa ulang rekapnya."
     );
   }
   if (input.tarifPerJam <= 0) {

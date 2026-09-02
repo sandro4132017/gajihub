@@ -1,0 +1,11 @@
+-- Nomor SK penetapan kelas jabatan, untuk kolom "Nomor SK" di ADK Tunjangan
+-- Kinerja. Sebelum ini kolom itu selalu dikirim KOSONG karena tidak ada tempat
+-- menyimpannya.
+--
+-- NULLABLE, dan memang seharusnya: 5.000+ pegawai belum punya isinya, dan
+-- memaksakan NOT NULL berarti mengarang nomor SK untuk semuanya - persis hal
+-- yang tidak boleh dilakukan pada data yang menyentuh pembayaran.
+--
+-- Tidak ada index: kolom ini dibaca bersama barisnya sendiri saat menyusun
+-- ADK, tidak pernah jadi syarat pencarian.
+ALTER TABLE "pegawai" ADD COLUMN "nomor_sk" TEXT;

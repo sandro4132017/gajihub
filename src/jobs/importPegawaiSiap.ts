@@ -225,6 +225,21 @@ async function main() {
       dilewati.push(`${b.nip} (${b.nama}): satuan kerja tidak terpetakan di dbo.SATKER`);
       return false;
     }
+    // BARIS UJI COBA DI SIAP. Nyata, bukan jaga-jaga: "dummy kepala" dan
+    // "dummy pegawai" ada di SIAP dan ikut tersinkron ke Gajihub, lalu
+    // muncul di daftar "pegawai belum punya predikat" dan menahan unitnya
+    // dari mengirim rekap.
+    //
+    // Menghapusnya di Gajihub tidak menyelesaikan apa pun - sinkronisasi
+    // berikutnya membawanya kembali. Penyaringnya harus di sini.
+    //
+    // Sengaja HANYA yang namanya DIAWALI "dummy", bukan mengandung: nama
+    // orang Indonesia tidak diawali kata itu, sementara "mengandung" bisa
+    // menjaring nama sah yang kebetulan memuat rangkaian huruf yang sama.
+    if (/^dummy/i.test(b.nama.trim())) {
+      dilewati.push(`${b.nip} (${b.nama}): baris uji coba di SIAP, sengaja tidak diambil`);
+      return false;
+    }
     return true;
   });
 

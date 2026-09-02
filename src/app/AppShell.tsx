@@ -7,7 +7,61 @@ import { AccountMenu } from "./AccountMenu";
 import { PanelKabar } from "./PanelKabar";
 import { GajihubLogo } from "./GajihubLogo";
 import { labelRole } from "../auth/roleLabel";
+import { TAMPILKAN_MENU_LEMBUR } from "./tampilUangLembur";
 import type { Role } from "@prisma/client";
+
+/**
+ * Entri menu Uang Lembur, dipisah karena dipakai TIGA daftar menu berbeda
+ * (approver, Kasubag TU, PPABP). Selama TAMPILKAN_MENU_LEMBUR false, array
+ * ini kosong dan `...MENU_UANG_LEMBUR` tidak menambah apa pun - jadi tidak
+ * ada daftar yang bisa ketinggalan waktu saklarnya dinyalakan lagi.
+ */
+/**
+ * Entri menu Predikat Kinerja - bahan bobot 70% Tunjangan Kinerja.
+ *
+ * SEBELUM INI TIDAK ADA DI SIDEBAR MANA PUN, padahal ADMIN, PPABP, dan
+ * KASUBAG_TU ketiganya berwenang membukanya (canBukaHalamanPredikatKinerja).
+ * Satu-satunya jalan ke sana adalah tautan dari halaman lain - dan semua
+ * tautan itu cuma muncul KALAU ADA MASALAH ("sekian pegawai belum punya
+ * predikat"). Akibatnya pekerjaan yang harus dilakukan tiap bulan cuma bisa
+ * ditemukan lewat peringatan, tidak pernah lewat menu, dan yang mau
+ * mengunggah lebih dulu tidak tahu harus ke mana.
+ *
+ * DITARUH TEPAT DI BAWAH PRESENSI, dan urutan itu yang jadi alasannya: dua
+ * baris itu adalah dua bahan Tukin - kehadiran (30%) dan kinerja (70%) -
+ * sebelum Kalkulasi menggabungkannya. Sidebar yang melompat dari Presensi
+ * langsung ke Kalkulasi membuat bahan yang 70% tidak terbaca sebagai langkah
+ * sama sekali.
+ *
+ * LABELNYA "Predikat Kinerja", bukan "e-Kinerja": yang disimpan Gajihub
+ * predikatnya, sementara e-Kinerja BKN nama aplikasi SUMBERNYA - dan Gajihub
+ * belum punya sambungan ke sana. Judul halamannya tetap menyebut e-Kinerja
+ * supaya yang mencari kata itu tetap menemukannya.
+ */
+const MENU_PREDIKAT_KINERJA = {
+  href: "/tukin/predikat-kinerja",
+  label: "Predikat Kinerja",
+  icon: (
+    <>
+      <circle cx="12" cy="8" r="5" />
+      <path d="M8.5 12.5 7 22l5-2.6 5 2.6-1.5-9.5" />
+    </>
+  ),
+};
+
+const MENU_UANG_LEMBUR = TAMPILKAN_MENU_LEMBUR
+  ? [
+      {
+        href: "/uang-lembur",
+        label: "Uang Lembur",
+        icon: (
+          <>
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+          </>
+        ),
+      },
+    ]
+  : [];
 
 const MENU_APPROVER = [
   {
@@ -20,11 +74,7 @@ const MENU_APPROVER = [
     label: "Uang Makan",
     icon: <><path d="M5 2v6a2 2 0 0 0 4 0V2" /><path d="M7 8v14" /><path d="M17 2c1.7 1.8 2 4 2 6s-.3 3.5-2 3.5V22" /></>,
   },
-  {
-    href: "/uang-lembur",
-    label: "Uang Lembur",
-    icon: <><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></>,
-  },
+  ...MENU_UANG_LEMBUR,
 ];
 
 // KASUBAG_TU: privilege Pegawai (link "Data Saya" tetap ditampilkan, sesuai
@@ -50,6 +100,7 @@ const MENU_KASUBAG = [
     pisah: true,
     icon: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
   },
+  MENU_PREDIKAT_KINERJA,
   {
     href: "/kasubag/kalkulasi",
     label: "Kalkulasi",
@@ -57,7 +108,7 @@ const MENU_KASUBAG = [
   },
   { href: "/tukin", label: "Tukin", icon: <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></> },
   { href: "/uang-makan", label: "Uang Makan", icon: <><path d="M5 2v6a2 2 0 0 0 4 0V2" /><path d="M7 8v14" /><path d="M17 2c1.7 1.8 2 4 2 6s-.3 3.5-2 3.5V22" /></> },
-  { href: "/uang-lembur", label: "Uang Lembur", icon: <><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></> },
+  ...MENU_UANG_LEMBUR,
   {
     href: "/kasubag/banding",
     label: "Verifikasi Banding",
@@ -65,14 +116,22 @@ const MENU_KASUBAG = [
   },
 
   // --- dilipat: jarang dibuka ---
+  //
+  // SATU PINTU, bukan dua. Dulu di sini ada grup "Pegawai" berisi "Pegawai
+  // Unit" (/kasubag/pegawai) dan "Data Pegawai" (/pegawai). Untuk Kasubag TU
+  // keduanya membuka hal yang sama - daftar pegawai unitnya sendiri - dan
+  // yang membedakan cuma satu bisa disunting. Bedanya tidak terbaca dari
+  // namanya, jadi yang terjadi menebak-nebak tiap kali.
+  //
+  // Sekarang daftarnya cuma di /kasubag/pegawai, dan tombol Edit di tiap
+  // baris membawa ke /pegawai. Halaman /pegawai TIDAK dihapus: dia tetap
+  // satu-satunya tempat data pegawai bisa diubah, dan tetap ada di menu
+  // PPABP & Admin yang memang memakainya lintas unit.
   {
-    label: "Pegawai",
+    href: "/kasubag/pegawai",
+    label: "Pegawai Unit",
     pisah: true,
     icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
-    anak: [
-      { href: "/kasubag/pegawai", label: "Pegawai Unit" },
-      { href: "/pegawai", label: "Data Pegawai" },
-    ],
   },
   {
     label: "Dokumen SK",
@@ -164,6 +223,7 @@ const MENU_PPABP = [
     pisah: true,
     icon: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
   },
+  MENU_PREDIKAT_KINERJA,
   // Halamannya di bawah /kasubag karena dibangun untuk Kasubag TU duluan, TAPI
   // PPABP juga berwenang kalkulasi massal (canAjukanKalkulasiTukinMassalUnit).
   // Bedanya: satuan kerjanya dipilih lewat filter, tidak dipaksa satu unit.
@@ -180,7 +240,7 @@ const MENU_PPABP = [
   // untuk uang makan & tukin, sekaligus rancu dengan halaman Presensi.
   { href: "/tukin", label: "Tukin", icon: <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></> },
   { href: "/uang-makan", label: "Uang Makan", icon: <><path d="M5 2v6a2 2 0 0 0 4 0V2" /><path d="M7 8v14" /><path d="M17 2c1.7 1.8 2 4 2 6s-.3 3.5-2 3.5V22" /></> },
-  { href: "/uang-lembur", label: "Uang Lembur", icon: <><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></> },
+  ...MENU_UANG_LEMBUR,
   {
     href: "/ppabp/rekonsiliasi",
     label: "Rekonsiliasi",
@@ -246,6 +306,7 @@ const MENU_ADMIN = [
     label: "Data Pegawai",
     icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M12 20h9" /></>,
   },
+  MENU_PREDIKAT_KINERJA,
   {
     href: "/admin/usulan-role",
     label: "Eksekusi Usulan Role",

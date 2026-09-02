@@ -369,6 +369,16 @@ export async function hapusPredikatPeriodeAction(
     }
 
     await prisma.$transaction([
+      // Bug yang sama dengan hapus per orang di bawah - lihat catatan panjang
+      // di sana. Tanpa baris ini, seluruh unit bisa kehilangan predikatnya
+      // sementara angka Tukin-nya tetap berdiri dan ikut terkirim.
+      prisma.tukinCalculation.deleteMany({
+        where: {
+          pegawaiId: { in: boleh.map((b) => b.pegawaiId) },
+          periodeBulan,
+          periodeTahun,
+        },
+      }),
       prisma.predikatKinerja.deleteMany({ where: { id: { in: boleh.map((b) => b.id) } } }),
       prisma.auditTrail.create({
         data: {
@@ -451,7 +461,34 @@ export async function hapusPredikatAction(
     // Baris dihapus, TAPI jejaknya tetap ada di AuditTrail (dataSebelum berisi
     // nilai lengkap yang dihapus) - jadi penghapusan bisa ditelusuri dan
     // dipulihkan manual kalau ternyata keliru.
-    await prisma.predikatKinerja.delete({ where: { id } });
+    //
+    // TUKIN TURUNANNYA IKUT DIHAPUS, dan ini bukan kerapian.
+    //
+    // Tukin dihitung dari predikat (bobot 70%) lalu angkanya DIBEKUKAN.
+    // Menghapus predikatnya saja meninggalkan baris Tukin yatim yang tetap
+    // berdiri dengan nilai hasil hitungan dari data yang sudah tidak ada -
+    // dan baris itu ikut terkirim ke PPABP lalu masuk ADK.
+    //
+    // Terjadi betulan 2026-09-02: predikat CHAERUNNISA dihapus, Tukin-nya
+    // Rp 2.415.155 tetap tersimpan, dan dia tetap terhitung "sudah lengkap"
+    // di gerbang kirim.
+    //
+    // Uang makan & lembur TIDAK ikut dihapus - keduanya tidak memakai predikat
+    // kinerja sama sekali (dasarnya kehadiran dan jam), jadi angkanya tetap
+    // sah tanpa predikat.
+    //
+    // SATU TRANSAKSI: kalau salah satu gagal, keduanya batal. Kalau dipisah,
+    // ada jendela waktu ketika predikatnya sudah hilang tapi Tukin-nya belum.
+    const [tukinYatim] = await prisma.$transaction([
+      prisma.tukinCalculation.deleteMany({
+        where: {
+          pegawaiId: lama.pegawai.id,
+          periodeBulan: lama.periodeBulan,
+          periodeTahun: lama.periodeTahun,
+        },
+      }),
+      prisma.predikatKinerja.delete({ where: { id } }),
+    ]);
 
     await prisma.auditTrail.create({
       data: {
@@ -468,6 +505,7 @@ export async function hapusPredikatAction(
           nilaiAngka: lama.nilaiAngka,
           sourceSystem: lama.sourceSystem,
           inputMethod: lama.inputMethod,
+          tukinIkutDihapus: tukinYatim.count,
         },
         dataSesudah: { alasan: String(formData.get("alasan") ?? "").trim() || null },
       },

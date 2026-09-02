@@ -1,16 +1,16 @@
 import { prisma } from "../../lib/prisma";
-import { evaluasiApproval } from "../../approval/approvalEngine";
-import { DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_LEMBUR } from "../../approval/approvalUangLemburService";
-import type { KeputusanApproval } from "../../approval/types";
-import { ApprovalForm } from "../ApprovalForm";
-import { ajukanApprovalUangLemburAction } from "../actions";
 import { FilterBar } from "../FilterBar";
-import { ApprovalMassalForm } from "../ApprovalMassalForm";
+import { BadgeStatusKirim, keadaanKirimBaris } from "../StatusKirimBaris";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewApproverDashboard } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
 import { AksesDitolak } from "../AksesDitolak";
 import { StatusBadge } from "../StatusBadge";
+import {
+  ALASAN_UANG_LEMBUR_DISEMBUNYIKAN,
+  TAMPILKAN_MENU_LEMBUR,
+  TAMPILKAN_NOMINAL_LEMBUR,
+} from "../tampilUangLembur";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,24 @@ export default async function UangLemburPage({
   searchParams: Promise<{ bulan?: string; tahun?: string; satker?: string }>;
 }) {
   const { bulan, tahun, satker } = await searchParams;
+
+  // Gerbang paling luar, SEBELUM satu query pun dijalankan.
+  //
+  // Diletakkan di sini, bukan sekadar melepas menunya dari sidebar: menu yang
+  // hilang tidak menutup URL, dan orang yang pernah mem-bookmark halaman ini
+  // akan tetap sampai ke angkanya. Yang dilihatnya sekarang penjelasan, bukan
+  // halaman kosong yang terbaca seperti kerusakan.
+  if (!TAMPILKAN_MENU_LEMBUR) {
+    return (
+      <main className="p-6">
+        <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Lembur</h1>
+        <div className="card mt-4 max-w-2xl p-5">
+          <span className="chip chip-wait">Sementara disembunyikan</span>
+          <p className="mt-3 text-sm text-ink-2">{ALASAN_UANG_LEMBUR_DISEMBUNYIKAN}</p>
+        </div>
+      </main>
+    );
+  }
 
   // Guard sama dengan Dashboard Tukin (lihat src/app/tukin/page.tsx) -
   // KASUBAG_TU discope ke unit kerjanya sendiri, PEGAWAI diarahkan ke
@@ -62,31 +80,42 @@ export default async function UangLemburPage({
     orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }, { pegawai: { nama: "asc" } }],
   });
 
-  const approvalLogSemua = await prisma.approvalLog.findMany({
-    where: { referensiTipe: "UANG_LEMBUR", referensiId: { in: kalkulasiList.map((k) => k.id) } },
-    orderBy: { timestampAksi: "asc" },
+  // Status baris dari PENGIRIMAN UNIT - pola yang sama persis dengan
+  // src/app/tukin/page.tsx. Approval berjenjang dihapus 2026-09-02.
+  const pengirimanPeriode = await prisma.pengirimanUnit.findMany({
+    where: {
+      OR: kalkulasiList.map((k) => ({
+        satuanKerja: k.pegawai.satuanKerja,
+        periodeBulan: k.periodeBulan,
+        periodeTahun: k.periodeTahun,
+      })),
+    },
+    select: { satuanKerja: true, periodeBulan: true, periodeTahun: true, status: true },
   });
+  const petaKirim = new Map(
+    pengirimanPeriode.map((p) => [`${p.satuanKerja}|${p.periodeBulan}|${p.periodeTahun}`, p.status])
+  );
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Lembur</h1>
       <p className="mt-1 text-sm text-muted">
-        Hasil kalkulasi uang lembur dari job scheduler, siap direview dan disetujui berjenjang.
+        Pemantauan <strong>jam lembur</strong> yang terekam per pegawai per periode, dari e-Presensi dan koreksi
+        manual di halaman Kalkulasi.
       </p>
 
-      <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
-
-      {/* Lihat catatan di src/app/tukin/page.tsx - periode wajib dipilih dulu. */}
-      {bulan && tahun && authUser.role !== "PIMPINAN" && (
-        <ApprovalMassalForm
-          jenis="UANG_LEMBUR"
-          label="Uang Lembur"
-          bulan={Number(bulan)}
-          tahun={Number(tahun)}
-          satker={satkerEfektif}
-          jumlahBelumApproved={kalkulasiList.filter((k) => k.status !== "APPROVED").length}
-        />
+      {/* Halaman ini SENGAJA tetap dibuka walau nominalnya ditahan. Jam
+          lembur harus terus terpantau selama menunggu tata cara turun -
+          halaman yang ikut ditutup membuat periode-periode ini lewat tanpa
+          ada yang memeriksa, dan mengisinya ulang nanti berarti dari kertas. */}
+      {!TAMPILKAN_NOMINAL_LEMBUR && (
+        <div className="card mt-4 border-l-4 border-l-gold p-4">
+          <p className="text-sm font-bold text-ink">Nominal rupiah belum ditampilkan</p>
+          <p className="mt-1 text-sm text-muted">{ALASAN_UANG_LEMBUR_DISEMBUNYIKAN}</p>
+        </div>
       )}
+
+      <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
 
       <div className="mt-8 space-y-4">
         {kalkulasiList.length === 0 && (
@@ -96,15 +125,11 @@ export default async function UangLemburPage({
         )}
 
         {kalkulasiList.map((kalkulasi) => {
-          const logSiklusIni = approvalLogSemua.filter(
-            (l) => l.referensiId === kalkulasi.id && l.timestampAksi >= kalkulasi.calculatedAt
+          const keadaanKirim = keadaanKirimBaris(
+            petaKirim.get(
+              `${kalkulasi.pegawai.satuanKerja}|${kalkulasi.periodeBulan}|${kalkulasi.periodeTahun}`
+            )
           );
-          const evaluasi = evaluasiApproval(
-            logSiklusIni.map((l) => ({ jenjang: l.jenjang, keputusan: l.keputusan as KeputusanApproval })),
-            DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_LEMBUR
-          );
-
-          const sudahApproved = kalkulasi.status === "APPROVED";
 
           return (
             <div key={kalkulasi.id} className="card p-4">
@@ -114,17 +139,18 @@ export default async function UangLemburPage({
                   <p className="text-sm text-muted">
                     NIP {kalkulasi.pegawai.nip} - Periode {kalkulasi.periodeBulan}/{kalkulasi.periodeTahun}
                   </p>
-                  <p className="text-xs text-muted/80">{kalkulasi.totalJamLembur} jam lembur</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="font-mono font-bold text-ink">{formatRupiah(kalkulasi.totalUangLembur)}</p>
-                  {sudahApproved && <StatusBadge label="Disetujui" warna="hijau" />}
-                  {!sudahApproved && evaluasi.outcome === "MENUNGGU_APPROVAL" && (
-                    <StatusBadge label={`Menunggu jenjang ${evaluasi.jenjangBerikutnya}`} warna="amber" />
-                  )}
-                  {!sudahApproved && evaluasi.outcome === "PERLU_REVISI" && (
-                    <StatusBadge label="Perlu revisi" warna="merah" />
-                  )}
+                  {/* Yang ditahan RUPIAHNYA, bukan jamnya - jadi jam naik ke
+                      tempat angka utama, bukan diganti tanda hubung. Kolom
+                      kosong terbaca seperti data yang belum masuk, padahal
+                      datanya ada dan justru itu yang perlu diperiksa. */}
+                  <p className="font-mono font-bold text-ink">
+                    {TAMPILKAN_NOMINAL_LEMBUR
+                      ? formatRupiah(kalkulasi.totalUangLembur)
+                      : `${kalkulasi.totalJamLembur} jam`}
+                  </p>
+                  <BadgeStatusKirim keadaan={keadaanKirim} />
                 </div>
               </div>
 
@@ -134,31 +160,6 @@ export default async function UangLemburPage({
                 </p>
               )}
 
-              {logSiklusIni.length > 0 && (
-                <ul className="mt-2 space-y-1 text-xs text-muted">
-                  {logSiklusIni.map((l) => (
-                    <li key={l.id}>
-                      Jenjang {l.jenjang} - {l.approverNama} ({l.approverJabatan}): {l.keputusan}
-                      {l.catatan ? ` - "${l.catatan}"` : ""}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {/* PIMPINAN: read-only, lihat catatan sama di src/app/tukin/page.tsx */}
-              {!sudahApproved && authUser.role !== "PIMPINAN" && evaluasi.outcome === "MENUNGGU_APPROVAL" && evaluasi.jenjangBerikutnya && (
-                <ApprovalForm
-                  action={ajukanApprovalUangLemburAction}
-                  calculationId={kalkulasi.id}
-                  jenjangBerikutnya={evaluasi.jenjangBerikutnya}
-                />
-              )}
-
-              {!sudahApproved && evaluasi.outcome === "PERLU_REVISI" && (
-                <p className="mt-3 text-xs text-muted">
-                  Perlu recalculation (job scheduler dijalankan ulang) sebelum bisa diajukan approval lagi.
-                </p>
-              )}
             </div>
           );
         })}

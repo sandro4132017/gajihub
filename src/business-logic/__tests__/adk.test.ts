@@ -27,6 +27,7 @@ const SUMBER: SumberBarisAdkTukin[] = [
     namaBank: "Bank Rakyat Indonesia",
     nomorRekening: "076301015957537",
     namaRekening: "TUTI HARYANTI",
+    nomorSk: "1234/SJ/KP.03.00/VII/2026",
   },
   {
     nip: "197904302011011012",
@@ -39,17 +40,22 @@ const SUMBER: SumberBarisAdkTukin[] = [
     namaBank: "Bank Rakyat Indonesia",
     nomorRekening: "223301002832507",
     namaRekening: "LUTHFI FIRDAUS",
+    nomorSk: null,
   },
 ];
 
 describe("KOLOM_ADK_TUKIN - header persis file contoh", () => {
-  it("22 kolom dengan urutan & penamaan yang sama", () => {
-    expect(KOLOM_ADK_TUKIN).toHaveLength(22);
-    expect(KOLOM_ADK_TUKIN[0]).toBe("NO");
-    expect(KOLOM_ADK_TUKIN[8]).toBe("Nilai Bruto");
-    expect(KOLOM_ADK_TUKIN[9]).toBe("Nilai Potongan");
-    expect(KOLOM_ADK_TUKIN[10]).toBe("Nilai Bersih");
-    expect(KOLOM_ADK_TUKIN[21]).toBe("Nomor Tukin Baru");
+  it("21 kolom - tanpa kolom penomoran NO", () => {
+    // Kolom "NO" dihapus atas permintaan user 2026-09-02. Nomor urut tidak
+    // dibaca Web Gaji, dan begitu file antar unit digabung penomorannya
+    // justru berulang.
+    expect(KOLOM_ADK_TUKIN).toHaveLength(21);
+    expect(KOLOM_ADK_TUKIN).not.toContain("NO");
+    expect(KOLOM_ADK_TUKIN[0]).toBe("Kode Satker");
+    expect(KOLOM_ADK_TUKIN[7]).toBe("Nilai Bruto");
+    expect(KOLOM_ADK_TUKIN[8]).toBe("Nilai Potongan");
+    expect(KOLOM_ADK_TUKIN[9]).toBe("Nilai Bersih");
+    expect(KOLOM_ADK_TUKIN[20]).toBe("Nomor Tukin Baru");
   });
 
   it("kolom yang dijumlahkan menunjuk ke tiga kolom nilai uang", () => {
@@ -66,8 +72,8 @@ describe("susunBarisAdkTukin", () => {
 
   it("baris pertama cocok dengan baris pertama file contoh", () => {
     expect(baris[0]).toEqual([
-      1, "450938", "06", "2026", "197509082006042003", "TUTI HARYANTI, ST.",
-      "", "15", 19_280_000, 2_892_000, 16_388_000,
+      "450938", "06", "2026", "197509082006042003", "TUTI HARYANTI, ST.",
+      "1234/SJ/KP.03.00/VII/2026", "15", 19_280_000, 2_892_000, 16_388_000,
       "520002000990", "Bank Rakyat Indonesia", "076301015957537", "TUTI HARYANTI",
       "", "", "", "", 1, "", "",
     ]);
@@ -79,27 +85,27 @@ describe("susunBarisAdkTukin", () => {
 
   it("bulan & kode grade di-pad dua digit seperti file contoh", () => {
     const b = susunBarisAdkTukin([{ ...SUMBER[0], kelasJabatan: 7 }], 6, 2026)[0];
-    expect(b[2]).toBe("06");
-    expect(b[7]).toBe("07"); // bukan "7"
+    expect(b[1]).toBe("06");
+    expect(b[6]).toBe("07"); // bukan "7"
   });
 
   it("aritmatika bruto - potongan = bersih (sama dengan file contoh)", () => {
     for (const b of baris) {
-      expect((b[8] as number) - (b[9] as number)).toBe(b[10]);
+      expect((b[7] as number) - (b[8] as number)).toBe(b[9]);
     }
   });
 
   it("kode satker dikosongkan kalau gaji induk periode itu belum diupload", () => {
     const b = susunBarisAdkTukin([{ ...SUMBER[0], kodeSatker: null }], 6, 2026)[0];
-    expect(b[1]).toBe("");
+    expect(b[0]).toBe("");
   });
 
   it("kolom rekening TERISI - Web Gaji butuh nomor rekening buat memproses", () => {
     const b = baris[0];
-    expect(b[11]).toBe("520002000990"); // Kode Bank SPAN
-    expect(b[12]).toBe("Bank Rakyat Indonesia");
-    expect(b[13]).toBe("076301015957537");
-    expect(b[14]).toBe("TUTI HARYANTI");
+    expect(b[10]).toBe("520002000990"); // Kode Bank SPAN
+    expect(b[11]).toBe("Bank Rakyat Indonesia");
+    expect(b[12]).toBe("076301015957537");
+    expect(b[13]).toBe("TUTI HARYANTI");
   });
 
   it("rekening pegawai yang belum terdaftar TETAP kosong - jangan ditebak", () => {
@@ -108,22 +114,33 @@ describe("susunBarisAdkTukin", () => {
       6,
       2026
     )[0];
+    expect(b[10]).toBe("");
     expect(b[11]).toBe("");
     expect(b[12]).toBe("");
-    expect(b[13]).toBe("");
     // Nama Rekening jatuh ke nama pegawai - itu yang paling mungkin benar.
-    expect(b[14]).toBe("TUTI HARYANTI, ST.");
+    expect(b[13]).toBe("TUTI HARYANTI, ST.");
   });
 
-  it("nomor SK & bulan/tahun awal-akhir TETAP kosong - datanya tidak ada", () => {
+  it("nomor SK diambil dari data pegawai, bukan dikosongkan", () => {
+    // Kolom ini WAJIB terisi di ADK. Dulu selalu dikirim kosong karena tidak
+    // ada tempat menyimpannya; sekarang sumbernya Pegawai.nomorSk yang diisi
+    // petugas lewat halaman Data Pegawai.
+    expect(baris[0][5]).toBe("1234/SJ/KP.03.00/VII/2026");
+  });
+
+  it("pegawai yang nomor SK-nya belum diisi TETAP kosong - jangan ditebak", () => {
+    expect(baris[1][5]).toBe("");
+  });
+
+  it("bulan/tahun awal-akhir TETAP kosong - datanya memang tidak ada", () => {
     const b = baris[0];
-    for (const idx of [6, 15, 16, 17, 18, 20, 21]) {
+    for (const idx of [14, 15, 16, 17, 19, 20]) {
       expect(b[idx]).toBe("");
     }
   });
 
   it("Tukin Kali selalu 1", () => {
-    for (const b of baris) expect(b[19]).toBe(1);
+    for (const b of baris) expect(b[18]).toBe(1);
   });
 });
 
@@ -131,18 +148,18 @@ describe("susunBarisTotalAdk", () => {
   it("menjumlahkan hanya kolom nilai uang, sisanya kosong", () => {
     const baris = susunBarisAdkTukin(SUMBER, 6, 2026);
     const total = susunBarisTotalAdk(baris, KOLOM_TOTAL_ADK_TUKIN, KOLOM_ADK_TUKIN.length);
-    expect(total[8]).toBe(19_280_000 + 9_896_000);
-    expect(total[9]).toBe(2_892_000 + 29_688);
-    expect(total[10]).toBe(16_388_000 + 9_866_312);
+    expect(total[7]).toBe(19_280_000 + 9_896_000);
+    expect(total[8]).toBe(2_892_000 + 29_688);
+    expect(total[9]).toBe(16_388_000 + 9_866_312);
     expect(total[0]).toBe("");
-    expect(total[5]).toBe("");
+    expect(total[4]).toBe("");
     expect(total).toHaveLength(KOLOM_ADK_TUKIN.length);
   });
 
   it("total tetap konsisten: total bruto - total potongan = total bersih", () => {
     const baris = susunBarisAdkTukin(SUMBER, 6, 2026);
     const t = susunBarisTotalAdk(baris, KOLOM_TOTAL_ADK_TUKIN, KOLOM_ADK_TUKIN.length);
-    expect((t[8] as number) - (t[9] as number)).toBe(t[10]);
+    expect((t[7] as number) - (t[8] as number)).toBe(t[9]);
   });
 });
 
@@ -174,11 +191,11 @@ describe("format teks tab-separated", () => {
 
     expect(garis).toHaveLength(1 + SUMBER.length + 1);
     expect(garis[0].split("\t")).toEqual([...KOLOM_ADK_TUKIN]);
-    expect(garis[1].split("\t")[5]).toBe("TUTI HARYANTI, ST.");
+    expect(garis[1].split("\t")[4]).toBe("TUTI HARYANTI, ST.");
     // Tiap baris punya jumlah kolom yang sama - kalau tidak, file ditolak
     // aplikasi tujuan.
     for (const g of garis) expect(g.split("\t")).toHaveLength(KOLOM_ADK_TUKIN.length);
-    expect(garis[garis.length - 1].split("\t")[8]).toBe(" 29.176.000 ");
+    expect(garis[garis.length - 1].split("\t")[7]).toBe(" 29.176.000 ");
   });
 });
 
@@ -189,10 +206,10 @@ describe("pembulatan nilai uang", () => {
       6,
       2026
     )[0];
-    expect(b[8]).toBe(5_824_937);
-    expect(b[9]).toBe(0);
-    expect(b[10]).toBe(5_824_937);
-    expect(Number.isInteger(b[8] as number)).toBe(true);
+    expect(b[7]).toBe(5_824_937);
+    expect(b[8]).toBe(0);
+    expect(b[9]).toBe(5_824_937);
+    expect(Number.isInteger(b[7] as number)).toBe(true);
   });
 
   it("baris total = jumlah baris yang SUDAH dibulatkan, jadi cocok kalau dijumlah manual", () => {
@@ -206,8 +223,8 @@ describe("pembulatan nilai uang", () => {
     );
     const total = susunBarisTotalAdk(baris, KOLOM_TOTAL_ADK_TUKIN, KOLOM_ADK_TUKIN.length);
     // 101 + 201 = 302 (bukan Math.round(301) = 301 dari penjumlahan pecahan)
-    expect(total[8]).toBe((baris[0][8] as number) + (baris[1][8] as number));
-    expect(Number.isInteger(total[8] as number)).toBe(true);
+    expect(total[7]).toBe((baris[0][7] as number) + (baris[1][7] as number));
+    expect(Number.isInteger(total[7] as number)).toBe(true);
   });
 });
 

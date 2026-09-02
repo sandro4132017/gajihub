@@ -34,6 +34,21 @@ export interface AuthUser {
   role: Role;
   satuanKerja: string | null;
   aktif: boolean;
+
+  /**
+   * Satuan kerja LAIN yang boleh dilihat user ini, dari tabel
+   * AksesSatkerTambahan (hibah akses lintas unit, keputusan user 2026-09-02).
+   *
+   * OPSIONAL DENGAN SENGAJA. Ratusan pemanggil `AuthUser` yang sudah ada
+   * tidak mengisinya, dan `undefined` berarti "tidak ada hibah" - persis
+   * perilaku sebelum fitur ini ada. Jadi lupa mengisinya menyebabkan akses
+   * KURANG, tidak pernah akses LEBIH.
+   *
+   * HANYA BERPENGARUH PADA FUNGSI BACA - lihat `canLihatSatker`. Wewenang
+   * menghitung, mengirim, mengembalikan, dan meng-export tetap ditentukan
+   * `role` + `satuanKerja` saja, dan sengaja TIDAK membaca daftar ini.
+   */
+  satuanKerjaTambahan?: readonly string[];
 }
 
 export interface TargetPegawai {
@@ -53,6 +68,51 @@ function cekRole(user: AuthUser, role: Role): boolean {
 /** ADMIN "privilege semua role" - lihat TODO(confirm) besar di atas. */
 function cekRoleAtauAdmin(user: AuthUser, role: Role): boolean {
   return user.aktif && (user.role === role || user.role === "ADMIN");
+}
+
+/**
+ * Apakah user boleh MELIHAT data satuan kerja ini.
+ *
+ * Ini satu-satunya tempat hibah `AksesSatkerTambahan` dibaca. Dipisah dari
+ * `cekScopeSatkerAtauAdmin` dengan sengaja: yang itu menjawab "boleh
+ * bertindak atas unit ini", yang ini menjawab "boleh melihat unit ini".
+ * Menyatukannya akan membuat hibah baca diam-diam ikut memberi wewenang
+ * menghitung dan mengirim.
+ */
+export function canLihatSatker(user: AuthUser, targetSatuanKerja: string): boolean {
+  if (!user.aktif) return false;
+  // Role yang cakupannya memang lintas unit tidak perlu hibah.
+  if (user.role === "ADMIN" || user.role === "PPABP" || user.role === "PIMPINAN") return true;
+  if (user.satuanKerja === targetSatuanKerja) return true;
+  return (user.satuanKerjaTambahan ?? []).includes(targetSatuanKerja);
+}
+
+/**
+ * Seluruh satuan kerja yang terlihat oleh user, untuk mengisi dropdown filter.
+ *
+ * `null` berarti LINTAS SEMUA - pemanggilnya tidak boleh memfilter apa pun.
+ * Sengaja `null`, bukan array kosong: array kosong dan "semua" adalah dua
+ * keadaan yang berlawanan, dan menyamakannya pernah menghasilkan halaman
+ * kosong untuk PPABP.
+ */
+export function satkerTerlihatOleh(user: AuthUser): string[] | null {
+  if (!user.aktif) return [];
+  if (user.role === "ADMIN" || user.role === "PPABP" || user.role === "PIMPINAN") return null;
+  const daftar = new Set<string>();
+  if (user.satuanKerja) daftar.add(user.satuanKerja);
+  for (const s of user.satuanKerjaTambahan ?? []) daftar.add(s);
+  return [...daftar];
+}
+
+/**
+ * Memberi & mencabut hibah akses lintas unit - ADMIN SAJA.
+ *
+ * TIDAK diberikan ke PPABP meski jangkauannya lintas unit: memperluas akses
+ * orang lain ke data gaji adalah wewenang yang berbeda jenis dari mengolah
+ * data gaji itu sendiri, dan yang memegangnya sebaiknya bukan yang sama.
+ */
+export function canKelolaAksesSatkerTambahan(user: AuthUser): boolean {
+  return cekRole(user, "ADMIN");
 }
 
 /** Sama seperti cekRoleAtauAdmin, tapi untuk aksi yang di-scope ke satuan kerja tertentu. */
@@ -186,13 +246,21 @@ export function canVerifikasiBandingJenjang1(user: AuthUser, banding: TargetBand
 }
 
 /**
- * Approval jenjang 1 kalkulasi Tukin/Uang Makan/Uang Lembur - HANYA buat
- * unit kerjanya sendiri. Role matrix: "TIDAK BOLEH approval final atau
- * lihat unit lain".
+ * Mengirim rekap unit ke PPABP - HANYA unit kerjanya sendiri.
+ *
+ * MENGGANTIKAN `canApproveJenjang1`. Approval per-kalkulasi dihapus atas
+ * keputusan user 2026-09-02: yang sesungguhnya dinilai Kasubag TU bukan
+ * ratusan baris satu per satu, melainkan satu pernyataan - "rekap unit saya
+ * periode ini sudah saya periksa dan sudah benar".
+ *
+ * SENGAJA TIDAK membaca `satuanKerjaTambahan`. Hibah akses lintas unit
+ * hanya memberi hak BACA; orang dari unit lain tidak boleh mengirimkan
+ * rekap atas nama unit yang bukan tanggung jawabnya.
  */
-export function canApproveJenjang1(user: AuthUser, targetSatuanKerja: string): boolean {
+export function canKirimRekapUnit(user: AuthUser, targetSatuanKerja: string): boolean {
   return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
 }
+
 
 /** Monitor status rekonsiliasi (ReconciliationStatus) unitnya sendiri. */
 export function canMonitorRekonsiliasiUnit(user: AuthUser, targetSatuanKerja: string): boolean {
@@ -422,11 +490,57 @@ export function canTelaahValidasiPengajuanLintasUnit(user: AuthUser, targetSatua
 }
 
 /**
- * Approval jenjang FINAL (jenjang terakhir sebelum status APPROVED, siap
- * kirim ke Web Gaji/SAKTI). targetSatuanKerja opsional - kalau PPABP-nya
- * scoped per-satker (belum terjadi di pilot), WAJIB diisi dan dicocokkan.
+ * Mengembalikan rekap yang sudah dikirim ke unit asalnya, supaya bisa
+ * diperbaiki dan dikirim ulang.
+ *
+ * MENGGANTIKAN `canApproveJenjangFinal`. Setelah approval berjenjang dihapus,
+ * PPABP tidak lagi "menyetujui" apa pun - kiriman unit langsung terkunci dan
+ * siap di-export. Yang tersisa di tangan PPABP justru kebalikannya: satu-
+ * satunya jalan membuka kunci kalau ada yang salah.
+ *
+ * INI BUKAN KELONGGARAN, INI SYARAT. Tanpa tombol ini, satu salah kirim
+ * mengunci periode itu sampai ada yang menyunting database langsung -
+ * tepat hal yang keberadaan sistem ini dimaksudkan untuk menghentikan.
+ * Alasannya wajib diisi (lihat PengirimanUnit.alasanKembali): unit tidak
+ * punya cara lain mengetahui apa yang harus diperbaiki.
  */
-export function canApproveJenjangFinal(user: AuthUser, targetSatuanKerja?: string): boolean {
+export function canKembalikanRekapUnit(user: AuthUser, targetSatuanKerja?: string): boolean {
+  return cekPpabpAtauAdmin(user, targetSatuanKerja);
+}
+
+/**
+ * Melihat papan progres pengiriman seluruh unit (siapa sudah kirim, siapa
+ * belum). PPABP & PIMPINAN lintas unit; Kasubag TU melihatnya juga supaya
+ * tahu posisi unitnya sendiri terhadap yang lain.
+ *
+ * Read-only murni - tidak ada aksi yang bergantung pada fungsi ini.
+ */
+export function canLihatProgresPengiriman(user: AuthUser): boolean {
+  return (
+    user.aktif &&
+    (user.role === "PPABP" ||
+      user.role === "PIMPINAN" ||
+      user.role === "KASUBAG_TU" ||
+      user.role === "ADMIN")
+  );
+}
+
+/**
+ * Mencatat, mengubah, dan menghapus SK Grade (dasar kolom "Nomor SK" &
+ * "Kode Grade" di ADK).
+ *
+ * DUA ROLE dengan cakupan berbeda - pola yang sama persis dengan
+ * `canAjukanKalkulasiTukinMassalUnit`:
+ *   - KASUBAG_TU : unitnya sendiri saja.
+ *   - PPABP      : lintas satuan kerja.
+ *
+ * PPABP ikut karena dialah yang menekan tombol export dan dialah yang pertama
+ * melihat kolom SK-nya kosong. Menyuruhnya menunggu unit mengisi, padahal
+ * berkas SK-nya ada di mejanya sendiri, cuma menunda export tanpa menambah
+ * satu pun pemeriksaan.
+ */
+export function canKelolaSkGrade(user: AuthUser, targetSatuanKerja: string): boolean {
+  if (cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja)) return true;
   return cekPpabpAtauAdmin(user, targetSatuanKerja);
 }
 

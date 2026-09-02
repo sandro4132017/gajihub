@@ -1,19 +1,21 @@
 import { prisma } from "../../../lib/prisma";
-import { canViewRekapUnitKerja } from "../../../auth/permissions";
+import { canViewRekapUnitKerja, canEditDataPegawai } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { ambilAksesUnit } from "../access";
 import { SatkerPicker } from "../SatkerPicker";
 import { PencarianDebounce } from "../../PencarianDebounce";
+import { Paginasi, hitungPaginasi } from "../../Paginasi";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function RosterPegawaiUnitPage({
   searchParams,
 }: {
-  searchParams: Promise<{ satker?: string; q?: string; nonaktif?: string }>;
+  searchParams: Promise<{ satker?: string; q?: string; nonaktif?: string; hal?: string; per?: string }>;
 }) {
-  const { satker, q, nonaktif } = await searchParams;
+  const { satker, q, nonaktif, hal, per } = await searchParams;
   const akses = await ambilAksesUnit(satker);
   if (!akses) {
     return <AksesDitolak pesan="Kamu harus login dulu buat lihat halaman ini." />;
@@ -64,6 +66,24 @@ export default async function RosterPegawaiUnitPage({
     }),
     prisma.pegawai.count({ where: { satuanKerja: satkerEfektif, statusPegawai: { not: "AKTIF" } } }),
   ]);
+
+  // PAGINASI. Unit terbesar di data ini berisi 227 pegawai (Balai Bekasi),
+  // dan 54 dari 84 unit melewati 50 orang - daftar utuh dalam satu halaman
+  // menjadikan halaman ini gulungan panjang tanpa ujung.
+  //
+  // Bawaannya 50 baris, bukan 10 seperti UKURAN_HALAMAN_DEFAULT: ini roster
+  // yang dibaca menyeluruh ("siapa saja di unit saya"), bukan tabel hasil
+  // pencarian yang dibaca sebaris.
+  const paginasi = hitungPaginasi(pegawaiList.length, hal, per ?? "50");
+  const pegawaiHalamanIni = pegawaiList.slice(paginasi.mulai, paginasi.selesai);
+  const paramPaginasi = new URLSearchParams({ satker: satkerEfektif });
+  if (q) paramPaginasi.set("q", q);
+  if (tampilkanNonaktif) paramPaginasi.set("nonaktif", "1");
+
+  // Tombol Edit cuma muncul kalau memang berwenang - halaman /pegawai
+  // memeriksanya lagi per baris, jadi ini soal tidak menawarkan pintu yang
+  // akan ditolak, bukan soal keamanan.
+  const bolehEdit = canEditDataPegawai(authUser, satkerEfektif);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -122,17 +142,18 @@ export default async function RosterPegawaiUnitPage({
               <th className="px-4 py-2.5">Golongan</th>
               <th className="px-4 py-2.5">Kelas</th>
               <th className="px-4 py-2.5">Status</th>
+              {bolehEdit && <th className="px-4 py-2.5">Tindakan</th>}
             </tr>
           </thead>
           <tbody>
             {pegawaiList.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-muted">
+                <td colSpan={bolehEdit ? 7 : 6} className="px-4 py-6 text-center text-muted">
                   Tidak ada pegawai yang cocok.
                 </td>
               </tr>
             )}
-            {pegawaiList.map((p) => (
+            {pegawaiHalamanIni.map((p) => (
               <tr key={p.id} className="border-b border-line-2">
                 <td className="col-nama px-4 py-2.5 font-semibold text-ink">{p.nama}</td>
                 <td className="px-4 py-2.5 font-mono text-xs text-muted">{p.nip}</td>
@@ -144,10 +165,31 @@ export default async function RosterPegawaiUnitPage({
                     {p.statusPegawai}
                   </span>
                 </td>
+                {bolehEdit && (
+                  <td className="px-4 py-2.5">
+                    {/* Menuju /pegawai - SATU-SATUNYA tempat data pegawai
+                        diubah. Halaman ini sengaja tetap baca-saja: form
+                        sunting yang disalin ke dua tempat cepat atau lambat
+                        berbeda aturannya. */}
+                    <Link
+                      href={`/pegawai?pegawaiId=${p.id}`}
+                      className="text-xs font-semibold text-biru hover:underline"
+                    >
+                      Edit data
+                    </Link>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
+        <Paginasi
+          basePath="/kasubag/pegawai"
+          params={paramPaginasi}
+          info={paginasi}
+          totalBaris={pegawaiList.length}
+          labelBaris="pegawai"
+        />
       </div>
     </main>
   );

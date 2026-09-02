@@ -350,6 +350,65 @@ describe("rekapDariLaporanPdf - akhir pekan", () => {
   });
 });
 
+describe("rekapDariLaporanPdf - lembur hari kerja hanya untuk WFO", () => {
+  // Aturan user 2026-09-02. Yang dijaga di sini BUKAN cuma "WFH ditolak",
+  // tapi juga batas-batasnya - tanpa itu aturannya menolkan seluruh lembur.
+
+  it("WFH di hari kerja: baris Lembur di hari yang sama tidak dibayar", () => {
+    const hasil = rekapDariLaporanPdf(
+      laporan([
+        baris("07-07-2026", "Selasa", "08:00", "16:00", "WFH"),
+        baris("07-07-2026", "Selasa", "16:00", "20:00", "Lembur"),
+      ])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+    expect(hasil.rekap.jumlahHariMakanLembur).toBe(0);
+    expect(hasil.catatan.join(" ")).toContain("bukan WFO");
+  });
+
+  it("WFO di hari kerja: lembur di hari yang sama TETAP dibayar", () => {
+    const hasil = rekapDariLaporanPdf(
+      laporan([
+        baris("07-07-2026", "Selasa", "08:00", "16:00", "WFO"),
+        baris("07-07-2026", "Selasa", "16:00", "20:00", "Lembur"),
+      ])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(4);
+  });
+
+  it("cuti, diklat, dinas luar, dan tidak hadir sama-sama menolak lembur", () => {
+    for (const status of ["Cuti - Cuti Tahunan", "Diklat", "Dinas Keluar", "Tidak Hadir"]) {
+      const hasil = rekapDariLaporanPdf(
+        laporan([
+          baris("07-07-2026", "Selasa", "08:00", "16:00", status),
+          baris("07-07-2026", "Selasa", "16:00", "20:00", "Lembur"),
+        ])
+      );
+      expect(hasil.rekap.totalJamLembur, status).toBe(0);
+    }
+  });
+
+  it("baris Lembur yang BERDIRI SENDIRI di hari kerja tetap dibayar", () => {
+    // Bentuk normal data e-Presensi: tidak ada baris WFO pendamping. Kalau
+    // ini ikut ditolak, seluruh uang lembur jadi nol - lihat catatan panjang
+    // di blok "4. Lembur" presensiPdfKeRekap.ts.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("07-07-2026", "Selasa", "16:00", "20:00", "Lembur")])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(4);
+  });
+
+  it("di HARI LIBUR syarat WFO tidak berlaku sama sekali", () => {
+    // Sabtu. Tidak ada status WFO/WFH di akhir pekan, dan justru inilah
+    // lembur yang dibayar 2x.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("04-07-2026", "Sabtu", "09:00", "13:00", "Lembur")])
+    );
+    expect(hasil.rekap.totalJamLemburHariLibur).toBe(4);
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+  });
+});
+
 describe("rekapDariLaporanPdf - uang lembur", () => {
   it("menghitung lembur akhir pekan penuh dari jam masuk sampai jam pulang", () => {
     // Sabtu 02-05-2026, 10:43-19:43 = 9 jam.

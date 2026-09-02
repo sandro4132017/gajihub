@@ -9,7 +9,7 @@ import {
   canViewRekapUnitKerja,
   canExportRekapUnit,
   canVerifikasiBandingJenjang1,
-  canApproveJenjang1,
+  canKirimRekapUnit,
   canMonitorRekonsiliasiUnit,
   canTarikAtauUploadPresensiUnit,
   canTarikUlangPresensiUnit,
@@ -28,7 +28,7 @@ import {
   canMonitorKepatuhanData,
   canTarikAtauUploadPresensiFallback,
   canTelaahValidasiPengajuanLintasUnit,
-  canApproveJenjangFinal,
+  canKembalikanRekapUnit,
   canHandleSelisih,
   canGenerateAdk,
   canUploadAnggaranRealisasi,
@@ -177,15 +177,15 @@ describe("KASUBAG_TU - verifikator satker", () => {
     expect(canVerifikasiBandingJenjang1(user, { pengajuNip: "111", satuanKerjaPegawai: BIRO_UMUM })).toBe(false);
   });
 
-  it("canApproveJenjang1: diizinkan buat unitnya, DITOLAK buat unit lain", () => {
+  it("canKirimRekapUnit: diizinkan buat unitnya, DITOLAK buat unit lain", () => {
     const user = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
-    expect(canApproveJenjang1(user, SETJEN)).toBe(true);
-    expect(canApproveJenjang1(user, BIRO_UMUM)).toBe(false);
+    expect(canKirimRekapUnit(user, SETJEN)).toBe(true);
+    expect(canKirimRekapUnit(user, BIRO_UMUM)).toBe(false);
   });
 
-  it("canApproveJenjang1: DITOLAK buat PPABP (bukan wewenangnya, itu jenjang final)", () => {
+  it("canKirimRekapUnit: DITOLAK buat PPABP - yang mengirim rekap unit adalah Kasubag TU", () => {
     const ppabp = buatUser({ role: "PPABP", satuanKerja: null });
-    expect(canApproveJenjang1(ppabp, SETJEN)).toBe(false);
+    expect(canKirimRekapUnit(ppabp, SETJEN)).toBe(false);
   });
 
   it("canMonitorRekonsiliasiUnit: sama pola scoping dengan canViewRekapUnitKerja", () => {
@@ -239,13 +239,13 @@ describe("KASUBAG_TU - verifikator satker", () => {
 });
 
 describe("PPABP - approval jenjang final, lintas satker", () => {
-  it("canApproveJenjangFinal: PPABP pusat (satuanKerja NULL) diizinkan lintas semua satker", () => {
+  it("canKembalikanRekapUnit: PPABP pusat (satuanKerja NULL) diizinkan lintas semua satker", () => {
     const ppabpPusat = buatUser({ role: "PPABP", satuanKerja: null });
-    expect(canApproveJenjangFinal(ppabpPusat, SETJEN)).toBe(true);
-    expect(canApproveJenjangFinal(ppabpPusat, BIRO_UMUM)).toBe(true);
+    expect(canKembalikanRekapUnit(ppabpPusat, SETJEN)).toBe(true);
+    expect(canKembalikanRekapUnit(ppabpPusat, BIRO_UMUM)).toBe(true);
   });
 
-  it("canApproveJenjangFinal: PPABP tetap lintas satker WALAU User.satuanKerja terisi", () => {
+  it("canKembalikanRekapUnit: PPABP tetap lintas satker WALAU User.satuanKerja terisi", () => {
     // MENGGANTIKAN test lama yang mengunci "PPABP per-satker cuma diizinkan
     // buat satkernya". Perilaku itu sengaja dicabut: `User.satuanKerja` itu
     // kolom milik KASUBAG_TU dan WAJIB diisi kalau akun punya role Kasubag
@@ -253,13 +253,13 @@ describe("PPABP - approval jenjang final, lintas satker", () => {
     // kehilangan jangkauan lintas unit tanpa alasan. Lihat komentar cekPpabp
     // di permissions.ts - scoping PPABP per satker butuh kolomnya sendiri.
     const ppabpSatker = buatUser({ role: "PPABP", satuanKerja: SETJEN });
-    expect(canApproveJenjangFinal(ppabpSatker, SETJEN)).toBe(true);
-    expect(canApproveJenjangFinal(ppabpSatker, BIRO_UMUM)).toBe(true);
+    expect(canKembalikanRekapUnit(ppabpSatker, SETJEN)).toBe(true);
+    expect(canKembalikanRekapUnit(ppabpSatker, BIRO_UMUM)).toBe(true);
   });
 
-  it("canApproveJenjangFinal: DITOLAK buat KASUBAG_TU (bukan jenjang final)", () => {
+  it("canKembalikanRekapUnit: DITOLAK buat KASUBAG_TU - membuka kunci wewenang PPABP", () => {
     const kasubag = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
-    expect(canApproveJenjangFinal(kasubag, SETJEN)).toBe(false);
+    expect(canKembalikanRekapUnit(kasubag, SETJEN)).toBe(false);
   });
 
   it("canHandleSelisih, canViewRekonsiliasiLintasSatker, canTelaahValidasiPengajuanLintasUnit, canMonitorUbahStatusLintasUnit: ikut pola scoping PPABP yang sama", () => {
@@ -395,11 +395,11 @@ describe("ADMIN - privilege teknis + SEMUA role lain (simulasi/demo, lihat TODO(
   it("ADMIN privilege semua role lain - fungsi role-scoped (KASUBAG_TU/OSDMA/PPABP) diizinkan buat ADMIN apapun target-nya", () => {
     const admin = buatUser({ role: "ADMIN" });
     expect(canViewRekapUnitKerja(admin, SETJEN)).toBe(true);
-    expect(canApproveJenjang1(admin, BIRO_UMUM)).toBe(true);
+    expect(canKirimRekapUnit(admin, BIRO_UMUM)).toBe(true);
     expect(canAjukanKalkulasiTukinMassalUnit(admin, SETJEN)).toBe(true);
     expect(canReviewPerubahanDataMaster(admin)).toBe(true);
     expect(canApproveBandingFinal(admin)).toBe(true);
-    expect(canApproveJenjangFinal(admin, SETJEN)).toBe(true);
+    expect(canKembalikanRekapUnit(admin, SETJEN)).toBe(true);
     expect(canGenerateAdk(admin)).toBe(true);
     expect(canViewDashboardLintasUnit(admin)).toBe(true);
   });
@@ -555,7 +555,7 @@ describe("Akun multi-role sedang memakai role PPABP (satuanKerja terisi buat Kas
   });
 
   it("kewenangan PPABP lintas unit lain juga ikut utuh", () => {
-    expect(canApproveJenjangFinal(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
+    expect(canKembalikanRekapUnit(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
     expect(canHandleSelisih(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
     expect(canViewRekonsiliasiLintasSatker(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);
     expect(canTelaahValidasiPengajuanLintasUnit(adminSebagaiPpabp, BIRO_UMUM)).toBe(true);

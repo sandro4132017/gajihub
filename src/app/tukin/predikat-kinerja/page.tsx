@@ -275,7 +275,14 @@ export default async function PredikatKinerjaPage({
             </div>
             <div>
               <label className="field-label">Tahun</label>
-              <input type="number" name="tahun" defaultValue={String(periodeTahun ?? "")} className="field-input w-24 py-1.5" />
+              {/* Lihat catatan `key` yang sama di src/app/tukin/presensi/page.tsx. */}
+              <input
+                key={String(periodeTahun ?? "")}
+                type="number"
+                name="tahun"
+                defaultValue={String(periodeTahun ?? "")}
+                className="field-input w-24 py-1.5"
+              />
             </div>
             {!satkerWajib && (
               <div>

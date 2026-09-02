@@ -21,6 +21,7 @@ import {
 } from "../../business-logic/ptkp";
 import { TAB_SAYA, resolveTabSaya } from "./tabs";
 import { kunciPeriode, pilihPeriode, type PeriodeSaya } from "./periodeSaya";
+import { TAMPILKAN_NOMINAL_LEMBUR } from "../tampilUangLembur";
 
 export const dynamic = "force-dynamic";
 
@@ -316,7 +317,10 @@ export default async function DataSayaPage({
     gajiBersih: gajiTerbaru?.gajiBersih ?? 0,
     tunjanganKinerja: tukinTerbaru?.tukinBersih ?? 0,
     uangMakan: umTerbaru?.totalUangMakan ?? 0,
-    uangLembur: lemburTerbaru?.totalUangLembur ?? 0,
+    // Uang lembur belum ikut selama angkanya belum disetujui - lihat
+    // src/app/tampilUangLembur.ts. Slip gaji diperlakukan sama persis,
+    // supaya Total di sini dan Total Penghasilan di slip tetap sepadan.
+    uangLembur: TAMPILKAN_NOMINAL_LEMBUR ? lemburTerbaru?.totalUangLembur ?? 0 : 0,
     honorarium: gajiTerbaru?.honorarium ?? 0,
   });
 
@@ -590,14 +594,6 @@ export default async function DataSayaPage({
               sampaikan ke Kasubag TU unit kamu.
             </p>
           </section>
-
-          {/* Keterangan ini menjawab pertanyaan yang PASTI muncul begitu
-              halaman ini dibandingkan dengan aplikasi HR lain: kenapa tidak ada
-              alamat, NIK, NPWP, nomor telepon. Bukan karena belum sempat. */}
-          <p className="text-xs text-muted">
-            Gajihub sengaja tidak menyimpan data pribadi (alamat, NIK, NPWP, telepon, email) - sistem ini hanya
-            memerlukan data yang menentukan pembayaran. Data itu tetap ada di SIAP.
-          </p>
         </div>
       )}
 
@@ -793,11 +789,17 @@ export default async function DataSayaPage({
                   Lihat slip gaji
                 </Link>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <div
+                className={`mt-3 grid grid-cols-2 gap-3 ${
+                  TAMPILKAN_NOMINAL_LEMBUR ? "sm:grid-cols-5" : "sm:grid-cols-4"
+                }`}
+              >
                 <StatTile label="Gaji bersih" nilai={gajiTerbaru?.gajiBersih ?? 0} />
                 <StatTile label="Tukin" nilai={tukinTerbaru?.tukinBersih ?? 0} />
                 <StatTile label="Uang Makan" nilai={umTerbaru?.totalUangMakan ?? 0} />
-                <StatTile label="Uang Lembur" nilai={lemburTerbaru?.totalUangLembur ?? 0} />
+                {TAMPILKAN_NOMINAL_LEMBUR && (
+                  <StatTile label="Uang Lembur" nilai={lemburTerbaru?.totalUangLembur ?? 0} />
+                )}
                 <StatTile label="Total" nilai={totalTerbaru} />
               </div>
               {!gajiTerbaru && (
@@ -839,12 +841,14 @@ export default async function DataSayaPage({
             referensiTipe="UANG_MAKAN"
             bandingTerpakai={bandingTerpakai}
           />
-          <KalkulasiSection
-            judul="Uang Lembur"
-            rows={pegawai.uangLembur.map((r) => ({ ...r, nilai: r.totalUangLembur }))}
-            referensiTipe="UANG_LEMBUR"
-            bandingTerpakai={bandingTerpakai}
-          />
+          {TAMPILKAN_NOMINAL_LEMBUR && (
+            <KalkulasiSection
+              judul="Uang Lembur"
+              rows={pegawai.uangLembur.map((r) => ({ ...r, nilai: r.totalUangLembur }))}
+              referensiTipe="UANG_LEMBUR"
+              bandingTerpakai={bandingTerpakai}
+            />
+          )}
         </div>
       )}
 

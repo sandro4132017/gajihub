@@ -1,6 +1,8 @@
 import { prisma } from "../../../lib/prisma";
 import { akhirPekan, type PegawaiAdkHarian } from "../../../business-logic/adkHarian";
 import { STATUS_BERHAK_UANG_MAKAN } from "./statusUangMakan";
+import { satkerTerkirim, whereIkutAdk } from "./satkerTerkirim";
+import type { JenisPegawaiAdk } from "./jenisPegawaiAdk";
 
 /**
  * Baris ADK Uang Makan satu periode - SATU-SATUNYA tempat barisnya disusun.
@@ -17,7 +19,7 @@ import { STATUS_BERHAK_UANG_MAKAN } from "./statusUangMakan";
  */
 export interface DataUangMakanHarian {
   pegawai: PegawaiAdkHarian[];
-  /** Pegawai APPROVED yang tidak punya satupun hari - barisnya kosong di berkas. */
+  /** Pegawai dari unit terkirim yang tidak punya satupun hari - barisnya kosong di berkas. */
   tanpaHari: number;
   totalBaris: number;
   /**
@@ -30,9 +32,34 @@ export interface DataUangMakanHarian {
   selisih: { nip: string; nama: string; diBerkas: number; disetujui: number }[];
 }
 
-export async function dataUangMakanHarian(bulan: number, tahun: number): Promise<DataUangMakanHarian> {
+export async function dataUangMakanHarian(
+  bulan: number,
+  tahun: number,
+  /**
+   * Batasi ke satu satuan kerja saja.
+   *
+   * Dipakai halaman /uang-makan, yang untuk KASUBAG_TU memang discope ke
+   * unitnya sendiri. Tanpa ini pratinjaunya akan memperlihatkan pegawai unit
+   * lain di halaman yang seluruh isinya sudah disaring - kebocoran ruang
+   * lingkup yang tidak akan terlihat sebagai kesalahan, cuma sebagai
+   * "kok ada nama asing".
+   *
+   * Penyaringannya IRISAN dengan daftar unit terkirim, bukan penggantinya:
+   * unit yang belum mengirim tetap menghasilkan nol baris walau namanya
+   * disebut di sini.
+   */
+  satuanKerja?: string | null,
+  /** Penyaringan PNS/P3K - lihat ./jenisPegawaiAdk.ts. `null` = semua. */
+  jenis?: JenisPegawaiAdk | null
+): Promise<DataUangMakanHarian> {
+  // Gerbang yang SAMA PERSIS dengan ADK Tukin - lihat ./satkerTerkirim.ts.
+  // Kalau kedua berkas memakai aturan berbeda, satu periode bisa menghasilkan
+  // ADK Tukin berisi unit A tapi ADK Uang Makan tidak, dan selisihnya baru
+  // ketahuan setelah keduanya diunggah ke Web Gaji.
+  const semuaTerkirim = await satkerTerkirim(prisma, bulan, tahun);
+  const satkerBoleh = satuanKerja ? semuaTerkirim.filter((s) => s === satuanKerja) : semuaTerkirim;
   const rows = await prisma.uangMakan.findMany({
-    where: { periodeBulan: bulan, periodeTahun: tahun, status: "APPROVED" },
+    where: whereIkutAdk(bulan, tahun, satkerBoleh, jenis ?? null),
     include: { pegawai: { select: { id: true, nip: true, nama: true } } },
     orderBy: { pegawai: { nama: "asc" } },
   });

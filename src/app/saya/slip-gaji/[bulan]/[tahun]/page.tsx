@@ -7,6 +7,7 @@ import { getEselon1 } from "../../../../../business-logic/strukturEselon";
 import { AksesDitolak } from "../../../../AksesDitolak";
 import { NAMA_BULAN } from "../../../../bulan";
 import { PrintButton } from "../../../PrintButton";
+import { TAMPILKAN_NOMINAL_LEMBUR } from "../../../../tampilUangLembur";
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +127,9 @@ export default async function SlipGajiPage({
     gajiBersih: gaji?.gajiBersih ?? 0,
     tunjanganKinerja: tukin?.tukinBersih ?? 0,
     uangMakan: uangMakan?.totalUangMakan ?? 0,
-    uangLembur: uangLembur?.totalUangLembur ?? 0,
+    // Lihat src/app/tampilUangLembur.ts. Sekali slip tercetak, keterangan
+    // "angka ini belum final" tidak ikut tercetak bersamanya.
+    uangLembur: TAMPILKAN_NOMINAL_LEMBUR ? uangLembur?.totalUangLembur ?? 0 : 0,
     honorarium: gaji?.honorarium ?? 0,
   });
 
@@ -250,7 +253,9 @@ export default async function SlipGajiPage({
               <BarisNilai label="Jumlah Gaji Bersih" nilai={gaji.gajiBersih} tebal garisAtas />
               <BarisNilai label="Tunjangan Kinerja" nilai={tukin?.tukinBersih ?? 0} />
               <BarisNilai label="Uang Makan" nilai={uangMakan?.totalUangMakan ?? 0} />
-              <BarisNilai label="Uang Lembur" nilai={uangLembur?.totalUangLembur ?? 0} />
+              {TAMPILKAN_NOMINAL_LEMBUR && (
+                <BarisNilai label="Uang Lembur" nilai={uangLembur?.totalUangLembur ?? 0} />
+              )}
               <BarisNilai label="Honorarium" nilai={gaji.honorarium} />
               <BarisNilai label="Total Penghasilan" nilai={totalPenghasilanSlip} tebal garisAtas />
             </tbody>
@@ -265,7 +270,9 @@ export default async function SlipGajiPage({
               <tbody>
                 <BarisNilai label="Tunjangan Kinerja" nilai={tukin?.tukinBersih ?? 0} />
                 <BarisNilai label="Uang Makan" nilai={uangMakan?.totalUangMakan ?? 0} />
-                <BarisNilai label="Uang Lembur" nilai={uangLembur?.totalUangLembur ?? 0} />
+                {TAMPILKAN_NOMINAL_LEMBUR && (
+                  <BarisNilai label="Uang Lembur" nilai={uangLembur?.totalUangLembur ?? 0} />
+                )}
                 <BarisNilai label="Jumlah" nilai={totalPenghasilanSlip} tebal garisAtas />
               </tbody>
             </table>

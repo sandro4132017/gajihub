@@ -101,7 +101,7 @@ export function rincianUangMakan(input: InputRincianUangMakan): RincianUangMakan
   // Urutannya sengaja: yang dibayar dulu, baru yang tidak - supaya selisih
   // "hadir tapi tidak dibayar" terbaca sebagai satu blok.
   const baris: BarisHariUangMakan[] = [
-    { status: "WFO (kerja di kantor)", jumlahHari: input.jumlahHariWfo, berhak: true, alasan: "" },
+    { status: "WFO", jumlahHari: input.jumlahHariWfo, berhak: true, alasan: "" },
     { status: "WFH / WFA", jumlahHari: input.jumlahHariWfhWfa, berhak: true, alasan: "" },
     {
       status: "Diklat",

@@ -56,6 +56,7 @@ export async function ubahDataPegawaiAction(
     const kelasJabatanRaw = String(formData.get("kelasJabatan") ?? "").trim();
     const statusPegawai = String(formData.get("statusPegawai") ?? "").trim();
     const tmtSkTerakhir = String(formData.get("tmtSkTerakhir") ?? "").trim();
+    const nomorSk = String(formData.get("nomorSk") ?? "").trim();
 
     const pegawai = await prisma.pegawai.findUnique({ where: { id: pegawaiId } });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
@@ -94,6 +95,7 @@ export async function ubahDataPegawaiAction(
       kelasJabatan: pegawai.kelasJabatan,
       statusPegawai: pegawai.statusPegawai,
       tmtSkTerakhir: pegawai.tmtSkTerakhir,
+      nomorSk: pegawai.nomorSk,
     };
     const dataBaru = {
       nama,
@@ -104,6 +106,10 @@ export async function ubahDataPegawaiAction(
       kelasJabatan,
       statusPegawai,
       tmtSkTerakhir: tmtSkTerakhir ? new Date(tmtSkTerakhir) : null,
+      // String kosong disimpan sebagai null, bukan "" - supaya "belum diisi"
+      // cuma punya SATU bentuk di database dan pencarian "yang belum punya
+      // nomor SK" tidak perlu memeriksa dua keadaan yang artinya sama.
+      nomorSk: nomorSk || null,
     };
 
     await prisma.$transaction([

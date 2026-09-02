@@ -4,6 +4,8 @@ import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canGenerateAdk } from "../../../../auth/permissions";
 import { responseAdkHarian } from "../responseAdk";
 import { dataUangMakanHarian } from "../dataUangMakanHarian";
+import { bacaJenisPegawai, labelJenisPegawai } from "../jenisPegawaiAdk";
+import { slugSatker } from "../slugSatker";
 
 /**
  * Export ADK Uang Makan - dua format (.xlsx & .txt).
@@ -42,7 +44,15 @@ export async function GET(req: NextRequest) {
   // Barisnya disusun di modul bersama - halaman /ppabp/adk memakai fungsi yang
   // SAMA untuk pratinjaunya, jadi yang dilihat di layar dan yang diunduh tidak
   // bisa berbeda.
-  const { pegawai } = await dataUangMakanHarian(bulan, tahun);
+  // Penyaringan PNS/P3K - sama persis dengan yang dipakai halaman
+  // /ppabp/adk untuk pratinjaunya, jadi yang terlihat di layar dan yang
+  // terunduh tidak bisa berbeda isi.
+  const jenisPegawai = bacaJenisPegawai(req.nextUrl.searchParams.get("jenis"));
+  // Penyempitan ke satu unit divalidasi DI DALAM dataUangMakanHarian:
+  // penyaringnya irisan dengan daftar unit terkirim, jadi nama unit yang
+  // belum mengirim tetap menghasilkan nol baris - bukan menembus gerbangnya.
+  const satkerDiminta = req.nextUrl.searchParams.get("satker");
+  const { pegawai } = await dataUangMakanHarian(bulan, tahun, satkerDiminta, jenisPegawai);
 
   // Berkas ADK adalah PERINTAH BAYAR yang keluar dari sistem ini menuju Web
   // Gaji/SAKTI. Sampai sebelum ini pengunduhannya TIDAK tercatat sama sekali -
@@ -63,6 +73,9 @@ export async function GET(req: NextRequest) {
         jenis: "Uang Makan",
         periode: `${bulan}/${tahun}`,
         format: req.nextUrl.searchParams.get("format") ?? "xlsx",
+        jenisPegawai: labelJenisPegawai(jenisPegawai),
+        satuanKerja: satkerDiminta ?? "semua unit terkirim",
+        jumlahPegawai: pegawai.length,
       },
     },
   });
@@ -73,6 +86,8 @@ export async function GET(req: NextRequest) {
     periodeBulan: bulan,
     periodeTahun: tahun,
     denganJam: false,
-    namaFile: `adk-uang-makan-${String(bulan).padStart(2, "0")}-${tahun}`,
+    namaFile: `adk-uang-makan-${String(bulan).padStart(2, "0")}-${tahun}${slugSatker(satkerDiminta)}${
+      jenisPegawai ? `-${jenisPegawai.toLowerCase()}` : ""
+    }`,
   });
 }

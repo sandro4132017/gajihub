@@ -1,5 +1,4 @@
 export const KOLOM_ADK_TUKIN = [
-  "NO",
   "Kode Satker",
   "Bulan",
   "Tahun",
@@ -23,7 +22,10 @@ export const KOLOM_ADK_TUKIN = [
   "Nomor Tukin Baru",
 ] as const;
 
-export const KOLOM_TOTAL_ADK_TUKIN = [8, 9, 10];
+// Indeks Nilai Bruto / Potongan / Bersih. Bergeser satu ke kiri sejak
+// kolom "NO" dihapus (permintaan user 2026-09-02) - penomoran baris tidak
+// dipakai Web Gaji dan cuma bikin selisih kalau file digabung antar unit.
+export const KOLOM_TOTAL_ADK_TUKIN = [7, 8, 9];
 
 export type SelAdk = string | number | null;
 
@@ -44,6 +46,7 @@ export interface SumberBarisAdkTukin {
   kodeBankSpan: string | null;
   namaBank: string | null;
   nomorRekening: string | null;
+  nomorSk: string | null;
   namaRekening: string | null;
 }
 
@@ -91,16 +94,15 @@ export function susunBarisAdkTukin(
   periodeTahun: number
 ): SelAdk[][] {
   const bulanPad = String(periodeBulan).padStart(2, "0");
-  return sumber.map((r, i) => {
+  return sumber.map((r) => {
     const uang = nilaiUangAdkTukin(r);
     return [
-    i + 1,
     r.kodeSatker ?? "",
     bulanPad,
     String(periodeTahun),
     r.nip,
     r.nama,
-    "", // Nomor SK
+    r.nomorSk ?? "",
     r.kelasJabatan === null ? "" : String(r.kelasJabatan).padStart(2, "0"),
     uang.bruto,
     uang.potongan,

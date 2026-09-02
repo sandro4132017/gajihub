@@ -796,7 +796,39 @@ export function rekapDariLaporanPdf(
     // Lembur diambil HANYA dari baris berstatus "Lembur" - itu penanda bahwa
     // lemburnya memang diperintahkan. Jam pulang malam di baris WFO biasa
     // TIDAK dihitung lembur; tanpa surat perintah, itu cuma pulang telat.
-    if (barisLembur.length > 0) {
+    //
+    // LEMBUR HARI KERJA HANYA UNTUK HARI BERSTATUS WFO (aturan user 2026-09-02).
+    // Pegawai yang hari itu WFH/WFA, cuti, diklat, dinas luar, tugas belajar,
+    // sakit, izin, atau tidak hadir TIDAK berhak lembur pada hari itu -
+    // lemburnya dinolkan, bukan dibayar dengan catatan.
+    //
+    // BATASNYA SENGAJA CUMA HARI KERJA, dan itu bukan kelonggaran:
+    //   - Di HARI LIBUR (akhir pekan & libur nasional) tidak ada status
+    //     WFO/WFH sama sekali - tidak ada kewajiban kantor yang bisa dipenuhi
+    //     dari rumah. Yang datang lembur di hari libur memang datang, dan
+    //     itulah justru yang dibayar 2x. Memaksakan syarat WFO di sana akan
+    //     menolkan SELURUH lembur akhir pekan.
+    //   - Terbukti di data: dari 1.205 hari lembur yang tersimpan, 1.205-nya
+    //     berstatus LEMBUR tanpa baris harian pendamping sama sekali. Syarat
+    //     WFO tanpa batas hari kerja = nol rupiah lembur untuk semua orang.
+    //
+    // YANG DIBLOKIR: hari kerja yang PUNYA baris harian, dan baris itu bukan
+    // WFO. Itulah bentuk nyata pelanggarannya - orang tercatat WFH (atau
+    // cuti/diklat/dinas luar) tapi mengklaim lembur di hari yang sama.
+    //
+    // YANG TIDAK DIBLOKIR: hari kerja yang baris Lembur-nya BERDIRI SENDIRI
+    // tanpa baris harian apa pun. Itu bukan celah yang kelewat, itu bentuk
+    // normal datanya - e-Presensi memang tidak menerbitkan baris WFO
+    // pendamping untuk hari lembur. Dari 1.205 hari lembur yang tersimpan,
+    // 1.205-nya berstatus LEMBUR tanpa pendamping; menolak bentuk ini sama
+    // dengan menolkan seluruh uang lembur, termasuk contoh yang diberikan
+    // user sendiri (pulang wajib 16:00, pulang 20:00 = 4 jam).
+    const statusHarianMenolakLembur = !hariLibur && terpilih !== null && terpilih.kategori !== "WFO";
+    if (barisLembur.length > 0 && statusHarianMenolakLembur) {
+      catatan.push(
+        `${iso} (${namaHari ?? "hari kerja"}): ada baris Lembur, tapi status hari itu "${terpilih!.baris.statusTeks}" - bukan WFO. Lembur hari kerja hanya untuk pegawai yang WFO, jadi jam lemburnya tidak dihitung. Kalau ini keliru, perbaiki statusnya di e-Presensi lalu tarik ulang.`
+      );
+    } else if (barisLembur.length > 0) {
       let jamHariIni = 0;
       let adaBlokDuaJam = false;
       for (const x of barisLembur) {

@@ -25,7 +25,7 @@
 // ============================================================================
 import pg from "pg";
 import sql from "mssql";
-import { konfigurasiSiap } from "../lib/siapConfig";
+import { bukaPoolSiap } from "../lib/siapConfig";
 
 export interface BarisPotonganEpresensi {
   /** "YYYY-MM-DD" - dibaca sebagai TEKS, lihat catatan zona waktu di bawah. */
@@ -47,7 +47,10 @@ export interface BarisPotonganEpresensi {
  * Dipakai sebagai `id_pegawai` di e-Presensi - lihat rantai pemetaan di atas.
  */
 export async function pegawaiIdEpresensiUntukNip(nip: string): Promise<string | null> {
-  const pool = await sql.connect(konfigurasiSiap());
+  // Pool BERDIRI SENDIRI - bukan sql.connect(), yang memakai pool global
+  // satu proses dan membuat dua tarikan bersamaan saling menutup koneksi.
+  // Lihat catatan lengkapnya di src/lib/siapConfig.ts.
+  const pool = await bukaPoolSiap();
   try {
     const hasil = await pool
       .request()

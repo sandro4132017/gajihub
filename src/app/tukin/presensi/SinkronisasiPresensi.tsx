@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { tarikPresensiEpresensiAction, type SinkronPresensiFormState } from "./actionsSync";
 import { NAMA_BULAN } from "../../bulan";
 import { SearchableSelect } from "../../SearchableSelect";
@@ -15,6 +16,50 @@ export function SinkronisasiPresensi({
   defaultTahun: number;
 }) {
   const [state, formAction, pending] = useActionState(tarikPresensiEpresensiAction, INITIAL_STATE);
+
+  // ==========================================================================
+  // FILTER DI BAWAH IKUT PINDAH KE PERIODE YANG BARU DITARIK.
+  //
+  // Tanpa ini, menarik Juli sementara halaman sedang menampilkan Agustus
+  // menghasilkan pemandangan yang menyesatkan: tarikan berhasil, tapi tabel
+  // di bawah tetap Agustus dan terlihat kosong - dan yang membacanya
+  // menyimpulkan pegawainya gagal diproses.
+  //
+  // Tautan "Lihat rekap periode ini" sudah ada sejak dulu, tapi harus diklik,
+  // dan keraguan itu muncul SEBELUM orang sempat membacanya.
+  //
+  // Parameter lain (pencarian, satker, halaman) sengaja dipertahankan: yang
+  // berubah cuma periodenya, dan menyapu filter lain memaksa orang menyetel
+  // ulang pekerjaannya.
+  // ==========================================================================
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Penanda supaya perpindahan terjadi SEKALI per hasil tarikan. Tanpa ini,
+  // router.replace memicu render ulang yang menjalankan efeknya lagi.
+  const sudahPindah = useRef<string | null>(null);
+
+  const ringkasan = state.ringkasan;
+  useEffect(() => {
+    if (!ringkasan) return;
+    const kunci = `${ringkasan.periodeBulan}-${ringkasan.periodeTahun}`;
+    if (sudahPindah.current === kunci) return;
+
+    const bulanSekarang = searchParams.get("bulan");
+    const tahunSekarang = searchParams.get("tahun");
+    const sudahSama =
+      bulanSekarang === String(ringkasan.periodeBulan) && tahunSekarang === String(ringkasan.periodeTahun);
+    sudahPindah.current = kunci;
+    if (sudahSama) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("bulan", String(ringkasan.periodeBulan));
+    params.set("tahun", String(ringkasan.periodeTahun));
+    // Halaman dikembalikan ke awal - hasil tarikan baru tidak ada urusannya
+    // dengan halaman ke-4 daftar sebelumnya.
+    params.delete("hal");
+    router.replace(`${pathname}?${params.toString()}`);
+  }, [ringkasan, pathname, router, searchParams]);
 
   return (
     <div className="card mt-6 p-5">
@@ -86,17 +131,18 @@ export function SinkronisasiPresensi({
               </ul>
             </>
           )}
-          <p className="mt-2 text-xs">
+          <p className="mt-2 text-xs text-muted">
+            Filter di bawah sudah dipindahkan ke {NAMA_BULAN[state.ringkasan.periodeBulan - 1]}{" "}
+            {state.ringkasan.periodeTahun}.{" "}
             <a
               href={`/tukin/presensi?bulan=${state.ringkasan.periodeBulan}&tahun=${state.ringkasan.periodeTahun}`}
               className="font-semibold underline"
             >
-              Lihat rekap periode ini di tabel bawah &rarr;
+              Buka rekapnya &rarr;
             </a>
           </p>
           <p className="mt-2 text-xs text-muted">
-            Kalkulasi Tukin/uang makan/uang lembur TIDAK otomatis dihitung ulang - jalankan sendiri dari halaman
-            Kalkulasi supaya siklus approval yang sudah selesai tidak dibuka ulang tanpa disengaja.
+            Kalkulasi Tukin/uang makan TIDAK otomatis dihitung ulang - jalankan sendiri dari halaman Kalkulasi.
           </p>
         </div>
       )}

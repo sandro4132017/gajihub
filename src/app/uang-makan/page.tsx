@@ -1,17 +1,14 @@
 import { prisma } from "../../lib/prisma";
-import { evaluasiApproval } from "../../approval/approvalEngine";
-import { DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_MAKAN } from "../../approval/approvalUangMakanService";
-import type { KeputusanApproval } from "../../approval/types";
-import { ApprovalForm } from "../ApprovalForm";
-import { ajukanApprovalUangMakanAction } from "../actions";
 import { FilterBar } from "../FilterBar";
-import { ApprovalMassalForm } from "../ApprovalMassalForm";
+import { BadgeStatusKirim, keadaanKirimBaris } from "../StatusKirimBaris";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewApproverDashboard } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
 import { AksesDitolak } from "../AksesDitolak";
 import { StatusBadge } from "../StatusBadge";
 import { RincianUangMakan } from "../RincianUangMakan";
+import { PratinjauAdkUangMakan } from "../ppabp/adk/PratinjauAdkUangMakan";
+import { dataUangMakanHarian } from "../ppabp/adk/dataUangMakanHarian";
 
 export const dynamic = "force-dynamic";
 
@@ -63,10 +60,27 @@ export default async function UangMakanPage({
     orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }, { pegawai: { nama: "asc" } }],
   });
 
-  const approvalLogSemua = await prisma.approvalLog.findMany({
-    where: { referensiTipe: "UANG_MAKAN", referensiId: { in: kalkulasiList.map((k) => k.id) } },
-    orderBy: { timestampAksi: "asc" },
+  // Status baris sekarang datang dari PENGIRIMAN UNIT, bukan dari
+  // ApprovalLog per baris. Approval berjenjang dihapus 2026-09-02 - yang
+  // menggantikannya satu keputusan Kasubag TU per unit per periode, dan
+  // keputusan itulah yang juga menentukan isi berkas ADK.
+  //
+  // Diambil per PERIODE YANG DITAMPILKAN, bukan per baris: satu query untuk
+  // seluruh halaman, dan hasilnya tidak berubah dari baris ke baris dalam
+  // satu unit.
+  const pengirimanPeriode = await prisma.pengirimanUnit.findMany({
+    where: {
+      OR: kalkulasiList.map((k) => ({
+        satuanKerja: k.pegawai.satuanKerja,
+        periodeBulan: k.periodeBulan,
+        periodeTahun: k.periodeTahun,
+      })),
+    },
+    select: { satuanKerja: true, periodeBulan: true, periodeTahun: true, status: true },
   });
+  const petaKirim = new Map(
+    pengirimanPeriode.map((p) => [`${p.satuanKerja}|${p.periodeBulan}|${p.periodeTahun}`, p.status])
+  );
 
   // Bahan rincian "kenapa segini". Diambil sekali untuk seluruh daftar lalu
   // dipetakan per pegawai+periode - bukan satu query per kartu.
@@ -96,6 +110,21 @@ export default async function UangMakanPage({
     rekapSemua.map((r) => [kunciRekap(r.pegawaiId, r.periodeBulan, r.periodeTahun), r])
   );
 
+  // --- Pratinjau isi ADK Uang Makan ---------------------------------------
+  //
+  // HANYA kalau bulan DAN tahun sudah dipilih. Berkas ADK selalu milik satu
+  // periode; tanpa periode yang pasti tidak ada yang bisa dipratinjau, dan
+  // menebak "periode terbaru di daftar" akan menampilkan isi berkas yang bukan
+  // yang sedang dilihat orangnya.
+  //
+  // Discope ke `satkerEfektif` supaya pratinjaunya tidak memperlihatkan unit
+  // lain di halaman yang seluruh isinya sudah disaring - untuk PPABP nilainya
+  // null, jadi dia tetap melihat seluruh isi berkas.
+  const periodeAdk = bulan && tahun ? { bulan: Number(bulan), tahun: Number(tahun) } : null;
+  const pratinjauAdk = periodeAdk
+    ? await dataUangMakanHarian(periodeAdk.bulan, periodeAdk.tahun, satkerEfektif)
+    : null;
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Makan</h1>
@@ -105,16 +134,27 @@ export default async function UangMakanPage({
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
 
-      {/* Lihat catatan di src/app/tukin/page.tsx - periode wajib dipilih dulu. */}
-      {bulan && tahun && authUser.role !== "PIMPINAN" && (
-        <ApprovalMassalForm
-          jenis="UANG_MAKAN"
-          label="Uang Makan"
-          bulan={Number(bulan)}
-          tahun={Number(tahun)}
-          satker={satkerEfektif}
-          jumlahBelumApproved={kalkulasiList.filter((k) => k.status !== "APPROVED").length}
+      {/* Pratinjau isi ADK - RUMAHNYA di sini, bukan di halaman Export ADK.
+          Yang memeriksa isinya orang yang mengurus uang makan, dan dia bekerja
+          di menu ini.
+
+          TERTUTUP seperti di halaman Export ADK: gridnya 31 kolom kali 25
+          baris, dan kalau terbuka sendiri ia mendorong daftar pegawai - isi
+          utama halaman ini - keluar layar. Judul ringkasannya sudah menyebut
+          jumlah baris & pegawai, jadi yang tidak perlu membukanya tetap dapat
+          angkanya. */}
+      {periodeAdk && pratinjauAdk && (
+        <PratinjauAdkUangMakan
+          data={pratinjauAdk}
+          periodeBulan={periodeAdk.bulan}
+          periodeTahun={periodeAdk.tahun}
+          satuanKerja={satkerEfektif}
         />
+      )}
+      {!periodeAdk && (
+        <p className="mt-4 text-xs text-muted">
+          Pilih <strong>bulan dan tahun</strong> di filter untuk melihat pratinjau isi ADK Uang Makan periode itu.
+        </p>
       )}
 
       <div className="mt-8 space-y-4">
@@ -125,15 +165,11 @@ export default async function UangMakanPage({
         )}
 
         {kalkulasiList.map((kalkulasi) => {
-          const logSiklusIni = approvalLogSemua.filter(
-            (l) => l.referensiId === kalkulasi.id && l.timestampAksi >= kalkulasi.calculatedAt
+          const keadaanKirim = keadaanKirimBaris(
+            petaKirim.get(
+              `${kalkulasi.pegawai.satuanKerja}|${kalkulasi.periodeBulan}|${kalkulasi.periodeTahun}`
+            )
           );
-          const evaluasi = evaluasiApproval(
-            logSiklusIni.map((l) => ({ jenjang: l.jenjang, keputusan: l.keputusan as KeputusanApproval })),
-            DEFAULT_TOTAL_JENJANG_APPROVAL_UANG_MAKAN
-          );
-
-          const sudahApproved = kalkulasi.status === "APPROVED";
 
           return (
             <div key={kalkulasi.id} className="card p-4">
@@ -150,13 +186,7 @@ export default async function UangMakanPage({
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="font-mono font-bold text-ink">{formatRupiah(kalkulasi.totalUangMakan)}</p>
-                  {sudahApproved && <StatusBadge label="Disetujui" warna="hijau" />}
-                  {!sudahApproved && evaluasi.outcome === "MENUNGGU_APPROVAL" && (
-                    <StatusBadge label={`Menunggu jenjang ${evaluasi.jenjangBerikutnya}`} warna="amber" />
-                  )}
-                  {!sudahApproved && evaluasi.outcome === "PERLU_REVISI" && (
-                    <StatusBadge label="Perlu revisi" warna="merah" />
-                  )}
+                  <BadgeStatusKirim keadaan={keadaanKirim} />
                 </div>
               </div>
 
@@ -189,31 +219,6 @@ export default async function UangMakanPage({
                 );
               })()}
 
-              {logSiklusIni.length > 0 && (
-                <ul className="mt-2 space-y-1 text-xs text-muted">
-                  {logSiklusIni.map((l) => (
-                    <li key={l.id}>
-                      Jenjang {l.jenjang} - {l.approverNama} ({l.approverJabatan}): {l.keputusan}
-                      {l.catatan ? ` - "${l.catatan}"` : ""}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {/* PIMPINAN: read-only, lihat catatan sama di src/app/tukin/page.tsx */}
-              {!sudahApproved && authUser.role !== "PIMPINAN" && evaluasi.outcome === "MENUNGGU_APPROVAL" && evaluasi.jenjangBerikutnya && (
-                <ApprovalForm
-                  action={ajukanApprovalUangMakanAction}
-                  calculationId={kalkulasi.id}
-                  jenjangBerikutnya={evaluasi.jenjangBerikutnya}
-                />
-              )}
-
-              {!sudahApproved && evaluasi.outcome === "PERLU_REVISI" && (
-                <p className="mt-3 text-xs text-muted">
-                  Perlu recalculation (job scheduler dijalankan ulang) sebelum bisa diajukan approval lagi.
-                </p>
-              )}
             </div>
           );
         })}

@@ -15,8 +15,34 @@ import { AksesDitolak } from "../AksesDitolak";
 import { NAMA_BULAN } from "../bulan";
 import { PegawaiEditForm } from "./PegawaiEditForm";
 import { PencarianDebounce } from "../PencarianDebounce";
+import { Paginasi, hitungPaginasi } from "../Paginasi";
+import {
+  JENIS_PEGAWAI_ADK,
+  bacaJenisPegawai,
+  wherePegawaiJenis,
+  wherePegawaiTanpaJenis,
+} from "../ppabp/adk/jenisPegawaiAdk";
+import { SearchableSelect } from "../SearchableSelect";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Kode kategori "belum diketahui" - pegawai yang tidak punya identitas Web
+ * Gaji, jadi PNS/P3K-nya tidak bisa dipastikan.
+ *
+ * ADA SEBAGAI PILIHAN, bukan cuma sebagai keadaan. Merekalah yang tersingkir
+ * dari berkas ADK begitu penyaring jenis dipakai di /ppabp/adk - 329 orang
+ * pada data 2026-09-02, 121 di antaranya masih AKTIF. Tanpa cara menyaringnya
+ * di sini, satu-satunya jalan menemukan mereka adalah menyisir 5.302 nama.
+ * Dengan pilihan ini, halaman perbaikan data punya daftar kerjanya sendiri.
+ */
+const KATEGORI_BELUM_DIKETAHUI = "TANPA";
+
+/** Potongan `where` untuk penyaring kategori. Kosong = semua. */
+function whereKategori(kategori: string | undefined) {
+  if (kategori === KATEGORI_BELUM_DIKETAHUI) return wherePegawaiTanpaJenis();
+  return wherePegawaiJenis(bacaJenisPegawai(kategori ?? null));
+}
 
 const LABEL_PREDIKAT: Record<string, string> = {
   SANGAT_BAIK: "Sangat Baik",
@@ -38,9 +64,16 @@ const LABEL_PREDIKAT: Record<string, string> = {
 export default async function DataPegawaiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; pegawaiId?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    pegawaiId?: string;
+    hal?: string;
+    per?: string;
+    satker?: string;
+    kategori?: string;
+  }>;
 }) {
-  const { q, pegawaiId } = await searchParams;
+  const { q, pegawaiId, hal, per, satker, kategori } = await searchParams;
   const akun = await getSessionAccount();
   const authUser: AuthUser | null =
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
@@ -104,7 +137,20 @@ export default async function DataPegawaiPage({
       })
     : [];
 
-  const hrefDaftar = q ? `/pegawai?q=${encodeURIComponent(q)}` : "/pegawai";
+  // KASUBAG_TU tidak boleh memilih unit - unitnya sudah dipaksa di level
+  // query lewat `satkerWajib`. Menampilkan penyaring yang tidak berpengaruh
+  // apa-apa lebih buruk daripada tidak menampilkannya: yang mencoba
+  // memakainya akan mengira halamannya rusak.
+  const satkerPilih = satkerWajib ? "" : (satker ?? "");
+  const kategoriPilih = kategori ?? "";
+
+  const paramDaftar = new URLSearchParams();
+  if (q) paramDaftar.set("q", q);
+  if (satkerPilih) paramDaftar.set("satker", satkerPilih);
+  if (kategoriPilih) paramDaftar.set("kategori", kategoriPilih);
+  if (hal) paramDaftar.set("hal", hal);
+  if (per) paramDaftar.set("per", per);
+  const hrefDaftar = paramDaftar.size > 0 ? `/pegawai?${paramDaftar.toString()}` : "/pegawai";
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -122,14 +168,59 @@ export default async function DataPegawaiPage({
       </p>
 
       <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
-        <div className="min-w-[240px] flex-1">
+        <div className="min-w-[220px] flex-1">
           <label className="field-label">Cari nama atau NIP</label>
           <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
         </div>
+        {!satkerWajib && (
+          <div>
+            <label className="field-label">Satuan kerja</label>
+            <SearchableSelect
+              name="satker"
+              className="w-64"
+              options={[
+                { value: "", label: "Semua satuan kerja" },
+                ...satuanKerjaList.map((nama) => ({ value: nama, label: nama })),
+              ]}
+              defaultValue={satkerPilih}
+            />
+          </div>
+        )}
+        <div>
+          <label className="field-label" htmlFor="filter-kategori">
+            Kategori pegawai
+          </label>
+          <select
+            id="filter-kategori"
+            name="kategori"
+            defaultValue={kategoriPilih}
+            className="field-input w-48 py-1.5"
+          >
+            <option value="">Semua kategori</option>
+            {JENIS_PEGAWAI_ADK.map((j) => (
+              <option key={j.kode} value={j.kode}>
+                {j.kode === "PNS" ? "PNS / CPNS" : "P3K (PPPK)"}
+              </option>
+            ))}
+            <option value={KATEGORI_BELUM_DIKETAHUI}>Belum diketahui</option>
+          </select>
+        </div>
         <button type="submit" className="btn btn-primary">
-          Cari
+          Terapkan
         </button>
       </form>
+
+      {/* Penjelasan pilihan "Belum diketahui" ditaruh di sini, bukan sebagai
+          keterangan di bawah dropdown yang selalu tampil: ia cuma relevan
+          begitu pilihannya dipakai, dan justru saat itulah orang bertanya
+          "kenapa mereka tidak punya kategori?". */}
+      {kategoriPilih === KATEGORI_BELUM_DIKETAHUI && (
+        <p className="mt-2 rounded-lg bg-gold-tint px-3 py-2 text-xs text-ink-2">
+          Pegawai yang belum tercakup berkas <strong>Basis Data Gaji</strong>, jadi PNS/P3K-nya tidak bisa
+          dipastikan. Mereka <strong>tersingkir dari berkas ADK</strong> begitu penyaring jenis dipakai. Kategorinya
+          terisi sendiri setelah berkas basis data gaji yang memuat mereka diunggah - bukan lewat halaman ini.
+        </p>
+      )}
 
       {pegawaiTerpilih ? (
         !bolehEditTerpilih ? (
@@ -170,7 +261,14 @@ export default async function DataPegawaiPage({
           </>
         )
       ) : (
-        <HasilPencarian q={q} satkerWajib={satkerWajib} />
+        <HasilPencarian
+          q={q}
+          satkerWajib={satkerWajib}
+          satkerPilih={satkerPilih}
+          kategori={kategoriPilih}
+          hal={hal}
+          per={per}
+        />
       )}
     </main>
   );
@@ -236,20 +334,71 @@ function AkunTerkait({
   );
 }
 
-async function HasilPencarian({ q, satkerWajib }: { q?: string; satkerWajib: string | null }) {
+async function HasilPencarian({
+  q,
+  satkerWajib,
+  satkerPilih,
+  kategori,
+  hal,
+  per,
+}: {
+  q?: string;
+  satkerWajib: string | null;
+  satkerPilih: string;
+  kategori: string;
+  hal?: string;
+  per?: string;
+}) {
   const where: Prisma.PegawaiWhereInput = {
-    ...(satkerWajib ? { satuanKerja: satkerWajib } : {}),
+    // `satkerWajib` MENANG atas pilihan user - itu batas kewenangan
+    // KASUBAG_TU, bukan preferensi tampilan, dan `satker` di query string
+    // tidak boleh bisa menembusnya.
+    ...(satkerWajib ? { satuanKerja: satkerWajib } : satkerPilih ? { satuanKerja: satkerPilih } : {}),
     ...(q ? { OR: [{ nama: { contains: q, mode: "insensitive" } }, { nip: { contains: q } }] } : {}),
+    ...whereKategori(kategori),
   };
 
-  // Tanpa kata kunci: KASUBAG_TU langsung dapat roster unitnya (jumlahnya
-  // wajar, ~80), sementara ADMIN/PPABP TIDAK - 5.069 baris tidak ada gunanya
-  // ditampilkan, mereka diminta mencari dulu.
-  if (!q && !satkerWajib) {
-    return <p className="card mt-4 p-6 text-sm text-muted">Cari nama atau NIP pegawai dulu untuk mengubah datanya.</p>;
+  // Tanpa penyaring apa pun: KASUBAG_TU langsung dapat roster unitnya
+  // (jumlahnya wajar), sementara ADMIN/PPABP TIDAK - 5.302 baris tidak ada
+  // gunanya ditampilkan sekaligus.
+  //
+  // PENYARING SATUAN KERJA & KATEGORI IKUT MEMBUKA DAFTARNYA, bukan cuma kata
+  // kunci. Dulu satu-satunya jalan masuk adalah mengetik nama - dan itu
+  // mensyaratkan sudah tahu siapa yang dicari. Pertanyaan yang sebenarnya
+  // dibawa PPABP ke halaman ini justru kebalikannya: "siapa saja di unit X",
+  // "siapa yang kategorinya belum diketahui".
+  const adaPenyaring = Boolean(q || satkerWajib || satkerPilih || kategori);
+  if (!adaPenyaring) {
+    return (
+      <p className="card mt-4 p-6 text-sm text-muted">
+        Pilih satuan kerja, kategori pegawai, atau ketik nama/NIP dulu untuk menampilkan daftarnya.
+      </p>
+    );
   }
 
-  const hasil = await prisma.pegawai.findMany({ where, orderBy: { nama: "asc" }, take: 50 });
+  // PAGINASI, bukan `take: 50`.
+  //
+  // Potongan 50 baris itu diam-diam menyembunyikan orang. KASUBAG_TU masuk ke
+  // sini tanpa kata kunci dan langsung mendapat roster unitnya - dan 54 dari
+  // 84 unit berisi lebih dari 50 pegawai (terbesar 227, Balai Bekasi). Yang
+  // dilihatnya cuma 50 nama pertama urut abjad; sisanya cuma bisa ditemukan
+  // kalau dia kebetulan menebak namanya. Keterangan "persempit pencarian"
+  // memang ada, tapi kecil, dan tidak memberi tahu ADA BERAPA yang tidak
+  // tampil.
+  //
+  // Bawaannya 50 baris supaya tidak ada yang merasa halamannya menyusut.
+  const totalBaris = await prisma.pegawai.count({ where });
+  const paginasi = hitungPaginasi(totalBaris, hal, per ?? "50");
+  const hasil = await prisma.pegawai.findMany({
+    where,
+    orderBy: { nama: "asc" },
+    skip: paginasi.mulai,
+    take: paginasi.perHalaman,
+  });
+  const paramPaginasi = new URLSearchParams();
+  if (q) paramPaginasi.set("q", q);
+  if (satkerPilih) paramPaginasi.set("satker", satkerPilih);
+  if (kategori) paramPaginasi.set("kategori", kategori);
 
   return (
     <div className="card mt-4 divide-y divide-line-2">
@@ -274,16 +423,26 @@ async function HasilPencarian({ q, satkerWajib }: { q?: string; satkerWajib: str
             </p>
           </div>
           <Link
-            href={`/pegawai?${q ? `q=${encodeURIComponent(q)}&` : ""}pegawaiId=${p.id}`}
+            href={`/pegawai?${(() => {
+              const u = new URLSearchParams(paramPaginasi);
+              u.set("hal", String(paginasi.halaman));
+              u.set("per", String(paginasi.perHalaman));
+              u.set("pegawaiId", p.id);
+              return u.toString();
+            })()}`}
             className="btn btn-ghost btn-sm flex-none"
           >
             Edit
           </Link>
         </div>
       ))}
-      {hasil.length === 50 && (
-        <p className="p-3 text-xs text-muted">Menampilkan 50 hasil teratas - persempit pencarian kalau perlu.</p>
-      )}
+      <Paginasi
+        basePath="/pegawai"
+        params={paramPaginasi}
+        info={paginasi}
+        totalBaris={totalBaris}
+        labelBaris="pegawai"
+      />
     </div>
   );
 }

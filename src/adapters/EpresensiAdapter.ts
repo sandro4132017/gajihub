@@ -40,8 +40,7 @@
 // ============================================================================
 
 import pg from "pg";
-import sql from "mssql";
-import { konfigurasiSiap } from "../lib/siapConfig";
+import { bukaPoolSiap } from "../lib/siapConfig";
 import {
   rekapDariLaporanPdf,
   JADWAL_KERJA_DEFAULT,
@@ -214,7 +213,10 @@ async function petaIdKeNip(ids: string[]): Promise<Map<string, string>> {
   // keduanya menunjuk instance berbeda, pemetaan id_pegawai->NIP dilakukan
   // terhadap daftar pegawai yang berbeda dari yang ada di Gajihub, dan
   // gagalnya diam-diam (cuma jadi "sekian pegawai dilewati").
-  const pool = await sql.connect(konfigurasiSiap());
+  // Pool BERDIRI SENDIRI - bukan sql.connect(), yang memakai pool global
+  // satu proses dan membuat dua tarikan bersamaan saling menutup koneksi.
+  // Lihat catatan lengkapnya di src/lib/siapConfig.ts.
+  const pool = await bukaPoolSiap();
   const peta = new Map<string, string>();
   try {
     const POTONGAN = 500;

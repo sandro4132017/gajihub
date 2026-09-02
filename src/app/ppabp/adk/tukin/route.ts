@@ -11,6 +11,9 @@ import {
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../../business-logic/tarifTukinPokok";
 import { kelasJabatanEfektif } from "../../../../business-logic/kelasJabatanEfektif";
 import { responseAdk } from "../responseAdk";
+import { satkerTerkirim, sempitkanKeSatker, whereIkutAdk } from "../satkerTerkirim";
+import { bacaJenisPegawai, labelJenisPegawai } from "../jenisPegawaiAdk";
+import { slugSatker } from "../slugSatker";
 
 /**
  * Export ADK Tunjangan Kinerja - baris TukinCalculation yang SUDAH APPROVED
@@ -43,8 +46,27 @@ export async function GET(req: NextRequest) {
   const tahun = Number(req.nextUrl.searchParams.get("tahun"));
   if (!bulan || !tahun) return new Response("Parameter bulan dan tahun wajib diisi.", { status: 400 });
 
+  // Yang menentukan isi berkas sekarang adalah PENGIRIMAN UNIT, bukan kolom
+  // `status` tiap baris - approval berjenjang sudah dihapus. Lihat
+  // src/app/ppabp/adk/satkerTerkirim.ts.
+  //
+  // Daftar kosong (belum ada unit yang mengirim) menghasilkan `{ in: [] }`,
+  // yang di Prisma memang berarti nol baris. Jangan "menyederhanakannya"
+  // dengan melepas filter saat daftarnya kosong - itu justru mengirim SEMUA
+  // orang, termasuk yang unitnya belum memeriksa apa pun.
+  // Penyaringan PNS/P3K. Diterapkan DI QUERY, bukan setelah barisnya
+  // tersusun: yang tidak ikut tidak boleh sempat masuk ke penyusun baris,
+  // karena baris TOTAL di kaki berkas dihitung dari apa yang ada di sana.
+  const jenisPegawai = bacaJenisPegawai(req.nextUrl.searchParams.get("jenis"));
+  const satkerBoleh = await satkerTerkirim(prisma, bulan, tahun);
+  // Penyempitan ke satu unit. Nilai yang tidak cocok jatuh kembali ke seluruh
+  // unit terkirim, BUKAN ke berkas kosong - lihat sempitkanKeSatker().
+  const { dipakai: satkerDipakai, terpilih: satkerTerpilih } = sempitkanKeSatker(
+    satkerBoleh,
+    req.nextUrl.searchParams.get("satker")
+  );
   const rows = await prisma.tukinCalculation.findMany({
-    where: { periodeBulan: bulan, periodeTahun: tahun, status: "APPROVED" },
+    where: whereIkutAdk(bulan, tahun, satkerDipakai, jenisPegawai),
     include: { pegawai: true },
     orderBy: { pegawai: { nama: "asc" } },
   });
@@ -129,6 +151,9 @@ export async function GET(req: NextRequest) {
         namaBank: rek?.namaBank ?? null,
         nomorRekening: rek?.nomorRekening ?? null,
         namaRekening: rek?.namaRekening ?? null,
+        // Diisi petugas lewat halaman Data Pegawai. Kosong tetap dikirim
+        // kosong - TIDAK ditebak dari nomor SK pegawai lain yang mirip.
+        nomorSk: r.pegawai.nomorSk,
       };
     }),
     bulan,
@@ -155,6 +180,14 @@ export async function GET(req: NextRequest) {
         jenis: "Tukin",
         periode: `${bulan}/${tahun}`,
         format: req.nextUrl.searchParams.get("format") ?? "xlsx",
+        // Penyaringnya ikut tercatat. Tanpa ini, dua unduhan periode yang sama
+        // dengan isi berbeda tidak bisa dibedakan lagi di audit trail - dan
+        // pertanyaan "berkas mana yang dikirim ke Web Gaji" jadi tidak punya
+        // jawaban.
+        jenisPegawai: labelJenisPegawai(jenisPegawai),
+        satuanKerja: satkerTerpilih || "semua unit terkirim",
+        bank: bankDiminta ?? "semua bank",
+        jumlahBaris: baris.length,
       },
     },
   });
@@ -165,8 +198,12 @@ export async function GET(req: NextRequest) {
     baris,
     total,
     namaSheet: "daftar bayar",
-    namaFile: `adk-tukin-${String(bulan).padStart(2, "0")}-${tahun}${
-      bankDiminta ? `-bank-${bankDiminta}` : ""
-    }`,
+    // Nama berkas menyebutkan penyaringnya. Operator sering mengunduh
+    // beberapa potongan periode yang sama berturut-turut; tanpa pembeda di
+    // namanya, yang tertinggal di folder Downloads adalah lima berkas
+    // bernama sama dengan angka (1), (2), (3) di belakangnya.
+    namaFile: `adk-tukin-${String(bulan).padStart(2, "0")}-${tahun}${slugSatker(satkerTerpilih)}${
+      jenisPegawai ? `-${jenisPegawai.toLowerCase()}` : ""
+    }${bankDiminta ? `-bank-${bankDiminta}` : ""}`,
   });
 }

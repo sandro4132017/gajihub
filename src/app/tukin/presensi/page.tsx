@@ -184,7 +184,17 @@ export default async function PresensiTukinPage({
         </div>
         <div>
           <label className="field-label">Tahun</label>
-          <input type="number" name="tahun" defaultValue={periodeTahun} className="field-input w-28 py-1.5" />
+          {/* `key` WAJIB: <input> tak-terkendali cuma membaca defaultValue
+              saat dipasang. Tanpa ini, navigasi lunak yang memindahkan periode
+              (mis. sesudah tarik presensi) mengubah judul & tabel tapi
+              meninggalkan kotak tahun di nilai lama. */}
+          <input
+            key={periodeTahun}
+            type="number"
+            name="tahun"
+            defaultValue={periodeTahun}
+            className="field-input w-28 py-1.5"
+          />
         </div>
         {/* Dropdown satuan kerja cuma dirender untuk yang memang boleh
             memilih. Buat KASUBAG_TU tidak ada gunanya - unitnya sudah dipaksa

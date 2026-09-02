@@ -112,6 +112,20 @@ export function PegawaiEditForm({
         </div>
 
         <div>
+          <label className="field-label">Nomor SK</label>
+          <input
+            name="nomorSk"
+            defaultValue={pegawai.nomorSk ?? ""}
+            placeholder="Mis. 1234/SJ/KP.03.00/VII/2026"
+            className="field-input"
+          />
+          <p className="mt-1 text-xs text-muted">
+             ke kolom <strong>Nomor SK</strong> di berkas ADK Tunjangan Kinerja. Dikosongkan
+            berarti kolom itu ikut kosong di berkasnya.
+          </p>
+        </div>
+
+        <div>
           <label className="field-label">TMT SK terakhir</label>
           <input
             type="date"

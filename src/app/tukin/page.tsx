@@ -1,11 +1,6 @@
 import { prisma } from "../../lib/prisma";
-import { evaluasiApproval } from "../../approval/approvalEngine";
-import { DEFAULT_TOTAL_JENJANG_APPROVAL } from "../../approval/approvalTukinService";
-import type { KeputusanApproval } from "../../approval/types";
-import { ApprovalForm } from "../ApprovalForm";
-import { ajukanApprovalTukinAction } from "../actions";
 import { FilterBar } from "../FilterBar";
-import { ApprovalMassalForm } from "../ApprovalMassalForm";
+import { BadgeStatusKirim, keadaanKirimBaris } from "../StatusKirimBaris";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewApproverDashboard, canAjukanKalkulasiTukinMassalUnit } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
@@ -69,10 +64,27 @@ export default async function TukinPage({
     orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }, { pegawai: { nama: "asc" } }],
   });
 
-  const approvalLogSemua = await prisma.approvalLog.findMany({
-    where: { referensiTipe: "TUKIN", referensiId: { in: kalkulasiList.map((k) => k.id) } },
-    orderBy: { timestampAksi: "asc" },
+  // Status baris sekarang datang dari PENGIRIMAN UNIT, bukan dari
+  // ApprovalLog per baris. Approval berjenjang dihapus 2026-09-02 - yang
+  // menggantikannya satu keputusan Kasubag TU per unit per periode, dan
+  // keputusan itulah yang juga menentukan isi berkas ADK.
+  //
+  // Diambil per PERIODE YANG DITAMPILKAN, bukan per baris: satu query untuk
+  // seluruh halaman, dan hasilnya tidak berubah dari baris ke baris dalam
+  // satu unit.
+  const pengirimanPeriode = await prisma.pengirimanUnit.findMany({
+    where: {
+      OR: kalkulasiList.map((k) => ({
+        satuanKerja: k.pegawai.satuanKerja,
+        periodeBulan: k.periodeBulan,
+        periodeTahun: k.periodeTahun,
+      })),
+    },
+    select: { satuanKerja: true, periodeBulan: true, periodeTahun: true, status: true },
   });
+  const petaKirim = new Map(
+    pengirimanPeriode.map((p) => [`${p.satuanKerja}|${p.periodeBulan}|${p.periodeTahun}`, p.status])
+  );
 
   // --- Status kedua komponen pembentuk Tukin untuk periode yang difilter ---
   // Ditaruh di halaman yang sama supaya jelas kenapa seorang pegawai belum
@@ -106,20 +118,6 @@ export default async function TukinPage({
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
 
-      {/* Setujui semua - CUMA muncul kalau periodenya sudah dipilih. Tanpa
-          periode, "semua" berarti seluruh riwayat, dan itu bukan sesuatu yang
-          layak dipicu satu klik. PIMPINAN dikecualikan (read-only). */}
-      {bulan && tahun && authUser.role !== "PIMPINAN" && (
-        <ApprovalMassalForm
-          jenis="TUKIN"
-          label="Tukin"
-          bulan={Number(bulan)}
-          tahun={Number(tahun)}
-          satker={satkerEfektif}
-          jumlahBelumApproved={kalkulasiList.filter((k) => k.status !== "APPROVED").length}
-        />
-      )}
-
       <SumberDataTukin
         periodeAktif={periodeAktif}
         jumlahPegawai={jumlahPegawai}
@@ -137,15 +135,11 @@ export default async function TukinPage({
         )}
 
         {kalkulasiList.map((kalkulasi) => {
-          const logSiklusIni = approvalLogSemua.filter(
-            (l) => l.referensiId === kalkulasi.id && l.timestampAksi >= kalkulasi.calculatedAt
+          const keadaanKirim = keadaanKirimBaris(
+            petaKirim.get(
+              `${kalkulasi.pegawai.satuanKerja}|${kalkulasi.periodeBulan}|${kalkulasi.periodeTahun}`
+            )
           );
-          const evaluasi = evaluasiApproval(
-            logSiklusIni.map((l) => ({ jenjang: l.jenjang, keputusan: l.keputusan as KeputusanApproval })),
-            DEFAULT_TOTAL_JENJANG_APPROVAL
-          );
-
-          const sudahApproved = kalkulasi.status === "APPROVED";
 
           return (
             <div key={kalkulasi.id} className="card p-4">
@@ -165,13 +159,7 @@ export default async function TukinPage({
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="font-mono font-bold text-ink">{formatRupiah(kalkulasi.tukinBersih)}</p>
-                  {sudahApproved && <StatusBadge label="Disetujui" warna="hijau" />}
-                  {!sudahApproved && evaluasi.outcome === "MENUNGGU_APPROVAL" && (
-                    <StatusBadge label={`Menunggu jenjang ${evaluasi.jenjangBerikutnya}`} warna="amber" />
-                  )}
-                  {!sudahApproved && evaluasi.outcome === "PERLU_REVISI" && (
-                    <StatusBadge label="Perlu revisi" warna="merah" />
-                  )}
+                  <BadgeStatusKirim keadaan={keadaanKirim} />
                 </div>
               </div>
 
@@ -181,34 +169,6 @@ export default async function TukinPage({
                 </p>
               )}
 
-              {logSiklusIni.length > 0 && (
-                <ul className="mt-2 space-y-1 text-xs text-muted">
-                  {logSiklusIni.map((l) => (
-                    <li key={l.id}>
-                      Jenjang {l.jenjang} - {l.approverNama} ({l.approverJabatan}): {l.keputusan}
-                      {l.catatan ? ` - "${l.catatan}"` : ""}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {/* PIMPINAN: role matrix "read-only, tanpa approval/ubah data apapun" -
-                  server action sudah menolak PIMPINAN juga, ini cuma biar tombolnya
-                  tidak nongol dead-end di UI (lihat DashboardLintasUnit.tsx buat
-                  pola readOnly yang sama di dashboard lintas unit PPABP/Pimpinan). */}
-              {!sudahApproved && authUser.role !== "PIMPINAN" && evaluasi.outcome === "MENUNGGU_APPROVAL" && evaluasi.jenjangBerikutnya && (
-                <ApprovalForm
-                  action={ajukanApprovalTukinAction}
-                  calculationId={kalkulasi.id}
-                  jenjangBerikutnya={evaluasi.jenjangBerikutnya}
-                />
-              )}
-
-              {!sudahApproved && evaluasi.outcome === "PERLU_REVISI" && (
-                <p className="mt-3 text-xs text-muted">
-                  Perlu recalculation (job scheduler dijalankan ulang) sebelum bisa diajukan approval lagi.
-                </p>
-              )}
             </div>
           );
         })}

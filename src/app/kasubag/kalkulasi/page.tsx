@@ -15,6 +15,17 @@ import { KalkulasiMassalForm } from "./KalkulasiMassalForm";
 import { KoreksiLemburForm } from "./KoreksiLemburForm";
 import { Paginasi, hitungPaginasi } from "../../Paginasi";
 import { BadgePejabatEselon } from "../../BadgePejabatEselon";
+import { TAMPILKAN_NOMINAL_LEMBUR } from "../../tampilUangLembur";
+import { PengecualianForm, BatalPengecualianForm } from "./PengecualianForm";
+import {
+  alasanDariKode,
+  petunjukKemungkinanKeluar,
+} from "../../../business-logic/pengecualianPegawai";
+import {
+  cekBolehKirim,
+  statusUnit,
+} from "../../../business-logic/pengirimanUnit";
+import { KirimRekapForm } from "../kirim/KirimRekapForm";
 
 export const dynamic = "force-dynamic";
 
@@ -183,8 +194,28 @@ export default async function KalkulasiUnitPage({
     await periodePunyaPredikatKinerja(satkerEfektif)
   );
 
+  // Keadaan pengiriman unit periode ini. Menentukan dua hal sekaligus:
+  // spanduk di atas halaman, dan boleh-tidaknya tombol Kirim muncul.
+  const barisPengiriman = await prisma.pengirimanUnit.findUnique({
+    where: {
+      satuanKerja_periodeBulan_periodeTahun: {
+        satuanKerja: satkerEfektif,
+        periodeBulan,
+        periodeTahun,
+      },
+    },
+  });
+  const kirimStatus = statusUnit(barisPengiriman);
+
+  // HANYA PEGAWAI AKTIF - pensiun/berhenti/nonaktif tidak muncul di halaman
+  // ini sama sekali (keputusan user 2026-09-02).
+  //
+  // Disaring DI QUERY, bukan di tampilan. Kalau disaring belakangan, tiap
+  // hitungan turunan (pembagi kelengkapan, paginasi, jumlah baris di panel
+  // Kirim) harus ingat menyaring lagi sendiri-sendiri - dan yang lupa satu
+  // saja akan memunculkan mereka kembali lewat pintu lain.
   const pegawaiList = await prisma.pegawai.findMany({
-    where: { satuanKerja: satkerEfektif },
+    where: { satuanKerja: satkerEfektif, statusPegawai: "AKTIF" },
     orderBy: { nama: "asc" },
     include: {
       tukinCalc: { where: { periodeBulan, periodeTahun } },
@@ -195,15 +226,31 @@ export default async function KalkulasiUnitPage({
     },
   });
 
-  // Baris yang sudah APPROVED periode ini - menghitung ulang membatalkannya,
-  // jadi jumlahnya harus terlihat SEBELUM tombolnya ditekan.
-  const jumlahSudahApproved = pegawaiList.filter((p) =>
-    p.tukinCalc.some((t) => t.status === "APPROVED")
-  ).length;
+  // Pegawai yang DIKECUALIKAN dari periode ini - masih tercatat di unit,
+  // tapi sudah dinyatakan tidak seharusnya ikut dihitung. Lihat
+  // src/business-logic/pengecualianPegawai.ts.
+  const pengecualian = await prisma.pengecualianPegawai.findMany({
+    where: {
+      periodeBulan,
+      periodeTahun,
+      pegawai: { satuanKerja: satkerEfektif },
+    },
+    include: { pegawai: { select: { id: true, nama: true, nip: true } } },
+  });
+  const setDikecualikan = new Set(pengecualian.map((p) => p.pegawaiId));
 
-  const pegawaiAktif = pegawaiList.filter((p) => p.statusPegawai === "AKTIF");
-  const belumPunyaPredikat = pegawaiAktif.filter((p) => p.predikatKinerja.length === 0);
-  const belumPunyaPresensi = pegawaiAktif.filter((p) => p.rekapPresensi.length === 0);
+  // INI PEMBAGI SELURUH KELENGKAPAN. Yang dikecualikan keluar dari sini, jadi
+  // dia tidak lagi mengunci unitnya - itulah seluruh gunanya fitur ini.
+  //
+  // Mereka TETAP tampil di tabel (dengan tanda), supaya tidak ada orang yang
+  // lenyap dari layar tanpa jejak.
+  const pegawaiAktif = pegawaiList.filter((p) => !setDikecualikan.has(p.id));
+  const belumPunyaPredikat = pegawaiAktif.filter(
+    (p) => p.predikatKinerja.length === 0,
+  );
+  const belumPunyaPresensi = pegawaiAktif.filter(
+    (p) => p.rekapPresensi.length === 0,
+  );
 
   // Angka Tukin yang tampil di tabel adalah nilai TERSIMPAN, dibekukan saat
   // tombol Hitung ditekan. Kalau presensi atau predikatnya berubah setelah
@@ -215,8 +262,28 @@ export default async function KalkulasiUnitPage({
     const t = p.tukinCalc[0];
     if (!t) return null;
     const sebab: string[] = [];
-    if (p.rekapPresensi[0] && p.rekapPresensi[0].diunggahPada > t.calculatedAt) sebab.push("presensi");
-    if (p.predikatKinerja[0] && p.predikatKinerja[0].sourceSyncedAt > t.calculatedAt) sebab.push("predikat kinerja");
+
+    // SUMBER YANG HILANG DICEK LEBIH DULU, dan ini bukan kelengkapan.
+    //
+    // Versi pertama cuma membandingkan CAP WAKTU baris yang masih ada. Kalau
+    // predikatnya DIHAPUS, `p.predikatKinerja[0]` jadi undefined - tidak ada
+    // yang dibandingkan, jadi tidak ada sebab yang dilaporkan, sementara
+    // baris Tukin-nya tetap berdiri dengan angka hasil hitungan dari predikat
+    // yang sudah tidak ada.
+    //
+    // Terjadi betulan 2026-09-02: predikat CHAERUNNISA dihapus, Tukin-nya
+    // Rp 2.415.155 tetap tersimpan, dan yang muncul di layar cuma "presensi
+    // berubah" - sebab yang benar tidak pernah disebut.
+    if (p.predikatKinerja.length === 0) sebab.push("predikat kinerja dihapus");
+    if (p.rekapPresensi.length === 0) sebab.push("rekap presensi dihapus");
+
+    if (p.rekapPresensi[0] && p.rekapPresensi[0].diunggahPada > t.calculatedAt)
+      sebab.push("presensi berubah");
+    if (
+      p.predikatKinerja[0] &&
+      p.predikatKinerja[0].sourceSyncedAt > t.calculatedAt
+    )
+      sebab.push("predikat kinerja berubah");
     return sebab.length > 0 ? sebab.join(" & ") : null;
   };
   const jumlahPerluHitungUlang = pegawaiAktif.filter((p) => perluHitungUlang(p) !== null).length;
@@ -272,9 +339,9 @@ export default async function KalkulasiUnitPage({
         </div>
         {/*
           Membawa periode & unit yang SEDANG DILIHAT. Berkasnya memuat SEMUA
-          status (DRAFT, SELISIH, APPROVED) - itu memang gunanya: dipakai
-          memeriksa SEBELUM menyetujui. Yang disetor ke Web Gaji tetap ADK di
-          /ppabp/adk, dan itu hanya baris APPROVED.
+          baris apa pun statusnya - itu memang gunanya: dipakai memeriksa
+          SEBELUM dikirim. Yang disetor ke Web Gaji tetap ADK di /ppabp/adk,
+          dan itu hanya unit yang sudah dikirim & dikunci.
         */}
         {bolehExportRekap && (
           <a
@@ -287,6 +354,67 @@ export default async function KalkulasiUnitPage({
       </div>
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={String(periodeBulan)} tahun={String(periodeTahun)} satker={satkerEfektif} />
+
+      {/* Daftar yang sedang dikecualikan. WAJIB TAMPIL - kalau orang yang
+          dikeluarkan dari hitungan tidak kelihatan di mana pun, pengecualian
+          berubah jadi cara menghilangkan orang tanpa jejak. */}
+      {pengecualian.length > 0 && (
+        <section className="card mt-4 p-4">
+          <h2 className="text-sm font-bold text-ink">
+            {pengecualian.length} pegawai dikecualikan dari periode ini
+          </h2>
+          <p className="mt-0.5 text-xs text-muted">
+            Tidak dihitung dan tidak ikut ke PPABP. Laporkan ke PPABP supaya
+            data SIAP diperbaiki.
+          </p>
+          <ul className="mt-2 space-y-1.5 text-xs">
+            {pengecualian.map((x) => (
+              <li key={x.id} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-medium text-ink">{x.pegawai.nama}</span>
+                <span className="text-muted">({x.pegawai.nip})</span>
+                <span className="chip chip-draft">
+                  {alasanDariKode(x.alasanKode)?.label ?? x.alasanKode}
+                </span>
+                {x.penjelasan && (
+                  <span className="text-muted">- {x.penjelasan}</span>
+                )}
+                <BatalPengecualianForm
+                  pegawaiId={x.pegawaiId}
+                  periodeBulan={periodeBulan}
+                  periodeTahun={periodeTahun}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* SPANDUK KEADAAN - ditaruh PALING ATAS, sebelum data apa pun.
+          Orang yang membuka halaman ini untuk memperbaiki sesuatu harus tahu
+          lebih dulu apakah perbaikannya bisa disimpan, bukan setelah mengisi
+          form dan ditolak server. */}
+      {kirimStatus.keadaan === "TERKIRIM" && (
+        <div className="card mt-4 border-l-4 border-l-green p-4">
+          <p className="text-sm font-bold text-ink">
+            Rekap periode ini sudah dikirim &amp; terkunci
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Kalkulasi tidak bisa dijalankan ulang selama masih terkunci. Kalau
+            ada yang perlu diperbaiki, minta PPABP mengembalikannya lebih dulu.
+          </p>
+        </div>
+      )}
+      {kirimStatus.keadaan === "DIKEMBALIKAN" && (
+        <div className="card mt-4 border-l-4 border-l-gold p-4">
+          <p className="text-sm font-bold text-ink">
+            Dikembalikan PPABP - perlu diperbaiki
+          </p>
+          <p className="mt-1 text-xs text-ink-2">{kirimStatus.alasanKembali}</p>
+          <p className="mt-1 text-xs text-muted">
+            Perbaiki dulu, lalu kirim ulang lewat panel di bawah.
+          </p>
+        </div>
+      )}
 
       {/* Kelengkapan sumber data - ditaruh SEBELUM tombol hitung, supaya
           ketahuan lebih dulu daripada setelah kalkulasi terlanjur jalan. */}
@@ -332,14 +460,13 @@ export default async function KalkulasiUnitPage({
             <p className="font-semibold text-ink">
               {jumlahPerluHitungUlang} pegawai perlu dihitung ulang - angka Tukin-nya sudah basi.
             </p>
-            <p className="mt-1">
-              Presensi atau predikat kinerja mereka berubah <strong>setelah</strong> Tukin terakhir dihitung (mis.
-              presensi ditarik ulang karena ada koreksi jam), jadi angka di tabel bawah masih yang lama. Baris yang
-              terdampak ditandai kuning.
-            </p>
+            {/* Sebabnya: presensi/predikat berubah SETELAH Tukin terakhir
+                dihitung (mis. presensi ditarik ulang karena koreksi jam),
+                jadi angka di tabel masih yang lama. Tidak ditulis di layar -
+                yang perlu diketahui pembaca cuma berapa orang dan apa yang
+                harus ditekan. */}
             <p className="mt-1 text-muted">
-              Tekan <strong>Hitung sekarang</strong> untuk memperbaruinya. Kalau ada yang sudah APPROVED, panel merah
-              di form akan menanyakan dulu apa yang harus dilakukan.
+              Baris terdampak ditandai kuning. Tekan Hitung sekarang.
             </p>
           </div>
         )}
@@ -349,15 +476,32 @@ export default async function KalkulasiUnitPage({
             <p className="font-semibold">
               {belumPunyaPredikat.length} pegawai aktif belum punya predikat kinerja periode ini.
             </p>
-            <p className="mt-1 text-muted">
-              Biasanya karena file dari salah satu unit penilai belum diupload - satu satuan kerja bisa dinilai lebih
-              dari satu penilai, masing-masing dengan file sendiri berisi orang yang berbeda. Kalau dihitung sekarang,
-              mereka dilewati dan tidak punya Tukin sama sekali untuk periode ini.
-            </p>
+            {/* Sebab tersering: file dari salah satu unit penilai belum
+                diupload - satu satuan kerja bisa dinilai lebih dari satu
+                penilai, masing-masing dengan file berisi orang berbeda.
+                Disimpan di sini, bukan di layar. */}
+            <p className="mt-1 text-muted">Dilewati kalau dihitung sekarang.</p>
             <ul className="mt-2 list-disc space-y-0.5 pl-4">
               {belumPunyaPredikat.slice(0, 15).map((p) => (
                 <li key={p.id}>
                   {p.nama} <span className="text-muted">({p.nip})</span>
+                  {/* Jalan keluar untuk orang yang memang sudah tidak di unit
+                      ini. Ditaruh tepat di sebelah namanya, bukan di halaman
+                      terpisah - di sinilah orang menyadari masalahnya. */}
+                  <PengecualianForm
+                    pegawaiId={p.id}
+                    nama={p.nama}
+                    periodeBulan={periodeBulan}
+                    periodeTahun={periodeTahun}
+                    petunjuk={petunjukKemungkinanKeluar({
+                      jumlahHariKerja: p.rekapPresensi[0]?.jumlahHariKerja ?? 0,
+                      jumlahHariHadir: p.rekapPresensi[0]?.jumlahHariHadir ?? 0,
+                      punyaPredikat: p.predikatKinerja.length > 0,
+                      jumlahHariCuti: p.rekapPresensi[0]?.jumlahHariCuti ?? 0,
+                      jumlahHariTugasBelajar:
+                        p.rekapPresensi[0]?.jumlahHariTugasBelajar ?? 0,
+                    })}
+                  />
                 </li>
               ))}
               {belumPunyaPredikat.length > 15 && (
@@ -379,7 +523,6 @@ export default async function KalkulasiUnitPage({
         periodeBulan={periodeBulan}
         periodeTahun={periodeTahun}
         jumlahBelumPunyaPredikat={belumPunyaPredikat.length}
-        jumlahSudahApproved={jumlahSudahApproved}
         namaBulan={NAMA_BULAN[periodeBulan - 1] ?? String(periodeBulan)}
       />
 
@@ -435,10 +578,18 @@ export default async function KalkulasiUnitPage({
                   <span className="block text-[10px] font-normal normal-case">dari bobot kehadiran</span>
                 </th>
                 <th className="px-4 py-2.5">Uang Makan</th>
-                <th className="px-4 py-2.5">Uang Lembur</th>
+                {TAMPILKAN_NOMINAL_LEMBUR && (
+                  <th className="px-4 py-2.5">Uang Lembur</th>
+                )}
                 <th className="px-4 py-2.5">
                   Jam Lembur
-                  <span className="block text-[10px] font-normal normal-case">dibayar</span>
+                  {/* Selama nominalnya belum disetujui, sub-judulnya tidak
+                      boleh berbunyi "dibayar" - itu menjanjikan sesuatu yang
+                      justru sedang ditahan. Jamnya sendiri memang sudah
+                      dibulatkan & dibatasi, jadi "tercatat" tetap akurat. */}
+                  <span className="block text-[10px] font-normal normal-case">
+                    {TAMPILKAN_NOMINAL_LEMBUR ? "dibayar" : "tercatat"}
+                  </span>
                 </th>
                 <th className="px-4 py-2.5">Tukin bersih</th>
               </tr>
@@ -505,14 +656,17 @@ export default async function KalkulasiUnitPage({
                         <BelumAda judul="Tukin periode ini belum dihitung" />
                       )}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-ink-2">{um ? formatRupiah(um.totalUangMakan) : "-"}</td>
                     <td className="px-4 py-2.5 font-mono text-ink-2">
-                      {lembur ? formatRupiah(lembur.totalUangLembur) : "-"}
+                      {um ? formatRupiah(um.totalUangMakan) : "-"}
                     </td>
+                    {TAMPILKAN_NOMINAL_LEMBUR && (
+                      <td className="px-4 py-2.5 font-mono text-ink-2">
+                        {lembur ? formatRupiah(lembur.totalUangLembur) : "-"}
+                      </td>
+                    )}
                     <td className="px-4 py-2.5 font-mono text-ink-2">
-                      {/* Jam yang benar-benar DIBAYAR: sudah dipangkas ke jam
-                          penuh dan sudah kena batas maksimal - bukan jam mentah
-                          yang dilaporkan di rekap presensi. */}
+                      {/* Jam yang SUDAH dipangkas ke jam penuh dan sudah kena
+                          batas maksimal - bukan jam mentah dari rekap presensi. */}
                       {lembur ? `${lembur.totalJamLembur} jam` : "-"}
                     </td>
                     <td className="px-4 py-2.5 font-mono font-semibold text-ink">
@@ -761,68 +915,136 @@ export default async function KalkulasiUnitPage({
         </ul>
       </div>
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Uang makan & lembur - di tampilan RINCI saja. Di tampilan ringkas */}
-      {/* ketiganya sudah jadi kolom biasa di tabel utama.                  */}
-      {/* ---------------------------------------------------------------- */}
-      <h2 className="mt-8 text-base font-bold text-ink">Uang Makan &amp; Uang Lembur</h2>
-      <p className="mt-1 text-xs text-muted">
-        Di luar cakupan rekap Excel Tukin - dipisah supaya tabel di atas tetap sebanding kolom per kolom.
-      </p>
-      <div className="card mt-2 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
-              <th className="col-nama px-4 py-2.5">Nama</th>
-              <th className="px-4 py-2.5">Uang Makan</th>
-              <th className="px-4 py-2.5">Uang Lembur</th>
-              <th className="px-4 py-2.5">Koreksi jam lembur</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pegawaiHalaman.map((p) => {
-              const um = p.uangMakan[0];
-              const lembur = p.uangLembur[0];
-              return (
-                <tr key={p.id} className="border-b border-line-2 align-top">
-                  <td className="col-nama px-4 py-2.5">
-                    <NamaPegawai
-                      nama={p.nama}
-                      nip={p.nip}
-                      periodeBulan={periodeBulan}
-                      periodeTahun={periodeTahun}
-                      satuanKerja={satkerEfektif}
-                      kelasJabatan={p.kelasJabatan}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-ink-2">{um ? formatRupiah(um.totalUangMakan) : "-"}</td>
-                  <td className="px-4 py-2.5 font-mono text-ink-2">
-                    {lembur ? `${formatRupiah(lembur.totalUangLembur)} (${lembur.totalJamLembur} jam)` : "-"}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <KoreksiLemburForm
-                      pegawaiId={p.id}
-                      periodeBulan={periodeBulan}
-                      periodeTahun={periodeTahun}
-                      totalJamLemburSaatIni={lembur?.totalJamLembur ?? 0}
-                      tarifPerJam={lembur?.tarifPerJam ?? TARIF_UANG_LEMBUR_DEFAULT}
-                    />
-                  </td>
+          {/* ---------------------------------------------------------------- */}
+          {/* Uang makan & lembur - di tampilan RINCI saja. Di tampilan ringkas */}
+          {/* ketiganya sudah jadi kolom biasa di tabel utama.                  */}
+          {/* ---------------------------------------------------------------- */}
+          <h2 className="mt-8 text-base font-bold text-ink">
+            Uang Makan &amp;{" "}
+            {TAMPILKAN_NOMINAL_LEMBUR ? "Uang Lembur" : "Jam Lembur"}
+          </h2>
+          <p className="mt-1 text-xs text-muted">
+            Di luar cakupan rekap Excel Tukin - dipisah supaya tabel di atas
+            tetap sebanding kolom per kolom.
+          </p>
+          <div className="card mt-2 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+                  <th className="col-nama px-4 py-2.5">Nama</th>
+                  <th className="px-4 py-2.5">Uang Makan</th>
+                  {TAMPILKAN_NOMINAL_LEMBUR && (
+                    <th className="px-4 py-2.5">Uang Lembur</th>
+                  )}
+                  <th className="px-4 py-2.5">Koreksi jam lembur</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <Paginasi
-          basePath="/kasubag/kalkulasi"
-          params={paramPaginasi}
-          info={paginasi}
-          totalBaris={pegawaiList.length}
-          labelBaris="pegawai"
-        />
-      </div>
-      </>
+              </thead>
+              <tbody>
+                {pegawaiHalaman.map((p) => {
+                  const um = p.uangMakan[0];
+                  const lembur = p.uangLembur[0];
+                  return (
+                    <tr key={p.id} className="border-b border-line-2 align-top">
+                      <td className="col-nama px-4 py-2.5">
+                        <NamaPegawai
+                          nama={p.nama}
+                          nip={p.nip}
+                          periodeBulan={periodeBulan}
+                          periodeTahun={periodeTahun}
+                          satuanKerja={satkerEfektif}
+                          kelasJabatan={p.kelasJabatan}
+                        />
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-ink-2">
+                        {um ? formatRupiah(um.totalUangMakan) : "-"}
+                      </td>
+                      {TAMPILKAN_NOMINAL_LEMBUR && (
+                        <td className="px-4 py-2.5 font-mono text-ink-2">
+                          {lembur
+                            ? `${formatRupiah(lembur.totalUangLembur)} (${lembur.totalJamLembur} jam)`
+                            : "-"}
+                        </td>
+                      )}
+                      <td className="px-4 py-2.5">
+                        {/* TETAP TAMPIL walau nominalnya ditahan: pengumpulan data
+                        jam lembur harus jalan terus selama menunggu tata cara
+                        turun, kalau tidak periode-periode ini akan kosong dan
+                        harus diisi ulang dari kertas. Formnya hanya menerima
+                        angka jam - tidak ada rupiah di dalamnya. */}
+                        <KoreksiLemburForm
+                          pegawaiId={p.id}
+                          periodeBulan={periodeBulan}
+                          periodeTahun={periodeTahun}
+                          totalJamLemburSaatIni={lembur?.totalJamLembur ?? 0}
+                          tarifPerJam={
+                            lembur?.tarifPerJam ?? TARIF_UANG_LEMBUR_DEFAULT
+                          }
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <Paginasi
+              basePath="/kasubag/kalkulasi"
+              params={paramPaginasi}
+              info={paginasi}
+              totalBaris={pegawaiList.length}
+              labelBaris="pegawai"
+            />
+          </div>
+        </>
       )}
+
+      {/* Panel Kirim sengaja di BAWAH tabel, bukan di atas: yang ditandatangani
+          Kasubag TU adalah angka-angka di atasnya, dan tombol yang mengunci
+          sebaiknya berada sesudah hal yang dikunci - bukan sebelum. */}
+      {/* SENGAJA TIDAK DIBUNGKUS `{!kirimStatus.terkunci && ...}`. Aksi kirim
+          memanggil revalidatePath, jadi begitu berhasil halaman ini langsung
+          dirender ulang dalam keadaan terkunci - dan komponen yang ikut
+          dilepas di situ membawa serta popup "berhasil dikirim"-nya sebelum
+          sempat terbaca. Keadaannya dikirim sebagai prop; komponennya sendiri
+          yang menyembunyikan formnya. */}
+      <KirimRekapForm
+        terkunci={kirimStatus.terkunci}
+        periodeBulan={periodeBulan}
+        periodeTahun={periodeTahun}
+        satuanKerja={satkerEfektif}
+        // PEMBAGINYA `pegawaiAktif`, BUKAN `pegawaiList`.
+        //
+        // Tabel di atas sengaja menampilkan SEMUA pegawai unit termasuk yang
+        // sudah pensiun/berhenti - bulan terakhir mereka tetap perlu terlihat
+        // dan tetap perlu dihitung. Tapi mereka TIDAK BOLEH ikut jadi syarat
+        // kelengkapan: orang yang sudah pensiun tidak akan pernah punya
+        // predikat kinerja baru, jadi unitnya tidak akan pernah bisa
+        // mengirim - macet permanen tanpa jalan keluar.
+        //
+        // Angka ini WAJIB sama dengan yang dihitung kirimRekapUnitAction di
+        // server (yang memakai `statusPegawai: "AKTIF"`). Kalau berbeda,
+        // tombolnya menyala tapi server menolak - atau lebih buruk,
+        // sebaliknya.
+        jumlahPegawai={pegawaiAktif.length}
+        jumlahKalkulasi={
+          pegawaiAktif.filter((p) => p.tukinCalc.length > 0).length
+        }
+        alasanTertahan={
+          cekBolehKirim(
+            {
+              totalPegawai: pegawaiAktif.length,
+              jumlahKalkulasi: pegawaiAktif.filter(
+                (p) => p.tukinCalc.length > 0,
+              ).length,
+              // Punya baris Tukin TIDAK SAMA DENGAN siap kirim. Baris yang
+              // sumbernya sudah berubah atau dihapus tetap berdiri dengan
+              // angka lama, dan tanpa hitungan ini ia ikut terkirim &
+              // terkunci tanpa ada yang menyadarinya.
+              jumlahBasi: jumlahPerluHitungUlang,
+            },
+            kirimStatus,
+          ).alasan
+        }
+      />
     </main>
   );
 }
