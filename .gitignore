@@ -1,16 +1,7 @@
 node_modules/
 dist/
 .next/
-# PENYEBAB INSIDEN 2026-09-02: baris ini dulu cuma `.env`, dan
-# `.env.bak-20260901-135857` lolos karena namanya bukan `.env` persis - lalu
-# ikut ter-commit di 886f1b1 dan ter-push ke repo PUBLIK. Yang bocor bukan
-# cuma SESSION_SECRET: password `sa` SIAP (sysadmin SQL Server produksi),
-# kredensial e-Presensi, dan DATABASE_URL Gajihub ikut di dalamnya.
-#
-# Sekarang POLA, bukan satu nama: apa pun yang berawalan `.env` terkunci,
-# termasuk salinan/cadangan yang belum terpikirkan namanya. `.env.example`
-# dikecualikan karena ia memang dokumentasi - isinya placeholder, tidak
-# pernah nilai asli, dan itu WAJIB dijaga tiap kali file itu disunting.
+
 .env
 .env.*
 !.env.example
@@ -19,29 +10,17 @@ dist/
 
 Excel/
 docs/
-
-# Jaring pengaman kalau berkas serupa ditaruh di LUAR kedua folder di atas.
-# Pola DEFAULT-TOLAK, bukan daftar-tolak: berkas baru yang belum terpikirkan
-# ikut terkunci sendiri, tidak perlu diingat satu per satu.
 *.xlsx
 *.xls
 *.xlsm
 *.csv
 *.pdf
 
-# Export "Laporan Detail Presensi Harian" e-Presensi - nama pegawai + jam
-# masuk/pulang per tanggal.
 rekap-presensi-*
 
-# Dump/backup database Gajihub. Isinya SELURUH data pegawai se-kementerian -
-# nama, NIP, nominal gaji, DAN nomor rekening bank - jadi ini berkas paling
-# berbahaya yang bisa ada di folder ini, dan repo ini publik.
-# Dipakai waktu memindahkan database ke laptop lain (lihat CLAUDE.md).
 *.dump
 *.backup
 *.tar
 *.sql
-# KECUALI migrasi Prisma - itu memang kode, wajib ikut ter-commit. Tanpa baris
-# ini `*.sql` di atas membuat migrasi BARU tidak pernah ikut `git add`, dan
-# deploy berikutnya gagal karena tabelnya tidak pernah dibuat di server.
+
 !prisma/migrations/**/*.sql

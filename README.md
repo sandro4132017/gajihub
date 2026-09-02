@@ -15,9 +15,22 @@ npm install
 
 1. Siapkan PostgreSQL (lokal, VPS dev Pusdatik, atau lewat Homebrew:
    `brew install postgresql@16 && brew services start postgresql@16`).
-2. Copy `.env.example` ke `.env`, isi `DATABASE_URL` dan `SESSION_SECRET`
-   (generate `SESSION_SECRET` acak dengan `openssl rand -hex 32` - JANGAN
-   pakai nilai contoh di `.env.example` untuk apapun selain localhost).
+2. Buat berkas `.env` di akar proyek. Berkas contohnya sengaja TIDAK ada di
+   repo ini - repo ini publik, dan berkas apa pun berawalan `.env` sekarang
+   dikunci `.gitignore` (lihat catatan insiden di sana). Yang dibutuhkan:
+
+   | Variabel | Keterangan |
+   |---|---|
+   | `DATABASE_URL` | PostgreSQL **milik Gajihub sendiri**, bukan SIAP/e-Presensi |
+   | `SESSION_SECRET` | acak & panjang - `openssl rand -hex 32` |
+   | `SIDIK_NIK_SECRET` | acak & panjang - kunci sidik NIK untuk SSO |
+   | `COOKIE_SECURE` | `true` HANYA kalau diakses lewat HTTPS asli |
+   | `SIAP_*` | sumber data pegawai (SQL Server), **READ-ONLY** |
+   | `EPRESENSI_*` | sumber presensi (PostgreSQL), **READ-ONLY** |
+   | `NACO_*` | SSO Kemnaker - boleh kosong, tombol SSO otomatis mati |
+
+   Nilai aslinya minta ke pengelola sistem masing-masing. JANGAN pernah
+   menaruhnya di berkas yang ikut ter-commit.
 3. Jalanin migrasi:
 
 ```bash
