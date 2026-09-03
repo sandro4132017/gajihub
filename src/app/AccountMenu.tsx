@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import type { Role } from "@prisma/client";
 import { gantiRoleAction, logoutAction, type GantiRoleFormState } from "./login/actions";
-import { labelRole } from "../auth/roleLabel";
+import { labelPilihanRole, labelRole } from "../auth/roleLabel";
 
 const INITIAL_STATE: GantiRoleFormState = {};
 
@@ -93,7 +93,12 @@ export function AccountMenu({
                           : "text-ink-2 hover:bg-line-2 hover:text-navy disabled:opacity-60"
                       }`}
                     >
-                      <span className="truncate">{labelRole(r, satuanKerja)}</span>
+                      {/* labelPilihanRole, BUKAN labelRole: ini daftar sudut
+                          pandang milik akun ini sendiri, jadi unitnya sama di
+                          semua baris dan tidak membedakan apa-apa. Label di
+                          bawah (role yang sedang aktif) TETAP menyebut unit -
+                          di sana pertanyaannya "saya sedang jadi siapa". */}
+                      <span className="truncate">{labelPilihanRole(r)}</span>
                       {aktif && (
                         <svg viewBox="0 0 24 24" className="size-4 flex-none text-biru" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                           <path d="M20 6 9 17l-5-5" />

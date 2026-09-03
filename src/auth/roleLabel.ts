@@ -52,6 +52,30 @@ export function labelRole(role: Role, satuanKerja?: string | null): string {
 }
 
 /**
+ * Label satu PILIHAN role di daftar "Ganti role" (menu akun).
+ *
+ * BEDA DARI `labelRole()`, dan bedanya soal pertanyaan yang dijawab. Di
+ * layar lain label menjawab "role ini milik siapa" - di situ unit wajib
+ * disebut, karena tiap unit punya Kasubag TU sendiri dan dua orang berbeda
+ * bisa berlabel sama. Di daftar ini pertanyaannya lain: "sudut pandang mana
+ * yang mau saya pakai sekarang".
+ *
+ * Di situ unitnya TIDAK membedakan apa pun. Seluruh baris di daftar itu
+ * milik SATU akun yang sama, jadi unitnya identik di setiap baris - dan
+ * karena labelnya di-`truncate` di menu yang sempit, nama unit yang panjang
+ * justru mendesak keluar bagian yang benar-benar membedakan, yaitu nama
+ * rolenya.
+ *
+ * Kasubag TU diberi keterangan fungsinya (permintaan user 2026-09-03) supaya
+ * terbaca sebagai peran yang dipilih, bukan sebagai nama jabatan yang
+ * terpotong di tengah.
+ */
+export function labelPilihanRole(role: Role): string {
+  if (role === "KASUBAG_TU") return "Kasubag TU - Kepegawaian";
+  return LABEL_ROLE[role];
+}
+
+/**
  * SENGAJA TIDAK ADA fungsi penyingkat nama unit.
  *
  * Nama satuan kerja memang panjang ("Biro Keuangan dan Barang Milik Negara"),

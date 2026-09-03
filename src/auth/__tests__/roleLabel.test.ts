@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LABEL_ROLE, labelRole } from "../roleLabel";
+import { LABEL_ROLE, labelPilihanRole, labelRole } from "../roleLabel";
 
 describe("labelRole", () => {
   it("Kasubag TU selalu menyebut unitnya", () => {
@@ -49,5 +49,27 @@ describe("labelRole", () => {
 
   it("spasi berlebih di nama unit dirapikan", () => {
     expect(labelRole("KASUBAG_TU", "  Biro Umum  ")).toBe("Kasubag TU Biro Umum");
+  });
+});
+
+describe("labelPilihanRole", () => {
+  it("Kasubag TU disebut fungsinya, TANPA nama unit", () => {
+    expect(labelPilihanRole("KASUBAG_TU")).toBe("Kasubag TU - Kepegawaian");
+  });
+
+  it("role lain sama persis dengan label dasarnya", () => {
+    for (const r of ["PEGAWAI", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"] as const) {
+      expect(labelPilihanRole(r)).toBe(LABEL_ROLE[r]);
+    }
+  });
+
+  it("TIDAK menggantikan labelRole - keduanya hidup berdampingan", () => {
+    // Penjagaan terhadap "sekalian dirapikan": kalau suatu saat labelRole
+    // ikut dibuat tanpa unit, pesan penolakan approval kembali berbunyi
+    // "Role Kasubag TU tidak berwenang atas satuan kerja X" tanpa menyebut
+    // Kasubag TU unit MANA - dan itu justru keterangan yang menjelaskan
+    // sebabnya.
+    expect(labelRole("KASUBAG_TU", "Biro Umum")).toBe("Kasubag TU Biro Umum");
+    expect(labelPilihanRole("KASUBAG_TU")).not.toContain("Biro Umum");
   });
 });

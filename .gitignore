@@ -4,7 +4,6 @@ dist/
 
 .env
 .env.*
-!.env.example
 .claude/settings.local.json
 *.tsbuildinfo
 
@@ -17,6 +16,7 @@ docs/
 *.pdf
 
 rekap-presensi-*
+log-sync/
 
 *.dump
 *.backup

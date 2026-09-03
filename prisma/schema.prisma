@@ -54,6 +54,34 @@ model Pegawai {
   /// riwayat bertanggal, bukan satu kolom.
   nomorSk       String?   @map("nomor_sk")
 
+  /// Tiga keterangan pelengkap SK di atas, diisi petugas lewat halaman Data
+  /// Pegawai (permintaan user 2026-09-02).
+  ///
+  /// TIDAK MASUK BERKAS ADK. `KOLOM_ADK_TUKIN` cuma punya satu kolom SK -
+  /// "Nomor SK" - dan ketiganya bukan calon isinya. Gunanya di sini: waktu
+  /// nomor SK dipertanyakan Itjen atau Rokeu, jawabannya ada di baris yang
+  /// sama, bukan di lemari arsip.
+  ///
+  /// SAMA SEPERTI `nomorSk`, ketiganya TIDAK ADA di SIAP dan karena itu tidak
+  /// boleh ditimpa sinkronisasi. Perlindungannya otomatis: importPegawaiSiap
+  /// cuma menulis kolom yang ia susun sendiri di `isi`, dan ketiganya tidak
+  /// ada di sana - jangan pernah menambahkannya ke situ.
+
+  /// Uraian isi SK, mis. "Penetapan Kelas Jabatan Pelaksana".
+  uraianSk      String?   @map("uraian_sk")
+
+  /// Tanggal SK diterbitkan - BEDA dari `tmtSkTerakhir`, yang tanggal mulai
+  /// berlakunya. SK bertanggal 3 Juli bisa berlaku surut sejak 1 Juni, dan
+  /// kalau keduanya disatukan salah satunya pasti hilang.
+  tanggalSk     DateTime? @map("tanggal_sk")
+
+  /// Instansi/unit yang menerbitkan SK, mis. "SEKRETARIAT JENDERAL".
+  /// Teks bebas, bukan relasi ke satuan kerja: penerbit SK sering unit yang
+  /// BUKAN tempat pegawainya bekerja, dan memaksanya memilih dari daftar
+  /// satuan kerja akan membuat sebagian orang memilih yang salah supaya
+  /// formnya bisa disimpan.
+  skDari        String?   @map("sk_dari")
+
   /// Sidik NIK - HMAC-SHA256 dari NIK, BUKAN NIK-nya.
   ///
   /// KENAPA ADA: SSO Naco tidak mengirimkan NIP. Diukur dua kali (akun publik

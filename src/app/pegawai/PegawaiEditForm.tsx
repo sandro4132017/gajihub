@@ -125,6 +125,38 @@ export function PegawaiEditForm({
           </p>
         </div>
 
+        <div className="sm:col-span-2">
+          <label className="field-label">Uraian SK</label>
+          <input
+            name="uraianSk"
+            defaultValue={pegawai.uraianSk ?? ""}
+            className="field-input"
+          />
+        </div>
+
+        <div>
+          <label className="field-label">Tanggal SK</label>
+          <input
+            type="date"
+            name="tanggalSk"
+            defaultValue={pegawai.tanggalSk ? pegawai.tanggalSk.toISOString().slice(0, 10) : ""}
+            className="field-input"
+          />
+          {/* Dibedakan dari TMT di sebelahnya - dua tanggal berdampingan tanpa
+              keterangan adalah undangan untuk tertukar. */}
+          <p className="mt-1 text-[11px] text-muted">Tanggal SK diterbitkan.</p>
+        </div>
+
+        <div>
+          <label className="field-label">Dari</label>
+          <input
+            name="skDari"
+            defaultValue={pegawai.skDari ?? ""}
+            className="field-input"
+          />
+          <p className="mt-1 text-[11px] text-muted">Instansi/unit yang menerbitkan SK.</p>
+        </div>
+
         <div>
           <label className="field-label">TMT SK terakhir</label>
           <input
@@ -133,6 +165,7 @@ export function PegawaiEditForm({
             defaultValue={pegawai.tmtSkTerakhir ? pegawai.tmtSkTerakhir.toISOString().slice(0, 10) : ""}
             className="field-input"
           />
+          <p className="mt-1 text-[11px] text-muted">Tanggal SK mulai berlaku - bisa berbeda dari tanggal terbit.</p>
         </div>
       </div>
 

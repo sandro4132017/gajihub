@@ -110,8 +110,22 @@ export function labelSumberSiap(): string {
  * detik.
  */
 export async function bukaPoolSiap(): Promise<import("mssql").ConnectionPool> {
-  const { ConnectionPool } = await import("mssql");
-  const pool = new ConnectionPool(konfigurasiSiap());
+  // `mssql` paket CommonJS, dan import-nya SENGAJA dinamis supaya modul ini
+  // bisa diimpor dari mana saja tanpa ikut menyeret driver SQL Server.
+  //
+  // JANGAN destructure langsung `const { ConnectionPool } = await import(...)`.
+  // Named export sebuah paket CommonJS di ESM ditebak cjs-module-lexer, dan
+  // untuk `mssql` tebakannya MELESET: yang terbaca cuma `default`,
+  // `module.exports`, `valueHandler`. Jadi `ConnectionPool` undefined dan
+  // `new undefined()` melempar "ConnectionPool is not a constructor" - bukan
+  // saat start, tapi saat orang menekan "Tarik data presensi".
+  //
+  // Hasilnya bergantung versi Node, jadi kode yang jalan di satu mesin bisa
+  // mati di mesin lain tanpa satu baris pun berubah. Diambil dari `default`
+  // dengan namespace sebagai cadangan supaya benar di kedua keadaan.
+  const mod = await import("mssql");
+  const mssql = mod.default ?? mod;
+  const pool = new mssql.ConnectionPool(konfigurasiSiap());
   await pool.connect();
   return pool;
 }

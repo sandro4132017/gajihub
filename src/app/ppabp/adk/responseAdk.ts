@@ -36,7 +36,9 @@ export function responseAdk({
   namaFile: string;
 }): Response {
   if (format === "txt") {
-    const teks = rakitTeksAdk(header, baris, total);
+    // `header` sengaja TIDAK diteruskan - muatan .txt tanpa nama kolom.
+    // Ia tetap dipakai sheet .xlsx di bawah; lihat rakitTeksAdk().
+    const teks = rakitTeksAdk(baris, total);
     return new Response(teks, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",

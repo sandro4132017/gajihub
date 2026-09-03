@@ -88,12 +88,42 @@ export function nilaiUangAdkTukin(r: Pick<SumberBarisAdkTukin, "tarifPenuhKelasJ
   return { bruto, potongan: Math.max(0, bruto - bersih), bersih };
 }
 
+/**
+ * Periode KERJA yang dibayar oleh satu berkas ADK - isi kolom "Bulan Awal",
+ * "Tahun Awal", "Bulan Akhir", dan "Tahun Akhir".
+ *
+ * SATU BULAN SEBELUM periode berkasnya (aturan user 2026-09-03): Tukin atas
+ * kerja bulan N dibayarkan pada bulan N+1. Berkas berlabel Juli 2026 karena
+ * itu membayar kerja bulan Juni - dan keempat kolom ini yang menyatakannya.
+ * Awal = Akhir karena satu berkas selalu satu bulan; kolomnya berpasangan
+ * supaya format yang sama bisa dipakai untuk rapel beberapa bulan sekaligus,
+ * yang belum pernah dipakai di sini.
+ *
+ * JANUARI MUNDUR KE DESEMBER TAHUN SEBELUMNYA - DIKONFIRMASI USER 2026-09-03,
+ * bukan turunan. Tahunnya tahun KERJANYA, bukan tahun berkasnya: ekspor
+ * Januari 2027 membayar kerja Desember 2026, jadi 12/2026 - bukan 12/2027
+ * yang berarti masa depan, dan bukan 0/2027 yang bukan bulan.
+ */
+export function periodeKerjaAdkTukin(
+  periodeBulan: number,
+  periodeTahun: number
+): { bulan: number; tahun: number } {
+  if (periodeBulan === 1) return { bulan: 12, tahun: periodeTahun - 1 };
+  return { bulan: periodeBulan - 1, tahun: periodeTahun };
+}
+
 export function susunBarisAdkTukin(
   sumber: SumberBarisAdkTukin[],
   periodeBulan: number,
   periodeTahun: number
 ): SelAdk[][] {
   const bulanPad = String(periodeBulan).padStart(2, "0");
+  // Periode kerja yang dibayar - lihat periodeKerjaAdkTukin(). Dihitung SEKALI
+  // di luar map: nilainya sama untuk seluruh baris, dan menghitungnya per
+  // pegawai cuma membuka peluang dua baris berbeda periodenya.
+  const kerja = periodeKerjaAdkTukin(periodeBulan, periodeTahun);
+  const kerjaBulanPad = String(kerja.bulan).padStart(2, "0");
+  const kerjaTahun = String(kerja.tahun);
   return sumber.map((r) => {
     const uang = nilaiUangAdkTukin(r);
     return [
@@ -111,10 +141,10 @@ export function susunBarisAdkTukin(
     r.namaBank ?? "",
     r.nomorRekening ?? "",
     r.namaRekening ?? r.nama,
-    "", // Bulan Awal
-    "", // Tahun Awal
-    "", // Bulan Akhir
-    "", // Tahun Akhir
+    kerjaBulanPad, // Bulan Awal
+    kerjaTahun, // Tahun Awal
+    kerjaBulanPad, // Bulan Akhir
+    kerjaTahun, // Tahun Akhir
     1, // Tukin Kali
     "", // Nomor Tukin Lama
     "", // Nomor Tukin Baru
@@ -139,9 +169,20 @@ export function selKeTeks(nilai: SelAdk, barisTotal = false): string {
   return nilai.replace(/[\t\r\n]+/g, " ");
 }
 
-export function rakitTeksAdk(header: readonly string[], baris: SelAdk[][], barisTotal: SelAdk[]): string {
+/**
+ * Muatan .txt ADK Tunjangan Kinerja - tab-separated, diakhiri baris TOTAL.
+ *
+ * TANPA BARIS HEADER (permintaan user 2026-09-03), dan karena itu parameter
+ * `header` sudah tidak ada lagi di sini. Versi .xlsx TETAP memakainya, dan
+ * bedanya bukan selera: yang .xlsx dibuka manusia untuk diperiksa, sementara
+ * yang .txt disetorkan ke Web Gaji - di sana nama kolom bukan keterangan,
+ * melainkan satu baris tambahan yang ikut terbaca sebagai data.
+ *
+ * Baris TOTAL DIPERTAHANKAN - berkas contoh dari PPABP memuatnya, dan yang
+ * diminta dihapus cuma headernya.
+ */
+export function rakitTeksAdk(baris: SelAdk[][], barisTotal: SelAdk[]): string {
   const garis = [
-    header.join("\t"),
     ...baris.map((b) => b.map((s) => selKeTeks(s)).join("\t")),
     barisTotal.map((s) => selKeTeks(s, true)).join("\t"),
   ];

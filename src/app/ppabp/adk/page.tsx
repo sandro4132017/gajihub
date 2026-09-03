@@ -275,7 +275,9 @@ export default async function ExportAdkPage({
       <p className="mt-1 text-sm text-muted">
         Menampilkan rekap unit yang telah <strong>dikirim &amp; dikunci</strong> oleh Kasubag TU untuk diunggah
         manual ke Web Gaji. Berkas tersedia dalam format <strong>Excel</strong> (.xlsx) dan <strong>TXT</strong>{" "}
-        dengan isi yang identik, menyesuaikan template masing-masing jenis ADK.
+        yang datanya sama, menyesuaikan template masing-masing jenis ADK. Versi <strong>TXT</strong> adalah
+        muatan yang disetorkan - tanpa baris nama kolom; versi <strong>Excel</strong> memakai nama kolom karena
+        ia dibuka untuk diperiksa.
       </p>
 
       <form method="get" className="card mt-4 p-4">
@@ -471,16 +473,42 @@ export default async function ExportAdkPage({
             ))}
           </ul>
           {tanpaRekening.length > 0 && (
-            <div className="mt-2 rounded-lg border border-gold bg-gold-tint px-3 py-2.5 text-sm text-ink-2">
-              <p className="font-bold text-gold-deep">
-                {tanpaRekening.length} pegawai belum memiliki rekening Tukin
-              </p>
-              {/* Nama DULU, penjelasan belakangan. Yang membaca ini butuh tahu
-                  siapa yang harus diurus; kalimat akibatnya baru berguna
+            /* SATU BARIS saat tertutup (permintaan user 2026-09-03), detailnya
+               di dalam. Pada halaman yang sehat kotak ini tidak muncul sama
+               sekali; waktu ia muncul, yang mendesak cuma satu angka - berapa
+               orang. Nama dan sebab-akibatnya baru dibutuhkan oleh orang yang
+               memang berniat mengurusnya.
+
+               <details>, BUKAN tombol ber-state: halaman ini Server Component,
+               dan buka-tutupnya jalan tanpa JavaScript sedikit pun. */
+            <details className="group mt-2 rounded-lg border border-gold bg-gold-tint px-3 py-2.5 text-sm text-ink-2">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                <span className="font-bold text-gold-deep">
+                  {tanpaRekening.length} pegawai belum memiliki rekening Tukin
+                </span>
+                <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-teal-deep hover:underline">
+                  <span className="group-open:hidden">Lihat detail</span>
+                  <span className="hidden group-open:inline">Tutup</span>
+                  <svg
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-3.5 w-3.5 transition-transform group-open:rotate-180"
+                  >
+                    <path d="M5 8l5 5 5-5" />
+                  </svg>
+                </span>
+              </summary>
+              {/* Nama DULU, penjelasan belakangan. Yang sudah membuka ini butuh
+                  tahu siapa yang harus diurus; kalimat akibatnya baru berguna
                   sesudah dia tahu namanya. Dipotong 8 - lebih dari itu
                   daftarnya jadi dinding nama dan yang perlu dibuka memang
                   halaman Rekening Pegawai, bukan kotak ini. */}
-              <ul className="mt-1.5 space-y-0.5">
+              <ul className="mt-2 space-y-0.5">
                 {tanpaRekening.slice(0, 8).map((p) => (
                   <li key={p.nip}>
                     <span className="font-semibold text-ink">{p.nama}</span>{" "}
@@ -504,7 +532,7 @@ export default async function ExportAdkPage({
                 </Link>
                 , lalu unduh ulang. Kalkulasi Tukin tidak perlu diulang - rekening dibaca saat berkas disusun.
               </p>
-            </div>
+            </details>
           )}
         </div>
       )}

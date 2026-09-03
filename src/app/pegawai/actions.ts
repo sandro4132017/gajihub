@@ -57,6 +57,9 @@ export async function ubahDataPegawaiAction(
     const statusPegawai = String(formData.get("statusPegawai") ?? "").trim();
     const tmtSkTerakhir = String(formData.get("tmtSkTerakhir") ?? "").trim();
     const nomorSk = String(formData.get("nomorSk") ?? "").trim();
+    const uraianSk = String(formData.get("uraianSk") ?? "").trim();
+    const tanggalSk = String(formData.get("tanggalSk") ?? "").trim();
+    const skDari = String(formData.get("skDari") ?? "").trim();
 
     const pegawai = await prisma.pegawai.findUnique({ where: { id: pegawaiId } });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
@@ -96,6 +99,9 @@ export async function ubahDataPegawaiAction(
       statusPegawai: pegawai.statusPegawai,
       tmtSkTerakhir: pegawai.tmtSkTerakhir,
       nomorSk: pegawai.nomorSk,
+      uraianSk: pegawai.uraianSk,
+      tanggalSk: pegawai.tanggalSk,
+      skDari: pegawai.skDari,
     };
     const dataBaru = {
       nama,
@@ -110,6 +116,9 @@ export async function ubahDataPegawaiAction(
       // cuma punya SATU bentuk di database dan pencarian "yang belum punya
       // nomor SK" tidak perlu memeriksa dua keadaan yang artinya sama.
       nomorSk: nomorSk || null,
+      uraianSk: uraianSk || null,
+      tanggalSk: tanggalSk ? new Date(tanggalSk) : null,
+      skDari: skDari || null,
     };
 
     await prisma.$transaction([
