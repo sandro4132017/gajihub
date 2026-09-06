@@ -15,6 +15,7 @@ import {
   canTarikUlangPresensiUnit,
   canUploadKoreksiPredikatKinerjaUnit,
   canAjukanKalkulasiTukinMassalUnit,
+  canLihatKalkulasiSebelumDikirim,
   canTelaahAjukanUangMakanUnit,
   canTelaahKoreksiAjukanUangLemburUnit,
   canViewDashboardUnit,
@@ -215,13 +216,30 @@ describe("KASUBAG_TU - verifikator satker", () => {
     }
   });
 
-  it("canAjukanKalkulasiTukinMassalUnit: PPABP boleh, LINTAS satker", () => {
-    // Ditambahkan atas keputusan user 2026-08-06 - menutup ketimpangan lama:
-    // PPABP boleh mengupload kedua komponen pembentuk Tukin tapi tidak boleh
-    // menjalankan kalkulasi yang memakainya.
+  it("canAjukanKalkulasiTukinMassalUnit: PPABP DITOLAK - dicabut 2026-09-06", () => {
+    // Membatalkan keputusan 2026-08-06, yang berangkat dari anggapan keliru
+    // bahwa alurnya PPABP -> Kasubag TU. Yang sebenarnya: Kasubag TU menyusun
+    // dan mengirim, PPABP menerima dan memeriksa. Test ini menjaga arah itu.
     const ppabp = buatUser({ role: "PPABP", satuanKerja: null });
-    expect(canAjukanKalkulasiTukinMassalUnit(ppabp, SETJEN)).toBe(true);
-    expect(canAjukanKalkulasiTukinMassalUnit(ppabp, BIRO_UMUM)).toBe(true);
+    expect(canAjukanKalkulasiTukinMassalUnit(ppabp, SETJEN)).toBe(false);
+    expect(canAjukanKalkulasiTukinMassalUnit(ppabp, BIRO_UMUM)).toBe(false);
+  });
+
+  it("canLihatKalkulasiSebelumDikirim: KASUBAG_TU unitnya sendiri, PPABP tidak sama sekali", () => {
+    const kasubag = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN });
+    expect(canLihatKalkulasiSebelumDikirim(kasubag, SETJEN)).toBe(true);
+    // Unit lain tetap tertutup - ini bukan izin lintas satker yang baru.
+    expect(canLihatKalkulasiSebelumDikirim(kasubag, BIRO_UMUM)).toBe(false);
+
+    const ppabp = buatUser({ role: "PPABP", satuanKerja: null });
+    expect(canLihatKalkulasiSebelumDikirim(ppabp, SETJEN)).toBe(false);
+    expect(canLihatKalkulasiSebelumDikirim(ppabp, BIRO_UMUM)).toBe(false);
+  });
+
+  it("ADMIN tetap bisa menghitung - kalau tidak, unit yang macet tidak ada yang bisa menolong", () => {
+    const admin = buatUser({ role: "ADMIN", satuanKerja: null });
+    expect(canAjukanKalkulasiTukinMassalUnit(admin, SETJEN)).toBe(true);
+    expect(canLihatKalkulasiSebelumDikirim(admin, SETJEN)).toBe(true);
   });
 
   it("canAjukanKalkulasiTukinMassalUnit: TETAP ditolak buat role yang bukan pengelola data", () => {

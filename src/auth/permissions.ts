@@ -388,22 +388,50 @@ export function canBukaHalamanPredikatKinerja(user: AuthUser): boolean {
  *
  * DUA ROLE, dua cakupan berbeda:
  *   - KASUBAG_TU : unitnya sendiri saja.
- *   - PPABP      : LINTAS satuan kerja, sama seperti kewenangannya yang lain.
+ *   - PPABP      : TIDAK BOLEH.
  *
- * PPABP ditambahkan atas keputusan user 2026-08-06, menutup ketimpangan yang
- * sebelumnya sudah tercatat sebagai gap: PPABP boleh meng-upload KEDUA
- * komponen pembentuk Tukin (presensi 30% lewat canTarikAtauUploadPresensiFallback,
- * predikat kinerja 70% lewat canUploadRekapPredikatKinerja) tapi tidak boleh
- * menjalankan kalkulasi yang memakai keduanya - sehingga kalau unit kerjanya
- * tidak menjalankan sendiri, datanya berhenti di tengah jalan tanpa ada yang
- * bisa melanjutkan selain ADMIN.
+ * PPABP DICABUT 2026-09-06, membatalkan penambahannya pada 2026-08-06.
  *
- * Ini TIDAK mengambil alih kewenangan Kasubag TU - keduanya bisa menjalankan,
- * dan hasilnya sama karena perhitungannya deterministik dari data yang sama.
+ * SEBABNYA BUKAN PERUBAHAN KEBIJAKAN, MELAINKAN KOREKSI FAKTA. Penambahan
+ * 2026-08-06 berangkat dari anggapan bahwa alurnya PPABP -> Kasubag TU.
+ * Yang sebenarnya berlaku kebalikannya: **Kasubag TU menyusun dan mengirim,
+ * PPABP menerima dan memeriksa**. Jadi izin itu bukan menutup celah, melainkan
+ * menaruh langkah pertama di tangan pihak yang justru langkah terakhir.
+ *
+ * Karena itu jangan diperlakukan sebagai preferensi yang bisa ditawar ulang:
+ * mengembalikan izin ini berarti PPABP memeriksa pekerjaannya sendiri, dan
+ * tidak ada lagi pihak kedua di seluruh alur. Sejalan dengan Pasal 20 ayat
+ * (5)-(6) yang memisahkan unit penyusun dari unit keuangan sebagai pembayar.
+ *
+ * YANG DIKORBANKAN, dan ini memang harga yang dipilih: alasan penambahan
+ * 2026-08-06 tetap berlaku - PPABP boleh mengunggah KEDUA komponen pembentuk
+ * Tukin (presensi 30% lewat canTarikAtauUploadPresensiFallback, predikat 70%
+ * lewat canUploadRekapPredikatKinerja) tapi sekarang tidak bisa menjalankan
+ * kalkulasi yang memakainya. Jadi kalau sebuah unit tidak menjalankannya
+ * sendiri, datanya berhenti di situ dan hanya ADMIN yang bisa melanjutkan.
+ * Itu keadaan yang HARUS terlihat, bukan ditambal diam-diam dengan
+ * mengembalikan izin ini - yang kurang adalah unitnya bekerja, dan papan
+ * progres pengiriman memang dibuat untuk memperlihatkannya.
  */
 export function canAjukanKalkulasiTukinMassalUnit(user: AuthUser, targetSatuanKerja: string): boolean {
-  if (cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja)) return true;
-  return cekPpabpAtauAdmin(user, targetSatuanKerja);
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
+}
+
+/**
+ * Boleh melihat baris kalkulasi yang UNITNYA BELUM mengirim rekap periode itu.
+ *
+ * KASUBAG_TU jelas boleh - dia justru harus memeriksanya sebelum mengirim,
+ * dan sebelum dikirim itulah satu-satunya saat angkanya masih bisa diperbaiki.
+ *
+ * PPABP TIDAK. Yang menjadi bahan kerjanya adalah rekap yang sudah dikirim
+ * dan terkunci; angka yang belum dikirim masih boleh berubah kapan saja oleh
+ * unitnya, jadi memperlihatkannya cuma mengundang pemeriksaan atas sesuatu
+ * yang belum final - dan lebih buruk lagi, mengundang tindak lanjut atasnya.
+ * Yang belum mengirim tetap terlihat di papan progres pengiriman, sebagai
+ * unit yang ditunggu, bukan sebagai angka yang siap diperiksa.
+ */
+export function canLihatKalkulasiSebelumDikirim(user: AuthUser, targetSatuanKerja: string): boolean {
+  return cekScopeSatkerAtauAdmin(user, "KASUBAG_TU", targetSatuanKerja);
 }
 
 /** Telaah dan ajukan Uang Makan pegawai unitnya. */

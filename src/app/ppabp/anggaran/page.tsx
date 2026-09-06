@@ -9,6 +9,9 @@ export const dynamic = "force-dynamic";
 const formatRupiah = (nilai: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(nilai);
 
+// TODO(confirm) angkanya masih total, belum dipecah per jenis belanja
+// (Tukin / Uang Makan / Uang Lembur). Keterangan ini dulu ikut tercetak di
+// deskripsi halaman, dipindah ke sini 2026-09-06.
 export default async function AnggaranRealisasiPage() {
   const akun = await getSessionAccount();
   const authUser: AuthUser | null = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
@@ -25,8 +28,7 @@ export default async function AnggaranRealisasiPage() {
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Anggaran & Realisasi Belanja Pegawai</h1>
       <p className="mt-1 text-sm text-muted">
-        Satu baris = total pagu/realisasi per satuan kerja+periode (belum dipecah per jenis belanja Tukin/Uang
-        Makan/Uang Lembur - lihat TODO(confirm) di CLAUDE.md).
+        Satu baris = total pagu dan realisasi per satuan kerja untuk satu periode.
       </p>
 
       <UploadAnggaranForm satuanKerjaList={satuanKerjaRows.map((r) => r.satuanKerja)} />

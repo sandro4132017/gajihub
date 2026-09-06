@@ -120,7 +120,7 @@ export default async function UangLemburPage({
       <div className="mt-8 space-y-4">
         {kalkulasiList.length === 0 && (
           <p className="card p-6 text-sm text-muted">
-            Tidak ada data untuk filter ini. Kalau memang belum ada data sama sekali, jalankan job scheduler dulu (npx tsx src/jobs/runUangLemburJobDemo.ts).
+            Belum ada hasil kalkulasi untuk filter ini. Coba ubah periode atau satuan kerjanya.
           </p>
         )}
 

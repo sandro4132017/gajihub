@@ -638,3 +638,40 @@ describe("cuti beberapa hari yang memotong SEBULAN PENUH (Pasal 14)", () => {
     expect(hasil.anomali.join(" ")).not.toContain("PERIKSA MANUAL");
   });
 });
+
+describe("cuti panjang tanpa keterangan bulan - Pasal 14", () => {
+  it("cuti sakit menutup hampir seluruh bulan TANPA bulan -> ditandai", () => {
+    // Kasus nyata NAELI ISTIANAH 7/2026: 21 dari 23 hari kerja, dan
+    // sinkronisasi e-Presensi tidak pernah mengisi bulan ke berapa. Tanpa
+    // catatan ini, ia dibayar penuh tanpa ada yang tahu bulannya diasumsikan.
+    const hasil = hitungPersenDibayarCuti({ jenis: "CUTI_SAKIT", jumlahHariCuti: 21 }, 23);
+    expect(hasil?.persenDibayar).toBe(1); // tetap bulan ke-1 - TIDAK ditebak
+    expect(hasil?.anomali.join(" ")).toContain("BULAN KE BERAPA");
+  });
+
+  it("sakit sehari-dua hari TIDAK ditandai", () => {
+    // Kalau ini ikut berbunyi, peringatannya muncul 1.500 kali pada data
+    // nyata - dan peringatan sebanyak itu sama saja dengan tidak ada.
+    expect(hitungPersenDibayarCuti({ jenis: "CUTI_SAKIT", jumlahHariCuti: 2 }, 23)?.anomali).toHaveLength(0);
+    expect(hitungPersenDibayarCuti({ jenis: "CUTI_SAKIT", jumlahHariCuti: 18 }, 23)?.anomali).toHaveLength(0);
+  });
+
+  it("bulan yang SUDAH diisi tidak ditandai, walau cutinya panjang", () => {
+    const hasil = hitungPersenDibayarCuti({ jenis: "CUTI_SAKIT", bulanKeberapa: 2, jumlahHariCuti: 21 }, 23);
+    expect(hasil?.persenDibayar).toBe(0.5); // Pasal 14 huruf d bulan ke-2
+    expect(hasil?.anomali).toHaveLength(0);
+  });
+
+  it("jenis yang potongannya TIDAK bertingkat per bulan tidak ditandai", () => {
+    // Cuti tahunan & melahirkan dibayar penuh berapa bulan pun - bulannya
+    // tidak mengubah apa pun, jadi tidak ada yang perlu diperingatkan.
+    expect(hitungPersenDibayarCuti({ jenis: "CUTI_TAHUNAN", jumlahHariCuti: 22 }, 23)?.anomali).toHaveLength(0);
+    expect(
+      hitungPersenDibayarCuti({ jenis: "CUTI_MELAHIRKAN_ANAK_1_2_3", jumlahHariCuti: 22 }, 23)?.anomali
+    ).toHaveLength(0);
+  });
+
+  it("tanpa jumlah hari kerja tidak bisa dinilai - tidak ditandai, bukan ditebak", () => {
+    expect(hitungPersenDibayarCuti({ jenis: "CUTI_SAKIT", jumlahHariCuti: 21 })?.anomali).toHaveLength(0);
+  });
+});

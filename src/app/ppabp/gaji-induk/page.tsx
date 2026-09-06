@@ -241,10 +241,10 @@ export default async function RiwayatGajiPage({
               paling kanan kalau pegawai yang bersangkutan menerima honorarium pada periode ini - angkanya langsung
               muncul di slip gajinya. Upload ulang file GPP TIDAK menghapus honorarium yang sudah diisi.
             </p>
-            <p className="mt-2 text-xs text-muted">
-              TODO(confirm): sumber resmi data honorarium (kemungkinan dari SPJ kegiatan, bukan dari GPP) belum
-              ditetapkan - sementara ini murni input manual PPABP.
-            </p>
+            {/* TODO(confirm) sumber resmi data honorarium (kemungkinan SPJ
+                kegiatan, bukan GPP) belum ditetapkan - sementara ini murni
+                input manual PPABP. Dulu tercetak di kartu ini, dipindah jadi
+                komentar 2026-09-06. */}
           </div>
         </>
       )}

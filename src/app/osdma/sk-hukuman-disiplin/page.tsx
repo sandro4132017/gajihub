@@ -10,6 +10,17 @@ export const dynamic = "force-dynamic";
 
 const WARNA_STATUS = { DIAJUKAN: "amber", DISETUJUI: "hijau", DITOLAK: "merah" } as const;
 
+/**
+ * TODO(confirm) alur approval OSDMA untuk SK Hukuman Disiplin masih ASUMSI -
+ * belum ada konfirmasi resmi dari OSDMA/Biro Hukum. Jenis hukuman juga masih
+ * bebas isi (free-text) karena kategorisasi PP 94/2021 belum dipetakan ke
+ * sistem ini, dan approval di sini TIDAK memberi efek potongan Tukin otomatis
+ * (Pasal 15 belum diimplementasikan).
+ *
+ * Peringatan ini dulu dipasang sebagai banner kuning di halaman; dicabut
+ * 2026-09-06 atas permintaan user menjelang pengujian bersama Kasubag TU.
+ * Isinya TIDAK batal - yang berubah cuma tempatnya.
+ */
 export default async function OsdmaSkHukdisPage() {
   const akun = await getSessionAccount();
   const authUser: AuthUser | null = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
@@ -23,12 +34,6 @@ export default async function OsdmaSkHukdisPage() {
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Approval SK Hukuman Disiplin</h1>
       <p className="mt-1 text-sm text-muted">Lintas satuan kerja.</p>
-
-      <div className="mt-4 rounded-lg bg-gold-tint px-3 py-2 text-xs font-semibold text-gold-deep">
-        TODO(confirm) - alur approval OSDMA untuk SK Hukuman Disiplin ASUMSI dari spesifikasi simulasi, BELUM ada
-        konfirmasi resmi dari OSDMA/Biro Hukum. Approval di sini tidak memberi efek potongan Tukin otomatis (Pasal 15
-        belum diimplementasikan) - jangan anggap alur ini final buat production.
-      </div>
 
       <div className="mt-6 space-y-4">
         {skList.length === 0 && <p className="card p-6 text-sm text-muted">Belum ada SK Hukuman Disiplin diajukan.</p>}

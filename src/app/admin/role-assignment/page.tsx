@@ -70,8 +70,8 @@ export default async function RoleAssignmentPage({
       <p className="mt-1 text-sm text-muted">
         Ubah role/satuan kerja/status aktif akun secara langsung - BEDA dari alur usulan PPABP (lihat menu &quot;Usulan
         Perubahan Role&quot;), ini jalur administratif langsung tanpa proses usul-lalu-eksekusi. Satu akun juga bisa
-        dikasih beberapa <strong>role tambahan</strong> buat kemudahan testing - pemiliknya lalu bisa ganti sudut
-        pandang sendiri lewat tombol akun di sidebar, tanpa logout.
+        diberi beberapa <strong>role tambahan</strong> - pemiliknya lalu bisa berpindah sudut pandang sendiri lewat
+        tombol akun di sidebar, tanpa logout.
       </p>
 
       {akunButaUnit.length > 0 && (

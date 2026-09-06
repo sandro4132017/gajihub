@@ -2,12 +2,20 @@ import { prisma } from "../../lib/prisma";
 import { FilterBar } from "../FilterBar";
 import { BadgeStatusKirim, keadaanKirimBaris } from "../StatusKirimBaris";
 import { getSessionAccount } from "../../auth/getSessionAccount";
-import { canViewApproverDashboard, canAjukanKalkulasiTukinMassalUnit } from "../../auth/permissions";
+import {
+  canViewApproverDashboard,
+  canAjukanKalkulasiTukinMassalUnit,
+  canLihatKalkulasiSebelumDikirim,
+} from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
 import { AksesDitolak } from "../AksesDitolak";
 import { StatusBadge } from "../StatusBadge";
 import { SumberDataTukin } from "./SumberDataTukin";
 import { BadgePejabatEselon } from "../BadgePejabatEselon";
+import { RingkasanPerUnit, type BarisRingkasanUnit } from "./RingkasanPerUnit";
+import { TabelRincianUnit, type BarisRincianTukin } from "./TabelRincianUnit";
+import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
+import { kelasJabatanEfektif } from "../../business-logic/kelasJabatanEfektif";
 
 export const dynamic = "force-dynamic";
 
@@ -80,11 +88,129 @@ export default async function TukinPage({
         periodeTahun: k.periodeTahun,
       })),
     },
-    select: { satuanKerja: true, periodeBulan: true, periodeTahun: true, status: true },
+    select: {
+      satuanKerja: true,
+      periodeBulan: true,
+      periodeTahun: true,
+      status: true,
+      dikirimPada: true,
+      dikirimOleh: { select: { nama: true } },
+    },
   });
   const petaKirim = new Map(
     pengirimanPeriode.map((p) => [`${p.satuanKerja}|${p.periodeBulan}|${p.periodeTahun}`, p.status])
   );
+  const petaPengirim = new Map(
+    pengirimanPeriode.map((p) => [`${p.satuanKerja}|${p.periodeBulan}|${p.periodeTahun}`, p])
+  );
+
+  // PPABP hanya melihat hasil yang SUDAH DIKIRIM unitnya (keputusan user
+  // 2026-09-06). Baris yang belum dikirim masih boleh berubah kapan saja oleh
+  // Kasubag TU-nya, jadi menampilkannya di sini mengundang pemeriksaan - dan
+  // tindak lanjut - atas angka yang belum final.
+  //
+  // Disaring SETELAH query, bukan di dalam `where`: status kirim disimpan per
+  // UNIT+periode di tabel lain, bukan per baris kalkulasi, jadi tidak bisa
+  // disatukan dalam satu kondisi Prisma tanpa relasi yang memang tidak ada.
+  //
+  // Unit yang belum mengirim TIDAK hilang dari pandangan PPABP: papan progres
+  // pengiriman menampilkannya sebagai unit yang DITUNGGU, dan itu memang
+  // tempat yang benar untuk melihatnya.
+  const kalkulasiTampil = kalkulasiList.filter((k) => {
+    if (canLihatKalkulasiSebelumDikirim(authUser, k.pegawai.satuanKerja)) return true;
+    return petaKirim.get(`${k.pegawai.satuanKerja}|${k.periodeBulan}|${k.periodeTahun}`) === "TERKIRIM";
+  });
+
+  // --- Rincian satu unit (tabel 39 kolom) ---
+  //
+  // Ditarik HANYA waktu satu satuan kerja dibuka. Tanpa penjaga ini, membuka
+  // /tukin tanpa filter berarti menarik presensi + predikat + identitas untuk
+  // lima ribu pegawai sekaligus, cuma untuk dibuang lagi karena yang tampil
+  // ringkasan per unit.
+  const barisRincian: BarisRincianTukin[] = [];
+  if (satkerEfektif && kalkulasiTampil.length > 0) {
+    const idPegawai = kalkulasiTampil.map((k) => k.pegawaiId);
+    const kunciPeriode = kalkulasiTampil.map((k) => ({
+      pegawaiId: k.pegawaiId,
+      periodeBulan: k.periodeBulan,
+      periodeTahun: k.periodeTahun,
+    }));
+
+    const [predikatList, skHukdis] = await Promise.all([
+      prisma.predikatKinerja.findMany({
+        where: { OR: kunciPeriode },
+        select: { pegawaiId: true, periodeBulan: true, periodeTahun: true, predikat: true },
+      }),
+      // Kelas jabatan EFEKTIF - pegawai yang sedang menjalani penurunan
+      // jabatan (PP 94/2021) dibayar dengan tarif kelas yang turun. Dihitung
+      // dengan cara yang SAMA PERSIS dengan route ADK; kalau berbeda, tabel
+      // pemeriksaan ini justru bertentangan dengan berkas yang diperiksanya.
+      prisma.skHukumanDisiplin.findMany({
+        where: { pegawaiId: { in: idPegawai }, status: "DISETUJUI", kelasJabatanSelamaHukuman: { not: null } },
+      }),
+    ]);
+
+    const kunci = (p: string, b: number, t: number) => `${p}|${b}|${t}`;
+    const petaPredikat = new Map(predikatList.map((r) => [kunci(r.pegawaiId, r.periodeBulan, r.periodeTahun), r]));
+    const petaSk = new Map<string, typeof skHukdis>();
+    for (const sk of skHukdis) petaSk.set(sk.pegawaiId, [...(petaSk.get(sk.pegawaiId) ?? []), sk]);
+
+    for (const k of kalkulasiTampil) {
+      const efektif = kelasJabatanEfektif(
+        k.pegawai.kelasJabatan,
+        petaSk.get(k.pegawaiId) ?? [],
+        k.periodeBulan,
+        k.periodeTahun
+      );
+      barisRincian.push({
+        nip: k.pegawai.nip,
+        nama: k.pegawai.nama,
+        kelasJabatan: efektif.kelas,
+        nominalTukin: efektif.kelas === null ? null : (TUKIN_POKOK_PER_KELAS_JABATAN[efektif.kelas] ?? null),
+        predikat: petaPredikat.get(kunci(k.pegawaiId, k.periodeBulan, k.periodeTahun))?.predikat ?? null,
+        dibayarkan: k.tukinBersih,
+        catatanAnomali: k.catatanAnomali,
+      });
+    }
+  }
+
+  // --- Ringkasan per satuan kerja ---
+  //
+  // Dipakai waktu belum ada satker yang dipilih. Diturunkan dari
+  // `kalkulasiTampil` - daftar yang SUDAH disaring hak aksesnya - supaya
+  // ringkasan dan rincian tidak mungkin bercerita berbeda. Kalau dihitung
+  // ulang lewat query terpisah, penyaringan hak akses harus ditulis dua kali
+  // dan cepat atau lambat keduanya menyimpang.
+  const ringkasanUnit: BarisRingkasanUnit[] = [];
+  if (!satkerEfektif) {
+    const per = new Map<string, BarisRingkasanUnit>();
+    for (const k of kalkulasiTampil) {
+      const kunci = `${k.pegawai.satuanKerja}|${k.periodeBulan}|${k.periodeTahun}`;
+      const kirim = petaPengirim.get(kunci);
+      const baris =
+        per.get(k.pegawai.satuanKerja) ??
+        {
+          satuanKerja: k.pegawai.satuanKerja,
+          jumlahPegawai: 0,
+          jumlahCatatan: 0,
+          totalBersih: 0,
+          statusKirim: kirim?.status,
+          dikirimPada: kirim?.dikirimPada ?? null,
+          dikirimOleh: kirim?.dikirimOleh?.nama ?? null,
+        };
+      baris.jumlahPegawai += 1;
+      baris.totalBersih += k.tukinBersih;
+      if (k.catatanAnomali) baris.jumlahCatatan += 1;
+      per.set(k.pegawai.satuanKerja, baris);
+    }
+    // Paling baru dikirim di atas - tabel ini antrean kerja, bukan arsip.
+    // Unit tanpa tanggal kirim ditaruh paling belakang.
+    ringkasanUnit.push(
+      ...[...per.values()].sort(
+        (a, b) => (b.dikirimPada?.getTime() ?? 0) - (a.dikirimPada?.getTime() ?? 0)
+      )
+    );
+  }
 
   // --- Status kedua komponen pembentuk Tukin untuk periode yang difilter ---
   // Ditaruh di halaman yang sama supaya jelas kenapa seorang pegawai belum
@@ -107,13 +233,18 @@ export default async function TukinPage({
       ])
     : [0, 0, 0];
 
+  // Ringkasan menggantikan daftar kartu, BUKAN disembunyikan dengan CSS -
+  // kartu yang dirender lalu di-`hidden` tetap dibuat semuanya, dan justru
+  // beban itulah yang mau dihilangkan.
+  const tampilkanRingkasan = !satkerEfektif && ringkasanUnit.length > 0;
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Dashboard Tukin</h1>
       <p className="mt-1 text-sm text-muted">
         Satu tempat untuk kedua komponen pembentuk Tunjangan Kinerja: <strong>kehadiran 30%</strong> dan{" "}
-        <strong>capaian kinerja 70%</strong> (Permenaker 15/2024 Pasal 5 &amp; 18), beserta hasil kalkulasi dan
-        approval berjenjangnya.
+        <strong>capaian kinerja 70%</strong> (Permenaker 15/2024 Pasal 5 &amp; 18), beserta hasil kalkulasinya
+        per satuan kerja.
       </p>
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
@@ -127,14 +258,22 @@ export default async function TukinPage({
         satkerEfektif={satkerEfektif}
       />
 
-      <div className="mt-8 space-y-4">
-        {kalkulasiList.length === 0 && (
+      {tampilkanRingkasan ? (
+        <RingkasanPerUnit
+          baris={ringkasanUnit}
+          qsPeriode={bulan && tahun ? `?bulan=${bulan}&tahun=${tahun}` : ""}
+        />
+      ) : barisRincian.length > 0 ? (
+        <TabelRincianUnit baris={barisRincian} satuanKerja={satkerEfektif ?? ""} />
+      ) : (
+        <div className="mt-8 space-y-4">
+        {kalkulasiTampil.length === 0 && (
           <p className="card p-6 text-sm text-muted">
-            Tidak ada data untuk filter ini. Kalau memang belum ada data sama sekali, jalankan job scheduler dulu (npx tsx src/jobs/runTukinJobDemo.ts).
+            Belum ada hasil kalkulasi untuk filter ini. Coba ubah periode atau satuan kerjanya.
           </p>
         )}
 
-        {kalkulasiList.map((kalkulasi) => {
+        {kalkulasiTampil.map((kalkulasi) => {
           const keadaanKirim = keadaanKirimBaris(
             petaKirim.get(
               `${kalkulasi.pegawai.satuanKerja}|${kalkulasi.periodeBulan}|${kalkulasi.periodeTahun}`
@@ -172,7 +311,8 @@ export default async function TukinPage({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </main>
   );
 }

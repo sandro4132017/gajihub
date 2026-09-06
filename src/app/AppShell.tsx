@@ -224,14 +224,11 @@ const MENU_PPABP = [
     icon: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
   },
   MENU_PREDIKAT_KINERJA,
-  // Halamannya di bawah /kasubag karena dibangun untuk Kasubag TU duluan, TAPI
-  // PPABP juga berwenang kalkulasi massal (canAjukanKalkulasiTukinMassalUnit).
-  // Bedanya: satuan kerjanya dipilih lewat filter, tidak dipaksa satu unit.
-  {
-    href: "/kasubag/kalkulasi",
-    label: "Kalkulasi",
-    icon: <><rect x="4" y="2" width="16" height="20" rx="2" /><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h6" /></>,
-  },
+  // TIDAK ADA menu "Kalkulasi" di sini - PPABP tidak menghitung, ia menerima
+  // hasil yang sudah dikirim dan dikunci unitnya (keputusan user 2026-09-06,
+  // lihat canAjukanKalkulasiTukinMassalUnit). Menu ini pernah ada waktu PPABP
+  // masih boleh menjalankan kalkulasi; dilepas bersamaan dengan izinnya
+  // supaya tidak jadi tautan yang selalu berakhir "Akses ditolak".
   // Ketiganya disandingkan karena memang sekelompok. Labelnya cukup nama
   // domainnya - kata "Approval"/"Dashboard" tidak menambah keterangan apa pun
   // (semua halaman di sini dashboard, dan approval cuma salah satu yang bisa

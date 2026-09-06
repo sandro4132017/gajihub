@@ -8,9 +8,9 @@ import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccoun
 import { canKelolaGajiInduk, type AuthUser } from "../../../auth/permissions";
 import {
   gabungHasilBasisDataGaji,
-  kodeBankBernamaGanda,
   nipGanda,
   parseSheetBasisDataGaji,
+  ringkasMasalahBasisDataGaji,
   type BarisBasisDataGaji,
 } from "../../../business-logic/basisDataGaji";
 
@@ -48,7 +48,10 @@ export interface UploadBasisDataGajiFormState {
     contohBedaNama: { nip: string; siap: string; webGaji: string }[];
     pegawaiAktifBelumTercakup: number;
   };
+  /** Perlu tindakan manusia - inilah yang ditampilkan lebih dulu. */
   peringatan?: string[];
+  /** Sudah beres sendiri; laporan pekerjaan, bukan tugas. */
+  dirapikan?: string[];
   dilewati?: { alasan: string; jumlah: number; contohNip: string[] }[];
 }
 
@@ -201,7 +204,18 @@ export async function uploadBasisDataGajiAction(
     const totalAktif = await prisma.pegawai.count({ where: { statusPegawai: "AKTIF" } });
     const tercakup = await prisma.identitasWebGaji.count({ where: { pegawai: { statusPegawai: "AKTIF" } } });
 
-    const peringatan = [...hasil.peringatan];
+    // Kalimatnya disusun SEKALI dari seluruh sheet yang sudah digabung -
+    // bukan per sheet - supaya satu jenis masalah tidak muncul dua kali cuma
+    // karena berkasnya punya sheet data_PNS dan data_P3K.
+    const { dirapikan, perluDiperiksa } = ringkasMasalahBasisDataGaji(hasil.masalah);
+    if (hasil.jumlahNikNipTertukar > 0) {
+      dirapikan.unshift(
+        `${hasil.jumlahNikNipTertukar} baris kolom NIK dan NIP-nya tertukar - sudah ditukar balik ` +
+          `(NIK 16 digit, NIP 18 digit, jadi tidak mungkin salah kenali).`
+      );
+    }
+
+    const peringatan = [...perluDiperiksa];
     const ganda = nipGanda(hasil.baris);
     if (ganda.length > 0) {
       peringatan.push(
@@ -211,13 +225,11 @@ export async function uploadBasisDataGajiAction(
           .join(", ")}). Yang tersimpan adalah baris TERAKHIR untuk NIP itu.`
       );
     }
-    for (const b of kodeBankBernamaGanda(hasil.baris)) {
-      peringatan.push(
-        `Kode bank ${b.kodeBankSpan} dipakai dengan ${b.nama.length} nama bank berbeda: ` +
-          `${b.nama.map((n) => `${n.nama} (${n.jumlah})`).join(", ")}. ` +
-          `Pemisahan berkas ADK memakai KODE-nya, jadi semuanya akan masuk satu berkas - perlu diperiksa.`
-      );
-    }
+    // Dulu ada satu laporan lagi di sini - "kode bank X dipakai dengan 2 nama
+    // berbeda" - dan itu dicabut bersama fungsinya: sejak kode/nama
+    // diputuskan dari nomor rekening, baris yang ditangkapnya sudah masuk
+    // ringkasan di atas. Melaporkannya lagi berarti cacat yang sama dihitung
+    // dua kali.
 
     await prisma.auditTrail.create({
       data: {
@@ -249,6 +261,7 @@ export async function uploadBasisDataGajiAction(
         pegawaiAktifBelumTercakup: Math.max(0, totalAktif - tercakup),
       },
       peringatan,
+      dirapikan,
       dilewati: kelompokkanAlasan(dilewati),
     };
   } catch (err) {

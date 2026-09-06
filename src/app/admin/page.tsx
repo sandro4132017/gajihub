@@ -13,19 +13,20 @@ export default async function AdminDashboardPage() {
     return <AksesDitolak pesan="Halaman ini khusus Admin." />;
   }
 
+  // TODO(confirm) role ADMIN sekarang menggabung akses teknis (konfigurasi,
+  // monitoring) dengan privilege seluruh role bisnis. Sebelum dipakai
+  // produksi ini perlu dipecah jadi System Admin (teknis saja) + role bisnis
+  // terpisah. Peringatannya dulu dipasang sebagai banner di halaman ini,
+  // dicabut 2026-09-06 - keputusan desainnya belum berubah, cuma tidak lagi
+  // ditayangkan ke pengguna.
   const usulanMenunggu = await prisma.usulanPerubahanRole.count({ where: { status: "MENUNGGU" } });
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Dashboard Admin</h1>
       <p className="mt-1 text-sm text-muted">
-        Kewenangan teknis (config, monitoring, eksekusi role) + privilege semua role lain untuk kebutuhan demo/simulasi.
+        Kewenangan teknis (konfigurasi, monitoring, eksekusi role) beserta akses ke seluruh menu role lain.
       </p>
-
-      <div className="mt-4 rounded-lg bg-gold-tint px-3 py-2 text-xs font-semibold text-gold-deep">
-        BUKAN DESAIN FINAL production - role ini WAJIB dipecah jadi System Admin (akses teknis saja) + role bisnis
-        terpisah sebelum production, lihat TODO(confirm) besar di CLAUDE.md.
-      </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <Link href="/admin/role-assignment" className="card p-4 transition hover:border-teal-deep">

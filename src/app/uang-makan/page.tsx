@@ -129,7 +129,7 @@ export default async function UangMakanPage({
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Makan</h1>
       <p className="mt-1 text-sm text-muted">
-        Hasil kalkulasi uang makan dari job scheduler, siap direview dan disetujui berjenjang.
+        Hasil kalkulasi uang makan per pegawai, siap diperiksa sebelum rekapnya dikirim ke PPABP.
       </p>
 
       <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
@@ -160,7 +160,7 @@ export default async function UangMakanPage({
       <div className="mt-8 space-y-4">
         {kalkulasiList.length === 0 && (
           <p className="card p-6 text-sm text-muted">
-            Tidak ada data untuk filter ini. Kalau memang belum ada data sama sekali, jalankan job scheduler dulu (npx tsx src/jobs/runUangMakanJobDemo.ts).
+            Belum ada hasil kalkulasi untuk filter ini. Coba ubah periode atau satuan kerjanya.
           </p>
         )}
 
@@ -206,7 +206,7 @@ export default async function UangMakanPage({
                   // bisa direkonstruksi - dan itu dikatakan, bukan dikosongkan.
                   return (
                     <p className="mt-3 text-xs text-muted">
-                      Rincian per status kehadiran tidak tersedia - rekap presensi periode ini belum ada di database.
+                      Rincian per status kehadiran tidak tersedia - presensi periode ini belum ditarik.
                     </p>
                   );
                 }

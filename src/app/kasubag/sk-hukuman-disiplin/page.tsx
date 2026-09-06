@@ -11,6 +11,17 @@ export const dynamic = "force-dynamic";
 
 const WARNA_STATUS = { DIAJUKAN: "amber", DISETUJUI: "hijau", DITOLAK: "merah" } as const;
 
+/**
+ * TODO(confirm) alur approval OSDMA untuk SK Hukuman Disiplin masih ASUMSI -
+ * belum ada konfirmasi resmi dari OSDMA/Biro Hukum. Jenis hukuman juga masih
+ * bebas isi (free-text) karena kategorisasi PP 94/2021 belum dipetakan ke
+ * sistem ini, dan approval di sini TIDAK memberi efek potongan Tukin otomatis
+ * (Pasal 15 belum diimplementasikan).
+ *
+ * Peringatan ini dulu dipasang sebagai banner kuning di halaman; dicabut
+ * 2026-09-06 atas permintaan user menjelang pengujian bersama Kasubag TU.
+ * Isinya TIDAK batal - yang berubah cuma tempatnya.
+ */
 export default async function SkHukumanDisiplinUnitPage({
   searchParams,
 }: {
@@ -79,12 +90,6 @@ export default async function SkHukumanDisiplinUnitPage({
           </div>
         );
       })()}
-
-      <div className="mt-4 rounded-lg bg-gold-tint px-3 py-2 text-xs font-semibold text-gold-deep">
-        TODO(confirm) - alur approval OSDMA untuk SK Hukuman Disiplin di halaman ini ASUMSI dari spesifikasi simulasi,
-        BELUM ada konfirmasi resmi dari OSDMA/Biro Hukum. Jenis hukuman masih bebas isi (free-text) karena kategorisasi
-        resmi PP 94/2021 belum dipetakan ke sistem ini - jangan anggap alur ini final buat production.
-      </div>
 
       <InputSkHukdisForm pegawaiList={pegawaiList} />
 

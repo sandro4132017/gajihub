@@ -83,9 +83,14 @@ export function UploadBasisDataGajiForm() {
         </p>
       )}
 
+      {/* HANYA yang butuh tindakan yang tampil terbuka. Yang sudah beres
+          sendiri dilipat di bawahnya - kalau keduanya dicetak sederet, yang
+          berbahaya tenggelam di antara laporan pekerjaan yang sudah selesai. */}
       {state.peringatan && state.peringatan.length > 0 && (
         <div className="mt-3 rounded-xl border border-gold/40 bg-gold-tint p-3">
-          <p className="text-sm font-bold text-ink">Perlu diperiksa</p>
+          <p className="text-sm font-bold text-ink">
+            Perlu diperiksa sebelum berkas dipakai membayar
+          </p>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-ink-2">
             {state.peringatan.map((p) => (
               <li key={p}>{p}</li>
@@ -94,10 +99,37 @@ export function UploadBasisDataGajiForm() {
         </div>
       )}
 
+      {state.dirapikan && state.dirapikan.length > 0 && (
+        <details className="group mt-3 rounded-xl border border-line bg-surface-2 p-3">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
+            <span>
+              Sudah dirapikan otomatis
+              <span className="ml-1.5 font-normal text-muted">({state.dirapikan.length} hal)</span>
+            </span>
+            <span className="text-xs font-normal text-muted group-open:hidden">Lihat detail</span>
+            <span className="hidden text-xs font-normal text-muted group-open:inline">Tutup</span>
+          </summary>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
+            {state.dirapikan.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+
       {state.dilewati && state.dilewati.length > 0 && (
-        <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3">
-          <p className="text-sm font-bold text-ink">Baris yang dilewati</p>
-          <ul className="mt-1 space-y-1.5 text-sm text-ink-2">
+        <details className="group mt-3 rounded-xl border border-line bg-surface-2 p-3">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
+            <span>
+              Baris yang dilewati
+              <span className="ml-1.5 font-normal text-muted">
+                ({state.dilewati.reduce((a, d) => a + d.jumlah, 0)} baris)
+              </span>
+            </span>
+            <span className="text-xs font-normal text-muted group-open:hidden">Lihat detail</span>
+            <span className="hidden text-xs font-normal text-muted group-open:inline">Tutup</span>
+          </summary>
+          <ul className="mt-2 space-y-1.5 text-sm text-ink-2">
             {state.dilewati.map((d) => (
               <li key={d.alasan}>
                 <strong>{d.jumlah}</strong> - {d.alasan}
@@ -107,7 +139,7 @@ export function UploadBasisDataGajiForm() {
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       )}
     </div>
   );

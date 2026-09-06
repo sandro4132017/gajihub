@@ -1,3 +1,4 @@
+import { rapikanRekening, type MasalahRekening } from "./bankSpan";
 // ============================================================================
 // REKENING PEGAWAI - pemetaan file daftar rekening bank penerima pembayaran.
 //
@@ -43,6 +44,12 @@ export interface HasilParseRekening {
   error?: string;
   baris: BarisRekening[];
   dilewati: BarisRekeningDilewati[];
+  /**
+   * Yang diperbaiki maupun yang perlu diperiksa manusia - lihat
+   * rapikanRekening(). Sengaja dikembalikan mentah, bukan sudah jadi
+   * kalimat: pemanggilnya yang tahu mau menampilkannya sebagai apa.
+   */
+  masalah: MasalahRekening[];
 }
 
 function teks(nilai: unknown): string | null {
@@ -75,6 +82,7 @@ export function parseRekeningPegawai(matriks: unknown[][]): HasilParseRekening {
     return {
       baris: [],
       dilewati: [],
+      masalah: [],
       error: 'Baris header tidak ketemu - file harus punya kolom "NIP" dan kolom nomor rekening.',
     };
   }
@@ -91,11 +99,12 @@ export function parseRekeningPegawai(matriks: unknown[][]): HasilParseRekening {
   if (kolNamaBank < 0) hilang.push("Nama Bank");
   if (kolRek < 0) hilang.push("Nomor Rekening");
   if (hilang.length > 0) {
-    return { baris: [], dilewati: [], error: `Kolom wajib tidak ditemukan: ${hilang.join(", ")}.` };
+    return { baris: [], dilewati: [], masalah: [], error: `Kolom wajib tidak ditemukan: ${hilang.join(", ")}.` };
   }
 
   const baris: BarisRekening[] = [];
   const dilewati: BarisRekeningDilewati[] = [];
+  const masalah: MasalahRekening[] = [];
 
   for (let i = idxHeader + 1; i < matriks.length; i++) {
     const row = matriks[i];
@@ -122,16 +131,24 @@ export function parseRekeningPegawai(matriks: unknown[][]): HasilParseRekening {
       continue;
     }
 
+    // Aturan perapian yang SAMA dengan jalur basis data gaji - nama bank
+    // dibakukan, nol di depan dikembalikan, kode bank rusak dipulihkan dari
+    // namanya. Dua jalur unggahan mengisi tabel yang sama, jadi keduanya
+    // harus memperlakukan datanya dengan cara yang sama; kalau tidak, isi
+    // tabelnya bergantung lewat pintu mana datanya masuk.
+    const rapi = rapikanRekening({ kodeBankSpan, namaBank, nomorRekening });
+    masalah.push(...rapi.masalah);
+
     baris.push({
       nip,
-      kodeBankSpan,
-      namaBank,
-      nomorRekening,
+      kodeBankSpan: rapi.kodeBankSpan,
+      namaBank: rapi.namaBank,
+      nomorRekening: rapi.nomorRekening,
       namaRekening: kolNamaRek >= 0 ? teks(row[kolNamaRek]) : null,
     });
   }
 
-  return { baris, dilewati };
+  return { baris, dilewati, masalah };
 }
 
 /**

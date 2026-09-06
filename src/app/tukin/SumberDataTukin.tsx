@@ -62,31 +62,19 @@ export function SumberDataTukin({
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        {bolehHitung ? (
+      {/* Tombolnya saja, tanpa keterangan (permintaan user 2026-09-06).
+          Yang berwenang menjalankan kalkulasi cuma KASUBAG_TU (unitnya
+          sendiri) dan ADMIN - PPABP dicabut 2026-09-06, lihat
+          canAjukanKalkulasiTukinMassalUnit. Untuk yang tidak berwenang
+          TIDAK ada teks pengganti: tombol yang absen sudah menjawabnya, dan
+          menjelaskan siapa yang berwenang di layar orang yang memang bukan
+          pelakunya cuma menambah bacaan. */}
+      {bolehHitung && (
+        <div className="mt-3">
           <Link href={`/kasubag/kalkulasi${qs}`} className="btn btn-primary">
             Hitung Tukin
           </Link>
-        ) : (
-          // Sengaja TIDAK menampilkan tombol yang pasti ditolak. Yang berwenang
-          // menjalankan kalkulasi: KASUBAG_TU (unitnya sendiri), PPABP (lintas
-          // satker), dan ADMIN - lihat canAjukanKalkulasiTukinMassalUnit di
-          // permissions.ts.
-          <span className="text-xs text-muted">
-            Kalkulasi dijalankan Kasubag TU unit masing-masing atau tim PPABP, lewat menu{" "}
-            <strong>Kalkulasi</strong>.
-          </span>
-        )}
-        <span className="text-xs text-muted">
-          Kalkulasi memakai data kedua komponen di atas. Pegawai yang salah satu datanya belum ada akan dilewati dengan
-          alasan yang jelas.
-        </span>
-      </div>
-
-      {!periodeAktif && (
-        <p className="mt-3 text-xs text-muted">
-          Pilih bulan &amp; tahun di filter atas buat melihat berapa pegawai yang datanya sudah lengkap.
-        </p>
+        </div>
       )}
     </div>
   );

@@ -252,14 +252,63 @@ function potonganBertingkat(tabel: number[], bulanKeberapa: number, potonganSete
   return potonganSetelahTabel;
 }
 
-export function hitungPersenDibayarCuti(cutiAktif?: {
-  jenis: JenisCuti;
-  bulanKeberapa?: number;
-  jumlahHariCuti?: number;
-}): { persenDibayar: number; anomali: string[] } | null {
+/**
+ * Jenis cuti yang potongannya BERTINGKAT per bulan - bulan ke berapa cuti itu
+ * berjalan menentukan berapa yang dibayar, jadi bulan yang tidak diketahui
+ * bukan sekadar keterangan yang kurang.
+ */
+const CUTI_BERTINGKAT_PER_BULAN: readonly JenisCuti[] = ["CUTI_SAKIT", "CUTI_BESAR"];
+
+/**
+ * Ambang "cuti berkepanjangan": cuti menutup sekian bagian hari kerja bulan itu.
+ *
+ * ADA supaya peringatannya BERARTI. Tanpa ambang, tiap orang yang sakit sehari
+ * ikut ditandai - pada data nyata itu 1.500 baris, dan peringatan yang berbunyi
+ * 1.500 kali sama saja dengan tidak ada peringatan. Yang benar-benar berisiko
+ * adalah cuti yang menghabiskan hampir seluruh bulan, karena cuti seperti itulah
+ * yang berlanjut ke bulan berikutnya dan berpindah tingkat potongan.
+ */
+const AMBANG_CUTI_BERKEPANJANGAN = 0.8;
+
+export function hitungPersenDibayarCuti(
+  cutiAktif?: {
+    jenis: JenisCuti;
+    bulanKeberapa?: number;
+    jumlahHariCuti?: number;
+  },
+  jumlahHariKerja?: number
+): { persenDibayar: number; anomali: string[] } | null {
   if (!cutiAktif) return null;
   const anomali: string[] = [];
   const bulan = cutiAktif.bulanKeberapa ?? 1;
+
+  // BULAN TIDAK DIKETAHUI PADA CUTI PANJANG - ditandai, bukan didiamkan.
+  //
+  // `bulanKeberapa ?? 1` di atas memilih tingkat potongan yang PALING RINGAN
+  // (Pasal 14 huruf d bulan ke-1 = tanpa potongan sama sekali). Untuk cuti
+  // sehari-dua hari itu memang benar. Untuk cuti yang menghabiskan hampir
+  // seluruh bulan, itu bisa berarti seseorang dibayar penuh padahal sedang di
+  // bulan kedua dan seharusnya dibayar separuh.
+  //
+  // Sinkronisasi e-Presensi TIDAK PERNAH mengisi bulan ini - labelnya cuma
+  // "Cuti Sakit", tanpa nomor - jadi keadaan ini tidak jarang, dan sebelum
+  // catatan ini ada, ia tidak terlihat di mana pun.
+  //
+  // TIDAK menebak bulannya: bulan ke berapa sebuah cuti berjalan ditentukan SK
+  // cuti, bukan oleh berapa hari orangnya tidak hadir, dan SK itu tidak ada di
+  // sistem ini.
+  if (
+    cutiAktif.bulanKeberapa === undefined &&
+    CUTI_BERTINGKAT_PER_BULAN.includes(cutiAktif.jenis) &&
+    jumlahHariKerja !== undefined &&
+    jumlahHariKerja > 0 &&
+    cutiAktif.jumlahHariCuti !== undefined &&
+    cutiAktif.jumlahHariCuti / jumlahHariKerja >= AMBANG_CUTI_BERKEPANJANGAN
+  ) {
+    anomali.push(
+      `${cutiAktif.jenis} menutup ${cutiAktif.jumlahHariCuti} dari ${jumlahHariKerja} hari kerja, tapi BULAN KE BERAPA cuti itu berjalan tidak diketahui - dihitung sebagai bulan ke-1, yaitu tingkat potongan paling ringan. Kalau menurut SK cutinya ini bulan ke-2 atau lebih, tukin seharusnya dipotong lebih besar (Pasal 14). Pastikan ke SK cuti, isi lewat koreksi presensi, lalu hitung ulang.`
+    );
+  }
 
   switch (cutiAktif.jenis) {
     // Pasal 14 huruf a & b - dibayar penuh, tidak ada potongan.
@@ -438,7 +487,10 @@ export function hitungTukin(input: TukinInput): TukinResult {
   let tukinPokok = komponenKehadiranSetelahPotongan + komponenKinerja;
 
   // --- Override cuti (Pasal 14) - berlaku atas TOTAL tukin, bukan cuma kehadiran ---
-  const hasilCuti = hitungPersenDibayarCuti(input.rekapKehadiran.cutiAktif);
+  const hasilCuti = hitungPersenDibayarCuti(
+    input.rekapKehadiran.cutiAktif,
+    input.rekapKehadiran.jumlahHariKerja
+  );
   const persenDibayarCuti = hasilCuti?.persenDibayar ?? null;
   // CUTI YANG TIDAK MEMOTONG TIDAK BOLEH MENIMPA APA PUN.
   //

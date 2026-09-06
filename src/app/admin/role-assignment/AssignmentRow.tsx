@@ -82,7 +82,7 @@ export function AssignmentRow({
 
       <div className="mt-3 rounded-lg bg-surface-2 p-3">
         <p className="text-[11px] font-bold uppercase tracking-wide text-muted">
-          Role tambahan (buat testing)
+          Role tambahan
         </p>
         <p className="mt-0.5 text-[11px] text-muted">
           Akun bisa ganti sudut pandang sendiri lewat tombol akun di sidebar - tanpa logout. Role utama di atas tetap

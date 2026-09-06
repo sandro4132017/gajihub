@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   gabungHasilBasisDataGaji,
-  kodeBankBernamaGanda,
   nipGanda,
   parseSheetBasisDataGaji,
+  ringkasMasalahBasisDataGaji,
 } from "../basisDataGaji";
 
 /** Dua baris kepala persis seperti file asli: judul grup, lalu header. */
@@ -86,7 +86,6 @@ describe("parseSheetBasisDataGaji", () => {
     const h = parseSheetBasisDataGaji([...HEADER, tertukar], "data_PNS");
     expect(h.baris[0]?.nip).toBe("196608211987031001");
     expect(h.jumlahNikNipTertukar).toBe(1);
-    expect(h.peringatan.join(" ")).toContain("tertukar");
   });
 
   it("TIDAK menukar kalau cuma NIP-nya yang pendek - itu data rusak, bukan tertukar", () => {
@@ -106,12 +105,75 @@ describe("parseSheetBasisDataGaji", () => {
     expect(h.baris[0]?.tukin?.kodeBankSpan).toBe("520002000990");
   });
 
-  it("kode bank yang panjangnya janggal TETAP disimpan tapi diperingatkan", () => {
+  it("kode bank yang bukan kode SPAN DIPULIHKAN dari nama banknya", () => {
     const janggal = [...barisNormal];
-    janggal[11] = "52009000990"; // 11 digit
+    janggal[11] = "52009000990"; // 11 digit - bukan kode SPAN
     const h = parseSheetBasisDataGaji([...HEADER, janggal], "data_PNS");
     expect(h.baris).toHaveLength(1);
-    expect(h.peringatan.join(" ")).toContain("bukan 12 digit");
+    // Nama banknya "BANK RAKYAT INDONESIA" dan itu dikenali, jadi kodenya
+    // DITURUNKAN dari situ - pemulihan, bukan tebakan. Pada berkas nyata ini
+    // menyelamatkan 4 baris BPVP Sorong yang kolom kodenya berisi nomor
+    // rekening.
+    expect(h.baris[0]?.tukin?.kodeBankSpan).toBe("520002000990");
+    expect(h.masalah.map((m) => m.jenis)).toContain("KODE_DIPULIHKAN_DARI_NAMA");
+  });
+
+  it("kode DAN nama bank sama-sama tidak dikenal - dibiarkan apa adanya", () => {
+    const janggal = [...barisNormal];
+    janggal[11] = "52009000990";
+    janggal[14] = "BANK ENTAH BERANTAH";
+    const h = parseSheetBasisDataGaji([...HEADER, janggal], "data_PNS");
+    // Tidak ada yang bisa diturunkan dari mana pun, jadi tidak disentuh -
+    // baris tetap disimpan supaya orangnya tidak hilang dari sistem.
+    expect(h.baris[0]?.tukin?.kodeBankSpan).toBe("52009000990");
+    expect(h.masalah.map((m) => m.jenis)).toContain("KODE_TIDAK_DIKENAL");
+  });
+
+  it("kode bank dibetulkan mengikuti nomor rekening - kasus 341 pegawai satker 451026", () => {
+    // Kode BRI, nama BNI, nomor 10 digit. Panjang 10 itu punya BNI, bukan BRI
+    // (15) - jadi dua kolom (nama + nomor) sepakat melawan kodenya, dan
+    // kodenya yang dibetulkan. Aturan dari user 2026-09-06.
+    const beda = [...barisNormal];
+    beda[12] = "1921483416"; // 10 digit - panjang baku BNI
+    beda[14] = "BANK NEGARA INDONESIA"; // kode di [11] BRI
+    const h = parseSheetBasisDataGaji([...HEADER, beda], "data_PNS");
+    expect(h.baris[0]?.tukin?.kodeBankSpan).toBe("520009000990");
+    expect(h.baris[0]?.tukin?.namaBank).toBe("BANK NEGARA INDONESIA");
+    expect(h.baris[0]?.tukin?.nomorRekening).toBe("1921483416");
+    expect(h.masalah.map((m) => m.jenis)).toContain("KODE_IKUT_NOMOR");
+    // SATU cacat, SATU tanda - bukan sekaligus "panjang janggal".
+    expect(h.masalah.map((m) => m.jenis)).not.toContain("PANJANG_JANGGAL");
+  });
+
+  it("kalau nomornya memihak KODE, justru namanya yang dibetulkan", () => {
+    const beda = [...barisNormal];
+    beda[14] = "BANK NEGARA INDONESIA"; // kode BRI, nomor [12] tetap 15 digit
+    const h = parseSheetBasisDataGaji([...HEADER, beda], "data_PNS");
+    expect(h.baris[0]?.tukin?.kodeBankSpan).toBe("520002000990");
+    expect(h.baris[0]?.tukin?.namaBank).toBe("BANK RAKYAT INDONESIA");
+    expect(h.masalah.map((m) => m.jenis)).toContain("NAMA_IKUT_NOMOR");
+  });
+
+  it("kode dan nama SEPAKAT - panjang nomor tidak boleh membatalkannya", () => {
+    // Bank Syariah Indonesia: 791 baris di berkas nyata, semuanya 10 digit -
+    // sama persis dengan BNI. Kalau panjang nomor dibiarkan memutuskan
+    // sendirian, ratusan rekening BSI pindah ke BNI tanpa ada satu pun kolom
+    // di berkasnya yang menyebut BNI.
+    const bsi = [...barisNormal];
+    bsi[11] = "525451000990";
+    bsi[12] = "7123456789"; // 10 digit
+    bsi[14] = "BANK SYARIAH INDONESIA";
+    const h = parseSheetBasisDataGaji([...HEADER, bsi], "data_PNS");
+    expect(h.baris[0]?.tukin?.kodeBankSpan).toBe("525451000990");
+    expect(h.masalah.map((m) => m.jenis)).not.toContain("KODE_IKUT_NOMOR");
+  });
+
+  it("nol di depan nomor rekening dikembalikan sesuai panjang baku banknya", () => {
+    const nolHilang = [...barisNormal];
+    nolHilang[8] = "447729376"; // BNI, 9 digit - harusnya 10
+    const h = parseSheetBasisDataGaji([...HEADER, nolHilang], "data_PNS");
+    expect(h.baris[0]?.gaji?.nomorRekening).toBe("0447729376");
+    expect(h.masalah.map((m) => m.jenis)).toContain("NOL_DEPAN_DIPULIHKAN");
   });
 
   it("baris tanpa rekening tetap dipakai untuk namanya", () => {
@@ -159,25 +221,50 @@ describe("pemeriksaan yang butuh mata manusia", () => {
     expect(ganda[0]?.jumlah).toBe(2);
   });
 
-  it("kodeBankBernamaGanda menangkap satu kode bank dengan dua nama berbeda", () => {
-    const lain = [...barisNormal];
-    lain[4] = "198202212009011011";
-    lain[11] = "520002000990"; // kode BRI...
-    lain[14] = "BANK NEGARA INDONESIA"; // ...tapi ditulis BNI
-    const h = parseSheetBasisDataGaji([...HEADER, barisNormal, lain], "data_PNS");
-    const bentrok = kodeBankBernamaGanda(h.baris).find((x) => x.kodeBankSpan === "520002000990");
-    expect(bentrok?.nama.map((n) => n.nama).sort()).toEqual([
-      "BANK NEGARA INDONESIA",
-      "BANK RAKYAT INDONESIA",
-    ]);
+  it("ringkasan memisahkan yang sudah beres dari yang butuh manusia", () => {
+    // Bertengkar DAN tak terputuskan: kode BRI (15), nama BNI (10), nomor 12
+    // digit - tidak memihak siapa pun.
+    const buntu = [...barisNormal];
+    buntu[12] = "223301007311"; // 12 digit
+    buntu[14] = "BANK NEGARA INDONESIA";
+    const nolHilang = [...barisNormal];
+    nolHilang[3] = "3216182108660002";
+    nolHilang[4] = "196608211987031002";
+    nolHilang[8] = "447729376";
+    const h = parseSheetBasisDataGaji([...HEADER, buntu, nolHilang], "data_PNS");
+    const r = ringkasMasalahBasisDataGaji(h.masalah);
+
+    expect(r.dirapikan.join(" ")).toContain("nol di depan");
+    expect(r.perluDiperiksa.join(" ")).toContain("tidak bisa diputuskan otomatis");
+    // Yang sudah beres TIDAK boleh ikut ke daftar yang butuh tindakan.
+    expect(r.perluDiperiksa.join(" ")).not.toContain("nol di depan");
   });
 
-  it("beda kapitalisasi saja TIDAK dianggap bentrok", () => {
-    const lain = [...barisNormal];
-    lain[4] = "198202212009011011";
-    lain[14] = "Bank Rakyat Indonesia";
-    const h = parseSheetBasisDataGaji([...HEADER, barisNormal, lain], "data_PNS");
-    expect(kodeBankBernamaGanda(h.baris).find((x) => x.kodeBankSpan === "520002000990")).toBeUndefined();
+  it("sisa yang tak terputuskan dikelompokkan per pasangan bank, bukan per baris", () => {
+    const a = [...barisNormal];
+    a[12] = "223301007311";
+    a[14] = "BANK NEGARA INDONESIA";
+    const b = [...a];
+    b[3] = "3216182108660003";
+    b[4] = "196608211987031003";
+    const h = parseSheetBasisDataGaji([...HEADER, a, b], "data_PNS");
+    const r = ringkasMasalahBasisDataGaji(h.masalah);
+    // Dua baris, SATU kalimat - yang ditanyakan ke pemilik data memang satu
+    // pertanyaan, bukan dua.
+    expect(r.perluDiperiksa).toHaveLength(1);
+    expect(r.perluDiperiksa[0]).toContain("2 rekening");
+  });
+
+  it("kode yang diikutkan ke nomor dilaporkan per bank tujuan", () => {
+    const pindah = [...barisNormal];
+    pindah[12] = "1921483416"; // 10 digit, nama BNI, kode BRI
+    pindah[14] = "BANK NEGARA INDONESIA";
+    const h = parseSheetBasisDataGaji([...HEADER, pindah], "data_PNS");
+    const r = ringkasMasalahBasisDataGaji(h.masalah);
+    expect(r.dirapikan.join(" ")).toContain("kode diikutkan ke nomor rekening");
+    expect(r.dirapikan.join(" ")).toContain("BANK NEGARA INDONESIA");
+    // Sudah selesai - tidak boleh muncul lagi sebagai tugas.
+    expect(r.perluDiperiksa.join(" ")).not.toContain("BANK NEGARA INDONESIA");
   });
 
   it("gabungHasilBasisDataGaji menyatukan beberapa sheet", () => {

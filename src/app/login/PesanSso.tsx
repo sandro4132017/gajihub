@@ -18,11 +18,17 @@ const JUDUL: Record<string, string> = {
 };
 
 const LANGKAH: Record<string, string> = {
+  // Sebab teknisnya: NACO_CLIENT_ID / NACO_CLIENT_SECRET / NACO_REDIRECT_URI
+  // belum terisi di .env server. Nama variabelnya TIDAK ditulis ke layar -
+  // halaman login terbuka untuk siapa saja, dan yang membacanya tidak bisa
+  // menindaklanjutinya sendiri.
   "belum-dikonfigurasi":
-    "NACO_CLIENT_ID, NACO_CLIENT_SECRET, dan NACO_REDIRECT_URI belum terisi di .env server ini.",
+    "Masuk lewat Akun Kemnaker belum diaktifkan di server ini. Sementara ini pakai NIP dan kata sandi di bawah, lalu laporkan ke Admin Gajihub.",
   ditolak: "Coba lagi, atau hubungi pengelola Akun Kemnaker kalau terus ditolak.",
-  gagal:
-    "Sebab paling sering: redirect_uri yang didaftarkan ke Naco tidak SAMA PERSIS dengan yang dipakai server ini.",
+  // Sebab paling sering waktu memasang SSO: redirect_uri yang didaftarkan ke
+  // Naco tidak sama persis dengan yang dipakai server ini. Itu urusan Admin,
+  // jadi yang ditulis ke layar cuma langkah yang bisa diambil pembacanya.
+  gagal: "Coba lagi, atau masuk memakai NIP di bawah. Kalau terus gagal, laporkan ke Admin Gajihub.",
   // Akun Kemnaker (SIAP ID) terbuka untuk masyarakat umum, dan akun publik
   // memang tidak memuat NIP. Jadi pesannya bicara soal itu - bukan soal scope
   // atau konfigurasi, yang tidak berarti apa-apa bagi orang yang membacanya.

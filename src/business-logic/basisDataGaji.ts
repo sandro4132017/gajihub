@@ -1,3 +1,4 @@
+import { PANJANG_KODE_BANK_SPAN, rapikanRekening, type MasalahRekening } from "./bankSpan";
 // ============================================================================
 // BASIS DATA GAJI KEMNAKER - identitas pembayaran versi Web Gaji Kemenkeu.
 //
@@ -58,13 +59,19 @@ export interface HasilParseBasisDataGaji {
   error?: string;
   baris: BarisBasisDataGaji[];
   dilewati: BarisDilewati[];
-  /** Hal yang tetap disimpan TAPI perlu dilihat manusia. */
-  peringatan: string[];
+  /**
+   * Masalah rekening apa adanya, satu entri per kejadian - BUKAN kalimat siap
+   * tayang. Kalimatnya disusun sekali di `ringkasMasalahBasisDataGaji()`
+   * setelah SEMUA sheet digabung; kalau tiap sheet menyusun kalimatnya
+   * sendiri, satu jenis masalah muncul dua kali di layar hanya karena
+   * berkasnya kebetulan punya dua sheet.
+   */
+  masalah: MasalahRekening[];
   /** Berapa baris yang kolom NIK & NIP-nya tertukar lalu diperbaiki. */
   jumlahNikNipTertukar: number;
 }
 
-const KODE_BANK_SPAN_PANJANG = 12;
+const KODE_BANK_SPAN_PANJANG = PANJANG_KODE_BANK_SPAN;
 
 function teks(nilai: unknown): string | null {
   if (nilai === null || nilai === undefined) return null;
@@ -88,15 +95,30 @@ function cariKolom(header: (string | null)[], mulai: number, akhir: number, ...k
 
 function bacaRekening(
   baris: unknown[],
-  kol: { kode: number; rek: number; namaRek: number; namaBank: number }
+  kol: { kode: number; rek: number; namaRek: number; namaBank: number },
+  masalah: MasalahRekening[]
 ): RekeningBasisGaji | null {
   const kode = angkaSaja(teks(baris[kol.kode]));
   const nomor = angkaSaja(teks(baris[kol.rek]));
   if (!kode || !nomor) return null;
-  return {
+  // Dirapikan DI SINI, sebelum nilainya menyentuh apa pun - supaya berkas
+  // ADK, halaman rekening pegawai, dan pemisahan per bank semuanya memakai
+  // nilai yang sama. Kalau perapiannya dilakukan belakangan di salah satu
+  // pemakai saja, ketiganya cepat atau lambat berbeda.
+  //
+  // `rapikanRekening` SENGAJA tidak memperbaiki segalanya - baris yang kode
+  // dan namanya menunjuk bank berbeda dibiarkan apa adanya lalu ditandai.
+  // Lihat alasannya di sana.
+  const rapi = rapikanRekening({
     kodeBankSpan: kode,
     namaBank: teks(baris[kol.namaBank]) ?? "",
     nomorRekening: nomor,
+  });
+  masalah.push(...rapi.masalah);
+  return {
+    kodeBankSpan: rapi.kodeBankSpan,
+    namaBank: rapi.namaBank,
+    nomorRekening: rapi.nomorRekening,
     namaRekening: teks(baris[kol.namaRek]),
   };
 }
@@ -113,7 +135,7 @@ export function parseSheetBasisDataGaji(matriks: unknown[][], namaSheet: string)
   const kosong: HasilParseBasisDataGaji = {
     baris: [],
     dilewati: [],
-    peringatan: [],
+    masalah: [],
     jumlahNikNipTertukar: 0,
   };
 
@@ -160,7 +182,7 @@ export function parseSheetBasisDataGaji(matriks: unknown[][], namaSheet: string)
   const baris: BarisBasisDataGaji[] = [];
   const dilewati: BarisDilewati[] = [];
   let tertukar = 0;
-  let kodeBankJanggal = 0;
+  const masalahRekening: MasalahRekening[] = [];
 
   for (let i = idxHeader + 1; i < matriks.length; i++) {
     const r = matriks[i] ?? [];
@@ -182,7 +204,9 @@ export function parseSheetBasisDataGaji(matriks: unknown[][], namaSheet: string)
         nama,
         alasan:
           "NIP tersimpan sebagai angka di Excel sehingga 3 digit terakhirnya hilang. " +
-          "Perbaiki di file sumber (format kolom NIP jadi Teks), lalu unggah ulang.",
+          "TIDAK bisa dipulihkan dengan mengubah format kolomnya jadi Teks - digitnya sudah tidak ada " +
+          "lagi di berkas ini. Minta berkas dibuat ulang dari sistem sumbernya dengan kolom NIP " +
+          "diekspor sebagai teks.",
       });
       continue;
     }
@@ -214,11 +238,8 @@ export function parseSheetBasisDataGaji(matriks: unknown[][], namaSheet: string)
       continue;
     }
 
-    const gaji = kolGaji.kode >= 0 && kolGaji.rek >= 0 ? bacaRekening(r, kolGaji) : null;
-    const tukin = kolTukin.rek >= 0 ? bacaRekening(r, kolTukin) : null;
-    for (const rek of [gaji, tukin]) {
-      if (rek && rek.kodeBankSpan.length !== KODE_BANK_SPAN_PANJANG) kodeBankJanggal++;
-    }
+    const gaji = kolGaji.kode >= 0 && kolGaji.rek >= 0 ? bacaRekening(r, kolGaji, masalahRekening) : null;
+    const tukin = kolTukin.rek >= 0 ? bacaRekening(r, kolTukin, masalahRekening) : null;
 
     baris.push({
       nip,
@@ -232,21 +253,117 @@ export function parseSheetBasisDataGaji(matriks: unknown[][], namaSheet: string)
     });
   }
 
-  const peringatan: string[] = [];
-  if (tertukar > 0) {
-    peringatan.push(
-      `${tertukar} baris di sheet "${namaSheet}" isi kolom NIK dan NIP-nya tertukar - sudah diperbaiki otomatis ` +
-        `(NIK 16 digit, NIP 18 digit, jadi tidak mungkin salah kenali).`
-    );
-  }
-  if (kodeBankJanggal > 0) {
-    peringatan.push(
-      `${kodeBankJanggal} kode bank SPAN di sheet "${namaSheet}" panjangnya bukan ${KODE_BANK_SPAN_PANJANG} digit. ` +
-        `Baris tetap disimpan, TAPI pemisahan berkas ADK per bank memakai kode ini - periksa sebelum dipakai membayar.`
+  return { baris, dilewati, masalah: masalahRekening, jumlahNikNipTertukar: tertukar };
+}
+
+/**
+ * Ubah daftar masalah rekening jadi kalimat siap tayang - DUA daftar, bukan
+ * satu.
+ *
+ * Yang memisahkannya: apakah pembaca perlu melakukan sesuatu. Nol depan yang
+ * dipulihkan dan NIK/NIP yang ditukar balik sudah selesai - itu laporan
+ * pekerjaan, bukan tugas. Kode bank yang bertengkar dengan nama banknya belum
+ * selesai, dan cuma pemilik data yang bisa menyelesaikannya. Waktu keduanya
+ * dicetak dalam satu daftar peringatan kuning yang sama, yang mendesak
+ * tenggelam di antara yang sudah beres - persis yang terjadi pada unggahan
+ * 2026-09-06: sembilan butir, dan yang benar-benar berbahaya cuma dua.
+ *
+ * SATU CACAT = SATU BARIS. Pertengkaran kode-vs-nama dulu dilaporkan tiga
+ * kali untuk baris yang sama - beda bank, panjang janggal, lalu sekali lagi
+ * sebagai "satu kode dipakai dengan dua nama" - sehingga ~350 baris
+ * bermasalah terbaca seperti ~950. Sekarang sebagian besarnya bahkan tidak
+ * jadi masalah sama sekali: kodenya dibetulkan mengikuti nomor rekening.
+ */
+export function ringkasMasalahBasisDataGaji(masalah: MasalahRekening[]): {
+  dirapikan: string[];
+  perluDiperiksa: string[];
+} {
+  const dirapikan: string[] = [];
+  const perluDiperiksa: string[] = [];
+  const cacah = (jenis: MasalahRekening["jenis"]) => masalah.filter((m) => m.jenis === jenis).length;
+
+  const nol = cacah("NOL_DEPAN_DIPULIHKAN");
+  if (nol > 0) {
+    dirapikan.push(
+      `${nol} nomor rekening kehilangan nol di depan karena kolomnya tersimpan sebagai angka di Excel - ` +
+        `sudah dikembalikan sesuai panjang baku banknya (BRI 15 digit, BNI 10, Mandiri 13).`
     );
   }
 
-  return { baris, dilewati, peringatan, jumlahNikNipTertukar: tertukar };
+  // Kode bank yang dibetulkan mengikuti nomor rekening. Dikelompokkan per
+  // bank tujuan supaya kalimatnya bisa dibaca sebagai satu kejadian ("341
+  // rekening pindah ke BNI"), bukan 341 kejadian.
+  const ikutNomor = new Map<string, number>();
+  for (const m of masalah) {
+    if (m.jenis === "KODE_IKUT_NOMOR") ikutNomor.set(m.bank, (ikutNomor.get(m.bank) ?? 0) + 1);
+  }
+  for (const [bank, jumlah] of [...ikutNomor.entries()].sort((a, b) => b[1] - a[1])) {
+    dirapikan.push(
+      `${jumlah} baris kode banknya tidak cocok dengan nama banknya - kode diikutkan ke nomor rekening, ` +
+        `dan panjang nomornya memastikan ${bank}. Berkas ADK-nya sekarang masuk kelompok ${bank}.`
+    );
+  }
+
+  const namaIkutNomor = cacah("NAMA_IKUT_NOMOR");
+  if (namaIkutNomor > 0) {
+    dirapikan.push(
+      `${namaIkutNomor} baris nama banknya tidak cocok dengan kodenya - nama dibetulkan mengikuti kode, ` +
+        `karena panjang nomor rekeningnya memihak kode itu.`
+    );
+  }
+
+  const kode = cacah("KODE_DIPULIHKAN_DARI_NAMA");
+  if (kode > 0) {
+    dirapikan.push(
+      `${kode} kolom kode bank SPAN isinya bukan kode ${PANJANG_KODE_BANK_SPAN} digit - sudah diisi dari nama banknya.`
+    );
+  }
+
+  // Pertengkaran kode-vs-nama dikelompokkan per PASANGAN bank. "349 baris
+  // bermasalah" tidak bisa ditindaklanjuti; "349 berkode BRI padahal namanya
+  // BNI" bisa langsung ditanyakan ke pemilik datanya.
+  const pasangan = new Map<string, { kode: string; nama: string; jumlah: number; nomorCocokNama: number }>();
+  for (const m of masalah) {
+    if (m.jenis !== "NAMA_BEDA_BANK") continue;
+    const kunci = `${m.bankMenurutKode}|${m.bankMenurutNama}`;
+    const p = pasangan.get(kunci) ?? {
+      kode: m.bankMenurutKode,
+      nama: m.bankMenurutNama,
+      jumlah: 0,
+      nomorCocokNama: 0,
+    };
+    p.jumlah += 1;
+    if (m.nomorSesuaiNama === true) p.nomorCocokNama += 1;
+    pasangan.set(kunci, p);
+  }
+  for (const p of [...pasangan.values()].sort((a, b) => b.jumlah - a.jumlah)) {
+    // Yang sampai ke sini adalah sisa yang panjang nomornya TIDAK memihak
+    // siapa pun - kalau memihak, kodenya sudah dibetulkan di langkah
+    // sebelumnya dan baris ini tidak pernah muncul. Jadi kalimatnya tidak
+    // boleh menyarankan kolom mana yang keliru: memang tidak diketahui.
+    perluDiperiksa.push(
+      `${p.jumlah} rekening berkode ${p.kode} tapi nama banknya ${p.nama}, dan panjang nomor rekeningnya ` +
+        `tidak cocok dengan keduanya - jadi tidak bisa diputuskan otomatis. Dibiarkan apa adanya; ` +
+        `pastikan ke pemilik data sebelum dipakai membayar.`
+    );
+  }
+
+  const panjang = cacah("PANJANG_JANGGAL");
+  if (panjang > 0) {
+    perluDiperiksa.push(
+      `${panjang} nomor rekening panjangnya tidak sesuai banknya, dan selisihnya terlalu besar untuk sekadar ` +
+        `nol yang hilang. Tidak diubah - periksa sebelum dipakai membayar.`
+    );
+  }
+
+  const tidakDikenal = cacah("KODE_TIDAK_DIKENAL");
+  if (tidakDikenal > 0) {
+    perluDiperiksa.push(
+      `${tidakDikenal} baris kode bank maupun nama banknya tidak dikenali. Tersimpan apa adanya - periksa sebelum dipakai membayar.`
+    );
+  }
+
+  return { dirapikan, perluDiperiksa };
 }
 
 /** Gabung hasil beberapa sheet jadi satu. */
@@ -256,7 +373,7 @@ export function gabungHasilBasisDataGaji(hasil: HasilParseBasisDataGaji[]): Hasi
     error,
     baris: hasil.flatMap((h) => h.baris),
     dilewati: hasil.flatMap((h) => h.dilewati),
-    peringatan: hasil.flatMap((h) => h.peringatan),
+    masalah: hasil.flatMap((h) => h.masalah),
     jumlahNikNipTertukar: hasil.reduce((a, h) => a + h.jumlahNikNipTertukar, 0),
   };
 }
@@ -274,32 +391,3 @@ export function nipGanda(baris: BarisBasisDataGaji[]): { nip: string; jumlah: nu
     .map(([nip, v]) => ({ nip, jumlah: v.length, nama: [...new Set(v.map((x) => x.nama))] }));
 }
 
-/**
- * Kode bank SPAN yang dipakai dengan LEBIH DARI SATU nama bank.
- *
- * Bukan sekadar beda kapitalisasi: di file asli ada 343 baris ber-kode
- * 520002000990 (BRI) tapi nama banknya ditulis "BANK NEGARA INDONESIA".
- * Pemisahan berkas ADK memakai KODE, jadi baris-baris itu akan masuk berkas
- * BRI - dan hanya manusia yang bisa memutuskan mana yang benar.
- */
-export function kodeBankBernamaGanda(
-  baris: BarisBasisDataGaji[]
-): { kodeBankSpan: string; nama: { nama: string; jumlah: number }[] }[] {
-  const per = new Map<string, Map<string, number>>();
-  for (const b of baris) {
-    for (const rek of [b.gaji, b.tukin]) {
-      if (!rek?.namaBank) continue;
-      const kunci = rek.kodeBankSpan;
-      const isi = per.get(kunci) ?? new Map<string, number>();
-      const namaBaku = rek.namaBank.toUpperCase();
-      isi.set(namaBaku, (isi.get(namaBaku) ?? 0) + 1);
-      per.set(kunci, isi);
-    }
-  }
-  return [...per.entries()]
-    .filter(([, v]) => v.size > 1)
-    .map(([kodeBankSpan, v]) => ({
-      kodeBankSpan,
-      nama: [...v.entries()].map(([nama, jumlah]) => ({ nama, jumlah })).sort((a, b) => b.jumlah - a.jumlah),
-    }));
-}

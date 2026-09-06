@@ -5,12 +5,43 @@ import { AksesDitolak } from "../../AksesDitolak";
 
 export const dynamic = "force-dynamic";
 
+// Sumber data eksternal beserta cara ambilnya. Kolom "status" menjawab satu
+// pertanyaan saja: apakah datanya masuk sendiri lewat koneksi, atau menunggu
+// orang mengunggah/mengunduh berkas.
+//
+// SIAP & e-Presensi diakses READ-ONLY - keduanya sistem produksi yang sedang
+// melayani pegawai, dan Gajihub tidak pernah menulis apa pun ke sana.
 const ADAPTER_LIST = [
-  { sistem: "SIAP", adapter: "MockSiapAdapter", status: "Mock", catatan: "Identitas & kelas jabatan - belum ada akses API resmi SIAP." },
-  { sistem: "e-Presensi", adapter: "MockPresensiAdapter", status: "Mock", catatan: "Rekap kehadiran - belum ada akses API resmi e-Presensi." },
-  { sistem: "e-Kinerja BKN", adapter: "MockEKinerjaAdapter", status: "Mock", catatan: "Predikat kinerja - alur upload manual rekap dari portal BKN, belum ada PKS/MoU API." },
-  { sistem: "Web Gaji Kemenkeu", adapter: "-", status: "Belum ada", catatan: "Export ADK manual (CSV) - lihat /ppabp/adk, belum ada koneksi API." },
-  { sistem: "SAKTI", adapter: "-", status: "Belum ada", catatan: "SPP/SP2D - di luar cakupan integrasi saat ini." },
+  {
+    sistem: "SIAP",
+    adapter: "Koneksi langsung (baca saja)",
+    status: "Tersambung",
+    catatan: "Identitas, jabatan, dan kelas jabatan pegawai. Ditarik lewat sinkronisasi data pegawai.",
+  },
+  {
+    sistem: "e-Presensi",
+    adapter: "Koneksi langsung (baca saja)",
+    status: "Tersambung",
+    catatan: "Kehadiran harian, jam masuk/pulang, dan cuti. Ditarik per periode dari menu Presensi.",
+  },
+  {
+    sistem: "e-Kinerja BKN",
+    adapter: "Unggah rekap",
+    status: "Manual",
+    catatan: "Predikat kinerja diunggah dari rekap portal BKN - belum ada koneksi langsung.",
+  },
+  {
+    sistem: "Web Gaji Kemenkeu",
+    adapter: "Berkas ADK",
+    status: "Manual",
+    catatan: "Berkas Excel/TXT diunduh dari menu Export ADK, lalu diunggah ke Web Gaji.",
+  },
+  {
+    sistem: "SAKTI",
+    adapter: "-",
+    status: "Belum ada",
+    catatan: "SPP/SP2D - di luar cakupan integrasi saat ini.",
+  },
 ] as const;
 
 export default async function SistemPage() {
@@ -32,8 +63,7 @@ export default async function SistemPage() {
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Konfigurasi & Kesehatan Sistem</h1>
       <p className="mt-1 text-sm text-muted">
-        Monitoring dasar + status adapter - BUKAN kontrol panel penuh, cuma visibilitas yang tersedia dari data yang
-        sudah ada (tidak ada uptime/metrik eksternal beneran karena sistem ini prototype/simulasi).
+        Ringkasan isi database dan cara Gajihub mengambil data dari sistem lain.
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -63,7 +93,7 @@ export default async function SistemPage() {
           <thead>
             <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
               <th className="col-nama px-4 py-2.5">Sistem Eksternal</th>
-              <th className="px-4 py-2.5">Adapter Aktif</th>
+              <th className="px-4 py-2.5">Cara Ambil Data</th>
               <th className="px-4 py-2.5">Status</th>
               <th className="px-4 py-2.5">Catatan</th>
             </tr>
@@ -72,9 +102,15 @@ export default async function SistemPage() {
             {ADAPTER_LIST.map((a) => (
               <tr key={a.sistem} className="border-b border-line-2">
                 <td className="col-nama px-4 py-2.5 font-semibold text-ink">{a.sistem}</td>
-                <td className="px-4 py-2.5 font-mono text-xs text-ink-2">{a.adapter}</td>
+                <td className="px-4 py-2.5 text-xs text-ink-2">{a.adapter}</td>
                 <td className="px-4 py-2.5">
-                  <span className={`chip ${a.status === "Mock" ? "chip-wait" : "chip-draft"}`}>{a.status}</span>
+                  <span
+                    className={`chip ${
+                      a.status === "Tersambung" ? "chip-navy" : a.status === "Manual" ? "chip-draft" : "chip-wait"
+                    }`}
+                  >
+                    {a.status}
+                  </span>
                 </td>
                 <td className="px-4 py-2.5 text-xs text-muted">{a.catatan}</td>
               </tr>
@@ -82,9 +118,7 @@ export default async function SistemPage() {
           </tbody>
         </table>
         <p className="p-4 pt-2 text-xs text-muted">
-          Belum ada mekanisme swap adapter dari UI (semua binding masih hardcode di composition root/job scheduler) -
-          adapter pattern SUDAH disiapkan buat ini (src/adapters/), tapi belum ada kebutuhan konkret buat toggle-nya
-          lewat halaman selama akses API resmi belum tersedia.
+          Sambungan ke sistem luar diatur lewat konfigurasi server, bukan dari halaman ini.
         </p>
       </div>
 
