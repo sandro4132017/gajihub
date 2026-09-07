@@ -5,6 +5,7 @@ import { AksesDitolak } from "../../AksesDitolak";
 import { StatusBadge } from "../../StatusBadge";
 import { SetujuTolakForm } from "../SetujuTolakForm";
 import { approveSkKgbAction } from "./actions";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function OsdmaSkKgbPage() {
   const skKgbList = await prisma.skKgb.findMany({ include: { pegawai: true }, orderBy: { createdAt: "desc" } });
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Approval SK KGB</h1>
       <p className="mt-1 text-sm text-muted">Lintas satuan kerja - menyetujui langsung memperbarui golongan pegawai.</p>
 

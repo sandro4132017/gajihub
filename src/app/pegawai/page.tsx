@@ -23,6 +23,7 @@ import {
   wherePegawaiTanpaJenis,
 } from "../ppabp/adk/jenisPegawaiAdk";
 import { SearchableSelect } from "../SearchableSelect";
+import { HALAMAN } from "../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -91,7 +92,7 @@ export default async function DataPegawaiPage({
   // penjelasan - sekarang dikasih tahu penyebab & jalan keluarnya.
   if (authUser.role === "KASUBAG_TU" && !satkerWajib) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <main className={HALAMAN}>
         <h1 className="text-xl font-extrabold tracking-tight text-ink">Data Pegawai</h1>
         <div className="card mt-4 border-l-4 border-l-gold p-5">
           <p className="font-bold text-ink">Akun kamu belum punya unit kerja</p>
@@ -153,7 +154,7 @@ export default async function DataPegawaiPage({
   const hrefDaftar = paramDaftar.size > 0 ? `/pegawai?${paramDaftar.toString()}` : "/pegawai";
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Data Pegawai</h1>
       <p className="mt-1 text-sm text-muted">
         Perbaiki data pokok pegawai (nama, jabatan, golongan, kelas jabatan, status) dan tetapkan satuan kerjanya.

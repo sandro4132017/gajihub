@@ -11,6 +11,7 @@ import {
   TAMPILKAN_MENU_LEMBUR,
   TAMPILKAN_NOMINAL_LEMBUR,
 } from "../tampilUangLembur";
+import { HALAMAN } from "../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function UangLemburPage({
   // halaman kosong yang terbaca seperti kerusakan.
   if (!TAMPILKAN_MENU_LEMBUR) {
     return (
-      <main className="p-6">
+      <main className={HALAMAN}>
         <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Lembur</h1>
         <div className="card mt-4 max-w-2xl p-5">
           <span className="chip chip-wait">Sementara disembunyikan</span>
@@ -97,7 +98,7 @@ export default async function UangLemburPage({
   );
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Lembur</h1>
       <p className="mt-1 text-sm text-muted">
         Pemantauan <strong>jam lembur</strong> yang terekam per pegawai per periode, dari e-Presensi dan koreksi

@@ -5,6 +5,7 @@ import { AksesDitolak } from "../../AksesDitolak";
 import { StatusBadge } from "../../StatusBadge";
 import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
 import { UsulkanPerubahanRoleForm } from "./UsulkanPerubahanRoleForm";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function UsulanPerubahanRolePage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Usulan Perubahan Role</h1>
       <p className="mt-1 text-sm text-muted">PPABP mengusulkan, eksekusi final ada di Admin.</p>
 

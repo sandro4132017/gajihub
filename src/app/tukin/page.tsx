@@ -16,6 +16,7 @@ import { RingkasanPerUnit, type BarisRingkasanUnit } from "./RingkasanPerUnit";
 import { TabelRincianUnit, type BarisRincianTukin } from "./TabelRincianUnit";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
 import { kelasJabatanEfektif } from "../../business-logic/kelasJabatanEfektif";
+import { HALAMAN } from "../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -239,7 +240,7 @@ export default async function TukinPage({
   const tampilkanRingkasan = !satkerEfektif && ringkasanUnit.length > 0;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Dashboard Tukin</h1>
       <p className="mt-1 text-sm text-muted">
         Satu tempat untuk kedua komponen pembentuk Tunjangan Kinerja: <strong>kehadiran 30%</strong> dan{" "}

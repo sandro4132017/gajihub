@@ -13,6 +13,7 @@ import { langkahTutupBulan } from "../../business-logic/langkahTutupBulan";
 import { bulanSebelumnyaDalamTahun, deltaPersen } from "../../business-logic/deltaPeriode";
 import { tinggiBatangPersen } from "../tinggiBatang";
 import { TAMPILKAN_MENU_LEMBUR, TAMPILKAN_NOMINAL_LEMBUR } from "../tampilUangLembur";
+import { HALAMAN } from "../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,7 @@ export default async function KasubagDashboardPage({
 
   if (!satkerEfektif) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <main className={HALAMAN}>
         <h1 className="text-2xl font-black tracking-tight text-ink">Dashboard Unit</h1>
         <p className="mt-1 text-sm text-muted">Pilih satuan kerja terlebih dahulu untuk melihat dashboard.</p>
         <div className="mt-4">
@@ -380,7 +381,7 @@ export default async function KasubagDashboardPage({
   const bandingSelesai = countBanding.filter((b) => b.status === "DISETUJUI" || b.status === "DITOLAK").length;
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 space-y-6">
+    <main className={`${HALAMAN} space-y-6`}>
       {/* ====================================================================
           1. HEADER & ACTION BAR
           ==================================================================== */}

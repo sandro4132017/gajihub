@@ -9,6 +9,7 @@ import { SearchableSelect } from "../../SearchableSelect";
 import { UploadGajiIndukForm } from "./UploadGajiIndukForm";
 import { HonorariumForm } from "./HonorariumForm";
 import { PencarianDebounce } from "../../PencarianDebounce";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +89,7 @@ export default async function RiwayatGajiPage({
   const sumberFile = [...new Set(barisList.map((b) => b.sourceFileName).filter(Boolean))];
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Riwayat Gaji Pegawai</h1>
       <p className="mt-1 text-sm text-muted">
         Gaji induk (gaji pokok + tunjangan melekat + potongan) hasil upload ADK dari GPP/Web Gaji. Angkanya dipakai apa

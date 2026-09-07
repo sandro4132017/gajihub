@@ -5,6 +5,7 @@ import { canKelolaGajiInduk, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { UploadRekeningForm } from "./UploadRekeningForm";
 import { PencarianDebounce } from "../../PencarianDebounce";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,7 @@ export default async function RekeningPage({
   ]);
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Rekening Pegawai</h1>
       <p className="mt-1 text-sm text-muted">
         Rekening penerima pembayaran, dibutuhkan Web Gaji untuk memproses pembayaran. Disimpan{" "}

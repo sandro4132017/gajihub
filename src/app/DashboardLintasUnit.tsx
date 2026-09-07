@@ -5,6 +5,7 @@ import { FilterBar } from "./FilterBar";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "./dashboardScope";
 import { kunciKirim, tallyKirim } from "./tallyKirim";
 import { TAMPILKAN_NOMINAL_LEMBUR } from "./tampilUangLembur";
+import { HALAMAN } from "./layoutHalaman";
 
 const formatRupiah = (nilai: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0, notation: "compact" }).format(nilai);
@@ -136,7 +137,7 @@ export async function DashboardLintasUnit({
   });
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Dashboard Lintas Unit</h1>
       <p className="mt-1 text-sm text-muted">
         {satkerEfektif ?? "Semua satuan kerja"} - Periode {periodeBulan && periodeTahun ? `${periodeBulan}/${periodeTahun}` : "belum ada data"}

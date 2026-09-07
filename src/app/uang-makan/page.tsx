@@ -9,6 +9,7 @@ import { StatusBadge } from "../StatusBadge";
 import { RincianUangMakan } from "../RincianUangMakan";
 import { PratinjauAdkUangMakan } from "../ppabp/adk/PratinjauAdkUangMakan";
 import { dataUangMakanHarian } from "../ppabp/adk/dataUangMakanHarian";
+import { HALAMAN } from "../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +127,7 @@ export default async function UangMakanPage({
     : null;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Makan</h1>
       <p className="mt-1 text-sm text-muted">
         Hasil kalkulasi uang makan per pegawai, siap diperiksa sebelum rekapnya dikirim ke PPABP.

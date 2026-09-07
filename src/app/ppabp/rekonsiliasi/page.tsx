@@ -4,6 +4,7 @@ import { canViewRekonsiliasiLintasSatker, type AuthUser } from "../../../auth/pe
 import { AksesDitolak } from "../../AksesDitolak";
 import { StatusBadge } from "../../StatusBadge";
 import { PutuskanRekonsiliasiForm } from "./PutuskanRekonsiliasiForm";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function RekonsiliasiLintasUnitPage() {
   const sudahBeres = reconList.filter((r) => r.status !== "SELISIH" && r.status !== "SANGGAH");
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Rekonsiliasi Lintas Unit</h1>
       <p className="mt-1 text-sm text-muted">
         Monitoring status rekonsiliasi (DRAFT/COCOK/SELISIH/SANGGAH/DIPUTUSKAN) &amp; tindak lanjut kasus SELISIH/SANGGAH.

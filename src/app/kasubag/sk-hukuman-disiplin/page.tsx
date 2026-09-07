@@ -6,6 +6,7 @@ import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { ambilAksesUnit } from "../access";
 import { SatkerPicker } from "../SatkerPicker";
 import { InputSkHukdisForm } from "./InputSkHukdisForm";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function SkHukumanDisiplinUnitPage({
       orderBy: { satuanKerja: "asc" },
     });
     return (
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <main className={HALAMAN}>
         <h1 className="text-xl font-extrabold tracking-tight text-ink">SK Hukuman Disiplin</h1>
         <p className="mt-1 text-sm text-muted">Pilih satuan kerja dulu.</p>
         <SatkerPicker satuanKerjaList={resolveSatuanKerjaListUntukFilter(authUser, satuanKerjaRows.map((r) => r.satuanKerja))} />
@@ -59,7 +60,7 @@ export default async function SkHukumanDisiplinUnitPage({
   ]);
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">SK Hukuman Disiplin</h1>
       <p className="mt-1 text-sm text-muted">{satkerEfektif}</p>
 

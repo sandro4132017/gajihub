@@ -22,6 +22,7 @@ import {
   potonganHarianPersen,
   rincianJamKerjaHari,
 } from "../../../../business-logic/rincianJamKerjaHarian";
+import { HALAMAN } from "../../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -322,7 +323,7 @@ export default async function RincianPresensiPegawaiPage({
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <Link href={asal.href} className="text-sm font-semibold text-teal-deep underline">
         &larr; {asal.label}
       </Link>

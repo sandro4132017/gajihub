@@ -5,6 +5,7 @@ import { canViewDataSendiri } from "../../../../../auth/permissions";
 import { AksesDitolak } from "../../../../AksesDitolak";
 import { NAMA_BULAN } from "../../../../bulan";
 import { jamTeks, labelStatus, namaHari, tanggalTeks } from "../../../../presensiTampilan";
+import { HALAMAN } from "../../../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +87,7 @@ export default async function PresensiSayaPage({
   const sebaranTerurut = [...sebaran.entries()].sort((a, b) => b[1] - a[1]);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <Link href="/saya?tab=kehadiran" className="text-xs font-semibold text-teal-deep underline">
         &larr; Kembali ke Data Saya
       </Link>

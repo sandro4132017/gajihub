@@ -22,6 +22,7 @@ import { Paginasi, hitungPaginasi } from "../../Paginasi";
 import { BadgePejabatEselon } from "../../BadgePejabatEselon";
 import { uraiJenisCuti, LABEL_JENIS_CUTI } from "../../../business-logic/jenisCuti";
 import { SumberAcuan } from "../../SumberAcuan";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +127,7 @@ export default async function PresensiTukinPage({
   ]);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <Link
         href="/tukin"
         className="inline-flex items-center gap-2 text-sm font-bold text-teal-deep transition hover:text-biru"

@@ -8,6 +8,7 @@ import { AksesDitolak } from "../../AksesDitolak";
 import { AssignmentRow } from "./AssignmentRow";
 import { BuatAkunBaruForm } from "./BuatAkunBaruForm";
 import { PencarianDebounce } from "../../PencarianDebounce";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export default async function RoleAssignmentPage({
   const akunTerpilih = pegawaiTerpilih ? await prisma.user.findUnique({ where: { nip: pegawaiTerpilih.nip } }) : null;
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Kelola Assignment Role</h1>
       <p className="mt-1 text-sm text-muted">
         Ubah role/satuan kerja/status aktif akun secara langsung - BEDA dari alur usulan PPABP (lihat menu &quot;Usulan

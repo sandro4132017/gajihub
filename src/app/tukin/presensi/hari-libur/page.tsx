@@ -13,6 +13,7 @@ import {
   TandaiCepatForm,
   ImporHariLiburForm,
 } from "./HariLiburForms";
+import { HALAMAN } from "../../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -128,7 +129,7 @@ export default async function HariLiburPage({
   const daftarPeriode = await periodePunyaRekapPresensi();
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <p className="text-xs text-muted">
         <Link href="/tukin/presensi" className="hover:underline">
           &larr; Presensi

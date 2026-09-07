@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../auth/permissions";
 import { AksesDitolak } from "../AksesDitolak";
+import { HALAMAN } from "../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export default async function AdminDashboardPage() {
   const usulanMenunggu = await prisma.usulanPerubahanRole.count({ where: { status: "MENUNGGU" } });
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Dashboard Admin</h1>
       <p className="mt-1 text-sm text-muted">
         Kewenangan teknis (konfigurasi, monitoring, eksekusi role) beserta akses ke seluruh menu role lain.

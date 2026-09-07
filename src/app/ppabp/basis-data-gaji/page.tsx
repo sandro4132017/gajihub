@@ -5,6 +5,7 @@ import { canKelolaGajiInduk, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { PencarianDebounce } from "../../PencarianDebounce";
 import { UploadBasisDataGajiForm } from "./UploadBasisDataGajiForm";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ export default async function BasisDataGajiPage({
   const belumTercakup = Math.max(0, totalAktif - tercakupAktif);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <Link
         href="/ppabp"
         className="text-sm font-semibold text-teal-deep hover:underline"

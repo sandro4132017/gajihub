@@ -3,6 +3,7 @@ import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canUploadAnggaranRealisasi, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { UploadAnggaranForm } from "./UploadAnggaranForm";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export default async function AnggaranRealisasiPage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Anggaran & Realisasi Belanja Pegawai</h1>
       <p className="mt-1 text-sm text-muted">
         Satu baris = total pagu dan realisasi per satuan kerja untuk satu periode.

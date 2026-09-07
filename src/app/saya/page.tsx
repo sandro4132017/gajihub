@@ -22,6 +22,7 @@ import {
 import { TAB_SAYA, resolveTabSaya } from "./tabs";
 import { kunciPeriode, pilihPeriode, type PeriodeSaya } from "./periodeSaya";
 import { TAMPILKAN_NOMINAL_LEMBUR } from "../tampilUangLembur";
+import { HALAMAN } from "../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -99,10 +100,33 @@ function StatTile({ label, nilai }: { label: string; nilai: number }) {
  * panjang (nama unit kerja Eselon II bisa 60 karakter) mendorong labelnya
  * keluar layar di HP, dan yang pertama hilang justru labelnya.
  */
-function Butir({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * Satu butir data berlabel.
+ *
+ * `keterangan` muncul sebagai tooltip pada labelnya, ditandai garis putus-
+ * putus supaya kelihatan bisa ditunjuk. Dipakai untuk batasan yang HARUS ada
+ * tapi tidak layak memakan satu paragraf di halaman - kalau tiap batasan
+ * dicetak penuh, yang dibaca orang justru catatannya, bukan angkanya.
+ */
+function Butir({
+  label,
+  keterangan,
+  children,
+}: {
+  label: string;
+  keterangan?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</dt>
+      <dt
+        className={`text-[11px] font-semibold uppercase tracking-wide text-muted${
+          keterangan ? " cursor-help underline decoration-dotted underline-offset-2" : ""
+        }`}
+        title={keterangan}
+      >
+        {label}
+      </dt>
       <dd className="mt-0.5 text-sm font-semibold text-ink">{children}</dd>
     </div>
   );
@@ -342,7 +366,7 @@ export default async function DataSayaPage({
   };
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Data Saya</h1>
       <p className="mt-1 text-sm text-muted">Ringkasan data kepegawaian, pendapatan, dan banding milik sendiri.</p>
 
@@ -474,17 +498,17 @@ export default async function DataSayaPage({
           <section className="card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Status PTKP (PPh Pasal 21)</h2>
-              <span className="chip chip-wait">Dugaan sistem</span>
+              <span className="chip chip-wait">Berdasarkan Data SIAP</span>
             </div>
-            {/* Tanggal acuan disebut di kepala kartu, bukan di catatan kaki:
-                PTKP ditetapkan menurut keadaan AWAL TAHUN, dan pembaca yang
-                melewatkan itu akan mengira angkanya menggambarkan keadaan
-                hari ini. */}
+            {/* TANGGALNYA TETAP DISEBUT walau kalimatnya dipendekkan
+                (permintaan user 2026-09-06): PTKP ditetapkan menurut keadaan
+                AWAL TAHUN, bukan hari ini. Tanpa tanggal itu, pegawai yang
+                menikah di tengah tahun akan mengira sistemnya salah baca -
+                padahal justru begitu aturannya (PMK 168/2023).
+                "Bukan status resmi, yang berlaku yang terdaftar di DJP" sudah
+                diwakili chip "Dugaan sistem" di sebelah judul. */}
             <p className="mt-1 text-xs text-muted">
-              Status per{" "}
-              <strong className="text-ink-2">{formatTanggal(acuanPtkp)}</strong>, diturunkan dari data keluarga di
-              SIAP menurut PMK 168/2023. <strong>Bukan status resmi</strong> - yang berlaku adalah yang terdaftar di
-              DJP dan dipakai Web Gaji.
+              Status per <strong className="text-ink-2">{formatTanggal(acuanPtkp)}</strong>, dari data SIAP.
             </p>
 
             {!ptkp && (
@@ -502,7 +526,12 @@ export default async function DataSayaPage({
                   </Butir>
                   <Butir label="Kategori TER">{ptkp.kategoriTer}</Butir>
                   <Butir label="PTKP setahun">{formatRupiah(ptkp.ptkpSetahun)}</Butir>
-                  <Butir label="Tanggungan dihitung">{ptkp.tanggunganDipakai}</Butir>
+                  <Butir
+                    label="Tanggungan dihitung"
+                    keterangan="Hanya anak. Tanggungan lain (orang tua, mertua, anak tiri, anak angkat) belum ikut, dan anak tanpa catatan pekerjaan dianggap tanggungan. Kalau tidak sesuai, sampaikan ke Kasubag TU unit kamu."
+                  >
+                    {ptkp.tanggunganDipakai}
+                  </Butir>
                 </dl>
 
                 {/* Catatan dari mesin aturannya, bukan teks tetap - yang muncul
@@ -534,11 +563,14 @@ export default async function DataSayaPage({
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-[11px] text-muted">
-                Untuk ASN yang penghasilannya dibebankan APBN, PPh Pasal 21 atas komponen di atas{" "}
-                <strong>ditanggung pemerintah</strong> - tidak mengurangi yang kamu terima. Uang makan dan uang
-                lembur belum termasuk dalam daftar ini; perlakuannya menunggu penegasan Bagian Keuangan.
-              </p>
+              {/* Dua keterangan dicabut dari layar atas permintaan user
+                  2026-09-06, dan keduanya TETAP BERLAKU:
+                  1. Untuk ASN yang penghasilannya dibebankan APBN, PPh Pasal
+                     21 atas komponen di atas DITANGGUNG PEMERINTAH - tidak
+                     mengurangi yang diterima pegawai.
+                  2. TODO(confirm) uang makan & uang lembur belum masuk daftar
+                     ini; perlakuan pajaknya menunggu penegasan Bagian
+                     Keuangan. */}
             </div>
 
             {/* ------------------------------------------------------------
@@ -588,11 +620,6 @@ export default async function DataSayaPage({
               </p>
             </div>
 
-            <p className="mt-5 border-t border-line-2 pt-3 text-xs text-muted">
-              Angka ini belum memperhitungkan tanggungan selain anak (orang tua, mertua, anak tiri, anak angkat),
-              dan menganggap anak tanpa catatan pekerjaan sebagai tanggungan. Kalau ada yang tidak sesuai,
-              sampaikan ke Kasubag TU unit kamu.
-            </p>
           </section>
         </div>
       )}

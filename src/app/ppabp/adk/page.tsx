@@ -22,6 +22,7 @@ import {
   labelJenisPegawai,
   wherePegawaiTanpaJenis,
 } from "./jenisPegawaiAdk";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -266,7 +267,7 @@ export default async function ExportAdkPage({
   );
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Export ADK</h1>
       {/* "Belum ada koneksi API resmi ke Web Gaji" sengaja TIDAK ditulis di
           layar. Itu alasan teknis kenapa unggahannya manual, dan yang membuka

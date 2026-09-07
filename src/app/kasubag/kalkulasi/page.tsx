@@ -26,6 +26,7 @@ import {
   statusUnit,
 } from "../../../business-logic/pengirimanUnit";
 import { KirimRekapForm } from "../kirim/KirimRekapForm";
+import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -171,7 +172,7 @@ export default async function KalkulasiUnitPage({
 
   if (!satkerEfektif) {
     return (
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <main className={HALAMAN}>
         <h1 className="text-xl font-extrabold tracking-tight text-ink">Kalkulasi Unit</h1>
         <p className="mt-1 text-sm text-muted">Pilih satuan kerja dan periode dulu.</p>
         <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satker} />
@@ -329,7 +330,7 @@ export default async function KalkulasiUnitPage({
   if (tampilRinci) paramPaginasi.set("rincian", "1");
 
   return (
-    <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className={HALAMAN}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight text-ink">Kalkulasi Unit</h1>
