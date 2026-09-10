@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   rekapDariLaporanPdf,
   kategoriDariStatus,
+  batasCheckoutMenit,
   JADWAL_KERJA_DEFAULT,
   TOLERANSI_TERLAMBAT_MENIT,
 } from "../presensiPdfKeRekap";
@@ -889,5 +890,75 @@ describe("ketukan yang tidak bisa dipercaya sebagai jam pulang (Pasal 13 ayat 2)
     const r = rekapDariLaporanPdf(laporan([baris("01-07-2026", "Rabu", "07:30", "15:00", "WFO")]));
     expect(r.rekap.totalMenitPulangCepat).toBe(60);
     expect(r.rekap.jumlahTidakPresensi).toBe(0);
+  });
+});
+
+// ============================================================================
+// BATAS CHECKOUT - "pulang cepat" diukur ke kewajiban 7,5 jam (Pasal 9 ayat
+// (1)), bukan ke jam 16.00 mati. Dipasang 2026-09-09 atas keterangan Biro
+// Hukum: kekurangan jam kerja tercatat sebagai keterlambatan / pulang cepat
+// dan ditagih 0,01% per menit - satu ayat, bukan pelanggaran keempat.
+// ============================================================================
+describe("batasCheckoutMenit - Pasal 9 ayat (1) & (3)", () => {
+  const SENIN = 1;
+  const JUMAT = 5;
+  const pulangWajibSenin = JADWAL_KERJA_DEFAULT.jamPulangWajibMenit[SENIN]!;
+  const pulangWajibJumat = JADWAL_KERJA_DEFAULT.jamPulangWajibMenit[JUMAT]!;
+
+  it("datang tepat waktu: batasnya PERSIS jam pulang wajib - rumus lama sebagai kasus khusus", () => {
+    // Ini yang membuat perubahan ini bukan pelanggaran keempat: pegawai yang
+    // datang 07.30 mendapat angka yang sama persis dengan rumus sebelumnya.
+    expect(batasCheckoutMenit(jam("07:30"), pulangWajibSenin, 60)).toBe(pulangWajibSenin);
+  });
+
+  it("datang lebih awal TIDAK memajukan batas - kewajiban tidak berkurang karena rajin", () => {
+    expect(batasCheckoutMenit(jam("06:45"), pulangWajibSenin, 60)).toBe(pulangWajibSenin);
+  });
+
+  it("datang 08.15 (masih dalam toleransi): pulang 16.00 kurang 45 menit", () => {
+    // Toleransi Pasal 9 ayat (3) menghapus potongan KETERLAMBATAN-nya, tapi
+    // kewajiban 7,5 jam di ayat (1) tetap berjalan: 08.15 + 7,5 jam + 60 menit
+    // istirahat = 16.45.
+    const batas = batasCheckoutMenit(jam("08:15"), pulangWajibSenin, 60);
+    expect(batas).toBe(jam("16:45"));
+    expect(Math.max(0, batas - jam("16:00")!)).toBe(45);
+  });
+
+  it("batas berhenti di jam pulang wajib + toleransi - toleransi tidak berbalik jadi kewajiban lembur", () => {
+    // Datang 09.00 seharusnya jatuh 17.30, tapi dikunci di 17.00. Menit yang
+    // tidak tertutup pergeseran itu sudah ditagih sebagai keterlambatan.
+    expect(batasCheckoutMenit(jam("09:00"), pulangWajibSenin, 60)).toBe(jam("17:00"));
+    expect(batasCheckoutMenit(jam("14:00"), pulangWajibSenin, 60)).toBe(jam("17:00"));
+  });
+
+  it("terlambat + pulang cepat = kekurangan jam kerja sesungguhnya, tidak lebih", () => {
+    // Datang 09.00, pulang 16.00: bekerja 09.00-16.00 dikurangi istirahat 60
+    // = 360 menit, kurang 90 dari 450. Yang ditagih juga 90 - 30 menit
+    // keterlambatan (setelah toleransi 60) + 60 menit pulang cepat. Kalau
+    // penjumlahan ini pernah melebihi kekurangan sesungguhnya, artinya ada
+    // menit yang ditagih dua kali.
+    const masuk = jam("09:00")!;
+    const keluar = jam("16:00")!;
+    const menitKerja = keluar - masuk - 60;
+    const kekuranganSesungguhnya = Math.max(0, 450 - menitKerja);
+
+    const terlambat = Math.max(
+      0,
+      masuk - JADWAL_KERJA_DEFAULT.jamMasukWajibMenit - JADWAL_KERJA_DEFAULT.toleransiTerlambatMenit
+    );
+    const pulangCepat = Math.max(0, batasCheckoutMenit(masuk, pulangWajibSenin, 60) - keluar);
+
+    expect(kekuranganSesungguhnya).toBe(90);
+    expect(terlambat + pulangCepat).toBe(kekuranganSesungguhnya);
+  });
+
+  it("Jumat memakai istirahat 90 menit dan jam pulang wajib 16.30", () => {
+    expect(batasCheckoutMenit(jam("07:30"), pulangWajibJumat, 90)).toBe(pulangWajibJumat);
+    expect(batasCheckoutMenit(jam("08:00"), pulangWajibJumat, 90)).toBe(jam("17:00"));
+    expect(batasCheckoutMenit(jam("10:00"), pulangWajibJumat, 90)).toBe(jam("17:30"));
+  });
+
+  it("tanpa jam masuk: tidak ada yang bisa digeser, batasnya jam pulang wajib", () => {
+    expect(batasCheckoutMenit(null, pulangWajibSenin, 60)).toBe(pulangWajibSenin);
   });
 });

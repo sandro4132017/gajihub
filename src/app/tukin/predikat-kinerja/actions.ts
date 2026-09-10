@@ -6,6 +6,7 @@ import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canUploadRekapPredikatKinerja, type AuthUser } from "../../../auth/permissions";
 import { parseRekapPredikatKinerja, type BarisRekapPredikat } from "../../../business-logic/rekapPredikatKinerja";
+import { dikecualikanPotonganKehadiran } from "../../../business-logic/pejabatPimpinanTinggi";
 
 /**
  * Upload file "Rekap Penilaian" dari e-Kinerja BKN -> tabel PredikatKinerja
@@ -67,10 +68,21 @@ export interface RingkasanPeriodePredikat {
 export interface KelengkapanPredikat {
   periode: string;
   satuanKerja: string;
+  /** Pembagi: pegawai aktif yang MEMANG ikut dihitung periode ini. */
   totalAktif: number;
   sudahPunya: number;
   belumPunya: number;
-  contohBelum: string[];
+  /**
+   * Yang belum punya predikat - nama, dan apakah dia pejabat pimpinan tinggi.
+   *
+   * Penandanya ikut karena tindak lanjutnya berbeda: predikat staf ditagih ke
+   * penilai di unit ini, predikat pejabat pimpinan tinggi ke penilai di
+   * atasnya. Tanpa tanda itu orang menagih berkas ke pihak yang memang tidak
+   * pernah memegangnya.
+   */
+  contohBelum: { nama: string; pejabatPimpinanTinggi: boolean }[];
+  /** Berapa pegawai yang dikecualikan dari periode ini - keluar dari pembagi. */
+  jumlahDikecualikan: number;
   sumberPenilaian: string[];
 }
 
@@ -430,11 +442,25 @@ export async function uploadRekapPredikatAction(
     for (const { satuanKerja, periodeBulan, periodeTahun } of kombinasi.values()) {
       // Hanya pegawai AKTIF - pensiunan tidak akan pernah punya predikat baru,
       // dan memasukkannya membuat kelengkapan mustahil tercapai.
-      const aktif = await prisma.pegawai.findMany({
+      const semuaAktif = await prisma.pegawai.findMany({
         where: { satuanKerja, statusPegawai: "AKTIF" },
-        select: { id: true, nama: true },
+        select: { id: true, nama: true, kelasJabatan: true },
         orderBy: { nama: "asc" },
       });
+
+      // PEMBAGINYA HARUS SAMA dengan halaman Kalkulasi: pegawai yang sudah
+      // dikecualikan dari periode ini tidak ikut dihitung, jadi tidak boleh
+      // ikut jadi penyebut di sini. Kalau berbeda, layar ini bilang "44 dari
+      // 48" sementara halaman Kalkulasi bilang "44 dari 47" untuk unit dan
+      // periode yang sama - dan yang membacanya tidak punya cara tahu mana
+      // yang benar.
+      const dikecualikan = await prisma.pengecualianPegawai.findMany({
+        where: { periodeBulan, periodeTahun, pegawaiId: { in: semuaAktif.map((p) => p.id) } },
+        select: { pegawaiId: true },
+      });
+      const setDikecualikan = new Set(dikecualikan.map((d) => d.pegawaiId));
+      const aktif = semuaAktif.filter((p) => !setDikecualikan.has(p.id));
+
       const punya = await prisma.predikatKinerja.findMany({
         where: { pegawaiId: { in: aktif.map((p) => p.id) }, periodeBulan, periodeTahun },
         select: { pegawaiId: true, unitPenilaian: true },
@@ -448,7 +474,13 @@ export async function uploadRekapPredikatAction(
         totalAktif: aktif.length,
         sudahPunya: aktif.length - belum.length,
         belumPunya: belum.length,
-        contohBelum: belum.slice(0, 10).map((p) => p.nama),
+        // Pejabat pimpinan tinggi didahulukan di daftar: merekalah yang paling
+        // sering tertinggal, dan berkasnya datang dari pihak yang berbeda.
+        contohBelum: belum
+          .map((p) => ({ nama: p.nama, pejabatPimpinanTinggi: dikecualikanPotonganKehadiran(p.kelasJabatan) }))
+          .sort((a, b) => Number(b.pejabatPimpinanTinggi) - Number(a.pejabatPimpinanTinggi))
+          .slice(0, 10),
+        jumlahDikecualikan: setDikecualikan.size,
         sumberPenilaian: [...new Set(punya.map((k) => k.unitPenilaian ?? "(sumber tidak tercatat)"))].sort(),
       });
     }

@@ -168,12 +168,27 @@ describe("parseSheetBasisDataGaji", () => {
     expect(h.masalah.map((m) => m.jenis)).not.toContain("KODE_IKUT_NOMOR");
   });
 
-  it("nol di depan nomor rekening dikembalikan sesuai panjang baku banknya", () => {
-    const nolHilang = [...barisNormal];
-    nolHilang[8] = "447729376"; // BNI, 9 digit - harusnya 10
-    const h = parseSheetBasisDataGaji([...HEADER, nolHilang], "data_PNS");
-    expect(h.baris[0]?.gaji?.nomorRekening).toBe("0447729376");
-    expect(h.masalah.map((m) => m.jenis)).toContain("NOL_DEPAN_DIPULIHKAN");
+  it("nomor rekening yang panjangnya janggal DITANDAI, tidak ditambal", () => {
+    // Sempat ditambal otomatis (9 digit BNI jadi "0447729376") dan itu dicabut
+    // 2026-09-08: panjang baku yang disebutkan user adalah keterangan tentang
+    // data, bukan izin mengubahnya. Penambalan itu merusak 20 rekening Mandiri
+    // satker Rokeu yang deretnya (7000134...) memang 12 digit.
+    const janggal = [...barisNormal];
+    janggal[8] = "447729376"; // BNI, 9 digit
+    const h = parseSheetBasisDataGaji([...HEADER, janggal], "data_PNS");
+    expect(h.baris[0]?.gaji?.nomorRekening).toBe("447729376");
+    expect(h.masalah.map((m) => m.jenis)).toContain("PANJANG_JANGGAL");
+  });
+
+  it("nomor Mandiri 12 digit deret 7000134 dibiarkan apa adanya", () => {
+    // Kasus nyata berkas ADK Rokeu Juli 2026: seluruh 48 rekeningnya 12 digit
+    // berawalan 7000134, dan itulah nomor yang benar-benar dipakai membayar.
+    const mandiri = [...barisNormal];
+    mandiri[11] = "520008000990";
+    mandiri[12] = "700013408492";
+    mandiri[14] = "BANK MANDIRI";
+    const h = parseSheetBasisDataGaji([...HEADER, mandiri], "data_PNS");
+    expect(h.baris[0]?.tukin?.nomorRekening).toBe("700013408492");
   });
 
   it("baris tanpa rekening tetap dipakai untuk namanya", () => {
@@ -227,17 +242,19 @@ describe("pemeriksaan yang butuh mata manusia", () => {
     const buntu = [...barisNormal];
     buntu[12] = "223301007311"; // 12 digit
     buntu[14] = "BANK NEGARA INDONESIA";
-    const nolHilang = [...barisNormal];
-    nolHilang[3] = "3216182108660002";
-    nolHilang[4] = "196608211987031002";
-    nolHilang[8] = "447729376";
-    const h = parseSheetBasisDataGaji([...HEADER, buntu, nolHilang], "data_PNS");
+    // Kode bank bukan kode SPAN, tapi nama banknya dikenali - ini benar-benar
+    // bisa dipulihkan dari baris yang sama, jadi masuk daftar "sudah beres".
+    const kodeJanggal = [...barisNormal];
+    kodeJanggal[3] = "3216182108660002";
+    kodeJanggal[4] = "196608211987031002";
+    kodeJanggal[11] = "52009000990";
+    const h = parseSheetBasisDataGaji([...HEADER, buntu, kodeJanggal], "data_PNS");
     const r = ringkasMasalahBasisDataGaji(h.masalah);
 
-    expect(r.dirapikan.join(" ")).toContain("nol di depan");
+    expect(r.dirapikan.join(" ")).toContain("diisi dari nama banknya");
     expect(r.perluDiperiksa.join(" ")).toContain("tidak bisa diputuskan otomatis");
     // Yang sudah beres TIDAK boleh ikut ke daftar yang butuh tindakan.
-    expect(r.perluDiperiksa.join(" ")).not.toContain("nol di depan");
+    expect(r.perluDiperiksa.join(" ")).not.toContain("diisi dari nama banknya");
   });
 
   it("sisa yang tak terputuskan dikelompokkan per pasangan bank, bukan per baris", () => {

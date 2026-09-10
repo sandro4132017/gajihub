@@ -136,6 +136,125 @@ export const JADWAL_KERJA_DEFAULT: JadwalKerja = {
 };
 
 /**
+ * Waktu istirahat yang tidak terhitung jam kerja, per hari (indeks 0 = Minggu).
+ * Pasal 9 ayat (2): Senin-Kamis 12.00-13.00 (60 menit), Jumat 11.30-13.00 (90).
+ * Sabtu & Minggu null - tidak ada kewajiban jam kerja yang perlu dikurangi.
+ */
+export const ISTIRAHAT_MENIT: readonly (number | null)[] = [null, 60, 60, 60, 60, 90, null];
+
+/**
+ * Jam paling cepat seorang pegawai boleh tap pulang hari itu.
+ *
+ * DUA PASAL BEKERJA BERSAMAAN, dan inilah tempat keduanya bertemu:
+ *   Pasal 9 ayat (1) - jam kerja PALING SEDIKIT 7,5 jam sehari.
+ *   Pasal 9 ayat (3) - jadwal ayat (2) diberi toleransi 60 menit.
+ *
+ * Toleransi ayat (3) menggeser JADWALNYA, bukan menghapus kewajiban 7,5 jam di
+ * ayat (1). Jadi orang yang datang 08.15 tidak ditagih terlambat, tapi jam
+ * kerjanya baru genap pukul 16.45 - pulang 16.00 berarti 45 menit kewajiban
+ * ayat (1) tidak terpenuhi, dan itulah "pulang cepat" Pasal 13 ayat (3).
+ *
+ * Batasnya BERGESER ikut jam masuk, tapi tidak pernah melewati jam pulang
+ * wajib + toleransi (17.00 / Jumat 17.30): toleransi yang sama tidak boleh
+ * berbalik jadi kewajiban lembur bagi orang yang datang sangat terlambat -
+ * menit yang tidak tertutup oleh pergeseran itu memang sudah ditagih sebagai
+ * keterlambatan.
+ *
+ * Bentuk min(max(...)) ini yang cocok 1.099 dari 1.133 baris ke berkas hitung
+ * petugas (48 pegawai Biro Keuangan, Juli 2026); dua bentuk lain yang diuji
+ * (tanpa batas atas, dan tanpa batas bawah) cocok jauh lebih sedikit.
+ *
+ * Mengembalikan `jamPulangWajibMenit` apa adanya kalau jam masuknya tidak
+ * diketahui - tanpa jam masuk tidak ada yang bisa digeser.
+ */
+export function batasCheckoutMenit(
+  jamMasukMenit: number | null,
+  jamPulangWajibMenit: number,
+  istirahatMenit: number,
+  jadwal: JadwalKerja = JADWAL_KERJA_DEFAULT
+): number {
+  if (jamMasukMenit === null) return jamPulangWajibMenit;
+  const jamHarusPulang = jamMasukMenit + Math.round(jadwal.jamKerjaPerHari * 60) + istirahatMenit;
+  const batasAtas = jamPulangWajibMenit + jadwal.toleransiTerlambatMenit;
+  return Math.min(Math.max(jamHarusPulang, jamPulangWajibMenit), batasAtas);
+}
+
+/**
+ * TIGA BENTUK KETUKAN YANG TIDAK DIPERCAYA - dipakai bareng mesin yang
+ * membayar DAN tabel rincian jam kerja.
+ *
+ * Diekstrak jadi fungsi 2026-09-10: sebelumnya ketiganya `const` di dalam
+ * `rekapDariLaporanPdf`, jadi tabel rincian tidak bisa mengetahuinya dan
+ * memajang angka yang TIDAK dipakai membayar - untuk satu baris nyata (WFH,
+ * masuk 23:26, keluar 23:59) tabelnya menulis "terlambat 896 menit" dan
+ * "menit kerja -57" sementara yang ditagih 0 menit + 1% Pasal 13 ayat (2).
+ *
+ * BUKAN mengoreksi Permenaker, dan bukan batas maksimal potongan: ini menolak
+ * mempercayai data yang tidak mungkin. Koreksi petugas SELALU menang - jam
+ * yang sudah diverifikasi manusia terhadap foto & geotag bukan tebakan atas
+ * ketukan yang hilang.
+ */
+
+/**
+ * Ketukan yang mustahil sebagai KEDATANGAN: jatuh pada/sesudah jam pulang
+ * wajib. Orang tidak memulai hari kerjanya pukul 16:00.
+ *
+ * TODO(confirm) - AMBANGNYA MASIH JAM PULANG WAJIB, dan itu bocor beberapa
+ * menit. Juli 2026: 46 baris ditagih >4% sehari untuk ketukan 15:56-16:22,
+ * lebih mahal daripada tidak masuk sama sekali (3%, ayat (1)). Kandidat
+ * penggantinya pukul 12:00 - dari 559 baris berpotongan di atas 3%, NOL yang
+ * jam masuknya sebelum 12:00. Menunggu validasi dampak nominal; jangan
+ * diubah sepihak karena menyentuh pembayaran.
+ */
+export function tapMasukMustahil(
+  jamMasukMenit: number | null,
+  jamPulangWajibMenit: number | null,
+  dikoreksi = false
+): boolean {
+  return !dikoreksi && jamMasukMenit !== null && jamPulangWajibMenit !== null && jamMasukMenit >= jamPulangWajibMenit;
+}
+
+/**
+ * Ketukan yang mustahil sebagai KEPULANGAN. Dua bentuk, keduanya nyata di
+ * data Juli 2026: jam keluar tepat 23:59 (isian otomatis e-Presensi saat tap
+ * pulang tidak masuk), dan jam keluar pada/sebelum jam masuk wajib - orang
+ * tidak bisa pulang sebelum jam kerjanya dimulai.
+ */
+export function tapKeluarMustahil(
+  jamKeluarMenit: number | null,
+  jadwal: JadwalKerja = JADWAL_KERJA_DEFAULT,
+  dikoreksi = false
+): boolean {
+  return (
+    !dikoreksi &&
+    jamKeluarMenit !== null &&
+    (jamKeluarMenit === JAM_TAP_PULANG_HILANG || jamKeluarMenit <= jadwal.jamMasukWajibMenit)
+  );
+}
+
+/**
+ * Satu ketukan tersalin ke DUA kolom - jam masuk & pulang berselisih
+ * semenit-dua. Yang terjadi cuma SATU tap, dan sisi mana yang hilang TIDAK
+ * BISA DITEBAK (ketukannya bisa pagi maupun sore), jadi KEDUA sisinya tidak
+ * dipercaya - bukan cuma satu.
+ */
+export function tapKetukanGanda(
+  jamMasukMenit: number | null,
+  jamKeluarMenit: number | null,
+  masukDikoreksi = false,
+  keluarDikoreksi = false
+): boolean {
+  return (
+    !masukDikoreksi &&
+    !keluarDikoreksi &&
+    jamMasukMenit !== null &&
+    jamKeluarMenit !== null &&
+    jamKeluarMenit >= jamMasukMenit &&
+    jamKeluarMenit - jamMasukMenit <= AMBANG_KETUKAN_GANDA_MENIT
+  );
+}
+
+/**
  * Kategori yang PUNYA kewajiban jam kerja - hanya ini yang bisa kena potongan
  * terlambat / pulang cepat (Pasal 13 ayat (3)).
  *
@@ -499,11 +618,7 @@ export function rekapDariLaporanPdf(
       //
       // Koreksi petugas selalu menang: jam yang sudah diverifikasi manusia
       // terhadap foto & geotag bukan tebakan atas ketukan yang hilang.
-      const masukMustahil =
-        !masukDikoreksi &&
-        jamMasukEfektif !== null &&
-        jamPulangWajib !== null &&
-        jamMasukEfektif >= jamPulangWajib;
+      const masukMustahil = tapMasukMustahil(jamMasukEfektif, jamPulangWajib, masukDikoreksi);
 
       // --- KETUKAN YANG MUSTAHIL SEBAGAI JAM PULANG -------------------------
       // Cerminan aturan di atas, dan sebelumnya TIDAK ADA di jalur ini -
@@ -517,10 +632,7 @@ export function rekapDariLaporanPdf(
       //      yang `menit_kerja`-nya TIDAK dinolkan, jadi lolos aturan lama).
       //   2. jam keluar pada/sebelum jam masuk wajib - orang tidak bisa
       //      pulang sebelum jam kerjanya dimulai (1 baris: keluar 06:15).
-      const keluarMustahil =
-        !keluarDikoreksi &&
-        jamKeluarEfektif !== null &&
-        (jamKeluarEfektif === JAM_TAP_PULANG_HILANG || jamKeluarEfektif <= jadwal.jamMasukWajibMenit);
+      const keluarMustahil = tapKeluarMustahil(jamKeluarEfektif, jadwal, keluarDikoreksi);
 
       // --- SATU KETUKAN TERSALIN KE DUA KOLOM -------------------------------
       // Jam masuk & pulang berselisih semenit-dua: yang terjadi cuma SATU tap,
@@ -538,13 +650,7 @@ export function rekapDariLaporanPdf(
       // Aturan yang sama sudah lama dipakai jalur rekap manual Excel; yang
       // dilakukan di sini memindahkannya ke mesin, supaya kedua jalur tidak
       // memperlakukan pola yang sama secara berbeda.
-      const ketukanGanda =
-        !masukDikoreksi &&
-        !keluarDikoreksi &&
-        jamMasukEfektif !== null &&
-        jamKeluarEfektif !== null &&
-        jamKeluarEfektif >= jamMasukEfektif &&
-        jamKeluarEfektif - jamMasukEfektif <= AMBANG_KETUKAN_GANDA_MENIT;
+      const ketukanGanda = tapKetukanGanda(jamMasukEfektif, jamKeluarEfektif, masukDikoreksi, keluarDikoreksi);
 
       // TIDAK ADA potongan apa pun di hari yang memang bukan hari kerja.
       // Pasal 13 memotong pelanggaran terhadap KEWAJIBAN jam kerja - kalau
@@ -653,8 +759,23 @@ export function rekapDariLaporanPdf(
           menitTerlambatMentah = Math.max(0, jamMasukEfektif - jadwal.jamMasukWajibMenit);
           menitTerlambat = Math.max(0, menitTerlambatMentah - jadwal.toleransiTerlambatMenit);
         }
+        // PULANG CEPAT DIUKUR KE KEWAJIBAN 7,5 JAM, BUKAN KE JAM 16.00 MATI.
+        // Pasal 9 ayat (1) mewajibkan jam kerja paling sedikit 7,5 jam sehari;
+        // toleransi ayat (3) menggeser jadwalnya, tidak menghapus kewajiban
+        // itu. Orang yang datang 08.15 lalu pulang 16.00 kurang 45 menit dari
+        // kewajibannya - menit itu Pasal 13 ayat (3), tarif 0,01% per menit.
+        //
+        // BUKAN pelanggaran keempat: batas yang bergeser ini SUDAH mencakup
+        // pulang cepat yang lama sebagai kasus khusus - pegawai yang datang
+        // 07.30 batasnya jatuh persis di jam pulang wajib. Diukur ke 7/2026:
+        // dari 38.609 baris yang datang tepat waktu, 37.984 (98,4%) angkanya
+        // sama persis dengan rumus lama. Menambahkannya sebagai kolom
+        // tersendiri - seperti yang sempat dilakukan 2026-08-06 - berarti
+        // menagih menit yang sama dua kali.
         if (keluarDipercaya && jamKeluarEfektif !== null && jamPulangWajib !== null) {
-          menitPulangCepat = Math.max(0, jamPulangWajib - jamKeluarEfektif);
+          const istirahat = (idxHari === null ? null : ISTIRAHAT_MENIT[idxHari]) ?? 0;
+          const batasCheckout = batasCheckoutMenit(jamMasukEfektif, jamPulangWajib, istirahat, jadwal);
+          menitPulangCepat = Math.max(0, batasCheckout - jamKeluarEfektif);
         }
         // Peringatan "jam masuk janggal" tidak perlu muncul lagi kalau jamnya
         // memang sudah diperbaiki manusia - itu justru penyelesaiannya.

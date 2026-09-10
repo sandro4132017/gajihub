@@ -15,12 +15,20 @@
  * SPAN 12 digit itu justru kolom yang paling gampang tertukar karena tidak
  * ada yang bisa membacanya sekilas.
  *
- * PANJANG REKENING DIPASTIKAN USER 2026-09-06 untuk BRI/BNI/Mandiri, dan
- * dipakai memulihkan nol di depan yang hilang saat kolomnya tersimpan sebagai
- * ANGKA di Excel (`0792474955` jadi `792474955`). Bank yang panjangnya BELUM
- * dipastikan sengaja diberi `null`: nomornya tidak pernah diubah, cuma
- * ditandai. Menambahkan nol memakai panjang yang salah sama saja mengarang
- * tujuan transfer.
+ * NOMOR REKENING TIDAK PERNAH DIUBAH. Panjang baku di bawah dipakai untuk
+ * MENANDAI baris yang perlu diperiksa, dan sebagai bukti waktu kode bank
+ * bertengkar dengan nama banknya - tidak pernah untuk menambal nomornya.
+ *
+ * Pernah dibuat begitu (nomor yang kurang 1-2 digit ditambahi nol di depan)
+ * dan itu KELIRU: panjang yang disebutkan user adalah keterangan tentang data,
+ * bukan izin mengubahnya. Akibatnya nyata - 20 rekening Mandiri satker Rokeu
+ * yang tadinya sudah benar (`700013408492`, deret 7000134 yang memang 12
+ * digit) berubah jadi `0700013408492` dan tidak lagi cocok dengan berkas ADK
+ * yang benar-benar dipakai membayar. Dicabut 2026-09-08.
+ *
+ * Panjang yang tidak cocok sekarang cuma dilaporkan. Nomor yang jelas
+ * kependekan lebih aman daripada nomor yang kelihatan sah tapi menunjuk entah
+ * ke mana - yang pertama tertahan di meja orang, yang kedua terkirim ke bank.
  */
 
 export interface BankSpan {
@@ -94,19 +102,6 @@ export const BANK_SPAN: readonly BankSpan[] = [
   },
 ];
 
-/**
- * Selisih panjang paling banyak yang masih dianggap "nol di depan hilang".
- *
- * Kurang 1-2 digit itu pola khas kolom Excel bertipe angka. Kurang 3 atau
- * lebih TIDAK dipulihkan: pada data nyata ada 27 baris berkode Bank Mandiri
- * (baku 13) yang nomornya 10 digit - persis panjang rekening BNI - jadi
- * penjelasan yang lebih masuk akal adalah kodenya yang salah, bukan tiga nol
- * yang hilang. Memaksa menambahkan nol di situ menghasilkan nomor rekening
- * yang KELIHATAN sah tapi menunjuk entah ke mana, dan itu lebih berbahaya
- * daripada nomor yang jelas-jelas kependekan.
- */
-const MAKS_NOL_DIPULIHKAN = 2;
-
 /** Kunci pembanding nama bank: huruf saja, huruf besar. */
 export function kunciNama(nama: string): string {
   return nama.toUpperCase().replace(/[^A-Z]/g, "");
@@ -155,8 +150,6 @@ export type MasalahRekening =
       bankMenurutNama: string;
       nomorSesuaiNama: boolean | null;
     }
-  /** Nol di depan dikembalikan. */
-  | { jenis: "NOL_DEPAN_DIPULIHKAN"; dari: string; jadi: string; bank: string }
   /** Panjang tidak wajar dan TIDAK dipulihkan - perlu diperiksa manusia. */
   | { jenis: "PANJANG_JANGGAL"; nomor: string; panjang: number; seharusnya: number; bank: string };
 
@@ -204,7 +197,8 @@ export function rapikanRekening(masuk: {
   const masalah: MasalahRekening[] = [];
   let kode = masuk.kodeBankSpan.trim();
   let nama = masuk.namaBank.trim();
-  let nomor = masuk.nomorRekening.trim();
+  // `const`, bukan `let` - nomor rekening tidak pernah diubah di fungsi ini.
+  const nomor = masuk.nomorRekening.trim();
 
   const bankNama = nama ? bankDariNama(nama) : null;
   let bankKode = bankDariKode(kode);
@@ -280,19 +274,7 @@ export function rapikanRekening(masuk: {
   // satu cacat terlihat seperti dua, dan angka di layar jadi dua kali lipat
   // dari jumlah baris yang benar-benar perlu diperiksa.
   const baku = bedaBank ? null : bankKode.panjangRekening;
-  if (baku !== null && nomor.length < baku) {
-    const kurang = baku - nomor.length;
-    if (kurang <= MAKS_NOL_DIPULIHKAN) {
-      const dipulihkan = nomor.padStart(baku, "0");
-      masalah.push({ jenis: "NOL_DEPAN_DIPULIHKAN", dari: nomor, jadi: dipulihkan, bank: bankKode.nama });
-      nomor = dipulihkan;
-    } else {
-      masalah.push({ jenis: "PANJANG_JANGGAL", nomor, panjang: nomor.length, seharusnya: baku, bank: bankKode.nama });
-    }
-  } else if (baku !== null && nomor.length > baku) {
-    // Kelebihan digit TIDAK pernah dipotong - memotong berarti membuang
-    // informasi, dan yang kepanjangan biasanya justru rekening bank lain
-    // yang kodenya salah.
+  if (baku !== null && nomor.length !== baku) {
     masalah.push({ jenis: "PANJANG_JANGGAL", nomor, panjang: nomor.length, seharusnya: baku, bank: bankKode.nama });
   }
 

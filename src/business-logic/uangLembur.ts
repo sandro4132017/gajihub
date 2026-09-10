@@ -84,15 +84,15 @@ export function hitungUangLembur(input: UangLemburInput): UangLemburResult {
   const batasMaksimal = input.batasMaksimalJamLembur ?? BATAS_DEFAULT_JAM_LEMBUR_PER_BULAN;
 
   if (input.totalJamLembur < 0) {
-    anomali.push("totalJamLembur tidak boleh negatif.");
+    anomali.push("Total jam lembur hari kerja tidak boleh bernilai negatif.");
   }
   if (input.totalJamLembur + (input.totalJamLemburHariLibur ?? 0) > batasMaksimal) {
     anomali.push(
-      `Total jam lembur (${input.totalJamLembur + (input.totalJamLemburHariLibur ?? 0)}) melebihi batas maksimal (${batasMaksimal} jam/bulan) - kelebihan jam tidak dibayarkan, perlu verifikasi ke atasan langsung.`
+      `Total jam lembur ${input.totalJamLembur + (input.totalJamLemburHariLibur ?? 0)} jam melebihi batas maksimal ${batasMaksimal} jam per bulan\u2014kelebihannya tidak dibayarkan. Perlu verifikasi ke atasan langsung.`
     );
   }
   if ((input.totalJamLemburHariLibur ?? 0) < 0) {
-    anomali.push("totalJamLemburHariLibur tidak boleh negatif.");
+    anomali.push("Total jam lembur hari libur tidak boleh bernilai negatif.");
   }
   // Silang tingkat bulan - lihat catatan di kepala file. Klaim lembur HARI
   // KERJA tanpa satu pun hari WFO berarti lemburnya diklaim dari hari yang
@@ -101,11 +101,11 @@ export function hitungUangLembur(input: UangLemburInput): UangLemburResult {
   // sini akan menuduh anomali pada pegawai yang cuma lembur di akhir pekan.
   if (input.jumlahHariWfo !== undefined && input.jumlahHariWfo === 0 && input.totalJamLembur > 0) {
     anomali.push(
-      "Ada klaim jam lembur HARI KERJA padahal pegawai ini tidak punya hari WFO sama sekali pada periode ini - lembur hari kerja hanya untuk pegawai yang WFO. Periksa ulang rekapnya."
+      "Ada klaim jam lembur hari kerja padahal pegawai ini sama sekali tidak punya hari WFO pada periode ini. Lembur hari kerja hanya untuk pegawai yang WFO\u2014periksa ulang rekapnya."
     );
   }
   if (input.tarifPerJam <= 0) {
-    anomali.push("tarifPerJam harus lebih besar dari 0.");
+    anomali.push("Tarif lembur per jam belum diisi atau tidak lebih besar dari nol.");
   }
 
   const jamHariLiburMentah = Math.max(0, input.totalJamLemburHariLibur ?? 0);
@@ -137,7 +137,7 @@ export function hitungUangLembur(input: UangLemburInput): UangLemburResult {
 
   if (hariMakanLembur > 0 && tarifMakanLembur <= 0) {
     anomali.push(
-      "Ada hari yang berhak uang makan lembur tapi tarif uang makan lemburnya belum diisi - uang makan lembur dihitung 0."
+      "Ada hari yang berhak uang makan lembur, tetapi tarif uang makan lemburnya belum diisi\u2014uang makan lemburnya dihitung nol."
     );
   }
   // Penjagaan konsistensi: n hari yang masing-masing >= 2 jam berarti total
@@ -145,7 +145,7 @@ export function hitungUangLembur(input: UangLemburInput): UangLemburResult {
   const totalJamMentah = jamHariKerjaMentah + jamHariLiburMentah;
   if (hariMakanLembur * MINIMAL_JAM_LEMBUR_DAPAT_MAKAN > totalJamMentah) {
     anomali.push(
-      `Jumlah hari berhak uang makan lembur (${hariMakanLembur} hari) tidak konsisten dengan total jam lembur (${totalJamMentah} jam) - ${hariMakanLembur} hari x minimal ${MINIMAL_JAM_LEMBUR_DAPAT_MAKAN} jam seharusnya minimal ${hariMakanLembur * MINIMAL_JAM_LEMBUR_DAPAT_MAKAN} jam.`
+      `Jumlah hari yang berhak uang makan lembur (${hariMakanLembur} hari) tidak konsisten dengan total jam lemburnya (${totalJamMentah} jam): ${hariMakanLembur} hari dikali minimal ${MINIMAL_JAM_LEMBUR_DAPAT_MAKAN} jam seharusnya paling sedikit ${hariMakanLembur * MINIMAL_JAM_LEMBUR_DAPAT_MAKAN} jam.`
     );
   }
 

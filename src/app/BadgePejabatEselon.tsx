@@ -38,13 +38,18 @@ export function BadgePejabatEselon({ kelasJabatan }: { kelasJabatan: number | nu
   return (
     <details className="group ml-1 inline-block align-middle">
       <summary
-        className="inline-flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full bg-gold-tint text-[10px] font-bold leading-none text-ink-2 ring-1 ring-inset ring-gold/40 marker:hidden hover:bg-gold/25 [&::-webkit-details-marker]:hidden"
+        // WARNA NETRAL, bukan emas. Selama pengecualian ini masih berstatus
+        // asumsi, latar emas memang tepat - ada sesuatu di baris ini yang
+        // belum berdasar. Sesudah diputuskan final (2026-09-10), emas cuma
+        // menyisakan salah baca: orang mengira ada masalah dengan pegawainya.
+        // Bentuknya kini sama dengan ikon keterangan lain di aplikasi ini.
+        className="inline-flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full bg-surface-2 text-[10px] font-bold leading-none text-ink-2 ring-1 ring-inset ring-line marker:hidden hover:bg-teal-tint hover:text-teal-deep [&::-webkit-details-marker]:hidden"
         title={`Pejabat ${jenjang} - klik untuk keterangan`}
         aria-label={`Keterangan jabatan: Pejabat ${jenjang}`}
       >
         ★
       </summary>
-      <div className="mt-1.5 w-64 max-w-full rounded-lg border border-line bg-gold-tint p-2.5 text-xs font-normal leading-relaxed text-ink-2">
+      <div className="mt-1.5 w-64 max-w-full rounded-lg border border-line bg-surface-2 p-2.5 text-xs font-normal leading-relaxed text-ink-2">
         <p className="font-bold text-ink">Pejabat {jenjang}</p>
         <p className="mt-1">
           Kelas jabatan <strong>{kelasJabatan}</strong>. Komponen kehadiran (30% dari tunjangan kinerja) dibayar{" "}
@@ -54,7 +59,9 @@ export function BadgePejabatEselon({ kelasJabatan }: { kelasJabatan: number | nu
           Pelanggaran presensinya <strong>tetap dicatat dan tetap ditampilkan</strong> apa adanya, hanya tidak
           mengurangi nominal.
         </p>
-        <p className="mt-1 text-muted">Dasar hukum pengecualian ini masih menunggu konfirmasi Biro OSDMA.</p>
+        <p className="mt-1 text-muted">
+          Mengikuti praktik pembayaran yang berjalan di Biro Keuangan, bukan pasal di Permenaker 15/2024.
+        </p>
       </div>
     </details>
   );

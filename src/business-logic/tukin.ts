@@ -26,6 +26,18 @@ import type {
   JenisCuti,
   RincianPotonganKehadiran,
 } from "../types/index";
+import { LABEL_JENIS_CUTI } from "./jenisCuti";
+
+/**
+ * Persentase yang DIBACA MANUSIA: koma sebagai pemisah desimal.
+ *
+ * Teks anomali tampil apa adanya ke Kasubag TU di samping nama pegawai, jadi
+ * "0.60%" di situ bukan soal gaya - itu salah tulis dalam bahasa Indonesia.
+ * SENGAJA tidak memakai `toLocaleString`: engine ini pure dan keluarannya
+ * diuji, jadi tidak boleh bergantung pada data lokal milik runtime.
+ */
+const persen = (pecahan: number, desimal = 2) =>
+  `${(pecahan * 100).toFixed(desimal).replace(".", ",")}%`;
 
 const BOBOT_KEHADIRAN = 0.3; // Pasal 5 ayat (2) huruf b
 const BOBOT_KINERJA = 0.7; // Pasal 5 ayat (2) huruf a
@@ -186,18 +198,20 @@ export function hitungPotonganKehadiranPersen(rekap: InputPotonganKehadiran): {
   const totalPersen = semuaBaris.reduce((a, r) => a + r.totalPersen, 0);
 
   if (semuaBaris.some((r) => r.jumlah < 0)) {
-    anomali.push("Ada komponen potongan kehadiran bernilai negatif - data presensi perlu diperiksa ulang.");
+    anomali.push(
+      "Ada komponen potongan kehadiran yang bernilai negatif. Data presensi periode ini perlu diperiksa ulang."
+    );
   }
   // totalPersen adalah pecahan DARI BOBOT KEHADIRAN, jadi batas "habis"-nya
   // adalah 1 (100% bobot kehadiran), bukan 0,3.
   if (totalPersen > 1) {
     anomali.push(
-      `Potongan kehadiran (${(totalPersen * 100).toFixed(2)}% dari bobot kehadiran) melebihi seluruh komponen kehadiran - perlu konfirmasi kebijakan apakah kelebihan potongan ikut memotong komponen kinerja atau di-cap habis di komponen kehadiran saja.`
+      `Potongan kehadiran mencapai ${persen(totalPersen)} dari bobot kehadiran\u2014melebihi seluruh komponen kehadiran yang tersedia. Perlu keputusan kebijakan: apakah kelebihannya ikut memotong komponen kinerja, atau berhenti di komponen kehadiran saja.`
     );
   }
   if (rekap.jumlahHariAlpha > 25) {
     anomali.push(
-      `jumlahHariAlpha (${rekap.jumlahHariAlpha}) tidak wajar untuk satu periode - cek kemungkinan data presensi belum lengkap.`
+      `Tercatat ${rekap.jumlahHariAlpha} hari tanpa keterangan dalam satu periode\u2014jumlah yang tidak wajar. Periksa kemungkinan data presensinya belum lengkap.`
     );
   }
 
@@ -306,7 +320,7 @@ export function hitungPersenDibayarCuti(
     cutiAktif.jumlahHariCuti / jumlahHariKerja >= AMBANG_CUTI_BERKEPANJANGAN
   ) {
     anomali.push(
-      `${cutiAktif.jenis} menutup ${cutiAktif.jumlahHariCuti} dari ${jumlahHariKerja} hari kerja, tapi BULAN KE BERAPA cuti itu berjalan tidak diketahui - dihitung sebagai bulan ke-1, yaitu tingkat potongan paling ringan. Kalau menurut SK cutinya ini bulan ke-2 atau lebih, tukin seharusnya dipotong lebih besar (Pasal 14). Pastikan ke SK cuti, isi lewat koreksi presensi, lalu hitung ulang.`
+      `${LABEL_JENIS_CUTI[cutiAktif.jenis]} menutup ${cutiAktif.jumlahHariCuti} dari ${jumlahHariKerja} hari kerja, tetapi bulan keberapa cuti itu berjalan tidak diketahui. Sementara dihitung sebagai bulan pertama, yaitu tingkat potongan paling ringan menurut Pasal 14. Kalau menurut SK cutinya sudah bulan kedua atau lebih, potongannya seharusnya lebih besar\u2014pastikan ke SK cuti, isi lewat koreksi presensi, lalu hitung ulang.`
     );
   }
 
@@ -325,7 +339,7 @@ export function hitungPersenDibayarCuti(
         // tidak mengatur bulan ke-4 dst. Dipakai potongan bulan ketiga dan
         // ditandai supaya tidak lewat diam-diam.
         anomali.push(
-          `Cuti besar bulan ke-${bulan} tidak diatur di Pasal 14 huruf c (hanya bulan 1-3) - dipakai potongan bulan ketiga (90%). Perlu konfirmasi Biro Hukum/OSDMA.`
+          `Cuti besar bulan ke-${bulan} tidak diatur di Pasal 14 huruf c, yang hanya mengatur bulan pertama sampai ketiga. Dipakai tingkat bulan ketiga, yaitu potongan 90%\u2014perlu konfirmasi Biro Hukum atau OSDMA.`
         );
       }
       const potongan = potonganBertingkat(POTONGAN_CUTI_BESAR_PER_BULAN, bulan, 0.9);
@@ -350,7 +364,7 @@ export function hitungPersenDibayarCuti(
      */
     case "CUTI_DI_LUAR_TANGGUNGAN_NEGARA":
       anomali.push(
-        "Cuti di Luar Tanggungan Negara: Tunjangan Kinerja TIDAK DIBERIKAN (Pasal 4 huruf d Permenaker 15/2024). Seluruh tukin periode ini menjadi nol - pastikan status cutinya benar sebelum disetujui."
+        "Cuti di Luar Tanggungan Negara: Tunjangan Kinerja tidak diberikan sama sekali (Pasal 4 huruf d Permenaker 15/2024). Seluruh tukin periode ini menjadi nol\u2014pastikan status cutinya benar sebelum disetujui."
       );
       return { persenDibayar: 0, anomali };
 
@@ -374,7 +388,7 @@ export function hitungPersenDibayarCuti(
         // Tidak menebak: tanpa jumlah hari, potongan harian tidak bisa
         // dihitung. Dibayar penuh (perlakuan sampai 1 bulan) TAPI ditandai.
         anomali.push(
-          "Cuti sakit gugur kandungan: jumlah hari cuti tidak diisi, jadi potongan 1%/hari (Pasal 14 huruf e) TIDAK dapat dihitung - sementara diperlakukan sebagai cuti sampai dengan 1 bulan (dibayar penuh). Isi jumlah hari cuti kalau lebih dari 1 bulan."
+          "Cuti sakit gugur kandungan, tetapi jumlah hari cuti tidak diisi, sehingga potongan 1% per hari (Pasal 14 huruf e) tidak dapat dihitung. Sementara diperlakukan sebagai cuti sampai dengan satu bulan, yaitu dibayar penuh\u2014isi jumlah hari cutinya kalau ternyata lebih dari satu bulan."
         );
         return { persenDibayar: 1.0, anomali };
       }
@@ -390,7 +404,7 @@ export function hitungPersenDibayarCuti(
 
       if (hari > BATAS_HARI) {
         anomali.push(
-          `Cuti sakit gugur kandungan ${hari} hari melebihi 1,5 bulan (45 hari) - Pasal 14 huruf e tidak mengatur di atas itu. Potongan dihitung sampai batas 45 hari saja, perlu konfirmasi Biro Hukum/OSDMA.`
+          `Cuti sakit gugur kandungan ${hari} hari melebihi 1,5 bulan (45 hari), dan Pasal 14 huruf e tidak mengatur di atas itu. Potongan dihitung sampai batas 45 hari saja\u2014perlu konfirmasi Biro Hukum atau OSDMA.`
         );
       }
 
@@ -420,9 +434,7 @@ export function hitungTukin(input: TukinInput): TukinResult {
   // --- Capaian kinerja (Pasal 5 huruf a, Pasal 6) ---
   const nilaiKinerja = input.capaianKinerja.nilaiCapaianKinerjaPersen;
   if (nilaiKinerja < 0 || nilaiKinerja > 100) {
-    anomali.push(
-      `nilaiCapaianKinerjaPersen (${nilaiKinerja}) di luar rentang wajar 0-100.`
-    );
+    anomali.push(`Nilai capaian kinerja ${nilaiKinerja} berada di luar rentang wajar 0-100.`);
   }
   const komponenKinerja = bobotKinerja * (Math.max(0, Math.min(100, nilaiKinerja)) / 100);
 
@@ -455,19 +467,19 @@ export function hitungTukin(input: TukinInput): TukinResult {
   // potongan rupiah. Menghapusnya berarti kehilangan bahan pengawasan atas
   // orang-orang yang justru paling perlu diawasi.
   //
-  // TODO(confirm): dasar hukumnya belum ada - lihat pejabatPimpinanTinggi.ts.
-  // Selama belum ada, pemakaiannya SELALU dicatat sebagai catatan supaya tidak
-  // ada nominal yang naik diam-diam.
+  // Aturannya FINAL sejak 2026-09-10 (keputusan user) - lihat
+  // pejabatPimpinanTinggi.ts. Pemakaiannya TETAP dicatat, dan itu bukan sisa
+  // dari masa "belum pasti": pengecualian yang menaikkan nominal harus selalu
+  // bisa ditunjukkan siapa saja dan berapa, persis seperti potongan.
   const pengecualianPotonganKehadiran = input.dikecualikanPotonganKehadiran === true;
   const potonganKehadiranPersen = pengecualianPotonganKehadiran
     ? 0
     : potonganKehadiranPersenSebelumPengecualian;
   if (pengecualianPotonganKehadiran && potonganKehadiranPersenSebelumPengecualian > 0) {
     anomali.push(
-      `Pejabat Pimpinan Tinggi - potongan kehadiran Pasal 13 sebesar ` +
-        `${(potonganKehadiranPersenSebelumPengecualian * 100).toFixed(2)}% dari bobot kehadiran ` +
-        `TIDAK diterapkan (komponen kehadiran dibayar penuh). ` +
-        `TODO(confirm): dasar hukum pengecualian ini belum ada salinannya - lihat pejabatPimpinanTinggi.ts.`
+      `Pejabat Pimpinan Tinggi: potongan kehadiran Pasal 13 sebesar ` +
+        `${persen(potonganKehadiranPersenSebelumPengecualian)} dari bobot kehadiran tidak diterapkan, ` +
+        `sehingga komponen kehadirannya dibayar penuh.`
     );
   }
 
@@ -516,7 +528,7 @@ export function hitungTukin(input: TukinInput): TukinResult {
   if (hasilCuti && overrideCutiDiterapkan) {
     tukinPokok = input.tukinPokokKelasJabatan * hasilCuti.persenDibayar;
     anomali.push(
-      `Override Pasal 14 diterapkan untuk cuti jenis ${input.rekapKehadiran.cutiAktif?.jenis} - dibayar ${(hasilCuti.persenDibayar * 100).toFixed(0)}% dari tukin pokok kelas jabatan. Potongan Pasal 13 periode ini TIDAK ikut diterapkan karena tertimpa override.`
+      `Pasal 14 menimpa perhitungan periode ini karena pegawai sedang ${LABEL_JENIS_CUTI[input.rekapKehadiran.cutiAktif!.jenis]}: dibayar ${persen(hasilCuti.persenDibayar, 0)} dari tukin pokok kelas jabatan. Potongan kehadiran Pasal 13 tidak ikut diterapkan karena sudah tertimpa aturan cuti ini.`
     );
 
     // ------------------------------------------------------------------
@@ -547,7 +559,7 @@ export function hitungTukin(input: TukinInput): TukinResult {
       hariCuti * 2 < hariKerja
     ) {
       anomali.push(
-        `PERIKSA MANUAL: cuti cuma ${hariCuti} hari dari ${hariKerja} hari kerja, TAPI potongan Pasal 14 sebesar ${(potonganPersen * 100).toFixed(0)}% berlaku untuk SATU BULAN PENUH (pasal itu tidak mengatur pembagian proporsional harian). Pastikan tanggal cutinya benar sebelum disetujui - kalau salah, pegawai kehilangan tukin sebulan karena cuti beberapa hari.`
+        `Perlu diperiksa manual: cutinya hanya ${hariCuti} hari dari ${hariKerja} hari kerja, tetapi potongan Pasal 14 sebesar ${persen(potonganPersen, 0)} berlaku untuk satu bulan penuh karena pasal itu tidak mengatur pembagian proporsional harian. Pastikan tanggal cutinya benar sebelum disetujui\u2014kalau keliru, pegawai kehilangan tukin sebulan hanya karena cuti beberapa hari.`
       );
     }
   }

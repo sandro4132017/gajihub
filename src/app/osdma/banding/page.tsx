@@ -3,6 +3,8 @@ import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canApproveBandingFinal, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { StatusBadge } from "../../StatusBadge";
+import { RincianBanding } from "../../RincianBanding";
+import { labelReferensiBanding } from "../../../business-logic/bandingData";
 import { SetujuTolakForm } from "../SetujuTolakForm";
 import { approveBandingFinalAction } from "./actions";
 import { HALAMAN } from "../../layoutHalaman";
@@ -41,12 +43,18 @@ export default async function OsdmaBandingPage() {
               <div>
                 <p className="font-bold text-ink">{b.pegawai.nama}</p>
                 <p className="text-sm text-muted">
-                  NIP {b.pegawai.nip} - {b.pegawai.satuanKerja} - {b.referensiTipe} - Periode {b.periodeBulan}/{b.periodeTahun}
+                  NIP {b.pegawai.nip} - {b.pegawai.satuanKerja} - {labelReferensiBanding(b.referensiTipe)} -
+                  Periode {b.periodeBulan}/{b.periodeTahun}
                 </p>
               </div>
               <StatusBadge label={LABEL_STATUS[b.status as keyof typeof LABEL_STATUS] ?? b.status} warna={WARNA_STATUS[b.status as keyof typeof WARNA_STATUS] ?? "abu"} />
             </div>
-            <p className="mt-2 text-sm text-ink-2">{b.alasan}</p>
+            <RincianBanding
+              referensiTipe={b.referensiTipe}
+              alasan={b.alasan}
+              bagianData={b.bagianData}
+              usulanPerbaikan={b.usulanPerbaikan}
+            />
             {b.status === "MENUNGGU_APPROVAL_FINAL" && (
               <SetujuTolakForm action={approveBandingFinalAction} idFieldName="bandingId" idValue={b.id} />
             )}

@@ -161,6 +161,26 @@ html {
     @apply text-left align-middle;
   }
 
+  /* KOLOM BEKU - tetap terlihat waktu tabel digeser ke kanan (freeze pane).
+     Dipakai di <th> DAN <td> kolom yang sama, sama seperti .col-nama.
+
+     `background-color: inherit` DISENGAJA, bukan warna tetap: sel ini harus
+     menutupi kolom yang lewat di belakangnya, tapi warnanya harus ikut warna
+     BARISNYA. Baris yang ditandai (mis. angka basi berlatar kuning) akan
+     terlihat separuh kuning separuh putih kalau di sini ditulis warna mati.
+
+     SYARATNYA: <tr>-nya WAJIB punya latar yang tidak transparan. Baris tanpa
+     latar mewarisi transparan, dan kolom di belakangnya akan tembus pandang
+     waktu digeser - satu-satunya cara gagal yang mungkin di sini, dan
+     kelihatan langsung begitu tabelnya digeser.
+
+     Wadah gulirnya tetap `overflow-x-auto` seperti biasa; sticky menempel ke
+     wadah itu tanpa perlu tinggi tetap. */
+  .kolom-beku {
+    @apply sticky left-0 z-10 border-r border-line;
+    background-color: inherit;
+  }
+
   .card {
     @apply rounded-2xl border border-line bg-surface shadow-[0_1px_2px_rgba(19,65,107,0.04),0_6px_22px_rgba(19,65,107,0.06)];
   }

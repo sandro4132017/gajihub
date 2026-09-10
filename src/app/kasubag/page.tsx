@@ -14,6 +14,7 @@ import { bulanSebelumnyaDalamTahun, deltaPersen } from "../../business-logic/del
 import { tinggiBatangPersen } from "../tinggiBatang";
 import { TAMPILKAN_MENU_LEMBUR, TAMPILKAN_NOMINAL_LEMBUR } from "../tampilUangLembur";
 import { HALAMAN } from "../layoutHalaman";
+import { sapaanNama } from "../sapaan";
 
 export const dynamic = "force-dynamic";
 
@@ -42,24 +43,6 @@ function formatRupiahPenuh(nilai: number): string {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(nilai);
-}
-
-/**
- * Nama untuk sapaan - maksimal dua kata.
- *
- * Nama dari SIAP sering panjang dan bergelar ("IRVAN GANEVA, M.M. , S.Ds"),
- * dan sapaan yang memuat seluruhnya justru terbaca kaku. Dua kata pertama
- * menangani mayoritas nama Indonesia dengan wajar.
- *
- * HURUF BESARNYA TIDAK DIUBAH. Banyak nama di SIAP tersimpan kapital penuh,
- * dan menurunkannya jadi Title Case akan merusak nama yang memang ditulis
- * begitu ("LA ODE", singkatan gelar) - proyek ini sudah punya aturan bahwa
- * nama pegawai tidak dikarang ulang.
- */
-function sapaanNama(nama: string): string {
-  const kata = nama.trim().split(/\s+/).filter(Boolean);
-  if (kata.length === 0) return "";
-  return kata.slice(0, 2).join(" ").replace(/,$/, "");
 }
 
 export default async function KasubagDashboardPage({

@@ -150,5 +150,5 @@ export function petunjukKemungkinanKeluar(p: PetunjukKehadiran): string | null {
   if (p.jumlahHariCuti > 0) return null;
   if (p.jumlahHariTugasBelajar > 0) return null;
 
-  return `0 hadir dari ${p.jumlahHariKerja} hari kerja, tanpa cuti atau tugas belajar, dan tidak ada predikat kinerja - kemungkinan sudah tidak di unit ini.`;
+  return `0 hari hadir dari ${p.jumlahHariKerja} hari kerja, tanpa catatan cuti atau tugas belajar, dan predikat kinerja kosong—kemungkinan besar pegawai sudah tidak aktif di unit ini.`;
 }

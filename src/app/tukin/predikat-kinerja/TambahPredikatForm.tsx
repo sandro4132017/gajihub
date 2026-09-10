@@ -77,6 +77,22 @@ export function TambahPredikatForm({
                 <label className="field-label">Predikat</label>
                 <SearchableSelect name="predikat" options={OPSI_PREDIKAT} required className="w-full" />
               </div>
+              {/* PENILAI dicatat, tidak lagi dibiarkan kosong.
+                  Predikat yang masuk lewat unggahan membawa nama unit penilai
+                  dari kepala berkasnya; yang diketik manual dulu tidak membawa
+                  apa-apa dan muncul sebagai "sumber tidak tercatat".
+                  Untuk pejabat pimpinan tinggi itu justru keterangan yang
+                  paling dibutuhkan - penilaiannya datang dari atas unit, dan
+                  tanpa dicatat tidak ada jejak siapa yang menilainya. */}
+              <div className="min-w-[190px] flex-1">
+                <label className="field-label">Penilai (opsional)</label>
+                <input
+                  type="text"
+                  name="penilai"
+                  className="field-input"
+                  placeholder="mis. Sekretaris Jenderal"
+                />
+              </div>
               <div className="min-w-[180px] flex-1">
                 <label className="field-label">Alasan (opsional)</label>
                 <input

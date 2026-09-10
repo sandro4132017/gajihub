@@ -39,10 +39,19 @@ const tanggalRingkas = (d: Date) =>
 export function RingkasanPerUnit({
   baris,
   qsPeriode,
+  hrefRincianTetap,
 }: {
   baris: BarisRingkasanUnit[];
   /** Query string periode yang sedang aktif, diteruskan ke tautan rincian. */
   qsPeriode: string;
+  /**
+   * Tujuan tautan nama unit, kalau rinciannya TIDAK di halaman ini.
+   *
+   * Dipakai Kasubag TU: rincian per pegawai unitnya ada di halaman Kalkulasi,
+   * dan tautan bawaan (`/tukin?satker=`) cuma mengembalikannya ke halaman yang
+   * sedang dia buka - satuan kerjanya memang sudah dipaksa ke unitnya sendiri.
+   */
+  hrefRincianTetap?: string;
 }) {
   const totalPegawai = baris.reduce((a, b) => a + b.jumlahPegawai, 0);
   const totalBersih = baris.reduce((a, b) => a + b.totalBersih, 0);
@@ -75,11 +84,35 @@ export function RingkasanPerUnit({
               <tr key={u.satuanKerja} className="border-b border-line-2 last:border-0 hover:bg-surface-2">
                 <td className="col-nama px-3 py-2">
                   <Link
-                    href={`/tukin${qsPeriode}${qsPeriode ? "&" : "?"}satker=${encodeURIComponent(u.satuanKerja)}`}
-                    className="font-semibold text-teal-deep hover:underline"
-                    title={u.satuanKerja}
+                    href={
+                      hrefRincianTetap ??
+                      `/tukin${qsPeriode}${qsPeriode ? "&" : "?"}satker=${encodeURIComponent(u.satuanKerja)}`
+                    }
+                    // BUKAN text-teal-deep. Tokennya #0e3255, LEBIH GELAP
+                    // daripada teks isi tabel (--color-ink #13416b), jadi nama
+                    // unitnya terbaca sebagai penegasan - bukan tautan. Diganti
+                    // --color-biru (#3f72af) yang jelas berbeda dari teks biasa.
+                    //
+                    // Panah kecil dipasang sebagai isyarat KEDUA: warna saja
+                    // tidak cukup untuk pembaca yang sulit membedakan warna,
+                    // dan di dalam tabel penuh angka, satu kolom berwarna beda
+                    // gampang terbaca sebagai penanda status.
+                    className="group inline-flex items-center gap-1 font-semibold text-biru underline decoration-transparent underline-offset-2 transition hover:decoration-current"
+                    title={`Lihat rincian per pegawai - ${u.satuanKerja}`}
                   >
                     {u.satuanKerja}
+                    <svg
+                      viewBox="0 0 24 24"
+                      aria-hidden
+                      className="size-3.5 shrink-0 transition-transform group-hover:translate-x-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
                   </Link>
                 </td>
                 <td className="px-3 py-2">{u.jumlahPegawai.toLocaleString("id-ID")}</td>
@@ -125,8 +158,14 @@ export function RingkasanPerUnit({
       </div>
 
       <p className="border-t border-line px-4 py-2.5 text-xs text-muted">
-        Klik nama satuan kerja untuk melihat rinciannya per pegawai. Mengembalikan rekap ke unit dilakukan lewat papan
-        progres pengiriman di halaman <strong>Export ADK</strong>.
+        Klik nama satuan kerja untuk melihat rinciannya per pegawai.
+        {!hrefRincianTetap && (
+          <>
+            {" "}
+            Mengembalikan rekap ke unit dilakukan lewat papan progres pengiriman di halaman{" "}
+            <strong>Export ADK</strong>.
+          </>
+        )}
       </p>
     </div>
   );

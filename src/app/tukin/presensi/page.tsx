@@ -6,6 +6,8 @@ import {
   canBukaHalamanPredikatKinerja,
   canKelolaKendalaEpresensi,
   canKelolaHariLibur,
+  canLihatKendalaEpresensi,
+  canLihatHariLibur,
   canUploadRekapPresensi,
   canExportRekapUnit,
   type AuthUser,
@@ -17,6 +19,7 @@ import { periodePunyaRekapPresensi, resolvePeriode } from "../../periodeDefault"
 import { UploadPresensiForm } from "./UploadPresensiForm";
 import { UploadPresensiPdfForm } from "./UploadPresensiPdfForm";
 import { SinkronisasiPresensi } from "./SinkronisasiPresensi";
+import { ambilSumberData, keSumberAcuan } from "../../sumberData";
 import { PencarianDebounce } from "../../PencarianDebounce";
 import { Paginasi, hitungPaginasi } from "../../Paginasi";
 import { BadgePejabatEselon } from "../../BadgePejabatEselon";
@@ -26,12 +29,28 @@ import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Gaya baris pengganti tombol untuk yang cuma boleh melihat. Ditulis sekali:
+ * dua kartu memakainya, dan dua salinan className yang sedikit berbeda membuat
+ * keduanya terlihat seperti dua jenis pesan yang berbeda.
+ */
+const CATATAN_HANYA_LIHAT = "mt-4 border-t border-line-2 pt-2.5 text-xs leading-relaxed text-muted";
+
 export default async function PresensiTukinPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bulan?: string; tahun?: string; q?: string; satker?: string; hal?: string; per?: string }>;
+  searchParams: Promise<{
+    bulan?: string;
+    tahun?: string;
+    q?: string;
+    satker?: string;
+    hal?: string;
+    per?: string;
+    /** "tukin" = dibuka dari Dashboard Tukin, bukan dari sidebar. */
+    dari?: string;
+  }>;
 }) {
-  const { bulan, tahun, q, satker, hal, per } = await searchParams;
+  const { bulan, tahun, q, satker, hal, per, dari } = await searchParams;
 
   const akun = await getSessionAccount();
   const authUser: AuthUser | null =
@@ -43,6 +62,12 @@ export default async function PresensiTukinPage({
   // Kasubag TU ikut boleh (unitnya sendiri) - cakupan per pegawai dicek ulang
   // di action rekonsiliasinya, jadi berkas lintas unit tetap tersaring.
   const bolehRekonsiliasi = canUploadRekapPresensi(authUser, authUser.satuanKerja ?? "");
+
+  // Dua keadaan yang BOLEH DILIHAT semua orang di halaman ini, tapi cuma boleh
+  // DIUBAH PPABP/Admin - keduanya berlaku se-kementerian. Lihat catatan di
+  // canLihatKendalaEpresensi (permissions.ts).
+  const bolehTandaiKendala = canKelolaKendalaEpresensi(authUser);
+  const bolehIsiKalender = canKelolaHariLibur(authUser);
 
   const satkerWajib = authUser.role === "KASUBAG_TU" ? authUser.satuanKerja : null;
   // Halaman ini isinya rekap presensi, jadi periode defaultnya diambil dari
@@ -64,6 +89,8 @@ export default async function PresensiTukinPage({
   // tombolnya tidak muncul - berkas berisi seluruh kementerian bukan yang
   // dimaksud siapa pun, dan route-nya memang menolaknya dengan 400.
   const bolehExport = satkerEfektif !== null && canExportRekapUnit(authUser, satkerEfektif);
+
+  const sumberData = await ambilSumberData({ satuanKerja: satkerEfektif, periodeBulan, periodeTahun });
 
   const filterPegawai: Prisma.PegawaiWhereInput = {};
   if (satkerEfektif) filterPegawai.satuanKerja = satkerEfektif;
@@ -107,6 +134,7 @@ export default async function PresensiTukinPage({
   if (periodeTahun) paramPaginasi.set("tahun", String(periodeTahun));
   if (satker && !satkerWajib) paramPaginasi.set("satker", satker);
   if (q?.trim()) paramPaginasi.set("q", q.trim());
+  if (dari === "tukin") paramPaginasi.set("dari", "tukin");
 
   const [rekapList, satuanKerjaRows] = await Promise.all([
     prisma.rekapPresensiPeriode.findMany({
@@ -126,24 +154,44 @@ export default async function PresensiTukinPage({
         }),
   ]);
 
+  // Tombol Kembali HANYA kalau halaman ini dibuka dari Dashboard Tukin.
+  // Lewat sidebar, halaman ini adalah tujuan akhir - tidak ada tempat untuk
+  // "kembali", dan tombol yang menunjuk ke halaman yang belum tentu pernah
+  // dibuka justru menyesatkan.
+  //
+  // Periode & satker ikut dibawa balik supaya Dashboard Tukin terbuka di
+  // periode yang BARU SAJA dilihat di sini - kalau tidak, halaman tujuan jatuh
+  // ke periode defaultnya sendiri dan terasa seperti pindah konteks.
+  const dariTukin = dari === "tukin";
+  const kembaliKeTukin =
+    `/tukin?bulan=${periodeBulan}&tahun=${periodeTahun}` +
+    (satkerEfektif && !satkerWajib ? `&satker=${encodeURIComponent(satkerEfektif)}` : "");
+
   return (
     <main className={HALAMAN}>
-      <Link
-        href="/tukin"
-        className="inline-flex items-center gap-2 text-sm font-bold text-teal-deep transition hover:text-biru"
-      >
-        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M19 12H5M12 19l-7-7 7-7" />
-        </svg>
-        <span className="underline underline-offset-2">Kembali</span>
-      </Link>
+      {dariTukin && (
+        <Link
+          href={kembaliKeTukin}
+          className="inline-flex items-center gap-2 text-sm font-bold text-teal-deep transition hover:text-biru"
+        >
+          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          <span className="underline underline-offset-2">Kembali</span>
+        </Link>
+      )}
 
-      <h1 className="mt-3 flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
+      <h1
+        className={`flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl ${
+          dariTukin ? "mt-3" : ""
+        }`}
+      >
         Presensi
         {/* Dasar hukumnya pindah ke sini - dulu memakan satu baris penuh di
             deskripsi. Tetap terbaca kapan pun diperlukan (auditor/Itjen),
             tanpa harus dibaca tiap halaman dibuka. */}
         <SumberAcuan
+          sumber={keSumberAcuan(sumberData)}
           acuan={[
             { aturan: "Pasal 5 ayat (2) huruf b", tentang: "Kehadiran berbobot 30% dari Tunjangan Kinerja" },
             { aturan: "Pasal 13", tentang: "Tarif potongan: alpha 3%/hari, lupa absen 1%/kali, telat & pulang cepat 0,01%/menit" },
@@ -151,7 +199,7 @@ export default async function PresensiTukinPage({
             { aturan: "Pasal 14", tentang: "Persentase yang dibayarkan selama cuti" },
             { aturan: "Pasal 10 ayat (2)", tentang: "Presensi manual kalau presensi elektronik mengalami kendala" },
           ]}
-          catatan="Semuanya Permenaker 15/2024 - Sumber data: database e-Presensi (READ ONLY)."
+          catatan="Semuanya Permenaker 15/2024. SIAP & e-Presensi diakses baca-saja - Gajihub tidak pernah menulis ke sana."
         />
       </h1>
       <p className="mt-0.5 text-sm font-bold text-ink">Komponen 30% Tunjangan Kinerja (Tukin)</p>
@@ -171,6 +219,10 @@ export default async function PresensiTukinPage({
       <SinkronisasiPresensi defaultBulan={periodeBulan} defaultTahun={periodeTahun} />
 
       <form method="get" className="card mt-6 flex flex-wrap items-end gap-3 p-4">
+        {/* Penanda asal ikut terkirim waktu filter dipakai. Tanpa ini
+            tombol Kembali lenyap begitu periodenya diganti, dan orangnya
+            kehilangan jalan pulang di tengah pekerjaan. */}
+        {dariTukin && <input type="hidden" name="dari" value="tukin" />}
         <div className="w-full text-xs text-muted">
           Pilih periode dan kriteria untuk menampilkan data pada tabel di bawah.
         </div>
@@ -404,11 +456,11 @@ export default async function PresensiTukinPage({
       {/* ------------------------------------------------------------------
           PENGATURAN PERIODE - dibuka beberapa kali setahun, bukan tiap hari
           ------------------------------------------------------------------ */}
-      {(canKelolaKendalaEpresensi(authUser) || canKelolaHariLibur(authUser) || bolehRekonsiliasi) && (
+      {(canLihatKendalaEpresensi(authUser) || canLihatHariLibur(authUser) || bolehRekonsiliasi) && (
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {/* Pasal 10 ayat (2) - kalau e-Presensi bermasalah, kegagalan
               mencatat presensi bukan kelalaian pegawainya. */}
-          {canKelolaKendalaEpresensi(authUser) && (
+          {canLihatKendalaEpresensi(authUser) && (
             <div className="card flex flex-col p-5">
               <p className="text-base font-extrabold text-navy">Data e-Presensi Bermasalah</p>
               <p className="mt-1 flex-1 text-sm leading-relaxed text-muted">
@@ -426,28 +478,36 @@ export default async function PresensiTukinPage({
                     <strong className="text-ink">
                       {NAMA_BULAN[periodeBulan - 1]} {periodeTahun}
                     </strong>
-                    . Kalau absen gagal massal karena sistemnya, tandai tanggalnya sekali - tidak perlu mengoreksi
-                    pegawai satu per satu.
+                    .{" "}
+                    {bolehTandaiKendala
+                      ? "Kalau absen gagal massal karena sistemnya, tandai tanggalnya sekali - tidak perlu mengoreksi pegawai satu per satu."
+                      : "Kalau absen di unitmu gagal massal karena sistemnya, sampaikan tanggalnya ke PPABP."}
                   </>
                 )}
               </p>
-              <Link
-                href={`/tukin/presensi/kendala?bulan=${periodeBulan}&tahun=${periodeTahun}`}
-                className="btn btn-secondary mt-4 self-start"
-              >
-                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z" />
-                  <path d="M12 9v4M12 17h.01" />
-                </svg>
-                Periksa Data Bermasalah
-              </Link>
+              {bolehTandaiKendala ? (
+                <Link
+                  href={`/tukin/presensi/kendala?bulan=${periodeBulan}&tahun=${periodeTahun}`}
+                  className="btn btn-secondary mt-4 self-start"
+                >
+                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z" />
+                    <path d="M12 9v4M12 17h.01" />
+                  </svg>
+                  Periksa Data Bermasalah
+                </Link>
+              ) : (
+                <p className={CATATAN_HANYA_LIHAT}>
+                  Penandaan dikerjakan PPABP - satu tanggal berlaku se-kementerian, bukan per unit.
+                </p>
+              )}
             </div>
           )}
 
           {/* Tanpa kalender ini "hari libur" cuma Sabtu/Minggu, jadi lembur di
               tanggal merah dibayar 1x (harusnya 2x) dan hari itu ikut jadi
               batas atas uang makan. */}
-          {canKelolaHariLibur(authUser) && (
+          {canLihatHariLibur(authUser) && (
             <div className="card flex flex-col p-5">
               <p className="text-base font-extrabold text-navy">Kalender Hari Libur</p>
               <p className="mt-1 flex-1 text-sm leading-relaxed text-muted">
@@ -461,25 +521,37 @@ export default async function PresensiTukinPage({
                   </>
                 ) : (
                   <>
-                    Belum ada tanggal merah di{" "}
+                    {/* Nol tanggal merah BUKAN keadaan netral: kalau bulan ini
+                        sebenarnya punya tanggal merah, hari kerja jadi
+                        kelebihan dan potongan periode ini ikut meleset. Itu
+                        yang pernah terbaca sebagai "salah hitung", jadi
+                        akibatnya disebutkan, bukan cuma keadaannya. */}
+                    <strong className="text-gold-deep">Belum ada tanggal merah</strong> di{" "}
                     <strong className="text-ink">
                       {NAMA_BULAN[periodeBulan - 1]} {periodeTahun}
                     </strong>
-                    . Kalender berlaku se-tahun - tanggal yang ditetapkan di bulan lain tetap tersimpan, cuma tidak
-                    jatuh di periode ini.
+                    . Kalau bulan ini seharusnya punya tanggal merah, jumlah hari kerja periode ini kelebihan dan
+                    potongannya ikut meleset.
                   </>
                 )}
               </p>
-              <Link
-                href={`/tukin/presensi/hari-libur?bulan=${periodeBulan}&tahun=${periodeTahun}`}
-                className="btn btn-secondary mt-4 self-start"
-              >
-                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" />
-                  <path d="M16 2v4M8 2v4M3 10h18" />
-                </svg>
-                Kelola Kalender Libur
-              </Link>
+              {bolehIsiKalender ? (
+                <Link
+                  href={`/tukin/presensi/hari-libur?bulan=${periodeBulan}&tahun=${periodeTahun}`}
+                  className="btn btn-secondary mt-4 self-start"
+                >
+                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                  Kelola Kalender Libur
+                </Link>
+              ) : (
+                <p className={CATATAN_HANYA_LIHAT}>
+                  Kalender diisi PPABP dan berlaku se-kementerian. Kalau ada tanggal yang belum tercatat, sampaikan ke
+                  PPABP sebelum Tukin dihitung.
+                </p>
+              )}
             </div>
           )}
 

@@ -2,6 +2,8 @@ import { prisma } from "../../../lib/prisma";
 import { canViewRekapUnitKerja } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { StatusBadge } from "../../StatusBadge";
+import { RincianBanding } from "../../RincianBanding";
+import { labelReferensiBanding } from "../../../business-logic/bandingData";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { ambilAksesUnit } from "../access";
 import { SatkerPicker } from "../SatkerPicker";
@@ -64,7 +66,8 @@ export default async function VerifikasiBandingUnitPage({
               <div>
                 <p className="font-bold text-ink">{b.pegawai.nama}</p>
                 <p className="text-sm text-muted">
-                  NIP {b.pegawai.nip} - {b.referensiTipe} - Periode {b.periodeBulan}/{b.periodeTahun}
+                  NIP {b.pegawai.nip} - {labelReferensiBanding(b.referensiTipe)} - Periode {b.periodeBulan}/
+                  {b.periodeTahun}
                 </p>
               </div>
               {b.status === "DIAJUKAN" && <StatusBadge label="Menunggu verifikasi" warna="amber" />}
@@ -72,7 +75,12 @@ export default async function VerifikasiBandingUnitPage({
               {b.status === "DISETUJUI" && <StatusBadge label="Disetujui" warna="hijau" />}
               {b.status === "DITOLAK" && <StatusBadge label="Ditolak" warna="merah" />}
             </div>
-            <p className="mt-2 text-sm text-ink-2">{b.alasan}</p>
+            <RincianBanding
+              referensiTipe={b.referensiTipe}
+              alasan={b.alasan}
+              bagianData={b.bagianData}
+              usulanPerbaikan={b.usulanPerbaikan}
+            />
             {b.status === "DIAJUKAN" && <VerifikasiBandingForm bandingId={b.id} />}
           </div>
         ))}

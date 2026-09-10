@@ -282,14 +282,6 @@ export function ringkasMasalahBasisDataGaji(masalah: MasalahRekening[]): {
   const perluDiperiksa: string[] = [];
   const cacah = (jenis: MasalahRekening["jenis"]) => masalah.filter((m) => m.jenis === jenis).length;
 
-  const nol = cacah("NOL_DEPAN_DIPULIHKAN");
-  if (nol > 0) {
-    dirapikan.push(
-      `${nol} nomor rekening kehilangan nol di depan karena kolomnya tersimpan sebagai angka di Excel - ` +
-        `sudah dikembalikan sesuai panjang baku banknya (BRI 15 digit, BNI 10, Mandiri 13).`
-    );
-  }
-
   // Kode bank yang dibetulkan mengikuti nomor rekening. Dikelompokkan per
   // bank tujuan supaya kalimatnya bisa dibaca sebagai satu kejadian ("341
   // rekening pindah ke BNI"), bukan 341 kejadian.
@@ -351,8 +343,10 @@ export function ringkasMasalahBasisDataGaji(masalah: MasalahRekening[]): {
   const panjang = cacah("PANJANG_JANGGAL");
   if (panjang > 0) {
     perluDiperiksa.push(
-      `${panjang} nomor rekening panjangnya tidak sesuai banknya, dan selisihnya terlalu besar untuk sekadar ` +
-        `nol yang hilang. Tidak diubah - periksa sebelum dipakai membayar.`
+      `${panjang} nomor rekening panjangnya tidak seperti kebanyakan rekening banknya (BRI 15 digit, BNI 10, ` +
+        `Mandiri 13). Disimpan APA ADANYA - Gajihub tidak pernah menambah atau memotong angka pada nomor ` +
+        `rekening. Sebagian mungkin memang begitu bentuknya, sebagian mungkin kehilangan nol di depan waktu ` +
+        `disimpan sebagai angka di Excel; periksa ke pemilik data sebelum dipakai membayar.`
     );
   }
 

@@ -40,7 +40,18 @@ export interface KalkulasiMassalFormState {
   ringkasan?: {
     dihitung: number;
     dilewati: number;
+    /**
+     * Sebab yang BARU ketahuan saat menghitung - kelas jabatan kosong, tarif
+     * belum dikonfigurasi, presensi belum ada.
+     *
+     * TIDAK memuat "predikat kinerja belum diupload": itu sudah dinyatakan
+     * lebih dulu lewat kotak centang persetujuan, dan mengulanginya di laporan
+     * hasil membuat orang membaca daftar yang isinya sudah dia setujui sendiri
+     * semenit sebelumnya. Jumlahnya tetap dilaporkan lewat `dilewatiPredikat`.
+     */
     detailDilewati: string[];
+    /** Berapa yang dilewati KARENA predikat - sesuai persetujuan, bukan temuan. */
+    dilewatiPredikat: number;
     /**
      * Pegawai yang Tukin-nya BERHASIL dihitung tapi Uang Makan/Lembur-nya
      * tidak. Dipisah dari `detailDilewati` karena artinya beda jauh: yang di
@@ -176,6 +187,7 @@ export async function kalkulasiMassalTukinUangMakanAction(
     // dengan alasan yang terbaca, bukan melewati sebagian baris diam-diam.
     let dihitung = 0;
     const detailDilewati: string[] = [];
+    let dilewatiPredikat = 0;
     const detailSebagian: string[] = [];
 
     // SK hukuman disiplin yang MENURUNKAN kelas jabatan (PP 94/2021). SIAP
@@ -224,7 +236,8 @@ export async function kalkulasiMassalTukinUangMakanAction(
         where: { pegawaiId_periodeBulan_periodeTahun: { pegawaiId: pegawai.id, periodeBulan, periodeTahun } },
       });
       if (!predikat) {
-        detailDilewati.push(`${pegawai.nama}: predikat kinerja periode ini belum diupload.`);
+        // TIDAK masuk detailDilewati - lihat catatannya di tipe `ringkasan`.
+        dilewatiPredikat++;
         continue;
       }
 
@@ -514,8 +527,12 @@ export async function kalkulasiMassalTukinUangMakanAction(
           : ", lengkap dengan uang makan/lembur."),
       ringkasan: {
         dihitung,
-        dilewati: detailDilewati.length,
+        // TOTAL yang dilewati, termasuk yang karena predikat - angka ini tetap
+        // utuh supaya pemakai lain (dan audit) tidak kehilangan hitungannya
+        // hanya karena tampilannya dipecah dua.
+        dilewati: detailDilewati.length + dilewatiPredikat,
         detailDilewati,
+        dilewatiPredikat,
         detailSebagian,
       },
     };

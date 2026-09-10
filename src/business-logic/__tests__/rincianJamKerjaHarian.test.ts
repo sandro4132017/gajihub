@@ -269,3 +269,72 @@ describe("jamDariMenit", () => {
     expect(jamDariMenit(null)).toBeNull();
   });
 });
+
+// ============================================================================
+// TAP TIDAK WAJAR - tabel tidak boleh memajang angka yang tidak dibayar.
+// Dipasang 2026-09-10 setelah satu baris nyata (David Casidi, 17 Juli 2026,
+// WFH, masuk 23:26 keluar 23:59) memunculkan "terlambat 896 menit" dan
+// "menit kerja -57" di tabel, sementara yang benar-benar ditagih 0 menit
+// plus 1 kejadian Pasal 13 ayat (2).
+// ============================================================================
+describe("rincianJamKerjaHari - ketukan yang tidak dipercaya", () => {
+  const KASUS_NYATA = { ...JUMAT, jamMasukMenit: MENIT(23, 26), jamKeluarMenit: JAM_TAP_PULANG_HILANG };
+
+  it("masuk 23:26 & keluar 23:59: seluruh kolom turunan null, bukan angka", () => {
+    const r = rincianJamKerjaHari(KASUS_NYATA);
+    expect(r.tapTidakWajar).toBe(true);
+    expect(r.menitTerlambat).toBeNull();
+    expect(r.menitKerja).toBeNull();
+    expect(r.jamHarusPulangMenit).toBeNull();
+    expect(r.batasCheckoutMenit).toBeNull();
+    expect(r.kekuranganJamKerjaMenit).toBeNull();
+    expect(r.totalMenitKekuranganHarian).toBeNull();
+  });
+
+  it("null, BUKAN nol - keduanya berarti hal yang berbeda", () => {
+    // Nol berarti "sudah diperiksa, tidak ada pelanggaran". Yang benar di
+    // sini "tidak bisa dihitung". Kalau ini jadi 0, tabelnya berbohong ke
+    // arah yang berlawanan: seolah pegawainya bersih.
+    const r = rincianJamKerjaHari(KASUS_NYATA);
+    expect(r.menitTerlambat).not.toBe(0);
+    expect(r.menitKerja).not.toBe(0);
+  });
+
+  it("jam masuk & pulang aslinya TETAP ditampilkan - yang hilang cuma turunannya", () => {
+    const r = rincianJamKerjaHari(KASUS_NYATA);
+    expect(r.jamMasukMenit).toBe(MENIT(23, 26));
+    expect(r.jamKeluarMenit).toBe(JAM_TAP_PULANG_HILANG);
+  });
+
+  it("masuk pada/sesudah jam pulang wajib ditandai - mustahil sebagai kedatangan", () => {
+    expect(rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(16, 0), jamKeluarMenit: MENIT(17, 0) }).tapTidakWajar).toBe(true);
+    // Jumat jam pulang wajibnya 16:30, jadi 16:00 di Jumat BELUM mustahil -
+    // ambangnya ikut jadwal hari itu, bukan angka tetap.
+    expect(rincianJamKerjaHari({ ...JUMAT, jamMasukMenit: MENIT(16, 0), jamKeluarMenit: MENIT(17, 0) }).tapTidakWajar).toBe(false);
+  });
+
+  it("satu ketukan tersalin ke dua kolom ditandai", () => {
+    expect(rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(19, 46), jamKeluarMenit: MENIT(19, 47) }).tapTidakWajar).toBe(true);
+  });
+
+  it("jam hasil koreksi petugas SELALU dipercaya - tidak ikut ditandai", () => {
+    // Aturan yang sama persis dengan mesin yang membayar: koreksi adalah
+    // keterangan terverifikasi terhadap foto & geotag, bukan tebakan.
+    const r = rincianJamKerjaHari({
+      ...SENIN,
+      jamMasukMenit: MENIT(9, 0),
+      jamKeluarMenit: MENIT(16, 0),
+      masukDikoreksi: true,
+      keluarDikoreksi: true,
+    });
+    expect(r.tapTidakWajar).toBe(false);
+    expect(r.menitTerlambat).toBe(30);
+  });
+
+  it("hari biasa TIDAK ikut tertandai", () => {
+    const r = rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(8, 15), jamKeluarMenit: MENIT(16, 0) });
+    expect(r.tapTidakWajar).toBe(false);
+    expect(r.menitTerlambat).toBe(0);
+    expect(r.kekuranganJamKerjaMenit).toBe(45);
+  });
+});

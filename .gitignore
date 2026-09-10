@@ -24,3 +24,5 @@ log-sync/
 *.sql
 
 !prisma/migrations/**/*.sql
+
+.claude/

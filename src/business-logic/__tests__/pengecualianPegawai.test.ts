@@ -67,7 +67,7 @@ describe("petunjukKemungkinanKeluar", () => {
       jumlahHariCuti: 0,
       jumlahHariTugasBelajar: 0,
     });
-    expect(t).toContain("0 hadir dari 23 hari kerja");
+    expect(t).toContain("0 hari hadir dari 23 hari kerja");
   });
 
   it("tidak pernah menyimpulkan - berhenti di 'kemungkinan'", () => {

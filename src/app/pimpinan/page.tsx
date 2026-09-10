@@ -22,9 +22,11 @@ export default async function PimpinanDashboardPage({
   const params = await searchParams;
   const akun = await getSessionAccount();
   const authUser: AuthUser | null = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
-  if (!authUser || !canViewDashboardLintasUnit(authUser)) {
+  // `!akun` ikut diuji walau `authUser` sudah menjaminnya - tanpa itu TypeScript
+  // tidak bisa mempersempit `akun` waktu namanya dipakai di bawah.
+  if (!akun || !authUser || !canViewDashboardLintasUnit(authUser)) {
     return <AksesDitolak pesan="Halaman ini khusus PPABP/Pimpinan/Admin." />;
   }
 
-  return <DashboardLintasUnit searchParams={params} authUser={authUser} readOnly={true} />;
+  return <DashboardLintasUnit searchParams={params} authUser={authUser} readOnly={true} nama={akun.nama} />;
 }

@@ -648,8 +648,30 @@ model Banding {
   periodeBulan Int     @map("periode_bulan")
   periodeTahun Int     @map("periode_tahun")
 
-  referensiTipe String @map("referensi_tipe") // TUKIN, UANG_MAKAN, UANG_LEMBUR
-  referensiId   String @map("referensi_id")
+  /// TUKIN, UANG_MAKAN, UANG_LEMBUR - banding atas ANGKA yang sudah dihitung.
+  /// DATA_PEGAWAI, PRESENSI, PREDIKAT_KINERJA - banding atas DATA SUMBER yang
+  /// membentuk angka itu. Daftar sahnya di src/business-logic/bandingData.ts.
+  referensiTipe String @map("referensi_tipe")
+
+  /// Baris yang dipersoalkan: id kalkulasi, id rekap presensi, id predikat,
+  /// atau - untuk DATA_PEGAWAI yang tidak terikat periode - id pegawainya.
+  referensiId String @map("referensi_id")
+
+  /// Bagian data yang dipersoalkan, mis. "Kelas jabatan" / "Jumlah hari hadir".
+  ///
+  /// Dipilih dari daftar tertutup per jenis banding, BUKAN teks bebas: yang
+  /// memverifikasi perlu tahu ke sistem mana harus melihat (SIAP, e-Presensi,
+  /// e-Kinerja BKN), dan itu tidak bisa diturunkan dari kalimat bebas.
+  /// NULL pada banding lama (sebelum 2026-09-07) dan pada banding atas angka.
+  bagianData String? @map("bagian_data")
+
+  /// Nilai yang MENURUT PEGAWAI seharusnya tercatat - usulan, bukan koreksi.
+  ///
+  /// TIDAK PERNAH ditulis otomatis ke data mana pun. Yang mengubah data tetap
+  /// manusia di sistem sumbernya (SIAP / e-Presensi / e-Kinerja BKN), karena
+  /// di sinilah satu-satunya tempat pegawai bisa menyebut angka yang
+  /// menguntungkan dirinya sendiri.
+  usulanPerbaikan String? @map("usulan_perbaikan")
 
   // Pengaju HARUS role PEGAWAI dan (asumsi saat ini) selalu pegawai yang
   // sama dengan `pegawaiId` di atas - banding diri sendiri, bukan

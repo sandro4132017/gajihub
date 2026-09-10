@@ -614,15 +614,15 @@ describe("cuti beberapa hari yang memotong SEBULAN PENUH (Pasal 14)", () => {
     // langsung dibayarkan.
     const hasil = dgnCuti(1);
     expect(hasil.tukinPokok).toBe(0);
-    expect(hasil.anomali.join(" ")).toContain("PERIKSA MANUAL");
-    expect(hasil.anomali.join(" ")).toContain("SATU BULAN PENUH");
+    expect(hasil.anomali.join(" ")).toContain("Perlu diperiksa manual");
+    expect(hasil.anomali.join(" ")).toContain("satu bulan penuh");
   });
 
   it("cuti yang memang sebulan penuh TIDAK ikut ditandai", () => {
     // Kalau semua cuti panjang ikut ditandai, penandanya kehilangan arti.
     const hasil = dgnCuti(22);
     expect(hasil.tukinPokok).toBe(0);
-    expect(hasil.anomali.join(" ")).not.toContain("PERIKSA MANUAL");
+    expect(hasil.anomali.join(" ")).not.toContain("Perlu diperiksa manual");
   });
 
   it("cuti yang TIDAK memotong tidak ikut ditandai walau cuma 1 hari", () => {
@@ -635,7 +635,7 @@ describe("cuti beberapa hari yang memotong SEBULAN PENUH (Pasal 14)", () => {
         },
       })
     );
-    expect(hasil.anomali.join(" ")).not.toContain("PERIKSA MANUAL");
+    expect(hasil.anomali.join(" ")).not.toContain("Perlu diperiksa manual");
   });
 });
 
@@ -646,7 +646,7 @@ describe("cuti panjang tanpa keterangan bulan - Pasal 14", () => {
     // catatan ini, ia dibayar penuh tanpa ada yang tahu bulannya diasumsikan.
     const hasil = hitungPersenDibayarCuti({ jenis: "CUTI_SAKIT", jumlahHariCuti: 21 }, 23);
     expect(hasil?.persenDibayar).toBe(1); // tetap bulan ke-1 - TIDAK ditebak
-    expect(hasil?.anomali.join(" ")).toContain("BULAN KE BERAPA");
+    expect(hasil?.anomali.join(" ")).toContain("bulan keberapa cuti itu berjalan tidak diketahui");
   });
 
   it("sakit sehari-dua hari TIDAK ditandai", () => {

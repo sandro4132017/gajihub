@@ -139,12 +139,23 @@ pulang hilang).
 
 **TIGA hal yang WAJIB tidak tertukar** - ketiganya disebut di panel penjelas
 halamannya, bukan cuma di komentar kode:
-- **"Kekurangan jam kerja" BUKAN "pulang cepat".** Pulang cepat diukur ke jam
-  pulang TETAP (16:00 / 16:30) dan itu yang dipotong Pasal 13 ayat (3);
-  kekurangan diukur ke *jam harus pulang* yang bergeser ikut jam kedatangan.
-  Masuk 09:00 lalu pulang 16:00 = pulang cepat **0 menit**, kekurangan **60
-  menit**. Kolom itu tidak memotong apa pun - pernah masuk mesin potongan
-  2026-08-06 dan dicabut sehari kemudian.
+- ~~**"Kekurangan jam kerja" BUKAN "pulang cepat".**~~ **DICABUT 2026-09-09
+  atas keterangan Biro Hukum** - *kekurangan jam kerja otomatis tercatat
+  sebagai keterlambatan atau pulang cepat, dan kena 0,01% per menit.* Sekarang
+  keduanya SATU angka: pulang cepat diukur ke **jam harus checkout** yang
+  bergeser ikut jam kedatangan (`batasCheckoutMenit` di
+  `presensiPdfKeRekap.ts`), berhenti di jam pulang wajib + toleransi. Dasarnya
+  Pasal 9 ayat (1) - jam kerja paling sedikit 7,5 jam sehari - yang tidak
+  dihapus oleh toleransi 60 menit di ayat (3).
+  BUKAN pelanggaran keempat: yang datang 07:30 mendapat angka yang sama persis
+  dengan rumus lama (37.984 dari 38.609 baris, 98,4%, periode 7/2026), jadi
+  rumus lama ternyata kasus khusus dari rumus baru. Kolom TERSENDIRI
+  `total_menit_kekurangan_jam_kerja` tetap tidak boleh kembali - itu yang
+  dicabut 2026-08-07, dan menagihnya di samping pulang cepat berarti memotong
+  menit yang sama dua kali.
+  Dampak terukur 7/2026 se-kementerian: 230.065 -> 260.790 menit (+13,4%),
+  993 pegawai, ± Rp 4,7 juta/bulan. **Berlaku pada tarikan berikutnya, tidak
+  surut.**
 - **"Jam toleransi pulang" BUKAN jam mulai lembur.** Angkanya sama (jam pulang
   + 60), artinya beda: di sini batas atas kewajiban checkout, di mesin lembur
   titik mulai jam yang dibayar.

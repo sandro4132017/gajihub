@@ -90,7 +90,13 @@ export function UploadRekapForm() {
         Keterangan rinci DILIPAT, bukan dihapus. Isinya menjelaskan perilaku
         yang tidak bisa ditebak dari tampilan (beberapa sheet bulan diproses
         sekaligus, beberapa penilai per unit, file tidak disimpan, predikat
-        asing dilewati) - kalau hilang, orang menebaknya sendiri. Pakai
+        asing dilewati) - kalau hilang, orang menebaknya sendiri.
+
+        DIPANGKAS 2026-09-10: dua kalimat dicabut karena mengulang yang sudah
+        ada di layar. Perilaku upload ulang sudah disebut di paragraf tepat di
+        ATAS lipatan ini, dan unit penilai tidak lagi ditampilkan di mana pun
+        (permintaan user), jadi menjelaskan cara membacanya cuma memancing
+        pertanyaan tentang sesuatu yang memang tidak perlu dipikirkan. Pakai
         <details> bawaan HTML supaya tetap jalan tanpa JavaScript, pola yang
         sama dengan "Cara lain mengisi presensi" di /tukin/presensi.
       */}
@@ -108,19 +114,29 @@ export function UploadRekapForm() {
           <p>
             <span className="font-semibold text-ink-2">Bisa pilih beberapa file sekaligus.</span> Satu satuan kerja
             sering dinilai lebih dari satu penilai (mis. Subbagian Tata Usaha dan Biro), masing-masing punya file
-            sendiri berisi orang yang berbeda - pilih semuanya dalam satu kali upload. Unit penilainya dibaca dari isi
-            file, tidak perlu kamu tandai sendiri.
+            sendiri berisi orang yang berbeda - pilih semuanya dalam satu kali upload.
           </p>
           <p>
             File-nya sendiri <span className="font-semibold text-ink-2">tidak disimpan</span> - yang masuk database cuma
             NIP, periode, dan predikatnya. Predikat yang labelnya tidak dikenali akan dilewati dan dilaporkan, bukan
-            ditebak. Kalau ada typo, cukup perbaiki di Excel lalu upload ulang: nilainya tertimpa berdasarkan NIP +
-            periode, tidak perlu menghapus siapa pun dulu.
+            ditebak.
           </p>
         </div>
       </details>
       {state.error && <p className="mt-3 text-sm font-medium text-red">{state.error}</p>}
-      {state.success && <p className="mt-3 text-sm font-semibold text-green">{state.success}</p>}
+      {/* HIJAU HANYA kalau tidak ada unit yang datanya kurang. "Berhasil"
+          berwarna hijau tepat di atas peringatan kuning membuat orang berhenti
+          membaca di baris pertama - padahal berkasnya memang tersimpan, yang
+          kurang justru data yang belum dikirim penilai lain. */}
+      {state.success && (
+        <p
+          className={`mt-3 text-sm font-semibold ${
+            state.kelengkapan?.some((k) => k.belumPunya > 0) ? "text-ink-2" : "text-green"
+          }`}
+        >
+          {state.success}
+        </p>
+      )}
 
       {/* VERIFIKASI KELENGKAPAN - inti dari upload beberapa file. Muncul
           langsung setelah upload supaya file penilai yang belum masuk
@@ -129,33 +145,42 @@ export function UploadRekapForm() {
         <div
           key={`${k.periode}-${k.satuanKerja}`}
           className={`mt-3 rounded-lg p-3 text-sm ${
-            k.belumPunya === 0 ? "border border-line bg-surface-2" : "bg-gold-tint"
+            k.belumPunya === 0 ? "border border-line bg-surface-2" : "border-l-4 border-l-gold bg-gold-tint"
           }`}
         >
-          <p className="font-semibold text-ink">
-            {k.satuanKerja} - periode {k.periode}
+          {/* ANGKA KELENGKAPAN DULUAN, baru nama unitnya. Yang dicari orang
+              sesudah mengunggah adalah "kurang berapa" - bukan konfirmasi
+              nama unit yang barusan dia pilih sendiri. */}
+          <p className="text-[15px] font-extrabold text-ink">
+            {k.sudahPunya} dari {k.totalAktif} data kinerja ditemukan
           </p>
-          <p className="mt-1 text-ink-2">
-            <span className="font-semibold">
-              {k.sudahPunya} / {k.totalAktif}
-            </span>{" "}
-            pegawai aktif sudah punya predikat kinerja.
+          <p className="mt-0.5 text-xs text-muted">
+            {k.satuanKerja} &middot; periode {k.periode}
+            {k.jumlahDikecualikan > 0 && (
+              <> &middot; {k.jumlahDikecualikan} pegawai dikecualikan, tidak ikut dihitung</>
+            )}
           </p>
-          {k.sumberPenilaian.length > 0 && (
-            <p className="mt-1 text-xs text-muted">
-              Sumber penilaian yang sudah masuk: {k.sumberPenilaian.join(", ")}
-            </p>
-          )}
 
           {k.belumPunya > 0 ? (
             <>
-              <p className="mt-2 text-ink-2">
-                <span className="font-semibold">{k.belumPunya} pegawai belum punya predikat.</span> Kalau unit ini
-                dinilai lebih dari satu penilai, kemungkinan besar filenya belum semua diupload.
+              <p className="mt-2.5 font-semibold text-gold-deep">
+                <span aria-hidden>&#9888;</span> {k.belumPunya} pegawai belum memiliki predikat kinerja
+              </p>
+              <p className="mt-0.5 text-xs text-ink-2">
+                Periksa kembali data SKP sebelum melanjutkan perhitungan. Kalau unit ini dinilai lebih dari satu
+                penilai, kemungkinan besar berkas penilai lain belum diunggah.
               </p>
               <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-ink-2">
-                {k.contohBelum.map((nama) => (
-                  <li key={nama}>{nama}</li>
+                {k.contohBelum.map((p) => (
+                  <li key={p.nama}>
+                    {p.nama}
+                    {/* Pejabat pimpinan tinggi ditandai: penilaiannya datang
+                        dari penilai di ATAS unit, jadi menagihnya ke penilai
+                        unit ini tidak akan pernah menghasilkan berkasnya. */}
+                    {p.pejabatPimpinanTinggi && (
+                      <span className="ml-1.5 chip chip-wait align-middle">pejabat pimpinan tinggi</span>
+                    )}
+                  </li>
                 ))}
                 {k.belumPunya > k.contohBelum.length && (
                   <li className="text-muted">...dan {k.belumPunya - k.contohBelum.length} pegawai lainnya</li>
@@ -163,8 +188,15 @@ export function UploadRekapForm() {
               </ul>
             </>
           ) : (
-            <p className="mt-2 text-sm font-semibold text-green">
-              Lengkap - semua pegawai aktif unit ini sudah punya predikat, siap dihitung.
+            <p className="mt-2 font-semibold text-green">
+              <span aria-hidden>&#10003;</span> Lengkap - semua pegawai yang ikut dihitung periode ini sudah punya
+              predikat.
+            </p>
+          )}
+
+          {k.sumberPenilaian.length > 0 && (
+            <p className="mt-2 border-t border-line-2 pt-2 text-xs text-muted">
+              Sumber penilaian yang sudah masuk: {k.sumberPenilaian.join(", ")}
             </p>
           )}
         </div>

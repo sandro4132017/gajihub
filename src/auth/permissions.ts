@@ -372,6 +372,35 @@ export function canKelolaHariLibur(user: AuthUser): boolean {
 }
 
 /**
+ * MELIHAT keadaan kendala e-Presensi & kalender hari libur - bukan mengubahnya.
+ *
+ * Dipisah dari `canKelolaKendalaEpresensi`/`canKelolaHariLibur` (2026-09-09)
+ * karena yang tertutup sebelumnya bukan cuma wewenang mengubah, tapi juga
+ * PENGETAHUAN bahwa keadaannya begitu.
+ *
+ * Kejadian yang melahirkan pemisahan ini: Kasubag TU melaporkan "hari kerja
+ * Agustus 21, harusnya 20" dan "diklat di hari libur ikut terhitung" sebagai
+ * BUG. Penyebab sebenarnya kalender hari libur yang belum diimpor - keadaan
+ * yang sepenuhnya tidak terlihat dari layar manapun yang bisa dia buka. Yang
+ * sampai ke atas jadi laporan salah hitung, padahal cuma data yang belum
+ * masuk.
+ *
+ * Cakupannya = siapa pun yang memang sudah boleh membuka halaman presensi.
+ * TIDAK ada wewenang yang berpindah: yang menandai kendala dan mengisi
+ * kalender tetap PPABP + ADMIN, dan tombolnya tetap dijaga fungsi di atas.
+ * Angka yang ditampilkan pun cacah tanggal se-kementerian, bukan data gaji
+ * siapa pun - jadi tidak menembus scoping unit yang berlaku di tempat lain.
+ */
+export function canLihatKendalaEpresensi(user: AuthUser): boolean {
+  return canBukaHalamanPredikatKinerja(user);
+}
+
+/** Lihat keterangan kalender hari libur. Lihat catatan di atas. */
+export function canLihatHariLibur(user: AuthUser): boolean {
+  return canBukaHalamanPredikatKinerja(user);
+}
+
+/**
  * Buka HALAMAN upload rekap predikat kinerja / presensi. Cek "boleh menulis
  * data pegawai unit MANA" dilakukan terpisah per baris lewat
  * canUploadRekapPredikatKinerja / canUploadRekapPresensi - pola yang sama

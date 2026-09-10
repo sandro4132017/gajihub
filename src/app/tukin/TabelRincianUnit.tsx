@@ -14,6 +14,15 @@
  */
 
 export interface BarisRincianTukin {
+  /**
+   * Id baris kalkulasi - dipakai sebagai `key` React.
+   *
+   * SENGAJA BUKAN NIP. Satu pegawai punya satu baris PER PERIODE, dan waktu
+   * Dashboard Tukin dibuka tanpa memilih bulan, seluruh periode ikut tampil -
+   * NIP yang sama muncul lebih dari sekali dan React menolaknya sebagai key
+   * ganda. Ketemu betulan pada 199906072025051003 (periode 5/2026 & 7/2026).
+   */
+  id: string;
   nip: string;
   nama: string;
   kelasJabatan: number | null;
@@ -62,23 +71,38 @@ const format2 = (n: number) => new Intl.NumberFormat("id-ID", { maximumFractionD
 const TH = "whitespace-nowrap px-3 py-2 text-[10.5px] font-bold uppercase tracking-wide";
 const TD = "whitespace-nowrap px-3 py-2";
 
-export function TabelRincianUnit({ baris, satuanKerja }: { baris: BarisRincianTukin[]; satuanKerja: string }) {
-  // Persen pada baris TOTAL dihitung dari jumlah rupiahnya, BUKAN dari
-  // rata-rata persen tiap baris. Rata-rata persen memberi bobot yang sama pada
-  // pegawai kelas 15 dan kelas 8, padahal tarifnya berbeda jauh - hasilnya
-  // angka yang tidak mewakili apa pun.
-  const totalPotongan = baris.reduce((a, b) => a + (potonganTotal(b) ?? 0), 0);
-  const totalTarif = baris.reduce((a, b) => a + (b.nominalTukin ?? 0), 0);
+export function TabelRincianUnit({
+  baris,
+  satuanKerja,
+  periode,
+}: {
+  baris: BarisRincianTukin[];
+  satuanKerja: string;
+  /**
+   * Periode yang sedang ditampilkan, mis. "Juli 2026".
+   *
+   * DISEBUT DI JUDUL, bukan diserahkan ke filter di puncak halaman: tabel ini
+   * jauh di bawah lipatan, dan angka rupiah tanpa keterangan bulan gampang
+   * ikut tersalin ke tempat lain sebagai angka periode yang keliru.
+   */
+  periode: string;
+}) {
+  // BARIS TOTAL SENGAJA TIDAK MEMUAT PERSEN (permintaan user 2026-09-09).
+  // Persen di kolom potongan gunanya membandingkan antar BARIS - berat
+  // tidaknya potongan seseorang. Dijumlahkan ke satu angka unit, perbandingan
+  // itu hilang dan yang tersisa cuma angka yang gampang disalahbaca sebagai
+  // "unit ini dipotong sekian persen". Yang benar-benar dipakai dari baris
+  // TOTAL adalah rupiah yang dibayarkan.
   const total = {
-    potongan: totalPotongan,
-    persen: totalTarif > 0 ? (totalPotongan / totalTarif) * 100 : null,
     dibayarkan: baris.reduce((a, b) => a + b.dibayarkan, 0),
   };
 
   return (
     <div className="card mt-8 overflow-hidden">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-4 py-3">
-        <h2 className="text-sm font-extrabold text-ink">Rincian Tukin &mdash; {satuanKerja}</h2>
+        <h2 className="text-sm font-extrabold text-ink">
+          Rincian Tukin {periode} &mdash; {satuanKerja}
+        </h2>
         <p className="text-xs text-muted">{baris.length} pegawai</p>
       </div>
 
@@ -100,7 +124,7 @@ export function TabelRincianUnit({ baris, satuanKerja }: { baris: BarisRincianTu
               const pot = potonganTotal(b);
               const persen = persenPotongan(b);
               return (
-                <tr key={b.nip} className="border-b border-line-2 last:border-0 hover:bg-surface-2">
+                <tr key={b.id} className="border-b border-line-2 last:border-0 hover:bg-surface-2">
                   <td className={`${TD} col-nama font-semibold text-ink`} title={b.nama}>
                     {b.nama}
                     {/* Catatan validasi kalkulasi - mis. cuti panjang yang bulan
@@ -132,11 +156,7 @@ export function TabelRincianUnit({ baris, satuanKerja }: { baris: BarisRincianTu
           <tfoot>
             <tr className="border-t-2 border-line bg-surface-2 font-bold text-ink">
               <td className={`${TD} col-nama`}>TOTAL</td>
-              <td className={TD} colSpan={3} />
-              <td className={`${TD} font-mono`} title={`Rp ${rupiah(total.potongan)}`}>
-                {total.persen === null ? "-" : `${format2(total.persen)}%`}
-              </td>
-              <td className={TD} />
+              <td className={TD} colSpan={5} />
               <td className={`${TD} font-mono`}>{rupiah(total.dibayarkan)}</td>
             </tr>
           </tfoot>

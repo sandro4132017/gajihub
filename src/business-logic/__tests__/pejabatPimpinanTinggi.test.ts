@@ -97,7 +97,13 @@ describe("hitungTukin - pengecualian Pejabat Pimpinan Tinggi", () => {
   it("pemakaiannya selalu dicatat, supaya nominal tidak naik diam-diam", () => {
     const hasil = hitungTukin({ ...dasar, dikecualikanPotonganKehadiran: true });
     expect(hasil.anomali.some((a) => a.includes("Pejabat Pimpinan Tinggi"))).toBe(true);
-    expect(hasil.anomali.some((a) => a.includes("TODO(confirm)"))).toBe(true);
+    // Persentase yang TIDAK jadi dipotong harus disebut angkanya - itu yang
+    // membuat kenaikan nominalnya bisa diperiksa, bukan cuma diketahui ada.
+    expect(hasil.anomali.some((a) => /\d+[.,]\d+% dari bobot kehadiran/.test(a))).toBe(true);
+    // TIDAK boleh lagi memuat "TODO(confirm)": aturannya sudah final
+    // (2026-09-10), dan catatan itu tampil ke Kasubag TU sebagai keterangan
+    // di samping nama pegawai.
+    expect(hasil.anomali.some((a) => a.includes("TODO"))).toBe(false);
   });
 
   it("tidak mencatat apa-apa kalau memang tidak ada pelanggaran buat dikecualikan", () => {

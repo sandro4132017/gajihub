@@ -168,12 +168,25 @@ export default async function RincianPresensiPegawaiPage({
   const barisJamKerja: BarisTabelRincianJamKerja[] = harian.map((h) => {
     const iso = h.tanggal.toISOString().slice(0, 10);
     const keteranganLibur = hariLiburPeriode.get(iso) ?? null;
+    // Penanda koreksi ikut dikirim supaya tabel memakai aturan kepercayaan
+    // yang SAMA dengan mesin yang membayar: jam hasil koreksi petugas selalu
+    // dipercaya, jadi baris yang sudah diperbaiki tidak ikut ditandai "tap
+    // tidak wajar" hanya karena jam aslinya dulu 23:59.
+    // JAM EFEKTIF, bukan jam mentah - persis yang dipakai mesin yang membayar
+    // (`jamMasukEfektif` di presensiPdfKeRekap.ts). Kalau tabel ini berhitung
+    // dari jam mentah sementara penanda kepercayaannya diambil dari koreksi,
+    // baris yang sudah diperbaiki akan dihitung dari 23:59 tapi diperlakukan
+    // sebagai tap yang sah - persis kebalikan dari yang dimaksud.
+    // Jam ASLI-nya tetap terlihat di tabel presensi (tampilan bawaan).
+    const koreksiHari = petaKoreksi.get(iso);
     const rincian = rincianJamKerjaHari({
       tanggalIso: iso,
       indeksHari: h.tanggal.getUTCDay(),
       hariLibur: keteranganLibur !== null,
-      jamMasukMenit: menitDariWaktu(h.jamMasuk),
-      jamKeluarMenit: menitDariWaktu(h.jamKeluar),
+      jamMasukMenit: menitDariWaktu(koreksiHari?.jamMasuk ?? h.jamMasuk),
+      jamKeluarMenit: menitDariWaktu(koreksiHari?.jamKeluar ?? h.jamKeluar),
+      masukDikoreksi: koreksiHari?.jamMasuk != null,
+      keluarDikoreksi: koreksiHari?.jamKeluar != null,
     });
 
     const kejadianTidakPresensi = kejadianTidakPresensiHari({
@@ -534,9 +547,7 @@ export default async function RincianPresensiPegawaiPage({
             {harian.length === 0 && (
               <tr>
                 <td colSpan={bolehKoreksi ? 8 : 7} className="px-3 py-6 text-center text-muted">
-                  Tidak ada rincian harian untuk periode ini. Rincian harian hanya tersimpan kalau presensinya diupload
-                  lewat <strong>PDF e-Presensi</strong> - rekap yang diisi lewat template Excel cuma menyimpan angka
-                  bulanan.
+                  Periode ini belum dilakukan sinkronisasi.
                 </td>
               </tr>
             )}
@@ -627,12 +638,12 @@ export default async function RincianPresensiPegawaiPage({
             kerja, yaitu 7,5 jam Pasal 9 ayat (1).
           </p>
           <p className="mt-2 rounded-lg bg-gold-tint px-3 py-2">
-            <strong>&quot;Kekurangan jam kerja&quot; BUKAN &quot;pulang cepat&quot;, dan tidak memotong apa pun.</strong>{" "}
-            Pulang cepat diukur ke jam pulang tetap (16:00 / 16:30) dan itulah yang dipotong Pasal 13 ayat (3).
-            Kekurangan jam kerja diukur ke <em>jam harus pulang</em> yang ikut bergeser kalau orangnya datang terlambat
-            - dibatasi jam toleransi pulang. Contohnya: masuk 09:00 lalu pulang 16:00 menghasilkan pulang cepat{" "}
-            <strong>0 menit</strong> tapi kekurangan jam kerja <strong>60 menit</strong>. Kolom{" "}
-            <strong>% Potongan</strong> memakai angka yang dipotong, bukan kolom kekurangan.
+            <strong>&quot;Kekurangan jam kerja&quot; = &quot;pulang cepat&quot;, dan memang dipotong.</strong> Sejak 9
+            September 2026 keduanya satu angka. Pulang cepat Pasal 13 ayat (3) diukur ke <em>jam harus pulang</em> yang
+            ikut bergeser kalau orangnya datang terlambat - dasarnya Pasal 9 ayat (1), jam kerja paling sedikit 7,5 jam
+            sehari, yang tidak dihapus oleh toleransi 60 menit di ayat (3). Contohnya: masuk 08:15 lalu pulang 16:00
+            tidak terhitung terlambat, tapi kurang <strong>45 menit</strong> dari kewajibannya - dan 45 menit itu
+            ditagih 0,01% per menit.
           </p>
           <p className="mt-2">
             &quot;Jam toleransi pulang&quot; di sini batas atas kewajiban checkout, <em>bukan</em> jam mulai lembur -
@@ -642,12 +653,7 @@ export default async function RincianPresensiPegawaiPage({
             <span className="font-mono">menit_kerja</span> milik e-Presensi yang dibatasi 7,5 jam.
           </p>
         </div>
-      ) : (
-        <p className="mt-3 text-xs text-muted">
-          Potongan dihitung ulang oleh Gajihub sesuai Pasal 13 Permenaker 15/2024 - kolom &quot;Potongan&quot; di PDF
-          e-Presensi tidak dipakai. Jam kerja acuan: masuk 07:30, pulang 16:00 (Senin-Kamis) / 16:30 (Jumat).
-        </p>
-      )}
+      ) : null}
     </main>
   );
 }

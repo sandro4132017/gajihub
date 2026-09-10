@@ -155,6 +155,15 @@ export async function tambahPredikatAction(
     const nilaiAngka = konversiPredikatKeNilaiPersen(predikat);
     const sekarang = new Date();
 
+    // Penilai yang diketik disimpan di kolom yang SAMA dengan yang diisi
+    // unggahan (`unitPenilaian`), bukan kolom baru. Halaman ini sudah
+    // mengelompokkan predikat menurut kolom itu; kolom kedua berarti dua
+    // daftar penilai yang harus disatukan tiap kali ditampilkan.
+    //
+    // Kosong tetap null, bukan string kosong - "tidak diisi" dan "diisi
+    // kosong" harus terbaca sama di seluruh tampilan.
+    const penilai = String(formData.get("penilai") ?? "").trim();
+
     const baru = await prisma.predikatKinerja.create({
       data: {
         pegawaiId: pegawai.id,
@@ -162,6 +171,7 @@ export async function tambahPredikatAction(
         periodeTahun: periode.tahun,
         predikat,
         nilaiAngka,
+        unitPenilaian: penilai || null,
         sourceSystem: SUMBER_MANUAL,
         sourceSyncedAt: sekarang,
         inputMethod: METODE_TAMBAH,
@@ -183,6 +193,7 @@ export async function tambahPredikatAction(
           predikat,
           nilaiAngka,
           sumber: `${SUMBER_MANUAL} (tambah satuan)`,
+          penilai: penilai || null,
           alasan: String(formData.get("alasan") ?? "").trim() || null,
         },
       },

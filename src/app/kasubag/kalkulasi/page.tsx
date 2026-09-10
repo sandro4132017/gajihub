@@ -3,6 +3,7 @@ import { prisma } from "../../../lib/prisma";
 import { canAjukanKalkulasiTukinMassalUnit, canExportRekapUnit } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { FilterBar } from "../../FilterBar";
+import { InfoIkon } from "../../InfoIkon";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { NAMA_BULAN } from "../../bulan";
 import { periodePunyaPredikatKinerja, resolvePeriode } from "../../periodeDefault";
@@ -12,6 +13,11 @@ import { TARIF_POTONGAN_PASAL_13 } from "../../../business-logic/tukin";
 import { rincianTukinTersimpan } from "../../../business-logic/rincianTukinTersimpan";
 import { LABEL_PREDIKAT } from "../../tukin/predikat-kinerja/predikat";
 import { KalkulasiMassalForm } from "./KalkulasiMassalForm";
+import { PanelKesiapan } from "./PanelKesiapan";
+import { BantuanRincianTukin } from "./BantuanRincianTukin";
+import { SumberAcuan } from "../../SumberAcuan";
+import { ambilSumberData, keSumberAcuan } from "../../sumberData";
+import { periksaKesiapanKalkulasi } from "../../../business-logic/kesiapanKalkulasi";
 import { KoreksiLemburForm } from "./KoreksiLemburForm";
 import { Paginasi, hitungPaginasi } from "../../Paginasi";
 import { BadgePejabatEselon } from "../../BadgePejabatEselon";
@@ -173,9 +179,16 @@ export default async function KalkulasiUnitPage({
   if (!satkerEfektif) {
     return (
       <main className={HALAMAN}>
-        <h1 className="text-xl font-extrabold tracking-tight text-ink">Kalkulasi Unit</h1>
-        <p className="mt-1 text-sm text-muted">Pilih satuan kerja dan periode dulu.</p>
-        <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satker} />
+        <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">Kalkulasi Unit</h1>
+        <p className="mt-2 text-sm text-biru">Pilih satuan kerja dan periode dulu.</p>
+        <FilterBar
+          wajibPeriode
+          wajibSatker
+          satuanKerjaList={satuanKerjaList}
+          bulan={bulan}
+          tahun={tahun}
+          satker={satker}
+        />
       </main>
     );
   }
@@ -246,6 +259,58 @@ export default async function KalkulasiUnitPage({
   // Mereka TETAP tampil di tabel (dengan tanda), supaya tidak ada orang yang
   // lenyap dari layar tanpa jejak.
   const pegawaiAktif = pegawaiList.filter((p) => !setDikecualikan.has(p.id));
+  // Berapa hari presensi tiap orang pernah dikoreksi manual pada periode ini.
+  //
+  // Bukan cacat data - justru sebaliknya. Ditampilkan karena yang memeriksa
+  // berhak tahu baris mana yang sudah tidak apa adanya dari e-Presensi,
+  // terutama kalau nanti angkanya dipersoalkan pegawainya.
+  const koreksiPeriode = await prisma.koreksiPresensiHarian.groupBy({
+    by: ["pegawaiId"],
+    where: {
+      pegawaiId: { in: pegawaiAktif.map((p) => p.id) },
+      tanggal: {
+        gte: new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1)),
+        lt: new Date(Date.UTC(periodeTahun, periodeBulan, 1)),
+      },
+    },
+    _count: { _all: true },
+  });
+  const petaKoreksi = new Map(koreksiPeriode.map((k) => [k.pegawaiId, k._count._all]));
+
+  const sumberData = await ambilSumberData({
+    satuanKerja: satkerEfektif,
+    periodeBulan,
+    periodeTahun,
+  });
+
+  // Pemeriksaan kelengkapan SEBELUM tombol Hitung. Yang dikecualikan sudah
+  // keluar lewat `pegawaiAktif` di atas - lihat alasannya di
+  // src/business-logic/kesiapanKalkulasi.ts.
+  const kesiapan = periksaKesiapanKalkulasi(
+    pegawaiAktif.map((p) => {
+      const r = p.rekapPresensi[0];
+      return {
+        nip: p.nip,
+        nama: p.nama,
+        kelasJabatan: p.kelasJabatan,
+        adaPredikat: p.predikatKinerja.length > 0,
+        jumlahKoreksi: petaKoreksi.get(p.id) ?? 0,
+        rekap: r
+          ? {
+              jumlahHariKerja: r.jumlahHariKerja,
+              jumlahHariHadir: r.jumlahHariHadir,
+              jumlahHariCuti: r.jumlahHariCuti,
+              jumlahHariDinasLuar: r.jumlahHariDinasLuar,
+              jumlahHariDiklat: r.jumlahHariDiklat,
+              jumlahHariTugasBelajar: r.jumlahHariTugasBelajar,
+              jenisCutiAktif: r.jenisCutiAktif,
+              bulanCutiKeberapa: r.bulanCutiKeberapa,
+            }
+          : null,
+      };
+    })
+  );
+
   const belumPunyaPredikat = pegawaiAktif.filter(
     (p) => p.predikatKinerja.length === 0,
   );
@@ -289,21 +354,11 @@ export default async function KalkulasiUnitPage({
   };
   const jumlahPerluHitungUlang = pegawaiAktif.filter((p) => perluHitungUlang(p) !== null).length;
 
-  const sumberPenilaian = [
-    ...new Map(
-      pegawaiAktif
-        .map((p) => p.predikatKinerja[0])
-        .filter((k): k is NonNullable<typeof k> => Boolean(k))
-        .map((k) => [k.unitPenilaian ?? "(sumber tidak tercatat)", k.unitPenilaian ?? "(sumber tidak tercatat)"])
-    ).values(),
-  ].map((unit) => ({
-    unit,
-    jumlah: pegawaiAktif.filter(
-      (p) => (p.predikatKinerja[0]?.unitPenilaian ?? "(sumber tidak tercatat)") === unit && p.predikatKinerja.length > 0
-    ).length,
-  }));
-
-  const lengkap = belumPunyaPredikat.length === 0 && pegawaiAktif.length > 0;
+  // Rincian per unit penilai (Kepala Biro / Kasubbag TU / sumber tidak
+  // tercatat) SENGAJA TIDAK ditampilkan - permintaan user, dua kali: pertama
+  // di halaman Predikat Kinerja, lalu di kartu ini. Yang perlu diketahui
+  // Kasubag TU cuma BERAPA yang sudah punya predikat, bukan siapa penilainya.
+  // `unitPenilaian` tetap tersimpan dan tetap bisa dilihat per pegawai.
 
   // Tanpa text-left/align-bottom: perataan tengah-menengah datang dari aturan
   // tabel di globals.css. Utility di sini akan MENIMPA aturan itu (layer
@@ -333,9 +388,43 @@ export default async function KalkulasiUnitPage({
     <main className={HALAMAN}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-ink">Kalkulasi Unit</h1>
-          <p className="mt-1 text-sm text-muted">
-            {satkerEfektif} - Periode {NAMA_BULAN[periodeBulan - 1]} {periodeTahun}
+          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
+            Kalkulasi Unit
+            {/* BADGE, bukan kartu berisi pesan PPABP. Pesan lengkapnya ada di
+                panel Kirim di kaki halaman - lihat catatan di sana.
+                Yang dibutuhkan di puncak halaman cuma SATU hal: halaman ini
+                sedang dalam tahap apa. Pesan detail di sini dibaca sekali di
+                awal, lalu tergulir hilang justru pada saat orang selesai
+                memperbaiki dan hendak mengirim ulang. */}
+            {kirimStatus.keadaan === "DIKEMBALIKAN" && (
+              <a
+                href="#kirim"
+                className="chip chip-danger align-middle text-[11px] no-underline hover:brightness-95"
+                title="PPABP mengembalikan rekap periode ini - klik untuk melompat ke catatannya di panel Kirim."
+              >
+                Revisi dari PPABP
+              </a>
+            )}
+            <SumberAcuan
+              judul="Dasar aturan"
+              sumber={keSumberAcuan(sumberData)}
+              acuan={[
+                { aturan: "Pasal 5 Permenaker 15/2024", tentang: "Bobot 70% capaian kinerja + 30% kehadiran" },
+                { aturan: "Lampiran Permenaker 15/2024", tentang: "Tukin pokok per kelas jabatan" },
+                { aturan: "Pasal 13 Permenaker 15/2024", tentang: "Potongan kehadiran - alpha, lupa absen, terlambat, pulang cepat" },
+                { aturan: "Pasal 14 Permenaker 15/2024", tentang: "Persentase yang dibayarkan selama cuti" },
+                { aturan: "Kepsekjen 82/2025", tentang: "Konversi predikat kinerja ke persentase" },
+                { aturan: "PP 94/2021", tentang: "Kelas jabatan yang turun selama hukuman disiplin" },
+                { aturan: "PMK 32/2025", tentang: "Tarif uang makan & uang lembur (SBM 2026)" },
+              ]}
+              catatan="Pejabat pimpinan tinggi (kelas jabatan 15 ke atas) dibayar penuh komponen kehadirannya - mengikuti praktik pembayaran yang berjalan, bukan pasal di Permenaker 15/2024."
+            />
+          </h1>
+          <p className="mt-0.5 text-sm font-bold text-ink">
+            {satkerEfektif} &middot; {NAMA_BULAN[periodeBulan - 1]} {periodeTahun}
+          </p>
+          <p className="mt-2 text-sm text-biru">
+            Hitung Tukin dan Uang Makan seluruh pegawai unit ini untuk satu periode, lalu kirim rekapnya ke PPABP.
           </p>
         </div>
         {/*
@@ -354,7 +443,46 @@ export default async function KalkulasiUnitPage({
         )}
       </div>
 
-      <FilterBar satuanKerjaList={satuanKerjaList} bulan={String(periodeBulan)} tahun={String(periodeTahun)} satker={satkerEfektif} />
+      {/* SATU KARTU: filter periode + ringkasan kesiapan datanya.
+          Keduanya menjawab pertanyaan yang sama - "periode ini, unit ini,
+          datanya bagaimana" - dan waktu jadi dua kartu bertumpuk, angka
+          kesiapannya terbaca seperti urusan terpisah dari periode yang baru
+          saja dipilih. */}
+      <div className="card mt-4 p-4">
+        <FilterBar
+          tanpaKartu
+          wajibPeriode
+          wajibSatker
+          satuanKerjaList={satuanKerjaList}
+          bulan={String(periodeBulan)}
+          tahun={String(periodeTahun)}
+          satker={satkerEfektif}
+        />
+        {/* Pemeriksaan kelengkapan - SEBELUM tombol hitung, supaya ketahuan
+            lebih dulu daripada setelah kalkulasi terlanjur jalan. */}
+        <PanelKesiapan
+          ringkasan={kesiapan}
+          tanpaKartu
+          sumber={[
+            {
+              nama: "Rekap presensi",
+              bobot: "30%",
+              terisi: pegawaiAktif.length - belumPunyaPresensi.length,
+              dari: pegawaiAktif.length,
+              href: "/tukin/presensi",
+              labelAksi: "Kelola presensi",
+            },
+            {
+              nama: "Predikat kinerja",
+              bobot: "70%",
+              terisi: pegawaiAktif.length - belumPunyaPredikat.length,
+              dari: pegawaiAktif.length,
+              href: "/tukin/predikat-kinerja",
+              labelAksi: "Kelola predikat kinerja",
+            },
+          ]}
+        />
+      </div>
 
       {/* Daftar yang sedang dikecualikan. WAJIB TAMPIL - kalau orang yang
           dikeluarkan dari hitungan tidak kelihatan di mana pun, pengecualian
@@ -405,119 +533,100 @@ export default async function KalkulasiUnitPage({
           </p>
         </div>
       )}
-      {kirimStatus.keadaan === "DIKEMBALIKAN" && (
-        <div className="card mt-4 border-l-4 border-l-gold p-4">
-          <p className="text-sm font-bold text-ink">
-            Dikembalikan PPABP - perlu diperbaiki
-          </p>
-          <p className="mt-1 text-xs text-ink-2">{kirimStatus.alasanKembali}</p>
+      {/* Kartu "Sumber data periode ini" DICABUT - kedua angkanya (47/48)
+          pindah jadi checklist di panel kesiapan, supaya tidak ada dua tempat
+          yang menyebut angka yang sama.
+
+          Peringatan angka basi TIDAK ikut pindah: itu urusan berbeda (angka
+          yang SUDAH dihitung kini kedaluwarsa), dan sekarang berdiri sendiri -
+          kartunya cuma muncul kalau memang ada yang basi, tidak lagi menyisakan
+          kotak kosong waktu semuanya mutakhir.
+
+          Angka Tukin dibekukan saat dihitung. Kalau sumbernya berubah setelah
+          itu, tabel di bawah menampilkan angka lama tanpa tanda - dan itu
+          terbaca sebagai "koreksi saya tidak berpengaruh". */}
+      {/* KECUALIKAN PEGAWAI - satu-satunya jalan keluar untuk orang yang memang
+          sudah tidak seharusnya dihitung di unit ini (mis. sudah mutasi tapi
+          SIAP belum diperbarui). Sempat HILANG dari halaman waktu kartu
+          "Sumber data periode ini" dibongkar - formnya dulu menempel pada
+          daftar pegawai tanpa predikat di dalam kartu itu.
+
+          DILIPAT, dan itu disengaja: sebagian besar periode tidak
+          membutuhkannya, sementara tombol "kecualikan" yang selalu terbuka di
+          sebelah tiap nama mengundang dipakai sebagai jalan pintas
+          menghilangkan orang yang datanya cuma belum lengkap. */}
+      {belumPunyaPredikat.length > 0 && (
+        <details className="card mt-4 p-4">
+          <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 text-sm font-bold text-ink [&::-webkit-details-marker]:hidden">
+            Kecualikan pegawai dari perhitungan
+            <span className="font-mono text-xs font-bold text-muted">{belumPunyaPredikat.length} kandidat</span>
+            {/* Ikon "i" AMAN di dalam <summary> - InfoIkon seluruhnya <span>.
+                Sebab tersering dijelaskan di sini, bukan di badan kartu:
+                orang yang sudah tahu tidak perlu membacanya tiap kali, dan
+                yang baru pertama kali membuka kartu ini justru butuh tahu
+                lebih dulu sebelum memutuskan mengeluarkan seseorang. */}
+            <InfoIkon
+              judul="Kapan ini dipakai"
+              poin={[
+                {
+                  judul: "Data SIAP belum diperbarui—sebab tersering",
+                  isi: "Pegawai sudah mutasi atau berhenti, tapi SIAP masih mencatatnya di unit ini. Gajihub menyalin SIAP apa adanya tiap malam, jadi selama SIAP belum berubah, namanya tetap muncul di sini.",
+                },
+                {
+                  judul: "BUKAN untuk data yang sekadar belum lengkap",
+                  isi: "Predikat kinerja yang belum diupload cukup ditagih ke penilainya, atau dilewati sekali jalan lewat kotak centang di panel Kalkulasi.",
+                },
+              ]}
+              catatan="Yang dikecualikan tidak dihitung dan tidak ikut dikirim ke PPABP, tapi tetap terlihat di daftar beserta alasannya—pengecualian tidak boleh jadi cara menghilangkan orang tanpa jejak."
+            />
+          </summary>
           <p className="mt-1 text-xs text-muted">
-            Perbaiki dulu, lalu kirim ulang lewat panel di bawah.
+            Gunakan fitur ini khusus untuk pegawai yang memang sudah tidak seharusnya dihitung di unit ini—bukan
+            untuk pegawai yang datanya sekadar belum lengkap. Pegawai yang dikecualikan akan tetap tampil di daftar
+            atas beserta alasannya.
           </p>
-        </div>
+          <ul className="mt-3 space-y-2 text-xs">
+            {belumPunyaPredikat.slice(0, 15).map((p) => (
+              <li key={p.id} className="border-l-2 border-line pl-3">
+                <span className="font-medium text-ink">{p.nama}</span>{" "}
+                <span className="text-muted">({p.nip})</span>
+                <PengecualianForm
+                  pegawaiId={p.id}
+                  nama={p.nama}
+                  periodeBulan={periodeBulan}
+                  periodeTahun={periodeTahun}
+                  petunjuk={petunjukKemungkinanKeluar({
+                    jumlahHariKerja: p.rekapPresensi[0]?.jumlahHariKerja ?? 0,
+                    jumlahHariHadir: p.rekapPresensi[0]?.jumlahHariHadir ?? 0,
+                    punyaPredikat: p.predikatKinerja.length > 0,
+                    jumlahHariCuti: p.rekapPresensi[0]?.jumlahHariCuti ?? 0,
+                    jumlahHariTugasBelajar: p.rekapPresensi[0]?.jumlahHariTugasBelajar ?? 0,
+                  })}
+                />
+              </li>
+            ))}
+          </ul>
+          {belumPunyaPredikat.length > 15 && (
+            <p className="mt-2 text-xs text-muted">
+              Menampilkan 15 dari {belumPunyaPredikat.length}. Sisanya muncul setelah yang ini ditangani.
+            </p>
+          )}
+        </details>
       )}
 
-      {/* Kelengkapan sumber data - ditaruh SEBELUM tombol hitung, supaya
-          ketahuan lebih dulu daripada setelah kalkulasi terlanjur jalan. */}
-      <div className="card mt-4 p-4">
-        <h2 className="text-sm font-bold text-ink">Kelengkapan data periode ini</h2>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-line-2 bg-surface-2 p-3">
-            <p className="text-xs font-semibold text-muted">Predikat kinerja (bobot 70%)</p>
-            <p className="mt-0.5 text-sm font-bold text-ink">
-              {pegawaiAktif.length - belumPunyaPredikat.length} / {pegawaiAktif.length} pegawai aktif
-            </p>
-            {sumberPenilaian.length > 0 && (
-              <ul className="mt-2 space-y-0.5 text-xs text-muted">
-                {sumberPenilaian.map((s) => (
-                  <li key={s.unit}>
-                    {s.unit} - {s.jumlah} pegawai
-                  </li>
-                ))}
-              </ul>
-            )}
-            <a href="/tukin/predikat-kinerja" className="mt-2 inline-block text-xs font-semibold text-brand underline">
-              Kelola predikat kinerja
-            </a>
-          </div>
-
-          <div className="rounded-lg border border-line-2 bg-surface-2 p-3">
-            <p className="text-xs font-semibold text-muted">Rekap presensi (bobot 30%)</p>
-            <p className="mt-0.5 text-sm font-bold text-ink">
-              {pegawaiAktif.length - belumPunyaPresensi.length} / {pegawaiAktif.length} pegawai aktif
-            </p>
-            <a href="/tukin/presensi" className="mt-2 inline-block text-xs font-semibold text-brand underline">
-              Kelola presensi
-            </a>
-          </div>
-        </div>
-
-        {/* Angka Tukin dibekukan saat dihitung. Kalau sumbernya berubah
-            setelah itu, tabel di bawah menampilkan angka lama tanpa tanda -
-            dan itu terbaca sebagai "koreksi saya tidak berpengaruh". */}
-        {jumlahPerluHitungUlang > 0 && (
-          <div className="mt-3 rounded-lg border border-amber-300 bg-gold-tint p-3 text-xs text-ink-2 dark:border-amber-800">
-            <p className="font-semibold text-ink">
-              {jumlahPerluHitungUlang} pegawai perlu dihitung ulang - angka Tukin-nya sudah basi.
-            </p>
-            {/* Sebabnya: presensi/predikat berubah SETELAH Tukin terakhir
-                dihitung (mis. presensi ditarik ulang karena koreksi jam),
-                jadi angka di tabel masih yang lama. Tidak ditulis di layar -
-                yang perlu diketahui pembaca cuma berapa orang dan apa yang
-                harus ditekan. */}
-            <p className="mt-1 text-muted">
-              Baris terdampak ditandai kuning. Tekan Hitung sekarang.
-            </p>
-          </div>
-        )}
-
-        {belumPunyaPredikat.length > 0 && (
-          <div className="mt-3 rounded-lg bg-gold-tint p-3 text-xs text-ink-2">
-            <p className="font-semibold">
-              {belumPunyaPredikat.length} pegawai aktif belum punya predikat kinerja periode ini.
-            </p>
-            {/* Sebab tersering: file dari salah satu unit penilai belum
-                diupload - satu satuan kerja bisa dinilai lebih dari satu
-                penilai, masing-masing dengan file berisi orang berbeda.
-                Disimpan di sini, bukan di layar. */}
-            <p className="mt-1 text-muted">Dilewati kalau dihitung sekarang.</p>
-            <ul className="mt-2 list-disc space-y-0.5 pl-4">
-              {belumPunyaPredikat.slice(0, 15).map((p) => (
-                <li key={p.id}>
-                  {p.nama} <span className="text-muted">({p.nip})</span>
-                  {/* Jalan keluar untuk orang yang memang sudah tidak di unit
-                      ini. Ditaruh tepat di sebelah namanya, bukan di halaman
-                      terpisah - di sinilah orang menyadari masalahnya. */}
-                  <PengecualianForm
-                    pegawaiId={p.id}
-                    nama={p.nama}
-                    periodeBulan={periodeBulan}
-                    periodeTahun={periodeTahun}
-                    petunjuk={petunjukKemungkinanKeluar({
-                      jumlahHariKerja: p.rekapPresensi[0]?.jumlahHariKerja ?? 0,
-                      jumlahHariHadir: p.rekapPresensi[0]?.jumlahHariHadir ?? 0,
-                      punyaPredikat: p.predikatKinerja.length > 0,
-                      jumlahHariCuti: p.rekapPresensi[0]?.jumlahHariCuti ?? 0,
-                      jumlahHariTugasBelajar:
-                        p.rekapPresensi[0]?.jumlahHariTugasBelajar ?? 0,
-                    })}
-                  />
-                </li>
-              ))}
-              {belumPunyaPredikat.length > 15 && (
-                <li className="text-muted">...dan {belumPunyaPredikat.length - 15} pegawai lainnya</li>
-              )}
-            </ul>
-          </div>
-        )}
-
-        {lengkap && (
-          <p className="mt-3 text-xs font-semibold text-green">
-            Semua pegawai aktif sudah punya predikat kinerja - siap dihitung.
+      {jumlahPerluHitungUlang > 0 && (
+        <div className="card mt-4 border-l-4 border-l-gold p-4 text-xs text-ink-2">
+          <p className="text-sm font-semibold text-ink">
+            {jumlahPerluHitungUlang} pegawai perlu dihitung ulang - angka Tukin-nya sudah basi.
           </p>
-        )}
-      </div>
+          {/* Sebabnya: presensi/predikat berubah SETELAH Tukin terakhir
+              dihitung (mis. presensi ditarik ulang karena koreksi jam), jadi
+              angka di tabel masih yang lama. Tidak ditulis di layar - yang
+              perlu diketahui pembaca cuma berapa orang dan apa yang harus
+              ditekan. */}
+          <p className="mt-1 text-muted">Baris terdampak ditandai kuning. Tekan Hitung sekarang.</p>
+        </div>
+      )}
 
       <KalkulasiMassalForm
         satuanKerja={satkerEfektif}
@@ -527,34 +636,18 @@ export default async function KalkulasiUnitPage({
         namaBulan={NAMA_BULAN[periodeBulan - 1] ?? String(periodeBulan)}
       />
 
-      <div className="card mt-6 p-4">
-        <h2 className="text-sm font-bold text-ink">Cara membaca tabel Rincian Tukin</h2>
-        <p className="mt-1.5 text-xs leading-relaxed text-muted">
-          Dasarnya <strong>Tunjangan Kinerja sebelum potongan</strong> (tukin pokok kelas jabatan, Lampiran Permenaker
-          15/2024), dibelah sesuai <strong>Pasal 5</strong>: 70% capaian kinerja + 30% kehadiran. Kolom{" "}
-          <strong>Potongan %</strong> adalah potongan Pasal 13 yang dihitung dari <em>bobot kehadiran</em>, bukan dari
-          total tukin - itu sebabnya potongan 1% cuma berkurang Rp26.273 dari Rp8.757.600, bukan Rp87.576.
-        </p>
-        <p className="mt-2 font-mono text-xs text-ink-2">
-          Tunjangan Kinerja kotor - potongan = Tukin bersih
-        </p>
-        <p className="mt-2 text-xs text-muted">
-          Potongan dalam <strong>rupiah</strong> tidak ditampilkan di tabel ringkas - buka{" "}
-          <strong>Lihat rincian lengkap</strong> kalau butuh angkanya beserta pecahan kehadiran dan kinerjanya.
-        </p>
-        <p className="mt-2 text-xs text-muted">
-          <strong>Tidak ada kolom PPh</strong> - sama seperti rekap Excel, angkanya bruto. Pemotongan pajak bukan bagian
-          dari perhitungan ini.
-        </p>
-      </div>
-
       {/* ------------------------------------------------------------------ */}
       {/* RINCIAN TUKIN - ringkas (default) atau lengkap (?rincian=1)         */}
       {/* ------------------------------------------------------------------ */}
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-ink">
-          Rincian Tukin{tampilRinci && <span className="ml-2 text-sm font-normal text-muted">- rincian lengkap</span>}
-        </h2>
+        {/* Ikon bantuan DI SAMPING heading, bukan di dalamnya - lihat catatan
+            flow content di BantuanRincianTukin.tsx. */}
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-base font-bold text-ink">
+            Rincian Tukin{tampilRinci && <span className="ml-2 text-sm font-normal text-muted">- rincian lengkap</span>}
+          </h2>
+          <BantuanRincianTukin />
+        </div>
         <a
           href={tampilRinci ? linkRingkas : linkRinci}
           className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-3"
@@ -568,7 +661,7 @@ export default async function KalkulasiUnitPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
-                <th className="col-nama px-4 py-2.5">Nama</th>
+                <th className="col-nama kolom-beku px-4 py-2.5">Nama</th>
                 <th className="px-4 py-2.5">Predikat Kinerja</th>
                 <th className="px-4 py-2.5">
                   Tunjangan Kinerja
@@ -617,8 +710,8 @@ export default async function KalkulasiUnitPage({
                 const basi = perluHitungUlang(p);
 
                 return (
-                  <tr key={p.id} className={`border-b border-line-2 align-top ${basi ? "bg-gold-tint" : ""}`}>
-                    <td className="col-nama px-4 py-2.5">
+                  <tr key={p.id} className={`border-b border-line-2 align-top ${basi ? "bg-gold-tint" : "bg-surface"}`}>
+                    <td className="col-nama kolom-beku px-4 py-2.5">
                       <NamaPegawai
                         nama={p.nama}
                         nip={p.nip}
@@ -705,7 +798,7 @@ export default async function KalkulasiUnitPage({
           <thead>
             <tr className="border-b border-line bg-surface-2 text-[11px] font-bold uppercase tracking-wide text-muted">
               <th className={th}>No.</th>
-              <th className={`col-nama ${th}`}>Nama Pegawai</th>
+              <th className={`col-nama kolom-beku ${th}`}>Nama Pegawai</th>
               <th className={th}>NIP</th>
               <th className={th}>GOL</th>
               <th className={th}>Kelas Jabatan</th>
@@ -770,9 +863,9 @@ export default async function KalkulasiUnitPage({
               const basi = perluHitungUlang(p);
 
               return (
-                <tr key={p.id} className={`border-b border-line-2 ${basi ? "bg-gold-tint" : ""}`}>
+                <tr key={p.id} className={`border-b border-line-2 ${basi ? "bg-gold-tint" : "bg-surface"}`}>
                   <td className={`${td} text-muted`}>{paginasi.mulai + i + 1}</td>
-                  <td className="col-nama whitespace-nowrap px-3 py-2">
+                  <td className="col-nama kolom-beku whitespace-nowrap px-3 py-2">
                     <NamaPegawai
                       nama={p.nama}
                       nip={p.nip}
@@ -1009,6 +1102,10 @@ export default async function KalkulasiUnitPage({
           yang menyembunyikan formnya. */}
       <KirimRekapForm
         terkunci={kirimStatus.terkunci}
+        // Catatan PPABP ditampilkan DI SINI, bukan di puncak halaman: ini hal
+        // terakhir yang dibaca sebelum tombol Kirim Ulang ditekan, jadi bisa
+        // diadu dengan perbaikan yang barusan dikerjakan.
+        alasanKembali={kirimStatus.keadaan === "DIKEMBALIKAN" ? kirimStatus.alasanKembali : null}
         periodeBulan={periodeBulan}
         periodeTahun={periodeTahun}
         satuanKerja={satkerEfektif}

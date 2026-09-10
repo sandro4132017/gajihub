@@ -53,6 +53,8 @@ import {
   canPindahSatuanKerjaPegawai,
   canKelolaKendalaEpresensi,
   canKelolaHariLibur,
+  canLihatKendalaEpresensi,
+  canLihatHariLibur,
   type AuthUser,
 } from "../permissions";
 
@@ -652,5 +654,41 @@ describe("canKelolaHariLibur", () => {
 
   it("akun nonaktif ditolak walau role-nya PPABP", () => {
     expect(canKelolaHariLibur(buatUser({ role: "PPABP", aktif: false }))).toBe(false);
+  });
+});
+
+describe("canLihat* kendala & hari libur - MELIHAT dipisah dari MENGUBAH", () => {
+  // Dipasang 2026-09-09. Kasubag TU melaporkan "hari kerja Agustus 21,
+  // harusnya 20" sebagai bug; penyebabnya kalender yang belum diisi - keadaan
+  // yang tidak terlihat dari layar manapun yang bisa dia buka.
+  it("KASUBAG_TU boleh MELIHAT keduanya", () => {
+    const kasubag = buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM });
+    expect(canLihatKendalaEpresensi(kasubag)).toBe(true);
+    expect(canLihatHariLibur(kasubag)).toBe(true);
+  });
+
+  it("tapi TETAP tidak boleh MENGUBAH - tidak ada wewenang yang berpindah", () => {
+    // Test ini yang menjaga maksud seluruh perubahan: kalau suatu saat
+    // canKelola* ikut dilonggarkan tanpa disengaja, di sinilah ketahuannya.
+    const kasubag = buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM });
+    expect(canKelolaKendalaEpresensi(kasubag)).toBe(false);
+    expect(canKelolaHariLibur(kasubag)).toBe(false);
+  });
+
+  it("PPABP & ADMIN boleh melihat juga - yang boleh mengubah pasti boleh melihat", () => {
+    for (const role of ["PPABP", "ADMIN"] as const) {
+      expect(canLihatKendalaEpresensi(buatUser({ role })), role).toBe(true);
+      expect(canLihatHariLibur(buatUser({ role })), role).toBe(true);
+    }
+  });
+
+  it("PEGAWAI tidak boleh melihat - dia memang tidak membuka halaman presensi unit", () => {
+    expect(canLihatKendalaEpresensi(buatUser({ role: "PEGAWAI" }))).toBe(false);
+    expect(canLihatHariLibur(buatUser({ role: "PEGAWAI" }))).toBe(false);
+  });
+
+  it("akun nonaktif ditolak, sama seperti jalur mengubah", () => {
+    expect(canLihatKendalaEpresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM, aktif: false }))).toBe(false);
+    expect(canLihatHariLibur(buatUser({ role: "PPABP", aktif: false }))).toBe(false);
   });
 });

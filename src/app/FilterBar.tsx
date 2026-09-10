@@ -19,6 +19,9 @@ export function FilterBar({
   satker,
   ringkas = false,
   satkerTerkunci = false,
+  tanpaKartu = false,
+  wajibPeriode = false,
+  wajibSatker = false,
 }: {
   satuanKerjaList: string[];
   bulan?: string;
@@ -39,6 +42,39 @@ export function FilterBar({
    * keadaan "belum memilih unit".
    */
   satkerTerkunci?: boolean;
+  /**
+   * Lepas pembungkus `card` supaya filternya bisa disatukan ke dalam kartu
+   * milik pemanggil. Isinya TIDAK berubah - label & tombolnya tetap seperti
+   * bentuk panjang; yang dilepas cuma latar, border, dan jaraknya.
+   *
+   * Dipakai di Kalkulasi Unit, tempat filter dan ringkasan kesiapan jadi satu
+   * kartu: keduanya menjawab pertanyaan yang sama ("periode ini, unit ini,
+   * datanya bagaimana"), dan dua kartu bertumpuk membuatnya terbaca seperti
+   * dua urusan terpisah.
+   */
+  tanpaKartu?: boolean;
+  /**
+   * Buang pilihan "Semua bulan" & "Semua tahun".
+   *
+   * Untuk halaman yang SELALU jatuh ke satu periode lewat `resolvePeriode`.
+   * Di situ opsi "Semua bulan" bukan pilihan yang lebih longgar melainkan
+   * pilihan yang BOHONG: orang memilihnya, menekan Terapkan, lalu melihat satu
+   * bulan tertentu tanpa penjelasan apa pun.
+   */
+  wajibPeriode?: boolean;
+  /**
+   * Buang pilihan "Semua satuan kerja".
+   *
+   * DIPISAH dari `wajibPeriode` karena keduanya tidak selalu sejalan: Dashboard
+   * Tukin selalu berperiode tunggal TAPI memang boleh menampilkan seluruh
+   * satuan kerja - itu justru gunanya ringkasan per unit di halaman itu.
+   *
+   * Placeholder "Pilih satuan kerja" tetap ada SELAMA belum ada yang dipilih -
+   * tanpa itu layar "belum memilih unit" kehilangan satu-satunya cara keluar
+   * dari keadaannya. Begitu unitnya terpilih, placeholder-nya hilang dan
+   * pilihan kosong tidak bisa dikembalikan.
+   */
+  wajibSatker?: boolean;
 }) {
   const adaFilterAktif = Boolean(bulan || tahun || satker);
 
@@ -96,7 +132,14 @@ export function FilterBar({
   }
 
   return (
-    <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
+    <form
+      method="get"
+      className={
+        tanpaKartu
+          ? "flex flex-wrap items-end gap-3"
+          : "card mt-4 flex flex-wrap items-end gap-3 p-4"
+      }
+    >
       <div>
         <label className="field-label">Bulan</label>
         <SearchableSelect
@@ -104,7 +147,7 @@ export function FilterBar({
           className="w-40"
           options={bulanOpsi}
           defaultValue={bulan ?? ""}
-          emptyLabel="Semua bulan"
+          emptyLabel={wajibPeriode ? undefined : "Semua bulan"}
         />
       </div>
 
@@ -115,7 +158,7 @@ export function FilterBar({
           className="w-32"
           options={tahunOpsi.map((t) => ({ value: String(t), label: String(t) }))}
           defaultValue={tahun ?? ""}
-          emptyLabel="Semua tahun"
+          emptyLabel={wajibPeriode ? undefined : "Semua tahun"}
         />
       </div>
 
@@ -129,7 +172,7 @@ export function FilterBar({
             className="min-w-[260px]"
             options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
             defaultValue={satker ?? ""}
-            emptyLabel="Semua satuan kerja"
+            emptyLabel={wajibSatker ? (satker ? undefined : "Pilih satuan kerja") : "Semua satuan kerja"}
           />
         </div>
       )}
@@ -138,7 +181,7 @@ export function FilterBar({
         Terapkan filter
       </button>
 
-      {adaFilterAktif && (
+      {adaFilterAktif && !wajibSatker && (
         <a href="?" className="text-sm font-medium text-muted underline">
           Reset filter
         </a>

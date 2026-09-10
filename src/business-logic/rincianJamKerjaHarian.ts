@@ -12,32 +12,43 @@
 // (48 pegawai Biro Keuangan, Juli 2026), kecocokan 1.092-1.133 per kolom.
 // Istirahat Senin-Kamis 60 menit, Jumat 90 menit (Pasal 9 ayat (2)).
 //
-// PERINGATAN 1 - "KEKURANGAN JAM KERJA" BUKAN "PULANG CEPAT":
-//   Pulang cepat (Pasal 13 ayat (3), YANG DIBAYARKAN)
-//       = jam pulang wajib - checkout        <- patokan TETAP 16:00 / 16:30
-//   Kekurangan jam kerja (berkas petugas, TABEL INI)
-//       = batas kewajiban hari itu - checkout <- patokan BERGESER ikut checkin
-//   Masuk 09:00 lalu pulang 16:00 = pulang cepat 0 menit, kekurangan 60 menit.
-//   Kolom ini pernah masuk mesin potongan (2026-08-06) dan DICABUT sehari
-//   kemudian: Pasal 13 ayat (3) menyebut tepat tiga pelanggaran dan kolom ini
-//   bukan salah satunya, lagipula ia AKIBAT dari terlambat & pulang cepat -
-//   menagihnya berarti memotong menit yang sama dua kali.
-//   JANGAN mengalirkan angka dari modul ini ke tukin.ts.
+// PERINGATAN 1 - "KEKURANGAN JAM KERJA" ADALAH "PULANG CEPAT" (sejak
+// 2026-09-09). Keduanya satu angka, dihitung satu tempat:
+// `batasCheckoutMenit` di presensiPdfKeRekap.ts.
+//   Pulang cepat, Pasal 13 ayat (3) = batas kewajiban hari itu - checkout
+//   Batas itu BERGESER ikut checkin (Pasal 9 ayat (1): paling sedikit 7,5 jam)
+//   dan berhenti di jam pulang wajib + toleransi (Pasal 9 ayat (3)).
+//   Masuk 08:15 lalu pulang 16:00 = kurang 45 menit, ditagih 0,01%/menit.
+//
+//   Yang DICABUT 2026-08-07 dan tetap tidak boleh kembali adalah kolom
+//   TERSENDIRI `total_menit_kekurangan_jam_kerja` sebagai pelanggaran KEEMPAT.
+//   Batas yang bergeser sudah mencakup pulang cepat lama sebagai kasus khusus
+//   (datang 07:30 -> batasnya persis jam pulang wajib), jadi menagih keduanya
+//   berarti memotong menit yang sama dua kali. Satu angka, satu ayat.
 //
 // PERINGATAN 2 - "JAM TOLERANSI PULANG" BUKAN JAM MULAI LEMBUR. Di berkas
 // petugas, 17:00 adalah BATAS ATAS kewajiban checkout. Lembur mulai berjalan
 // di jam pulang wajib (16:00 / Jumat 16:30).
 // ============================================================================
 
-import { JADWAL_KERJA_DEFAULT, JAM_TAP_PULANG_HILANG, type JadwalKerja } from "./presensiPdfKeRekap";
+import {
+  ISTIRAHAT_MENIT,
+  JADWAL_KERJA_DEFAULT,
+  JAM_TAP_PULANG_HILANG,
+  batasCheckoutMenit,
+  tapKetukanGanda,
+  tapKeluarMustahil,
+  tapMasukMustahil,
+  type JadwalKerja,
+} from "./presensiPdfKeRekap";
 import { TARIF_POTONGAN_PASAL_13 } from "./tukin";
 
 /**
- * Waktu istirahat yang dipotong dari rentang masuk-pulang, per hari
- * (indeks 0 = Minggu). Pasal 9 ayat (2): Senin-Kamis 60 menit, Jumat 90 menit.
- * Sabtu & Minggu null - tidak ada kewajiban jam kerja yang perlu dipotong.
+ * Pindah ke presensiPdfKeRekap.ts supaya mesin potongan dan tabel ini memakai
+ * angka istirahat yang SAMA. Diteruskan dari sini karena jalur impor lama
+ * masih dipakai - bukan salinan kedua.
  */
-export const ISTIRAHAT_MENIT: readonly (number | null)[] = [null, 60, 60, 60, 60, 90, null];
+export { ISTIRAHAT_MENIT };
 
 export interface InputRincianJamKerja {
   /** "YYYY-MM-DD" - dibawa apa adanya ke keluaran, tidak dipakai berhitung. */
@@ -52,6 +63,13 @@ export interface InputRincianJamKerja {
   hariLibur: boolean;
   jamMasukMenit: number | null;
   jamKeluarMenit: number | null;
+  /**
+   * Jam hasil koreksi petugas SELALU dipercaya - itu keterangan yang sudah
+   * diverifikasi manusia terhadap foto & geotag, bukan tebakan atas ketukan
+   * yang hilang. Aturan yang sama persis dipakai mesin yang membayar.
+   */
+  masukDikoreksi?: boolean;
+  keluarDikoreksi?: boolean;
 }
 
 export interface BarisRincianJamKerja {
@@ -72,8 +90,11 @@ export interface BarisRincianJamKerja {
   jamToleransiPulangMenit: number | null;
   /** checkin + 7,5 jam + istirahat. null kalau tidak ada ketukan masuk. */
   jamHarusPulangMenit: number | null;
-  /** Sesudah toleransi 60 menit - angka yang SAMA dengan yang dibayarkan. */
-  menitTerlambat: number;
+  /**
+   * Sesudah toleransi 60 menit - angka yang SAMA dengan yang dibayarkan.
+   * `null` kalau ketukannya tidak dipercaya (lihat `tapTidakWajar`).
+   */
+  menitTerlambat: number | null;
   /** (checkout - checkin) - istirahat. null kalau salah satu ketukan hilang. */
   menitKerja: number | null;
   /** Lihat peringatan di kepala file: ini BUKAN pulang cepat. */
@@ -85,6 +106,17 @@ export interface BarisRincianJamKerja {
    * ditelusuri tanpa menghitung ulang di kepala.
    */
   batasCheckoutMenit: number | null;
+  /**
+   * Ketukannya tidak dipercaya mesin yang membayar - mustahil sebagai
+   * kedatangan, mustahil sebagai kepulangan, atau satu tap tersalin ke dua
+   * kolom. Kalau true SELURUH kolom turunan bernilai null, karena angka apa
+   * pun yang dihitung darinya BUKAN angka yang ditagih: hari itu ditagih 1%
+   * Pasal 13 ayat (2), bukan per menit.
+   *
+   * Ini yang membuat tabel tidak lagi memajang "terlambat 896 menit" untuk
+   * baris yang sebenarnya dipotong 0 menit.
+   */
+  tapTidakWajar: boolean;
 }
 
 /**
@@ -125,12 +157,45 @@ export function rincianJamKerjaHari(
       kekuranganJamKerjaMenit: null,
       totalMenitKekuranganHarian: null,
       batasCheckoutMenit: null,
+      tapTidakWajar: false,
     };
   }
 
   const jamMasukWajibMenit = jadwal.jamMasukWajibMenit;
   const jamToleransiMasukMenit = jamMasukWajibMenit + jadwal.toleransiTerlambatMenit;
   const jamToleransiPulangMenit = jamPulangWajibMenit + jadwal.toleransiTerlambatMenit;
+
+  // KETUKAN YANG TIDAK DIPERCAYA -> tidak ada satu pun angka turunan.
+  // Predikatnya SAMA PERSIS dengan yang dipakai mesin yang membayar (fungsi
+  // yang sama, bukan salinan), jadi tabel ini tidak bisa lagi berbeda darinya.
+  const tapTidakWajar =
+    tapMasukMustahil(jamMasukMenit, jamPulangWajibMenit, input.masukDikoreksi) ||
+    tapKeluarMustahil(jamKeluarMenit, jadwal, input.keluarDikoreksi) ||
+    tapKetukanGanda(jamMasukMenit, jamKeluarMenit, input.masukDikoreksi, input.keluarDikoreksi);
+
+  if (tapTidakWajar) {
+    return {
+      tanggalIso,
+      indeksHari,
+      hariLibur: false,
+      jamMasukMenit,
+      jamKeluarMenit,
+      istirahatMenit,
+      jamMasukWajibMenit,
+      jamToleransiMasukMenit,
+      jamPulangWajibMenit,
+      jamToleransiPulangMenit,
+      // Jam & menit turunan SENGAJA null - bukan 0. Nol berarti "diperiksa,
+      // tidak ada pelanggaran"; yang benar di sini "tidak bisa dihitung".
+      jamHarusPulangMenit: null,
+      menitTerlambat: null,
+      menitKerja: null,
+      kekuranganJamKerjaMenit: null,
+      totalMenitKekuranganHarian: null,
+      batasCheckoutMenit: null,
+      tapTidakWajar: true,
+    };
+  }
 
   const jamHarusPulangMenit =
     jamMasukMenit === null ? null : jamMasukMenit + Math.round(jadwal.jamKerjaPerHari * 60) + istirahatMenit;
@@ -140,18 +205,13 @@ export function rincianJamKerjaHari(
   const menitKerja =
     jamMasukMenit === null || jamKeluarMenit === null ? null : jamKeluarMenit - jamMasukMenit - istirahatMenit;
 
-  // Batas kewajiban checkout hari itu: paling cepat jam pulang wajib, bergeser
-  // maju kalau orangnya datang terlambat, TAPI tidak pernah melewati jam
-  // toleransi pulang. Bentuk min(max(...)) ini yang cocok 1.099/1.133 ke
-  // berkas petugas - dua bentuk lain yang diuji (tanpa cap, dan tanpa max)
-  // cocok jauh lebih sedikit.
-  const batasCheckoutMenit =
-    jamHarusPulangMenit === null
-      ? jamPulangWajibMenit
-      : Math.min(Math.max(jamHarusPulangMenit, jamPulangWajibMenit), jamToleransiPulangMenit);
+  // Rumusnya ada di presensiPdfKeRekap.ts - fungsi yang SAMA dipakai mesin
+  // yang membayar. Tabel ini menampilkan angka yang benar-benar dipotong,
+  // bukan hitungan sejajar yang bisa menyimpang diam-diam.
+  const batasCheckout = batasCheckoutMenit(jamMasukMenit, jamPulangWajibMenit, istirahatMenit, jadwal);
 
   const kekuranganJamKerjaMenit =
-    jamKeluarMenit === null ? null : Math.max(0, batasCheckoutMenit - jamKeluarMenit);
+    jamKeluarMenit === null ? null : Math.max(0, batasCheckout - jamKeluarMenit);
 
   return {
     tanggalIso,
@@ -170,7 +230,8 @@ export function rincianJamKerjaHari(
     kekuranganJamKerjaMenit,
     totalMenitKekuranganHarian:
       kekuranganJamKerjaMenit === null ? null : menitTerlambat + kekuranganJamKerjaMenit,
-    batasCheckoutMenit,
+    batasCheckoutMenit: batasCheckout,
+    tapTidakWajar: false,
   };
 }
 
@@ -198,7 +259,9 @@ export interface PelanggaranHarian {
  * salinan di lapisan tampilan berbahaya: orang membaca rincian yang tidak
  * sesuai dengan potongan yang benar-benar dikenakan.
  *
- * SENGAJA TIDAK memakai "kekurangan jam kerja" - lihat kepala file.
+ * `menitPulangCepat` yang masuk ke sini SUDAH diukur ke batas kewajiban 7,5
+ * jam (lihat kepala file) - jadi kolom "kekurangan jam kerja" di tabel tidak
+ * boleh ditambahkan lagi di sini. Satu angka, satu ayat.
  */
 export function potonganHarianPersen(p: PelanggaranHarian): number {
   const t = TARIF_POTONGAN_PASAL_13;

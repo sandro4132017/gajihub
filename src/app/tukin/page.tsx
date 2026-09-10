@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import { FilterBar } from "../FilterBar";
+import { periodePunyaTukin, resolvePeriode } from "../periodeDefault";
 import { BadgeStatusKirim, keadaanKirimBaris } from "../StatusKirimBaris";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import {
@@ -16,7 +17,9 @@ import { RingkasanPerUnit, type BarisRingkasanUnit } from "./RingkasanPerUnit";
 import { TabelRincianUnit, type BarisRincianTukin } from "./TabelRincianUnit";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
 import { kelasJabatanEfektif } from "../../business-logic/kelasJabatanEfektif";
+import { SumberAcuan } from "../SumberAcuan";
 import { HALAMAN } from "../layoutHalaman";
+import { NAMA_BULAN } from "../bulan";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +56,10 @@ export default async function TukinPage({
   // paksa filter ke unitnya, abaikan ?satker= dari query kalau ada.
   const satkerEfektif = resolveSatkerEfektif(authUser, satker);
 
+  // Kasubag TU mengerjakan rinciannya di halaman Kalkulasi, bukan di sini -
+  // lihat alasannya di dekat `tampilkanRingkasan` di bawah.
+  const adalahKasubagUnit = authUser.role === "KASUBAG_TU";
+
   const satuanKerjaRows = await prisma.pegawai.findMany({
     distinct: ["satuanKerja"],
     select: { satuanKerja: true },
@@ -63,10 +70,25 @@ export default async function TukinPage({
     satuanKerjaRows.map((r) => r.satuanKerja)
   );
 
+  // SATU PERIODE, SELALU. Sebelumnya bulan/tahun yang kosong berarti "semua
+  // periode", dan halaman ini adalah satu-satunya yang begitu - akibatnya satu
+  // pegawai muncul sekali per periode di tabel rincian, baris TOTAL
+  // menjumlahkan beberapa bulan sekaligus, dan angka yang dibaca orang sebagai
+  // "yang dibayar bulan ini" sebenarnya gabungan dua bulan.
+  //
+  // Bawaannya periode TERBARU yang sudah punya kalkulasi DAN bulannya sudah
+  // lewat - aturan yang sama dengan seluruh halaman berperiode lain, lihat
+  // periodeDefault.ts.
+  const { bulan: periodeBulan, tahun: periodeTahun } = resolvePeriode(
+    bulan,
+    tahun,
+    await periodePunyaTukin()
+  );
+
   const kalkulasiList = await prisma.tukinCalculation.findMany({
     where: {
-      periodeBulan: bulan ? Number(bulan) : undefined,
-      periodeTahun: tahun ? Number(tahun) : undefined,
+      periodeBulan,
+      periodeTahun,
       pegawai: satkerEfektif ? { satuanKerja: satkerEfektif } : undefined,
     },
     include: { pegawai: true },
@@ -124,12 +146,16 @@ export default async function TukinPage({
 
   // --- Rincian satu unit (tabel 39 kolom) ---
   //
-  // Ditarik HANYA waktu satu satuan kerja dibuka. Tanpa penjaga ini, membuka
-  // /tukin tanpa filter berarti menarik presensi + predikat + identitas untuk
-  // lima ribu pegawai sekaligus, cuma untuk dibuang lagi karena yang tampil
-  // ringkasan per unit.
+  // Ditarik HANYA waktu satu satuan kerja dibuka DAN tabelnya memang akan
+  // dipakai. Tanpa penjaga ini, membuka /tukin tanpa filter berarti menarik
+  // presensi + predikat + identitas untuk lima ribu pegawai sekaligus, cuma
+  // untuk dibuang lagi karena yang tampil ringkasan per unit.
+  //
+  // Kasubag TU ikut dilewati: dia selalu punya satuan kerja efektif, tapi yang
+  // ditampilkan padanya ringkasan - query di bawah hasilnya tidak akan
+  // dirender sama sekali.
   const barisRincian: BarisRincianTukin[] = [];
-  if (satkerEfektif && kalkulasiTampil.length > 0) {
+  if (satkerEfektif && !adalahKasubagUnit && kalkulasiTampil.length > 0) {
     const idPegawai = kalkulasiTampil.map((k) => k.pegawaiId);
     const kunciPeriode = kalkulasiTampil.map((k) => ({
       pegawaiId: k.pegawaiId,
@@ -164,6 +190,7 @@ export default async function TukinPage({
         k.periodeTahun
       );
       barisRincian.push({
+        id: k.id,
         nip: k.pegawai.nip,
         nama: k.pegawai.nama,
         kelasJabatan: efektif.kelas,
@@ -177,13 +204,21 @@ export default async function TukinPage({
 
   // --- Ringkasan per satuan kerja ---
   //
-  // Dipakai waktu belum ada satker yang dipilih. Diturunkan dari
-  // `kalkulasiTampil` - daftar yang SUDAH disaring hak aksesnya - supaya
-  // ringkasan dan rincian tidak mungkin bercerita berbeda. Kalau dihitung
-  // ulang lewat query terpisah, penyaringan hak akses harus ditulis dua kali
-  // dan cepat atau lambat keduanya menyimpang.
+  // Dipakai waktu belum ada satker yang dipilih, DAN untuk Kasubag TU yang
+  // satkernya selalu dipaksa ke unitnya sendiri - dia pun melihat ringkasan,
+  // bukan tabel rincian.
+  //
+  // Syaratnya HARUS sama dengan `tampilkanRingkasan` di bawah. Waktu keduanya
+  // berbeda, Kasubag TU jatuh ke cabang terakhir dan halamannya merender satu
+  // kartu PER PEGAWAI - 47 kartu berisi nama, NIP, dan badge status yang
+  // semuanya berbunyi sama.
+  //
+  // Diturunkan dari `kalkulasiTampil` - daftar yang SUDAH disaring hak
+  // aksesnya - supaya ringkasan dan rincian tidak mungkin bercerita berbeda.
+  // Kalau dihitung ulang lewat query terpisah, penyaringan hak akses harus
+  // ditulis dua kali dan cepat atau lambat keduanya menyimpang.
   const ringkasanUnit: BarisRingkasanUnit[] = [];
-  if (!satkerEfektif) {
+  if (!satkerEfektif || adalahKasubagUnit) {
     const per = new Map<string, BarisRingkasanUnit>();
     for (const k of kalkulasiTampil) {
       const kunci = `${k.pegawai.satuanKerja}|${k.periodeBulan}|${k.periodeTahun}`;
@@ -217,12 +252,10 @@ export default async function TukinPage({
   // Ditaruh di halaman yang sama supaya jelas kenapa seorang pegawai belum
   // punya kalkulasi: presensinya belum ada, predikatnya belum ada, atau
   // dua-duanya. Sebelumnya kedua sumber ini ada di menu yang terpisah-pisah.
-  const periodeAktif =
-    bulan && tahun ? { periodeBulan: Number(bulan), periodeTahun: Number(tahun) } : null;
+  const periodeAktif = { periodeBulan, periodeTahun };
   const filterPegawaiSatker = satkerEfektif ? { pegawai: { satuanKerja: satkerEfektif } } : {};
 
-  const [jumlahPegawai, jumlahPresensi, jumlahPredikat] = periodeAktif
-    ? await Promise.all([
+  const [jumlahPegawai, jumlahPresensi, jumlahPredikat] = await Promise.all([
         // Penyebut "X / Y pegawai" pada panel sumber data: hanya yang AKTIF,
         // supaya cakupannya tidak terlihat lebih buruk dari kenyataan gara-gara
         // pensiunan yang memang tidak akan pernah punya presensi/predikat baru.
@@ -230,25 +263,60 @@ export default async function TukinPage({
           where: { statusPegawai: "AKTIF", ...(satkerEfektif ? { satuanKerja: satkerEfektif } : {}) },
         }),
         prisma.rekapPresensiPeriode.count({ where: { ...periodeAktif, ...filterPegawaiSatker } }),
-        prisma.predikatKinerja.count({ where: { ...periodeAktif, ...filterPegawaiSatker } }),
-      ])
-    : [0, 0, 0];
+    prisma.predikatKinerja.count({ where: { ...periodeAktif, ...filterPegawaiSatker } }),
+  ]);
 
   // Ringkasan menggantikan daftar kartu, BUKAN disembunyikan dengan CSS -
   // kartu yang dirender lalu di-`hidden` tetap dibuat semuanya, dan justru
   // beban itulah yang mau dihilangkan.
-  const tampilkanRingkasan = !satkerEfektif && ringkasanUnit.length > 0;
+  //
+  // KASUBAG TU IKUT DAPAT RINGKASAN, bukan tabel rincian (keputusan user
+  // 2026-09-09). Rincian per pegawai unitnya sudah ada di halaman Kalkulasi -
+  // di situlah dia mengerjakannya, lengkap dengan tombol hitung ulang dan
+  // rincian potongan per pasal. Menampilkan tabel yang sama di sini berarti
+  // dua tempat menjawab pertanyaan yang sama, dan yang satu tidak bisa
+  // ditindaklanjuti. Yang dia butuhkan di halaman ini cuma keadaan unitnya:
+  // sudah dihitung berapa orang, totalnya berapa, sudah terkirim atau belum.
+  //
+  // PPABP & Admin TETAP dapat tabel rincian - mereka tidak punya akses ke
+  // halaman Kalkulasi sama sekali, jadi di sinilah satu-satunya tempat mereka
+  // bisa memeriksa angkanya per pegawai.
+  const tampilkanRingkasan = ringkasanUnit.length > 0 && (!satkerEfektif || adalahKasubagUnit);
 
   return (
     <main className={HALAMAN}>
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Dashboard Tukin</h1>
-      <p className="mt-1 text-sm text-muted">
-        Satu tempat untuk kedua komponen pembentuk Tunjangan Kinerja: <strong>kehadiran 30%</strong> dan{" "}
-        <strong>capaian kinerja 70%</strong> (Permenaker 15/2024 Pasal 5 &amp; 18), beserta hasil kalkulasinya
-        per satuan kerja.
+      <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
+        Dashboard Tukin
+        <SumberAcuan
+          judul="Dasar aturan"
+          acuan={[
+            { aturan: "Pasal 5 ayat (2)", tentang: "Bobot 70% capaian kinerja + 30% kehadiran" },
+            { aturan: "Pasal 18", tentang: "Tukin = tarif kelas jabatan x (bobot kinerja + bobot kehadiran)" },
+            { aturan: "Lampiran Permenaker 15/2024", tentang: "Tukin pokok per kelas jabatan - kolom Nominal Tukin" },
+            // Kolom Potongan di tabel ini menjumlahkan TIGA arah sekaligus, jadi
+            // ketiga dasarnya harus ikut disebut - lihat potonganTotal() di
+            // TabelRincianUnit.tsx.
+            { aturan: "Pasal 13", tentang: "Potongan kehadiran - ikut terhitung di kolom Potongan" },
+            { aturan: "Pasal 14", tentang: "Persentase yang dibayarkan selama cuti - ikut terhitung di kolom Potongan" },
+          ]}
+          catatan="Semuanya Permenaker 15/2024. Angka di halaman ini nilai TERSIMPAN, dibekukan saat kalkulasi dijalankan - bukan dihitung ulang tiap halaman dibuka."
+        />
+      </h1>
+      <p className="mt-0.5 text-sm font-bold text-ink">Kehadiran 30% + Capaian Kinerja 70%</p>
+      <p className="mt-2 text-sm text-biru">
+        Satu tempat untuk kedua komponen pembentuk Tunjangan Kinerja beserta hasil kalkulasinya per satuan kerja.
       </p>
 
-      <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
+      {/* Yang ditampilkan filter HARUS periode yang benar-benar dipakai query -
+          kalau filter kosong sementara tabelnya sudah tersaring, orang membaca
+          angka satu bulan sebagai angka seluruh periode. */}
+      <FilterBar
+        wajibPeriode
+        satuanKerjaList={satuanKerjaList}
+        bulan={String(periodeBulan)}
+        tahun={String(periodeTahun)}
+        satker={satkerEfektif}
+      />
 
       <SumberDataTukin
         periodeAktif={periodeAktif}
@@ -262,10 +330,21 @@ export default async function TukinPage({
       {tampilkanRingkasan ? (
         <RingkasanPerUnit
           baris={ringkasanUnit}
-          qsPeriode={bulan && tahun ? `?bulan=${bulan}&tahun=${tahun}` : ""}
+          qsPeriode={`?bulan=${periodeBulan}&tahun=${periodeTahun}`}
+          hrefRincianTetap={
+            adalahKasubagUnit
+              ? `/kasubag/kalkulasi?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(
+                  satkerEfektif ?? ""
+                )}`
+              : undefined
+          }
         />
       ) : barisRincian.length > 0 ? (
-        <TabelRincianUnit baris={barisRincian} satuanKerja={satkerEfektif ?? ""} />
+        <TabelRincianUnit
+          baris={barisRincian}
+          satuanKerja={satkerEfektif ?? ""}
+          periode={`${NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} ${periodeTahun}`}
+        />
       ) : (
         <div className="mt-8 space-y-4">
         {kalkulasiTampil.length === 0 && (

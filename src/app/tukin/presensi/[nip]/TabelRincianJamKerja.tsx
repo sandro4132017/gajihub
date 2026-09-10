@@ -81,7 +81,7 @@ export function TabelRincianJamKerja({ baris }: { baris: BarisTabelRincianJamKer
           {baris.length === 0 && (
             <tr>
               <td colSpan={14} className="px-3 py-6 text-center text-muted">
-                Tidak ada rincian harian untuk periode ini.
+                Periode ini belum dilakukan sinkronisasi.
               </td>
             </tr>
           )}
@@ -110,15 +110,38 @@ export function TabelRincianJamKerja({ baris }: { baris: BarisTabelRincianJamKer
                 </td>
                 <td className="px-3 py-2 text-ink-2">{jam(r.jamMasukMenit)}</td>
                 <td className="px-3 py-2 text-ink-2">{jam(r.jamKeluarMenit)}</td>
-                <td className={`px-3 py-2 text-ink-2 ${pisah}`}>{jam(r.jamHarusPulangMenit)}</td>
-                <td className="px-3 py-2 text-muted">{jam(r.jamMasukWajibMenit)}</td>
-                <td className="px-3 py-2 text-muted">{jam(r.jamToleransiMasukMenit)}</td>
-                <td className="px-3 py-2 text-muted">{jam(r.jamPulangWajibMenit)}</td>
-                <td className="px-3 py-2 text-muted">{jam(r.jamToleransiPulangMenit)}</td>
-                <td className={`px-3 py-2 ${pisah}`}>{menitTeks(r.hariLibur ? null : r.menitTerlambat, true)}</td>
-                <td className="px-3 py-2">{menitTeks(r.menitKerja)}</td>
-                <td className="px-3 py-2">{menitTeks(r.kekuranganJamKerjaMenit, true)}</td>
-                <td className="px-3 py-2">{menitTeks(r.totalMenitKekuranganHarian, true)}</td>
+                {/* Ketukan yang tidak dipercaya mesin yang membayar: SEMBILAN
+                    kolom turunannya diganti satu keterangan. Memajang jadwal
+                    kerja lengkap untuk baris yang tapnya sampah tidak menambah
+                    apa pun - yang perlu diketahui pembaca cuma bahwa angkanya
+                    tidak bisa dihitung, dan apa yang ditagih sebagai gantinya.
+                    Kolom % Potongan TETAP tampil: itu angka tersimpan, yang
+                    benar-benar dipotong. */}
+                {r.tapTidakWajar ? (
+                  <td className={`px-3 py-2 ${pisah}`} colSpan={9}>
+                    <span
+                      className="rounded bg-gold-tint px-1.5 py-0.5 text-[11px] font-semibold text-gold-deep"
+                      title="Jam masuk/pulang di baris ini tidak mungkin - mustahil sebagai kedatangan, mustahil sebagai kepulangan, atau satu ketukan tersalin ke dua kolom. Terlambat & pulang cepat TIDAK ditagih per menit; hari ini dihitung 1 kejadian tidak melakukan presensi (Pasal 13 ayat (2))."
+                    >
+                      Tap tidak wajar
+                    </span>
+                    <span className="ml-2 text-[11px] text-muted">
+                      ditagih 1 kejadian Pasal 13 ayat (2), bukan per menit
+                    </span>
+                  </td>
+                ) : (
+                  <>
+                    <td className={`px-3 py-2 text-ink-2 ${pisah}`}>{jam(r.jamHarusPulangMenit)}</td>
+                    <td className="px-3 py-2 text-muted">{jam(r.jamMasukWajibMenit)}</td>
+                    <td className="px-3 py-2 text-muted">{jam(r.jamToleransiMasukMenit)}</td>
+                    <td className="px-3 py-2 text-muted">{jam(r.jamPulangWajibMenit)}</td>
+                    <td className="px-3 py-2 text-muted">{jam(r.jamToleransiPulangMenit)}</td>
+                    <td className={`px-3 py-2 ${pisah}`}>{menitTeks(r.hariLibur ? null : r.menitTerlambat, true)}</td>
+                    <td className="px-3 py-2">{menitTeks(r.menitKerja)}</td>
+                    <td className="px-3 py-2">{menitTeks(r.kekuranganJamKerjaMenit, true)}</td>
+                    <td className="px-3 py-2">{menitTeks(r.totalMenitKekuranganHarian, true)}</td>
+                  </>
+                )}
                 <td className="px-3 py-2">
                   {b.potonganPersen > 0 ? (
                     <span className="font-mono text-red">

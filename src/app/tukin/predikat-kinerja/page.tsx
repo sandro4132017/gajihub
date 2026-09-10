@@ -9,6 +9,8 @@ import {
 } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { NAMA_BULAN } from "../../bulan";
+import { dikecualikanPotonganKehadiran } from "../../../business-logic/pejabatPimpinanTinggi";
+import { ambilSumberData, keSumberAcuan } from "../../sumberData";
 import { SearchableSelect } from "../../SearchableSelect";
 import { UploadRekapForm } from "./UploadRekapForm";
 import { AksiBarisPredikat } from "./AksiBarisPredikat";
@@ -48,9 +50,16 @@ function ChipPredikat({ predikat }: { predikat: string }) {
 export default async function PredikatKinerjaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bulan?: string; tahun?: string; satker?: string; q?: string }>;
+  searchParams: Promise<{
+    bulan?: string;
+    tahun?: string;
+    satker?: string;
+    q?: string;
+    /** "tukin" = dibuka dari Dashboard Tukin, bukan dari sidebar. */
+    dari?: string;
+  }>;
 }) {
-  const { bulan, tahun, satker, q } = await searchParams;
+  const { bulan, tahun, satker, q, dari } = await searchParams;
 
   const akun = await getSessionAccount();
   const authUser: AuthUser | null =
@@ -99,6 +108,13 @@ export default async function PredikatKinerjaPage({
   // role lintas satker memakai apa yang dipilih di filter (boleh kosong).
   const satkerEfektif = satkerWajib ?? (satker?.trim() || null);
 
+  // Tanpa periode tidak ada cakupan yang bisa disebut - panelnya dilewati
+  // daripada menampilkan "belum pernah diambil" untuk periode yang memang
+  // belum dipilih siapa pun.
+  const sumberData = adaPeriode
+    ? await ambilSumberData({ satuanKerja: satkerEfektif, periodeBulan: periodeBulan!, periodeTahun: periodeTahun! })
+    : null;
+
   const filterPegawai: Prisma.PegawaiWhereInput = {};
   if (satkerEfektif) filterPegawai.satuanKerja = satkerEfektif;
   if (q?.trim()) {
@@ -117,7 +133,7 @@ export default async function PredikatKinerjaPage({
   // ikut tersaring pencarian nama/NIP, sementara yang dihapus adalah SELURUH
   // baris satuan kerja + periode itu. Kalau angka tersaring yang dipakai,
   // tombolnya bisa menulis "hapus 1 predikat" padahal 47 yang terhapus.
-  const [satuanKerjaRows, jumlahBaris, sebaran, barisList, jumlahSeUnitPeriode, sumberPenilaian] = await Promise.all([
+  const [satuanKerjaRows, jumlahBaris, sebaran, barisList, jumlahSeUnitPeriode] = await Promise.all([
     prisma.pegawai.findMany({ distinct: ["satuanKerja"], select: { satuanKerja: true }, orderBy: { satuanKerja: "asc" } }),
     prisma.predikatKinerja.count({ where }),
     prisma.predikatKinerja.groupBy({ by: ["predikat"], where, _count: { _all: true } }),
@@ -132,26 +148,6 @@ export default async function PredikatKinerjaPage({
           where: { periodeBulan: periodeBulan!, periodeTahun: periodeTahun!, pegawai: { satuanKerja: satkerEfektif } },
         })
       : Promise.resolve(0),
-    // Penilai mana saja yang filenya SUDAH masuk untuk unit + periode ini.
-    //
-    // Satu satuan kerja lazim dinilai beberapa penilai dengan file terpisah
-    // (data nyata 7/2026 Biro Keuangan: "Kasubbag TU" 25 orang, "Kepala Biro"
-    // 21, "Subbagian Tata Usaha" 1), dan yang mengupload bisa orang berbeda.
-    // Tanpa daftar ini, angka "belum punya predikat" tidak bisa dibaca: 20
-    // orang belum punya itu karena file penilai lain memang belum diupload,
-    // atau karena orangnya yang belum dinilai? Dua sebab, dua tindak lanjut.
-    //
-    // Sengaja TIDAK memakai `where` di atas - `where` ikut tersaring pencarian
-    // nama/NIP, sementara pertanyaannya soal SELURUH unit (alasan yang sama
-    // dengan `jumlahSeUnitPeriode`). Dan butuh satuan kerja terpilih: tanpa
-    // itu daftarnya jadi seluruh penilai se-kementerian.
-    adaPeriode && satkerEfektif
-      ? prisma.predikatKinerja.groupBy({
-          by: ["unitPenilaian"],
-          where: { periodeBulan: periodeBulan!, periodeTahun: periodeTahun!, pegawai: { satuanKerja: satkerEfektif } },
-          _count: { _all: true },
-        })
-      : Promise.resolve([]),
   ]);
 
   // --- Bahan form "tambah predikat satuan" ---
@@ -178,7 +174,7 @@ export default async function PredikatKinerjaPage({
           where: filterBelumPunya,
           take: MAKS_OPSI_TAMBAH,
           orderBy: { nama: "asc" },
-          select: { id: true, nip: true, nama: true },
+          select: { id: true, nip: true, nama: true, kelasJabatan: true },
         }),
       ])
     : [0, []];
@@ -196,18 +192,13 @@ export default async function PredikatKinerjaPage({
   const namaPeriode = adaPeriode ? `${NAMA_BULAN[periodeBulan! - 1] ?? periodeBulan} ${periodeTahun}` : "";
   const jumlahManual = barisList.filter((b) => adalahInputManual(b.inputMethod)).length;
 
-  // Penilai yang sudah masuk, terbanyak duluan. Baris ber-`unitPenilaian` null
-  // dipisah, TIDAK dibuang: itu predikat yang diketik manual lewat form
-  // "tambah predikat satuan" (atau diupload sebelum kolom ini ada), dan
-  // menyembunyikannya membuat jumlah di daftar ini tidak menjumlah ke total.
-  const penilaiTercatat = sumberPenilaian
-    .filter((s): s is typeof s & { unitPenilaian: string } => s.unitPenilaian !== null)
-    .sort((a, b) => b._count._all - a._count._all);
-  const jumlahTanpaPenilai = sumberPenilaian.find((s) => s.unitPenilaian === null)?._count._all ?? 0;
-
   // Periode & satker ikut dibawa balik supaya Dashboard Tukin terbuka di
   // periode yang BARU SAJA dilihat di sini - kalau tidak, halaman tujuan jatuh
   // ke periode defaultnya sendiri dan terasa seperti pindah konteks.
+  // Tombol Kembali HANYA kalau halaman ini dibuka dari Dashboard Tukin -
+  // lewat sidebar, halaman ini tujuan akhir. Catatan lengkapnya di
+  // SumberDataTukin.tsx, tempat penandanya dipasang.
+  const dariTukin = dari === "tukin";
   const kembaliKeTukin =
     "/tukin" +
     (adaPeriode
@@ -217,28 +208,35 @@ export default async function PredikatKinerjaPage({
 
   return (
     <main className={HALAMAN}>
-      <Link
-        href={kembaliKeTukin}
-        className="inline-flex items-center gap-2 text-sm font-bold text-teal-deep transition hover:text-biru"
-      >
-        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M19 12H5M12 19l-7-7 7-7" />
-        </svg>
-        <span className="underline underline-offset-2">Kembali</span>
-      </Link>
+      {dariTukin && (
+        <Link
+          href={kembaliKeTukin}
+          className="inline-flex items-center gap-2 text-sm font-bold text-teal-deep transition hover:text-biru"
+        >
+          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          <span className="underline underline-offset-2">Kembali</span>
+        </Link>
+      )}
 
-      <h1 className="mt-3 flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
+      <h1
+        className={`flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl ${
+          dariTukin ? "mt-3" : ""
+        }`}
+      >
         Predikat Kinerja
         {/* Dasar hukumnya di ikon, bukan memakan baris deskripsi - pola yang
             sama dengan /tukin/presensi. Yang perlu dibaca tiap hari adalah
             apa yang dikelola halaman ini, bukan nomor pasalnya. */}
         <SumberAcuan
+          sumber={sumberData ? keSumberAcuan(sumberData) : undefined}
           acuan={[
             { aturan: "Permenaker 15/2024 Pasal 5 ayat (2) huruf a", tentang: "Capaian kinerja berbobot 70% dari Tunjangan Kinerja" },
             { aturan: "Permenaker 15/2024 Pasal 11", tentang: "Tunjangan Kinerja dibayarkan menurut capaian kinerja pegawai" },
             { aturan: "Kepsekjen 82/2025 (Lampiran)", tentang: "Konversi predikat ke persen: Sangat Baik & Baik 100%, Perlu Perbaikan 85%, Kurang & Sangat Kurang 60%" },
           ]}
-          catatan="Sumber data: file Rekap Penilaian dari portal e-Kinerja BKN (upload manual - belum ada akses API)."
+          catatan="Berkas Rekap Penilaian diunggah manual dari portal e-Kinerja BKN - belum ada akses API."
         />
       </h1>
       <p className="mt-0.5 text-sm font-bold text-ink">Komponen 70% Tunjangan Kinerja (Tukin)</p>
@@ -263,6 +261,11 @@ export default async function PredikatKinerjaPage({
       ) : (
         <>
           <form method="get" className="card mt-6 p-4">
+        {/* Penanda asal ikut terkirim waktu filter dipakai. Tanpa ini
+            tombol Kembali lenyap begitu periodenya diganti, dan orangnya
+            kehilangan jalan pulang di tengah pekerjaan. */}
+        {dariTukin && <input type="hidden" name="dari" value="tukin" />}
+
             <p className="text-base font-bold text-navy">Filter</p>
             <div className="mt-3 flex flex-wrap items-end gap-3">
             <div>
@@ -315,9 +318,9 @@ export default async function PredikatKinerjaPage({
             melihat sekilas periode mana yang sudah terisi & seberapa banyak.
           */}
           <div className="card mt-4 p-4">
-            <p className="text-sm font-bold text-ink">Periode yang sudah ada datanya</p>
+            <p className="text-sm font-bold text-ink">Periode tersedia</p>
             <p className="mt-0.5 text-xs text-muted">
-              Klik salah satu buat berpindah. Angka dalam kurung = jumlah pegawai yang punya predikat di periode itu
+              Pilih periode untuk melihat data. Angka dalam kurung menunjukkan jumlah pegawai dengan predikat pada periode tersebut.
               {satkerWajib ? ` untuk ${satkerWajib}` : " (seluruh satuan kerja)"}.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -350,7 +353,7 @@ export default async function PredikatKinerjaPage({
                 sama - ini keterangan TENTANG periode terpilih, bukan blok
                 terpisah yang berdiri sendiri. */}
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-2 pt-3">
-              <span className="text-xs font-bold uppercase tracking-wide text-muted">Sebaran {namaPeriode}</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-muted">Predikat {namaPeriode}</span>
               {sebaran.length === 0 && <span className="text-sm text-muted">belum ada data</span>}
               {sebaran.map((s) => (
                 <span key={s.predikat} className="inline-flex items-center gap-1.5">
@@ -387,42 +390,6 @@ export default async function PredikatKinerjaPage({
                 </span>
               )}
             </div>
-
-            {/* Penilai yang filenya sudah masuk untuk unit + periode ini.
-                Sebelumnya keterangan ini CUMA muncul di hasil upload, jadi
-                orang kedua yang membuka halaman ini besoknya melihat "belum
-                punya predikat 20" tanpa bisa tahu apakah file penilai lain
-                sudah masuk atau belum - padahal datanya sudah tersimpan per
-                baris (PredikatKinerja.unitPenilaian). */}
-            {!perluPilihSatker && (
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-2 pt-3">
-                <span className="text-xs font-bold uppercase tracking-wide text-muted">Sumber penilaian</span>
-                {penilaiTercatat.length === 0 && jumlahTanpaPenilai === 0 && (
-                  <span className="text-sm text-muted">belum ada file yang masuk untuk periode ini</span>
-                )}
-                {penilaiTercatat.map((s) => (
-                  <span key={s.unitPenilaian} className="inline-flex items-center gap-1.5">
-                    <span className="chip chip-ok">{s.unitPenilaian}</span>
-                    <span className="font-mono text-sm font-extrabold text-ink">{s._count._all}</span>
-                  </span>
-                ))}
-                {jumlahTanpaPenilai > 0 && (
-                  <span className="inline-flex items-center gap-1.5" title="Predikat yang diketik manual, atau diupload sebelum sumber penilaian dicatat.">
-                    <span className="chip chip-wait">Tanpa sumber tercatat</span>
-                    <span className="font-mono text-sm font-extrabold text-ink">{jumlahTanpaPenilai}</span>
-                  </span>
-                )}
-                {/* Yang menentukan lengkap/tidaknya adalah kolom "Belum punya
-                    predikat" di atas, BUKAN jumlah penilai di sini - berapa
-                    penilai yang seharusnya mengirim file berbeda tiap unit dan
-                    tidak dipunyai sistem. */}
-                {penilaiTercatat.length > 1 && (
-                  <span className="text-xs text-muted">
-                    {penilaiTercatat.length} file penilai berbeda - semuanya tersimpan, tidak saling menimpa.
-                  </span>
-                )}
-              </div>
-            )}
           </div>
 
           {/*
@@ -435,6 +402,11 @@ export default async function PredikatKinerjaPage({
             atasnya. Yang benar-benar menambah keterangan cuma dua: sebaran
             predikat dan jumlah yang BELUM punya predikat.
           */}
+          {/* Pejabat pimpinan tinggi DITANDAI di daftar pilihannya. Penilaian
+              mereka tidak pernah ikut di rekap unit - datangnya dari penilai di
+              atas unit, jadi barisnya memang selalu ditambahkan satuan. Tanpa
+              tanda ini yang mengurus mengira berkas rekapnya yang kurang
+              lengkap, lalu menagih ke penilai yang tidak pernah memegangnya. */}
           {adaPeriode && (
             <TambahPredikatForm
               periodeBulan={periodeBulan!}
@@ -442,7 +414,9 @@ export default async function PredikatKinerjaPage({
               namaPeriode={namaPeriode}
               pegawaiBelumPunya={pegawaiBelumPunyaRows.map((p) => ({
                 value: p.id,
-                label: p.nama,
+                label: dikecualikanPotonganKehadiran(p.kelasJabatan)
+                  ? `${p.nama} - pejabat pimpinan tinggi`
+                  : p.nama,
                 keterangan: p.nip,
               }))}
               totalBelumPunya={totalBelumPunya}

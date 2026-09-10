@@ -86,8 +86,12 @@ export function PengecualianForm({
         <button type="submit" disabled={pending || kode === ""} className="btn btn-ghost btn-sm">
           {pending ? "Menyimpan..." : "Kecualikan"}
         </button>
+        {/* Akibat yang tidak bisa dibatalkan sendiri, jadi disebut sebagai
+            CATATAN bertanda - bukan kalimat datar yang gampang terlewat di
+            sebelah tombol. */}
         <p className="text-[11px] text-muted">
-          Kalkulasi yang sudah ada untuk periode ini ikut dihapus.
+          <strong className="text-ink-2">Catatan:</strong> Jika sebelumnya sudah pernah dihitung, data kalkulasi
+          pegawai ini untuk periode tersebut akan otomatis dihapus.
         </p>
       </form>
 

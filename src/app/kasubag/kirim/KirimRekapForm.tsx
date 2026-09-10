@@ -29,6 +29,7 @@ export function KirimRekapForm({
   jumlahPegawai,
   jumlahKalkulasi,
   alasanTertahan,
+  alasanKembali,
   terkunci,
 }: {
   periodeBulan: number;
@@ -39,6 +40,20 @@ export function KirimRekapForm({
   jumlahKalkulasi: number;
   /** Diisi kalau belum boleh dikirim - ditampilkan sebagai ganti tombolnya. */
   alasanTertahan: string | null;
+  /**
+   * Alasan PPABP mengembalikan rekap ini. null = tidak sedang dikembalikan.
+   *
+   * DITAMPILKAN DI PANEL INI, bukan di puncak halaman. Alasannya soal KAPAN
+   * dibacanya: catatan revisi di atas dibaca sekali waktu halaman dibuka,
+   * lalu tergulir hilang selama orang memperbaiki data - dan tidak terlihat
+   * lagi tepat pada saat paling dibutuhkan, yaitu sedetik sebelum mengirim
+   * ulang. Di sini catatannya jadi hal terakhir yang dilihat, sehingga bisa
+   * diadu dengan perbaikan yang barusan dikerjakan.
+   *
+   * Di puncak halaman tetap ada penanda, tapi cuma berupa badge status -
+   * cukup untuk tahu halaman ini sedang dalam tahap apa.
+   */
+  alasanKembali: string | null;
   /**
    * Rekap periode ini sudah terkirim & terkunci.
    *
@@ -119,13 +134,26 @@ export function KirimRekapForm({
   if (terkunci) return popupHasil;
 
   return (
-    <section className="card mt-6 border-l-4 border-l-navy p-5">
+    <section id="kirim" className="card mt-6 border-l-4 border-l-navy p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-bold text-ink">Kirim rekap ke PPABP</h2>
         <span className="text-xs text-muted">
           {jumlahKalkulasi} dari {jumlahPegawai} pegawai sudah terhitung
         </span>
       </div>
+
+      {/* Catatan PPABP di ATAS blok perhatian & tombol - dan tetap tampil
+          walaupun pengirimannya sedang tertahan, karena justru itu yang
+          menjelaskan kenapa unit ini harus mengerjakan sesuatu lagi. */}
+      {alasanKembali && (
+        <div className="mt-3 rounded-lg border border-red bg-red-tint px-3.5 py-3">
+          <p className="text-xs font-bold text-red">Catatan pengembalian dari PPABP</p>
+          <p className="mt-1.5 text-sm italic text-ink">&ldquo;{alasanKembali}&rdquo;</p>
+          <p className="mt-1.5 text-xs text-ink-2">
+            Pastikan catatan ini sudah ditindaklanjuti sebelum mengirim ulang.
+          </p>
+        </div>
+      )}
 
       {alasanTertahan ? (
         <p className="mt-3 rounded-lg bg-gold-tint px-3 py-2 text-xs font-semibold text-gold-deep">

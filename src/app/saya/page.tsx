@@ -9,7 +9,8 @@ import { RincianUangMakan } from "../RincianUangMakan";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
 import { dikecualikanPotonganKehadiran } from "../../business-logic/pejabatPimpinanTinggi";
 import { BadgePejabatEselon } from "../BadgePejabatEselon";
-import { BandingForm } from "./BandingForm";
+import { BandingForm, type SasaranBanding } from "./BandingForm";
+import { labelReferensiBanding } from "../../business-logic/bandingData";
 import { NAMA_BULAN } from "../bulan";
 import { SearchableSelect } from "../SearchableSelect";
 import { labelStatus } from "../presensiTampilan";
@@ -40,44 +41,25 @@ type KalkulasiRow = {
   nilai: number;
 };
 
-function KalkulasiSection({
-  judul,
-  rows,
-  referensiTipe,
-  bandingTerpakai,
-}: {
-  judul: string;
-  rows: KalkulasiRow[];
-  referensiTipe: "TUKIN" | "UANG_MAKAN" | "UANG_LEMBUR";
-  bandingTerpakai: Set<string>;
-}) {
+function KalkulasiSection({ judul, rows }: { judul: string; rows: KalkulasiRow[] }) {
   return (
     <section className="card p-4">
       <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">{judul}</h2>
       {rows.length === 0 && <p className="mt-2 text-sm text-muted">Belum ada data.</p>}
       <div className="mt-2 space-y-3">
-        {rows.map((row) => {
-          const sudahDibanding = bandingTerpakai.has(row.id);
-          return (
-            <div key={row.id} className="border-t border-line-2 pt-3 first:border-t-0 first:pt-0">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-ink-2">
-                  Periode {row.periodeBulan}/{row.periodeTahun}
-                </span>
-                <span className="font-mono font-bold text-ink">{formatRupiah(row.nilai)}</span>
-              </div>
-              <p className="mt-0.5 text-xs text-muted">
-                Status: {row.status === "APPROVED" ? "Disetujui (histori pembayaran)" : `${row.status} (estimasi, belum final)`}
-              </p>
-              {sudahDibanding && (
-                <p className="mt-1 text-xs font-medium text-gold-deep">Sudah ada banding yang diajukan untuk periode ini.</p>
-              )}
-              {!sudahDibanding && row.status !== "APPROVED" && (
-                <BandingForm referensiTipe={referensiTipe} referensiId={row.id} />
-              )}
+        {rows.map((row) => (
+          <div key={row.id} className="border-t border-line-2 pt-3 first:border-t-0 first:pt-0">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-ink-2">
+                Periode {row.periodeBulan}/{row.periodeTahun}
+              </span>
+              <span className="font-mono font-bold text-ink">{formatRupiah(row.nilai)}</span>
             </div>
-          );
-        })}
+            <p className="mt-0.5 text-xs text-muted">
+              Status: {row.status === "APPROVED" ? "Disetujui (histori pembayaran)" : `${row.status} (estimasi, belum final)`}
+            </p>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -223,7 +205,45 @@ export default async function DataSayaPage({
     );
   }
 
-  const bandingTerpakai = new Set(pegawai.banding.map((b) => b.referensiId));
+  // Daftar yang BISA dibanding, disusun dari baris yang benar-benar dimiliki
+  // pegawai ini - bukan daftar jenis yang tetap. Menawarkan "Kehadiran Juli"
+  // pada orang yang rekap Julinya belum ditarik cuma menghasilkan penolakan
+  // dari server setelah formulirnya terlanjur diisi.
+  //
+  // Yang bandingnya masih berjalan tetap DITAMPILKAN, cuma tidak bisa dipilih:
+  // menghilangkannya membuat orang mengira sasarannya tidak ada.
+  const bandingBerjalan = new Set(
+    pegawai.banding
+      .filter((b) => b.status === "DIAJUKAN" || b.status === "MENUNGGU_APPROVAL_FINAL")
+      .map((b) => `${b.referensiTipe}|${b.referensiId}`)
+  );
+  const sasaran = (nilai: string, label: string): SasaranBanding => ({
+    nilai,
+    label,
+    sedangBerjalan: bandingBerjalan.has(nilai),
+  });
+  const sasaranBanding: SasaranBanding[] = [
+    sasaran(`DATA_PEGAWAI|${pegawai.id}`, "Data pegawai (jabatan, golongan, kelas jabatan, rekening)"),
+    ...pegawai.rekapPresensi.map((r) =>
+      sasaran(`PRESENSI|${r.id}`, `Kehadiran - periode ${r.periodeBulan}/${r.periodeTahun}`)
+    ),
+    ...pegawai.predikatKinerja.map((p) =>
+      sasaran(`PREDIKAT_KINERJA|${p.id}`, `Predikat kinerja - periode ${p.periodeBulan}/${p.periodeTahun}`)
+    ),
+    ...pegawai.tukinCalc.map((t) =>
+      sasaran(`TUKIN|${t.id}`, `Tunjangan Kinerja - periode ${t.periodeBulan}/${t.periodeTahun}`)
+    ),
+    ...pegawai.uangMakan.map((u) =>
+      sasaran(`UANG_MAKAN|${u.id}`, `Uang Makan - periode ${u.periodeBulan}/${u.periodeTahun}`)
+    ),
+    // Mengikuti saklar yang sama dengan menu & nominalnya: selama uang lembur
+    // belum ditampilkan, membandingnya juga tidak ada gunanya.
+    ...(TAMPILKAN_NOMINAL_LEMBUR
+      ? pegawai.uangLembur.map((u) =>
+          sasaran(`UANG_LEMBUR|${u.id}`, `Uang Lembur - periode ${u.periodeBulan}/${u.periodeTahun}`)
+        )
+      : []),
+  ];
 
   // DUGAAN status PTKP dari data kepegawaian SIAP - bukan status resmi DJP.
   // Ditampilkan justru supaya pegawainya sendiri bisa mengoreksi: dialah
@@ -458,16 +478,14 @@ export default async function DataSayaPage({
                 berarti membuat dua versi kebenaran yang akan berbeda dalam
                 hitungan minggu - dan yang dipakai membayar adalah yang salah. */}
             <p className="mt-5 border-t border-line-2 pt-3 text-xs text-muted">
-              Data di atas cerminan dari SIAP, disinkronkan {formatTanggal(pegawai.sourceSyncedAt)}. Perbaikan
-              dilakukan di {pegawai.sourceSystem}, bukan di sini - kalau ada yang keliru, hubungi Kasubag TU unit
-              kamu.
+              Data bersumber dari SIAP dan terakhir diperbarui pada {formatTanggal(pegawai.sourceSyncedAt)}.
             </p>
           </section>
 
           <section className="card p-5">
             <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Rekening pembayaran</h2>
             <p className="mt-1 text-xs text-muted">
-              Rekening tujuan transfer per jenis pembayaran, hasil unggahan PPABP.
+              Rekening tujuan transfer per jenis pembayaran.
             </p>
             {pegawai.rekening.length === 0 && (
               <p className="mt-3 text-sm text-muted">Belum ada rekening yang terdaftar untuk kamu.</p>
@@ -792,7 +810,8 @@ export default async function DataSayaPage({
             )}
             <p className="mt-3 border-t border-line-2 pt-3 text-xs text-muted">
               Predikat kinerja menentukan komponen 70% Tunjangan Kinerja (Pasal 5). Perubahannya dilakukan di
-              e-Kinerja BKN, lalu diunggah ulang oleh unit kamu.
+              e-Kinerja BKN, lalu diunggah ulang oleh unit kamu. Kalau predikat yang tercatat tidak sesuai,
+              ajukan lewat tab Banding.
             </p>
           </section>
         </div>
@@ -859,21 +878,15 @@ export default async function DataSayaPage({
           <KalkulasiSection
             judul="Tukin"
             rows={pegawai.tukinCalc.map((r) => ({ ...r, nilai: r.tukinBersih }))}
-            referensiTipe="TUKIN"
-            bandingTerpakai={bandingTerpakai}
           />
           <KalkulasiSection
             judul="Uang Makan"
             rows={pegawai.uangMakan.map((r) => ({ ...r, nilai: r.totalUangMakan }))}
-            referensiTipe="UANG_MAKAN"
-            bandingTerpakai={bandingTerpakai}
           />
           {TAMPILKAN_NOMINAL_LEMBUR && (
             <KalkulasiSection
               judul="Uang Lembur"
               rows={pegawai.uangLembur.map((r) => ({ ...r, nilai: r.totalUangLembur }))}
-              referensiTipe="UANG_LEMBUR"
-              bandingTerpakai={bandingTerpakai}
             />
           )}
         </div>
@@ -990,12 +1003,32 @@ export default async function DataSayaPage({
           ================================================================== */}
       {tabAktif === "banding" && (
         <div className="mt-6 space-y-6">
+          {/* PENGAJUAN dulu, riwayat sesudahnya. Orang membuka tab ini dengan
+              satu maksud - mengajukan - dan riwayat yang mendahuluinya membuat
+              tombolnya terdorong ke bawah begitu bandingnya sudah beberapa.
+
+              Tertutup secara default: yang datang untuk memantau tidak perlu
+              melewati formulir dulu. */}
+          <details className="card group p-4" open={pegawai.banding.length === 0}>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+              <span className="text-[14.5px] font-extrabold tracking-tight text-ink">Ajukan banding</span>
+              <span className="btn btn-gold btn-sm group-open:hidden">Buka formulir</span>
+              <span className="hidden text-xs font-semibold text-muted group-open:inline">Tutup</span>
+            </summary>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              Ajukan koreksi jika terdapat data atau hasil perhitungan yang tidak sesuai.
+            </p>
+            <div className="mt-3">
+              <BandingForm sasaran={sasaranBanding} />
+            </div>
+          </details>
+
           <section className="card p-4">
-            <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Banding saya</h2>
+            <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Proses banding saya</h2>
             {pegawai.banding.length === 0 && (
               <p className="mt-2 text-sm text-muted">
-                Belum pernah mengajukan banding. Pengajuan dilakukan dari tab Pendapatan, pada periode yang mau
-                dibanding.
+                Belum pernah mengajukan banding. Yang diajukan lewat formulir di atas muncul di sini beserta
+                tahapannya.
               </p>
             )}
             <div className="mt-2 space-y-3">
@@ -1003,11 +1036,17 @@ export default async function DataSayaPage({
                 <div key={b.id} className="border-t border-line-2 pt-3 first:border-t-0 first:pt-0 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-ink-2">
-                      {b.referensiTipe} - Periode {b.periodeBulan}/{b.periodeTahun}
+                      {labelReferensiBanding(b.referensiTipe)} - Periode {b.periodeBulan}/{b.periodeTahun}
                     </span>
                   </div>
                   <BandingStepper status={b.status} />
-                  <p className="mt-2 text-xs text-muted">{b.alasan}</p>
+                  {b.bagianData && <p className="mt-2 text-xs font-semibold text-ink">{b.bagianData}</p>}
+                  <p className="mt-1 text-xs text-muted">{b.alasan}</p>
+                  {b.usulanPerbaikan && (
+                    <p className="mt-1 text-xs text-ink-2">
+                      <span className="font-semibold">Usulan kamu:</span> {b.usulanPerbaikan}
+                    </p>
+                  )}
                   {/*
                     Upload bukti dukung SENGAJA belum ada di sini - mekanisme
                     penyimpanan file (local disk vs object storage) masih

@@ -32,14 +32,14 @@ export function hitungUangMakan(input: UangMakanInput): UangMakanResult {
     anomali.push("Jumlah hari WFO/WFH/WFA tidak boleh negatif.");
   }
   if (tarifHarianUangMakan <= 0) {
-    anomali.push("tarifHarianUangMakan harus lebih besar dari 0.");
+    anomali.push("Tarif harian uang makan belum diisi atau tidak lebih besar dari nol.");
   }
 
   const hariBerhak = Math.max(0, jumlahHariWfo) + Math.max(0, jumlahHariWfhWfa);
 
   if (hariBerhak > jumlahHariKerja) {
     anomali.push(
-      `Hari berhak uang makan (${hariBerhak}) melebihi jumlah hari kerja (${jumlahHariKerja}) - kemungkinan data presensi tidak konsisten dengan kalender kerja.`
+      `Hari yang berhak uang makan (${hariBerhak} hari) melebihi jumlah hari kerja (${jumlahHariKerja} hari)\u2014data presensinya kemungkinan tidak konsisten dengan kalender kerja.`
     );
   }
 

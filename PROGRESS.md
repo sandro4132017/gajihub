@@ -186,6 +186,40 @@ SIAP menyimpan `RIWAYATJABATAN` lengkap dengan TMT selamanya, jadi "siapa di
 unit mana pada bulan X" selalu bisa direkonstruksi kapan pun. Putuskan
 kebijakannya dulu, baru implementasi sekali.
 
+**Tambahan dari audit ulang seluruh jalurnya (2026-09-09)** - dikerjakan
+NANTI, sesudah kebijakannya diputuskan. Tidak ada yang mendesak di sini;
+dicatat supaya tidak ditemukan ulang dari nol:
+
+1. **Kalau kebijakannya "tetap di unit lama", ini bukan tambalan satu query.**
+   Tidak satu pun dari `TukinCalculation`, `RekapPresensiPeriode`,
+   `PredikatKinerja`, `UangMakan`, dan `UangLembur` menyimpan satuan kerja -
+   semuanya disaring lewat relasi `pegawai: { satuanKerja }` yang HIDUP, di
+   **41 tempat**. Artinya butuh kolom snapshot (diisi saat kalkulasi, lalu
+   dibekukan) + migrasi pengisian baris lama. Sekali kerja, tapi menyentuh
+   angka yang muncul di laporan unit dan di ADK.
+
+2. **`PengirimanUnit` setengah beku - periksa ini waktu implementasi.**
+   `jumlahPegawai`/`jumlahKalkulasi` memang sengaja dibekukan saat Kirim
+   (komentarnya ada di `schema.prisma`), TAPI daftar barisnya tetap
+   diturunkan dari satker hidup. Sesudah ada yang mutasi, ringkasan
+   "48 terkirim" bisa tidak cocok dengan isi tabel di bawahnya.
+
+3. **Akun login TIDAK ikut mutasi, dan ini yang paling cepat menggigit.**
+   `User.satuanKerja` terpisah dari `Pegawai.satuanKerja` dan tidak pernah
+   disentuh `sync:pegawai`. Pegawainya sudah pindah keesokan pagi (cron
+   `scripts/sync-harian.sh`, 02.00), akunnya tidak - Kasubag TU yang mutasi
+   tetap melihat unit LAMA sampai Admin mengubahnya di
+   `/admin/role-assignment`. Belum ada peringatan apa pun di layar waktu
+   kedua kolom itu tidak lagi sama. Ini BISA dikerjakan lebih dulu dan
+   terpisah dari keputusan kebijakan di atas - sifatnya cuma menandai, tidak
+   menyentuh angka pembayaran.
+
+4. **Status `MUTASI` tidak pernah dipakai.** Skema menyebutnya sebagai contoh
+   nilai `statusPegawai`, tapi terhitung 2026-09-09 isinya: AKTIF 5.072,
+   PENSIUN 212, BERHENTI 17, NONAKTIF 1 - **MUTASI nol**. Mutasi tidak
+   mengubah status, cuma satuan kerjanya. Jangan bangun logika yang menunggu
+   status itu muncul.
+
 ---
 
 ## 3. MENUNGGU KEPUTUSAN USER
