@@ -442,39 +442,9 @@ export default async function KasubagDashboardPage({
           satker={satkerEfektif}
         />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-muted">Shortcut:</span>
-          <Link
-            href={`/tukin/presensi?bulan=${periodeBulan}&tahun=${periodeTahun}`}
-            className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
-          >
-            Presensi Pegawai
-          </Link>
-          <Link
-            href="/tukin/predikat-kinerja"
-            className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
-          >
-            Predikat Kinerja
-          </Link>
-          <Link
-            href={`/kasubag/banding?satker=${encodeURIComponent(satkerEfektif)}`}
-            className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
-          >
-            Verifikasi Banding {bandingPending > 0 && <span className="ml-1 rounded-full bg-gold px-1.5 py-0.2 text-[10px] text-white">{bandingPending}</span>}
-          </Link>
-          <Link
-            href={`/kasubag/sk-kgb?satker=${encodeURIComponent(satkerEfektif)}`}
-            className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
-          >
-            SK KGB
-          </Link>
-          <Link
-            href={`/kasubag/sk-hukuman-disiplin?satker=${encodeURIComponent(satkerEfektif)}`}
-            className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
-          >
-            SK Hukuman Disiplin
-          </Link>
-        </div>
+        {/* Baris pintasan DICABUT (permintaan user 2026-09-16), sama dengan
+            dashboard lintas unit - kedua dashboard ini sengaja dijaga
+            seragam. Seluruh tujuannya sudah ada di sidebar. */}
       </div>
 
       {/* ====================================================================

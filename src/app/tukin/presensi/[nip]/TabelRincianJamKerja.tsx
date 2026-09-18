@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { jamDariMenit, type BarisRincianJamKerja } from "../../../../business-logic/rincianJamKerjaHarian";
 
 /**
@@ -23,6 +24,16 @@ export interface BarisTabelRincianJamKerja {
   kejadianTidakPresensi: number;
   keteranganLibur: string | null;
   dikoreksiManual: boolean;
+  /**
+   * Kolom mana yang jamnya berasal dari koreksi manual, bukan dari e-Presensi.
+   * Dipisah per kolom karena koreksi boleh menyentuh salah satunya saja.
+   *
+   * Tabel ini memang SUDAH memajang jam hasil koreksi (halamannya menyuapkan
+   * jam efektif), jadi tanpa penanda ini tidak ada apa pun di layar yang
+   * membedakan angka hasil ketukan mesin dari angka yang diketik orang.
+   */
+  masukDikoreksi: boolean;
+  keluarDikoreksi: boolean;
 }
 
 /**
@@ -40,6 +51,25 @@ function jam(menit: number | null) {
     <span className="whitespace-nowrap font-mono">
       {jamDariMenit(menit % (24 * 60))}
       {lewatTengahMalam && <span className="ml-0.5 text-[11px] text-red">+1</span>}
+    </span>
+  );
+}
+
+/**
+ * Membungkus jam yang berasal dari koreksi manual supaya beda dari jam yang
+ * datang sendiri dari mesin absensi.
+ *
+ * Emas, sama dengan chip "dikoreksi" di kolom status dan sel jam di tabel
+ * presensi - satu arti, satu warna, di semua tempat yang memajang hari ini.
+ */
+function JamKoreksi({ teks, dikoreksi }: { teks: ReactNode; dikoreksi: boolean }) {
+  if (!dikoreksi) return <>{teks}</>;
+  return (
+    <span
+      className="rounded bg-gold-tint px-1 font-semibold text-gold-deep"
+      title="Jam ini diketik manual oleh petugas absensi, bukan ketukan e-Presensi. Alasannya ada di tabel presensi (tampilan bawaan)."
+    >
+      {teks}
     </span>
   );
 }
@@ -108,8 +138,12 @@ export function TabelRincianJamKerja({ baris }: { baris: BarisTabelRincianJamKer
                     <span className="ml-1.5 rounded bg-gold-tint px-1 text-[11px] text-ink-2">dikoreksi</span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-ink-2">{jam(r.jamMasukMenit)}</td>
-                <td className="px-3 py-2 text-ink-2">{jam(r.jamKeluarMenit)}</td>
+                <td className="px-3 py-2 text-ink-2">
+                  <JamKoreksi teks={jam(r.jamMasukMenit)} dikoreksi={b.masukDikoreksi} />
+                </td>
+                <td className="px-3 py-2 text-ink-2">
+                  <JamKoreksi teks={jam(r.jamKeluarMenit)} dikoreksi={b.keluarDikoreksi} />
+                </td>
                 {/* Ketukan yang tidak dipercaya mesin yang membayar: SEMBILAN
                     kolom turunannya diganti satu keterangan. Memajang jadwal
                     kerja lengkap untuk baris yang tapnya sampah tidak menambah

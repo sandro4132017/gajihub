@@ -33,29 +33,37 @@ export function HapusPeriodeForm({
   if (jumlahBaris === 0) return null;
 
   return (
-    <div className="card mt-4 border-red-300 p-4 dark:border-red-900">
-      <h2 className="text-sm font-bold text-ink">Ganti seluruh data periode ini</h2>
-      <p className="mt-1 text-xs leading-relaxed text-muted">
-        Menghapus <span className="font-semibold text-ink-2">{jumlahBaris} predikat</span> milik{" "}
-        <span className="font-semibold text-ink-2">{satuanKerja}</span> periode{" "}
-        <span className="font-semibold text-ink-2">{namaPeriode}</span>, supaya bisa diupload ulang dari nol.
-      </p>
-      <p className="mt-2 text-xs leading-relaxed text-muted">
-        <span className="font-semibold text-ink-2">Sering kali ini tidak perlu:</span> upload ulang otomatis menimpa
-        nilai yang lama. Hapus dulu cuma kalau ada orang yang <em>hilang</em> dari file penggantinya - kalau tidak,
-        baris lama mereka akan tertinggal dan ikut terhitung.
-      </p>
+    // ZONA BERBAHAYA, bukan kartu setara (permintaan user 2026-09-14).
+    // Dipisah garis di kaki halaman tanpa bingkai merah sendiri: yang datang
+    // ke halaman ini datang untuk mengunggah, melihat, lalu memperbaiki -
+    // bukan menghapus. Panel merah setinggi kartu unggah menarik perhatian
+    // sebesar pekerjaan utamanya, padahal ini jalan keluar yang jarang
+    // dipakai. Yang MERAH tinggal tombolnya, dan itu memang cukup.
+    <div className="mt-8 border-t border-line-2 pt-4">
+      {/* SATU BARIS waktu tertutup: keterangan kiri, tombol kanan. Judul
+          "Ganti seluruh data periode ini" dan paragraf "Sering kali ini tidak
+          perlu..." dua-duanya dicabut - yang pertama mengulang tombolnya,
+          yang kedua sistem mengajari orang kapan boleh menekan.
 
+          Yang menahan salah klik bukan teks di halaman, melainkan konfirmasi
+          dua langkah di bawah: centang wajib yang menyebut jumlah baris DAN
+          nama unitnya, plus kolom alasan. Itu tetap utuh. */}
       {!terbuka ? (
-        <button
-          type="button"
-          onClick={() => setTerbuka(true)}
-          className="mt-3 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
-        >
-          Hapus {jumlahBaris} predikat periode ini
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-muted">
+            Mau unggah ulang <span className="font-semibold text-ink-2">{namaPeriode}</span> dari awal? Hapus dulu data
+            lamanya.
+          </p>
+          <button
+            type="button"
+            onClick={() => setTerbuka(true)}
+            className="shrink-0 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
+          >
+            Hapus {jumlahBaris} predikat
+          </button>
+        </div>
       ) : (
-        <form action={formAction} className="mt-3 space-y-3">
+        <form action={formAction} className="space-y-3">
           <input type="hidden" name="satuanKerja" value={satuanKerja} />
           <input type="hidden" name="periodeBulan" value={periodeBulan} />
           <input type="hidden" name="periodeTahun" value={periodeTahun} />

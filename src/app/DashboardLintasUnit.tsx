@@ -92,29 +92,37 @@ function BarisProgres({
   tundaMs: number;
 }) {
   const persen = persenDari(tally.terkirim, tally.total);
+  // TANPA KARTU BERBINGKAI DI DALAM KARTU (dipadatkan 2026-09-16). Kotak
+  // ber-latar di dalam panel yang juga berlatar menambah dua garis dan
+  // padding ganda untuk tiga baris teks; tingginya berlipat tanpa satu pun
+  // angka bertambah.
+  //
+  // "Dikembalikan" cuma disebut kalau ADA. Nol yang selalu ditulis membuat
+  // mata melewatinya, dan justru angka inilah yang paling perlu terbaca waktu
+  // akhirnya tidak nol.
   return (
-    <div className="rounded-xl border border-line-2 bg-surface-2 p-3.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className={`flex size-8 items-center justify-center rounded-lg text-xs font-bold text-white ${kelasKotak}`}>
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`flex size-5 shrink-0 items-center justify-center rounded text-[10px] font-bold text-white ${kelasKotak}`}>
             {inisial}
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-ink">{nama}</h3>
-            <p className="text-[11px] text-muted">
-              {tally.terkirim} terkirim &bull; {tally.dikembalikan} dikembalikan &bull; {tally.belumKirim} belum
-              dikirim
-            </p>
-          </div>
+          </span>
+          <h3 className="truncate text-xs font-bold text-ink">{nama}</h3>
         </div>
-        <span className={`font-mono text-sm font-black ${kelasPersen}`}>{persen}%</span>
+        <span className={`shrink-0 font-mono text-xs font-black ${kelasPersen}`}>{persen}%</span>
       </div>
-      <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-line">
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-line">
         <div
           className={`gj-bar h-full rounded-full ${kelasBar}`}
           style={{ "--lebar-bar": `${persen}%`, animationDelay: `${tundaMs}ms` } as React.CSSProperties}
         />
       </div>
+      <p className="mt-1 text-[11px] text-muted">
+        {tally.terkirim} terkirim &middot; {tally.belumKirim} belum dikirim
+        {tally.dikembalikan > 0 && (
+          <span className="font-semibold text-red"> &middot; {tally.dikembalikan} dikembalikan</span>
+        )}
+      </p>
     </div>
   );
 }
@@ -124,16 +132,17 @@ function BarisProgres({
  * (langkah 4f), role matrix eksplisit bilang "dashboard lintas unit SAMA
  * seperti PPABP" buat Pimpinan, cuma beda read-only. `readOnly=true`
  * (Pimpinan) menyembunyikan link ke halaman AKSI (Rekonsiliasi, Export ADK,
- * Kelola Anggaran Realisasi, dan seluruh pintasan data pokok - semuanya butuh
- * izin PPABP/ADMIN yang Pimpinan tidak punya; kalau tetap ditautkan, Pimpinan
- * bakal mentok "Akses ditolak" di halaman tujuan) - angka "Rekonsiliasi perlu
+ * Kelola Anggaran Realisasi - semuanya butuh izin PPABP/ADMIN yang Pimpinan
+ * tidak punya; kalau tetap ditautkan, Pimpinan bakal mentok "Akses ditolak"
+ * di halaman tujuan) - angka "Rekonsiliasi perlu
  * ditangani" TETAP ditampilkan buat Pimpinan, cuma tidak jadi tautan, supaya
  * visibilitasnya utuh sesuai role matrix "dashboard yang SAMA".
  *
  * BENTUKNYA MENGIKUTI DASHBOARD KASUBAG TU (permintaan user 2026-09-10):
- * sapaan + lencana keadaan, baris filter ringkas + pintasan tanpa kartu,
- * kartu KPI ber-ikon dengan angka yang naik, lalu panel-panel ber-kepala
- * bergaris. Yang ditampilkan TIDAK bertambah maupun berkurang - seluruh angka
+ * sapaan + lencana keadaan, baris filter ringkas, kartu KPI ber-ikon dengan
+ * angka yang naik, lalu panel-panel ber-kepala bergaris. Baris pintasan yang
+ * dulu menemani filter sudah dicabut dari KEDUA dashboard (2026-09-16) -
+ * keseragaman itu disengaja, jangan dikembalikan sebelah saja. Yang ditampilkan TIDAK bertambah maupun berkurang - seluruh angka
  * di sini sama persis dengan bentuk sebelumnya.
  *
  * PAPAN PROGRES UNIT SENGAJA TIDAK DITARIK KE SINI walau dashboard Kasubag TU
@@ -163,16 +172,37 @@ export async function DashboardLintasUnit({
   });
   const satuanKerjaList = resolveSatuanKerjaListUntukFilter(authUser, satuanKerjaRows.map((r) => r.satuanKerja));
 
+  // "SEMUA BULAN" DIHORMATI, tidak lagi diam-diam diganti periode terbaru.
+  //
+  // Dulu nilai kosong apa pun jatuh ke periode terbaru, jadi memilih "Semua
+  // bulan" di filter menghasilkan angka SATU periode - filternya menjanjikan
+  // sesuatu yang tidak ia lakukan, dan tidak ada apa pun di layar yang
+  // memberi tahu bahwa yang tampil bukan yang diminta.
+  //
+  // Yang membedakan "belum pernah dipilih" dari "sengaja dikosongkan" adalah
+  // BENTUK nilainya, dan bedanya pasti: `undefined` berarti parameternya tidak
+  // ada di URL sama sekali (halaman dibuka polos lewat menu), sementara `""`
+  // berarti form filter mengirimkannya dalam keadaan kosong - SearchableSelect
+  // selalu merender input tersembunyinya, jadi "Semua bulan" tetap terkirim
+  // sebagai `?bulan=`. Hanya yang pertama yang boleh dijatuhkan ke bawaan;
+  // halaman polos yang menampilkan seluruh riwayat sekaligus bukan tampilan
+  // pembuka yang berguna.
   let periodeBulan = bulan ? Number(bulan) : undefined;
   let periodeTahun = tahun ? Number(tahun) : undefined;
-  if (!periodeBulan || !periodeTahun) {
+  if (bulan === undefined && tahun === undefined) {
     const terbaru = await prisma.tukinCalculation.findFirst({
       orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }],
       select: { periodeBulan: true, periodeTahun: true },
     });
-    periodeBulan = periodeBulan ?? terbaru?.periodeBulan;
-    periodeTahun = periodeTahun ?? terbaru?.periodeTahun;
+    periodeBulan = terbaru?.periodeBulan;
+    periodeTahun = terbaru?.periodeTahun;
   }
+
+  // Dirakit dari yang BENAR-BENAR terisi. Bulan kosong + tahun terisi berarti
+  // seluruh bulan di tahun itu; dua-duanya kosong berarti seluruh riwayat.
+  const filterPeriode: { periodeBulan?: number; periodeTahun?: number } = {};
+  if (periodeBulan) filterPeriode.periodeBulan = periodeBulan;
+  if (periodeTahun) filterPeriode.periodeTahun = periodeTahun;
 
   const filterSatker = satkerEfektif ? { pegawai: { satuanKerja: satkerEfektif } } : {};
   // Hanya AKTIF - pensiunan tetap disimpan (berhak atas tukin bulan yang
@@ -181,41 +211,61 @@ export async function DashboardLintasUnit({
     where: { statusPegawai: "AKTIF", ...(satkerEfektif ? { satuanKerja: satkerEfektif } : {}) },
   });
 
-  const [tukinRows, umRows, lemburRows] = periodeBulan && periodeTahun
-    ? await Promise.all([
-        prisma.tukinCalculation.findMany({
-          where: { periodeBulan, periodeTahun, ...filterSatker },
-          // satuanKerja dibutuhkan buat mencocokkan baris ke pengiriman unitnya.
-          include: { pegawai: { select: { satuanKerja: true } } },
-        }),
-        prisma.uangMakan.findMany({
-          where: { periodeBulan, periodeTahun, ...filterSatker },
-          // satuanKerja dibutuhkan buat mencocokkan baris ke pengiriman unitnya.
-          include: { pegawai: { select: { satuanKerja: true } } },
-        }),
-        prisma.uangLembur.findMany({
-          where: { periodeBulan, periodeTahun, ...filterSatker },
-          // satuanKerja dibutuhkan buat mencocokkan baris ke pengiriman unitnya.
-          include: { pegawai: { select: { satuanKerja: true } } },
-        }),
-      ])
-    : [[], [], []];
+  const [tukinRows, umRows, lemburRows] = await Promise.all([
+    prisma.tukinCalculation.findMany({
+      where: { ...filterPeriode, ...filterSatker },
+      // satuanKerja dibutuhkan buat mencocokkan baris ke pengiriman unitnya.
+      include: { pegawai: { select: { satuanKerja: true } } },
+    }),
+    prisma.uangMakan.findMany({
+      where: { ...filterPeriode, ...filterSatker },
+      include: { pegawai: { select: { satuanKerja: true } } },
+    }),
+    prisma.uangLembur.findMany({
+      where: { ...filterPeriode, ...filterSatker },
+      include: { pegawai: { select: { satuanKerja: true } } },
+    }),
+  ]);
 
   // Keadaan tiap baris = keadaan PENGIRIMAN unitnya. Satu query untuk
   // ketiga domain sekaligus - pengirimannya memang satu per unit per periode,
   // bukan per jenis pembayaran.
-  const pengiriman =
-    periodeBulan && periodeTahun
-      ? await prisma.pengirimanUnit.findMany({
-          where: { periodeBulan, periodeTahun },
-          select: { satuanKerja: true, status: true },
-        })
-      : [];
+  const pengiriman = await prisma.pengirimanUnit.findMany({
+    where: filterPeriode,
+    select: { satuanKerja: true, status: true, periodeBulan: true, periodeTahun: true },
+  });
+  // Dikunci dengan periode BARISNYA SENDIRI, bukan periode terpilih. Dulu
+  // keduanya selalu sama sehingga tidak ada bedanya; begitu "semua bulan"
+  // benar-benar berlaku, memakai periode terpilih akan membuat seluruh
+  // pengiriman tertumpuk di satu kunci dan tally-nya salah total.
   const petaKirim = new Map(
-    pengiriman.map((p) => [kunciKirim(p.satuanKerja, periodeBulan!, periodeTahun!), p.status])
+    pengiriman.map((p) => [kunciKirim(p.satuanKerja, p.periodeBulan, p.periodeTahun), p.status])
   );
   const kunci = (r: { pegawai: { satuanKerja: string }; periodeBulan: number; periodeTahun: number }) =>
     kunciKirim(r.pegawai.satuanKerja, r.periodeBulan, r.periodeTahun);
+
+  // --- Sebaran pengiriman PER UNIT (bahan donat) -------------------------
+  //
+  // Dihitung dari pasangan UNIT x PERIODE, bukan dari baris pegawai: yang
+  // ditagih PPABP adalah unitnya. Periodenya diambil dari periode yang
+  // benar-benar ada kalkulasinya dalam cakupan filter - kalau diambil dari
+  // kalender, unit akan dihitung "belum kirim" untuk bulan yang memang belum
+  // waktunya, dan angkanya jadi tidak berarti apa-apa.
+  const periodeCakupan = [...new Set(tukinRows.map((r) => `${r.periodeTahun}|${r.periodeBulan}`))];
+  const unitCakupan = satkerEfektif ? [satkerEfektif] : satuanKerjaList;
+  const kunciUnitPeriode = unitCakupan.flatMap((u) =>
+    periodeCakupan.map((p) => {
+      const [t, b] = p.split("|");
+      return kunciKirim(u, Number(b), Number(t));
+    })
+  );
+  const tallyUnit = tallyKirim(kunciUnitPeriode, petaKirim);
+
+  // Yang PALING bisa ditindaklanjuti: unit yang kalkulasinya sudah ada tapi
+  // belum dikirim - tinggal ditagih. Beda dari unit yang belum menghitung
+  // sama sekali, yang urusannya jauh lebih panjang.
+  const unitPunyaKalkulasi = new Set(tukinRows.map((r) => kunci(r)));
+  const siapKirimBelumDikirim = [...unitPunyaKalkulasi].filter((k) => !petaKirim.has(k)).length;
 
   const tallyTukin = tallyKirim(tukinRows.map(kunci), petaKirim);
   const tallyUm = tallyKirim(umRows.map(kunci), petaKirim);
@@ -226,14 +276,27 @@ export async function DashboardLintasUnit({
     umRows.reduce((a, r) => a + r.totalUangMakan, 0) +
     lemburRows.reduce((a, r) => a + r.totalUangLembur, 0);
 
-  const totalDikembalikan = tallyTukin.dikembalikan + tallyUm.dikembalikan + tallyLembur.dikembalikan;
-  const totalBelumKirim = tallyTukin.belumKirim + tallyUm.belumKirim + tallyLembur.belumKirim;
+  // SATU DEFINISI, SATU ANGKA - dihitung per UNIT, bukan per baris pegawai.
+  //
+  // Bentuk lamanya menjumlahkan baris dari TIGA jenis pembayaran sekaligus
+  // (tukin + uang makan + lembur), lalu menyebutnya "belum dikirim unit". Dua
+  // hal salah sekaligus: satuannya baris tapi ditulis unit, dan satu pegawai
+  // yang sama ikut terhitung sampai tiga kali. Hasilnya angka yang tidak
+  // menjawab pertanyaan apa pun - 108 di kepala halaman berdampingan dengan
+  // 167 di panel progres, dua-duanya benar menurut rumusnya sendiri, dan yang
+  // membacanya wajar menyimpulkan dashboardnya rusak.
+  //
+  // Sekarang keduanya memakai `tallyUnit` yang sama dengan panel di bawah.
+  // Kalau suatu saat perlu angka per BARIS lagi, beri nama yang menyebut
+  // satuannya - jangan pakai ulang nama ini.
+  const totalDikembalikan = tallyUnit.dikembalikan;
+  const totalBelumKirim = tallyUnit.belumKirim;
+  const satuanUnit = periodeCakupan.length > 1 ? "unit-periode" : "unit";
+  const persenUnitTerkirim = persenDari(tallyUnit.terkirim, kunciUnitPeriode.length);
 
-  const anggaranRows = periodeBulan && periodeTahun
-    ? await prisma.anggaranRealisasi.findMany({
-        where: { periodeBulan, periodeTahun, ...(satkerEfektif ? { satuanKerja: satkerEfektif } : {}) },
-      })
-    : [];
+  const anggaranRows = await prisma.anggaranRealisasi.findMany({
+    where: { ...filterPeriode, ...(satkerEfektif ? { satuanKerja: satkerEfektif } : {}) },
+  });
   const totalPagu = anggaranRows.reduce((a, r) => a + r.pagu, 0);
   const totalRealisasi = anggaranRows.reduce((a, r) => a + r.realisasi, 0);
   const persenRealisasi = persenDari(totalRealisasi, totalPagu);
@@ -245,33 +308,23 @@ export async function DashboardLintasUnit({
     },
   });
 
-  // Lencana keadaan di kepala halaman - DITURUNKAN dari angka yang sudah
-  // dihitung di atas, bukan query tambahan. Urutannya sengaja: yang
-  // dikembalikan lebih mendesak daripada yang belum dikirim, karena unitnya
-  // sudah pernah menyerahkan lalu ditolak.
+  // LENCANA KEADAAN DICABUT dari kepala halaman (permintaan user 2026-09-16).
+  // Di samping nama, angka itu terbaca seperti pemberitahuan pribadi padahal
+  // ia keadaan dashboard - dan isinya sama persis dengan kartu KPI "Belum
+  // Dikirim" beberapa sentimeter di bawahnya.
   const adaData = tallyTukin.total + tallyUm.total + tallyLembur.total > 0;
-  const keadaan = !adaData
-    ? { label: "Belum ada kalkulasi", kelas: "bg-line text-muted" }
-    : totalDikembalikan > 0
-      ? { label: `${totalDikembalikan} dikembalikan ke unit`, kelas: "bg-red-tint text-red" }
-      : totalBelumKirim > 0
-        ? { label: `${totalBelumKirim} belum dikirim unit`, kelas: "bg-gold-tint text-gold-deep" }
-        : { label: "Semua unit sudah kirim", kelas: "bg-green-tint text-green" };
 
+  // Labelnya menyebut apa yang BENAR-BENAR sedang dihitung. Menulis satu nama
+  // bulan sementara angkanya menjumlahkan sembilan periode adalah cara paling
+  // cepat membuat orang memakai angka yang salah.
   const periodeTeks =
-    periodeBulan && periodeTahun ? `${NAMA_BULAN[periodeBulan - 1]} ${periodeTahun}` : "belum ada data";
-
-  // Pintasan ke halaman data pokok. SEMUANYA butuh izin PPABP/ADMIN, jadi
-  // seluruh barisnya ditahan buat Pimpinan - bukan ditampilkan lalu ditolak
-  // di halaman tujuan.
-  const pintasan = [
-    { href: "/ppabp/adk", label: "Export ADK" },
-    { href: "/ppabp/gaji-induk", label: "Gaji Induk" },
-    { href: "/ppabp/rekening", label: "Rekening Pegawai" },
-    { href: "/ppabp/basis-data-gaji", label: "Basis Data Gaji" },
-    { href: "/ppabp/anggaran", label: "Anggaran & Realisasi" },
-    { href: "/ppabp/usulan-role", label: "Usulan Role" },
-  ];
+    periodeBulan && periodeTahun
+      ? `${NAMA_BULAN[periodeBulan - 1]} ${periodeTahun}`
+      : periodeTahun
+        ? `Semua bulan ${periodeTahun}`
+        : periodeBulan
+          ? `${NAMA_BULAN[periodeBulan - 1]} semua tahun`
+          : "Semua periode";
 
   return (
     <main className={`${HALAMAN} space-y-6`}>
@@ -280,21 +333,16 @@ export async function DashboardLintasUnit({
           ==================================================================== */}
       <div className="gj-masuk flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-2xl font-black tracking-tight text-ink sm:text-3xl">
-              Halo, {sapaanNama(nama)}{" "}
-              {/* Emoji dibungkus aria-hidden: pembaca layar melafalkannya
-                  ("melambaikan tangan") di tengah kalimat sapaan, dan itu
-                  mengganggu tanpa menambah arti apa pun. */}
-              <span aria-hidden="true">👋</span>
-            </h1>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${keadaan.kelas}`}>
-              {keadaan.label}
-            </span>
-          </div>
-          <p className="mt-1 text-sm font-medium text-muted">
-            Ringkasan {satkerEfektif ?? "seluruh satuan kerja"} periode{" "}
-            <span className="font-semibold text-ink">{periodeTeks}</span>.
+          <h1 className="text-2xl font-black tracking-tight text-ink sm:text-3xl">
+            Halo, {sapaanNama(nama)}{" "}
+            {/* Emoji dibungkus aria-hidden: pembaca layar melafalkannya
+                ("melambaikan tangan") di tengah kalimat sapaan, dan itu
+                mengganggu tanpa menambah arti apa pun. */}
+            <span aria-hidden="true">👋</span>
+          </h1>
+          <p className="mt-0.5 text-sm font-medium text-muted">
+            {satkerEfektif ?? "Seluruh satuan kerja"} &middot;{" "}
+            <span className="font-semibold text-ink">{periodeTeks}</span>
           </p>
         </div>
 
@@ -351,27 +399,20 @@ export async function DashboardLintasUnit({
           tahun={tahun}
           satker={satker}
         />
-
-        {!readOnly && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-[11px] font-bold uppercase tracking-wider text-muted">Shortcut:</span>
-            {pintasan.map((p) => (
-              <Link
-                key={p.href}
-                href={p.href}
-                className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
-              >
-                {p.label}
-              </Link>
-            ))}
-          </div>
-        )}
+        {/* Baris pintasan DICABUT (permintaan user 2026-09-16). Seluruh
+            tujuannya sudah ada di sidebar, dan menampilkannya dua kali
+            membuat baris filter ini bersaing perhatian dengan angka di
+            bawahnya - padahal itu isi halamannya. */}
       </div>
 
       {/* ====================================================================
           3. ANGKA POKOK
           ==================================================================== */}
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
+      {/* EMPAT KARTU, bukan lima (permintaan user 2026-09-16). Kartu
+          "Rekonsiliasi" dicabut: ia bukan ukuran keadaan melainkan pintu ke
+          halaman lain, dan tombolnya sudah berdiri di kanan atas LENGKAP
+          dengan lencana jumlahnya - dua tempat untuk satu tombol. */}
+      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         <KartuKpi
           label="Pegawai Aktif"
           nilai={totalPegawai}
@@ -405,26 +446,12 @@ export async function DashboardLintasUnit({
         />
 
         <KartuKpi
-          label="Dikembalikan"
-          nilai={totalDikembalikan}
-          keterangan="Kalkulasi yang ditolak ke unit"
-          warnaAngka={totalDikembalikan > 0 ? "text-red" : "text-ink"}
-          nuansa="bg-red-tint text-red"
-          tundaMs={280}
-          ikon={
-            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6" />
-            </svg>
-          }
-        />
-
-        <KartuKpi
           label="Belum Dikirim"
           nilai={totalBelumKirim}
-          keterangan="Masih ditahan di unit"
+          keterangan={`${satuanUnit} dari ${kunciUnitPeriode.length}, masih ditahan di unit`}
           warnaAngka={totalBelumKirim > 0 ? "text-gold-deep" : "text-ink"}
           nuansa="bg-gold-tint text-gold-deep"
-          tundaMs={335}
+          tundaMs={280}
           ikon={
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -432,39 +459,20 @@ export async function DashboardLintasUnit({
           }
         />
 
-        {/* Pimpinan tetap melihat ANGKANYA, cuma tidak jadi tautan - halaman
-            rekonsiliasi butuh izin PPABP/ADMIN. */}
-        {readOnly ? (
-          <KartuKpi
-            label="Rekonsiliasi"
-            nilai={selisihMenunggu}
-            keterangan="Perlu ditangani PPABP"
-            warnaAngka={selisihMenunggu > 0 ? "text-gold-deep" : "text-ink"}
-            nuansa="bg-biru/10 text-biru"
-            tundaMs={390}
-            ikon={
-              <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-              </svg>
-            }
-          />
-        ) : (
-          <Link href="/ppabp/rekonsiliasi" className="group block h-full">
-            <KartuKpi
-              label="Rekonsiliasi"
-              nilai={selisihMenunggu}
-              keterangan="Perlu ditangani, klik untuk membuka"
-              warnaAngka={selisihMenunggu > 0 ? "text-gold-deep" : "text-ink"}
-              nuansa="bg-biru/10 text-biru"
-              tundaMs={390}
-              ikon={
-                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-              }
-            />
-          </Link>
-        )}
+        <KartuKpi
+          label="Dikembalikan"
+          nilai={totalDikembalikan}
+          keterangan={`${satuanUnit} yang ditolak kembali ke unit`}
+          warnaAngka={totalDikembalikan > 0 ? "text-red" : "text-ink"}
+          nuansa="bg-red-tint text-red"
+          tundaMs={335}
+          ikon={
+            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6" />
+            </svg>
+          }
+        />
+
       </div>
 
       {/* ====================================================================
@@ -478,18 +486,69 @@ export async function DashboardLintasUnit({
           <div className="flex items-center justify-between gap-3 pb-3 border-b border-line-2">
             <div>
               <h2 className="text-sm font-bold text-ink">Progres Pengiriman Unit</h2>
-              <p className="text-xs text-muted">Berapa baris yang sudah sampai ke PPABP</p>
+              <p className="text-xs text-muted">Berapa unit yang sudah menyerahkan ke PPABP</p>
             </div>
             <span className="shrink-0 text-xs font-semibold text-muted">{periodeTeks}</span>
           </div>
 
-          <div className="mt-4 space-y-4">
+          <div className="mt-3.5 space-y-3">
             {!adaData ? (
               <p className="py-8 text-center text-sm text-muted">
                 Belum ada kalkulasi pada periode {periodeTeks}.
               </p>
             ) : (
               <>
+                {/* BAR, BUKAN DONAT (permintaan user 2026-09-16). Donatnya
+                    dicabut karena proporsinya di lapangan ekstrem - 1 dari 168
+                    membuat hampir seluruh lingkaran jadi satu warna, dan
+                    bentuk lingkaran itu memakan ruang seperempat panel untuk
+                    menyampaikan lebih sedikit daripada satu baris angka di
+                    sebelahnya.
+
+                    Batang bertumpuk: hijau terkirim, merah dikembalikan,
+                    sisanya lintasan kosong. Angkanya tetap ditulis lengkap di
+                    bawah, jadi warna bukan satu-satunya pembawa arti. */}
+                <div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-sm text-muted">
+                      <span className="font-mono text-lg font-black text-ink">{tallyUnit.terkirim}</span>
+                      <span className="text-muted"> / {kunciUnitPeriode.length} {satuanUnit} terkirim</span>
+                    </p>
+                    <span className="shrink-0 font-mono text-sm font-black text-green">{persenUnitTerkirim}%</span>
+                  </div>
+                  <div className="mt-2 flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full bg-line">
+                    {tallyUnit.terkirim > 0 && (
+                      <div
+                        className="rounded-full bg-green"
+                        style={{ width: `${(tallyUnit.terkirim / kunciUnitPeriode.length) * 100}%` }}
+                        title={`Terkirim: ${tallyUnit.terkirim} ${satuanUnit}`}
+                      />
+                    )}
+                    {tallyUnit.dikembalikan > 0 && (
+                      <div
+                        className="rounded-full bg-red"
+                        style={{ width: `${(tallyUnit.dikembalikan / kunciUnitPeriode.length) * 100}%` }}
+                        title={`Dikembalikan: ${tallyUnit.dikembalikan} ${satuanUnit}`}
+                      />
+                    )}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-muted">
+                    Belum dikirim <strong className="font-semibold text-ink-2">{tallyUnit.belumKirim}</strong>
+                    {tallyUnit.dikembalikan > 0 && (
+                      <span className="font-semibold text-red"> &middot; dikembalikan {tallyUnit.dikembalikan}</span>
+                    )}
+                    {siapKirimBelumDikirim > 0 && (
+                      <> &middot; {siapKirimBelumDikirim} sudah punya kalkulasi tapi belum menekan kirim</>
+                    )}
+                  </p>
+                </div>
+
+                <div className="border-t border-line-2 pt-3">
+                  <p className="pb-2.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+                    Baris pegawai per jenis pembayaran
+                  </p>
+                </div>
+
                 <BarisProgres
                   inisial="TK"
                   nama="Tunjangan Kinerja"
@@ -526,8 +585,17 @@ export async function DashboardLintasUnit({
           </div>
         </div>
 
+        {/* `justify-between` DICABUT dari keadaan kosong (permintaan user
+            2026-09-16): kartu ini setinggi kolom sebelahnya, dan mendorong
+            satu kalimat "belum ada data" ke tengah ruang setinggi ~500px
+            membuat bagian terkosong halaman jadi bagian terbesarnya.
+            Sekarang isinya menempel ke atas dan kartunya berhenti setinggi
+            isinya sendiri - `self-start` yang mencabut peregangan bawaan
+            grid. */}
         <div
-          className="gj-masuk flex flex-col justify-between rounded-2xl border border-line bg-surface p-5 shadow-xs lg:col-span-5"
+          className={`gj-masuk rounded-2xl border border-line bg-surface p-5 shadow-xs lg:col-span-5 ${
+            anggaranRows.length === 0 ? "self-start" : "flex flex-col justify-between"
+          }`}
           style={{ animationDelay: "480ms" }}
         >
           <div>
@@ -540,8 +608,14 @@ export async function DashboardLintasUnit({
             </div>
 
             {anggaranRows.length === 0 ? (
-              <p className="mt-4 py-8 text-center text-sm text-muted">
-                Belum ada data Anggaran &amp; Realisasi untuk periode/satker ini.
+              <p className="mt-3 text-sm text-muted">
+                Belum ada data untuk {periodeTeks}
+                {satkerEfektif ? ` di ${satkerEfektif}` : ""}.{" "}
+                {!readOnly && (
+                  <Link href="/ppabp/anggaran" className="font-semibold text-teal-deep underline">
+                    Unggah anggaran
+                  </Link>
+                )}
               </p>
             ) : (
               <div className="mt-4 space-y-3">

@@ -4,12 +4,11 @@ import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canGenerateAdk } from "../../../../auth/permissions";
 import {
   KOLOM_ADK_TUKIN,
-  KOLOM_TOTAL_ADK_TUKIN,
   susunBarisAdkTukin,
-  susunBarisTotalAdk,
 } from "../../../../business-logic/adk";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../../business-logic/tarifTukinPokok";
 import { kelasJabatanEfektif } from "../../../../business-logic/kelasJabatanEfektif";
+import { skGradeBerlaku, type SkGradeRingkas } from "../../../../business-logic/skGrade";
 import { responseAdk } from "../responseAdk";
 import { satkerTerkirim, sempitkanKeSatker, whereIkutAdk } from "../satkerTerkirim";
 import { bacaJenisPegawai, labelJenisPegawai } from "../jenisPegawaiAdk";
@@ -118,6 +117,24 @@ export async function GET(req: NextRequest) {
   const skPerPegawai = new Map<string, typeof skHukdis>();
   for (const sk of skHukdis) skPerPegawai.set(sk.pegawaiId, [...(skPerPegawai.get(sk.pegawaiId) ?? []), sk]);
 
+  // --- SK GRADING: isi kolom "Nomor SK" ---
+  //
+  // Yang diminta Rokeu di kolom itu adalah nomor SK GRADING - SK yang
+  // menetapkan kelas jabatan (keterangan user 2026-09-14). Nomornya tidak ada
+  // di SIAP sama sekali (lihat kepala src/business-logic/skGrade.ts), jadi
+  // dicatat petugas dan disimpan bertanggal di tabel SkGrade.
+  //
+  // SELURUH riwayat ditarik, bukan yang terbaru saja: yang dipakai adalah SK
+  // yang berlaku PADA PERIODE YANG DIEKSPOR. Berkas Januari yang dikerjakan
+  // Agustus wajib memuat SK era Januari, dan menyaring "terbaru" di sini akan
+  // membuang persis SK yang dibutuhkan.
+  const skGrade = await prisma.skGrade.findMany({
+    where: { pegawaiId: { in: rows.map((r) => r.pegawaiId) } },
+    select: { pegawaiId: true, nomorSk: true, tanggalSk: true, tmtBerlaku: true, kelasJabatan: true },
+  });
+  const gradePerPegawai = new Map<string, SkGradeRingkas[]>();
+  for (const g of skGrade) gradePerPegawai.set(g.pegawaiId, [...(gradePerPegawai.get(g.pegawaiId) ?? []), g]);
+
   // SAKTI SPP memproses per bank, jadi file bisa dipisah lewat ?bank=<kode>.
   // Tanpa parameter itu, semua bank ikut dalam satu file.
   const bankDiminta = req.nextUrl.searchParams.get("bank");
@@ -153,13 +170,20 @@ export async function GET(req: NextRequest) {
         namaRekening: rek?.namaRekening ?? null,
         // Diisi petugas lewat halaman Data Pegawai. Kosong tetap dikirim
         // kosong - TIDAK ditebak dari nomor SK pegawai lain yang mirip.
-        nomorSk: r.pegawai.nomorSk,
+        // SK grading periode ini kalau ada; kalau belum dicatat, jatuh ke
+        // kolom manual lama di Data Pegawai supaya berkas yang selama ini
+        // terisi tidak mendadak kosong. Yang belum punya keduanya tetap
+        // dikosongkan - TIDAK diambilkan dari SK pegawai lain yang mirip.
+        nomorSk:
+          skGradeBerlaku(gradePerPegawai.get(r.pegawaiId) ?? [], bulan, tahun)?.nomorSk ?? r.pegawai.nomorSk,
       };
     }),
     bulan,
-    tahun
+    tahun,
+    // Kolom "Bulan"/"Tahun" berkas ADK = KAPAN berkas ini dikerjakan. Jamnya
+    // diambil di sini, bukan di dalam engine - `susunBarisAdkTukin` pure.
+    new Date()
   );
-  const total = susunBarisTotalAdk(baris, KOLOM_TOTAL_ADK_TUKIN, KOLOM_ADK_TUKIN.length);
 
   // Berkas ADK adalah PERINTAH BAYAR yang keluar dari sistem ini menuju Web
   // Gaji/SAKTI. Sampai sebelum ini pengunduhannya TIDAK tercatat sama sekali -
@@ -196,7 +220,6 @@ export async function GET(req: NextRequest) {
     format: req.nextUrl.searchParams.get("format"),
     header: KOLOM_ADK_TUKIN,
     baris,
-    total,
     namaSheet: "daftar bayar",
     // Nama berkas menyebutkan penyaringnya. Operator sering mengunduh
     // beberapa potongan periode yang sama berturut-turut; tanpa pembeda di

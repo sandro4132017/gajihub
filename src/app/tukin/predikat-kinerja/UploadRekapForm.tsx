@@ -59,14 +59,26 @@ export function UploadRekapForm() {
   }, [ringkasanPerPeriode, pathname, router, searchParams]);
 
   return (
-    <div className="card mt-4 p-5">
+    <div className="card mt-4 p-4">
       <h2 className="text-base font-bold text-navy">Upload Rekap Penilaian e-Kinerja BKN</h2>
-      <p className="mt-1 text-sm text-muted">
-        Unggah file Rekap Penilaian e-Kinerja BKN untuk memproses predikat kinerja pegawai. Periode dan unit penilai
-        dibaca otomatis dari file.
+      {/* SATU BARIS. Kalimat lamanya mengulang judul di atasnya ("file Rekap
+          Penilaian e-Kinerja BKN ... predikat kinerja pegawai") lalu memakai
+          dua baris untuk satu keterangan yang benar-benar baru: periodenya
+          tidak perlu dipilih. Itu saja yang disisakan. */}
+      <p className="mt-0.5 text-sm text-muted">
+        Unggah file rekap. Periode dan unit penilai dibaca otomatis dari file.
       </p>
 
       <form action={formAction} className="mt-3">
+        {/* SATU BARIS - dan ini bukan sekadar menyetel `flex`, karena
+            baris ini SUDAH flex sejak awal dan tombolnya tetap turun ke
+            bawah. Sebabnya `.field-input` membawa `w-full`: kotak berkasnya
+            memakan seluruh lebar, jadi tombolnya tidak punya ruang tersisa
+            dan dibungkus ke baris berikutnya. `mt-0 w-auto min-w-0 flex-1`
+            yang mencabutnya - `w-auto` melepas lebar penuhnya, `flex-1`
+            memberinya sisa ruang, `min-w-0` mengizinkannya menyusut di layar
+            sempit (kotak flex menolak mengecil di bawah lebar isinya kalau
+            tidak disuruh). */}
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="file"
@@ -74,17 +86,13 @@ export function UploadRekapForm() {
             multiple
             accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             required
-            className="field-input py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-ink-2"
+            className="field-input mt-0 w-auto min-w-0 flex-1 py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-ink-2"
           />
-          <button type="submit" disabled={pending} className="btn btn-primary">
+          <button type="submit" disabled={pending} className="btn btn-primary shrink-0">
             {pending ? "Memproses..." : "Upload dan Proses"}
           </button>
         </div>
       </form>
-
-      <p className="mt-2 text-sm text-muted">
-        Upload ulang akan memperbarui data yang sesuai dan menambahkan data baru tanpa menghapus data yang sudah ada.
-      </p>
 
       {/*
         Keterangan rinci DILIPAT, bukan dihapus. Isinya menjelaskan perilaku
@@ -93,18 +101,28 @@ export function UploadRekapForm() {
         asing dilewati) - kalau hilang, orang menebaknya sendiri.
 
         DIPANGKAS 2026-09-10: dua kalimat dicabut karena mengulang yang sudah
-        ada di layar. Perilaku upload ulang sudah disebut di paragraf tepat di
-        ATAS lipatan ini, dan unit penilai tidak lagi ditampilkan di mana pun
-        (permintaan user), jadi menjelaskan cara membacanya cuma memancing
-        pertanyaan tentang sesuatu yang memang tidak perlu dipikirkan. Pakai
-        <details> bawaan HTML supaya tetap jalan tanpa JavaScript, pola yang
-        sama dengan "Cara lain mengisi presensi" di /tukin/presensi.
+        ada di layar, dan unit penilai tidak lagi ditampilkan di mana pun
+        (permintaan user).
+
+        2026-09-14: kalimat "upload ulang akan memperbarui..." IKUT MASUK KE
+        SINI, tidak dihapus. Ia satu-satunya yang menjawab "kalau saya unggah
+        lagi, yang lama hilang tidak?" - pertanyaan yang jawabannya salah
+        tebak berarti orang menghapus dulu tanpa perlu. Yang berubah cuma
+        tempatnya: di balik lipatan, bukan memakan baris tetap di kartu yang
+        justru ingin dibuat pendek.
+
+        Pakai <details> bawaan HTML supaya tetap jalan tanpa JavaScript, pola
+        yang sama dengan "Cara lain mengisi presensi" di /tukin/presensi.
       */}
-      <details className="group mt-3">
-        <summary className="cursor-pointer list-none text-sm font-semibold text-teal-deep underline underline-offset-2">
+      <details className="group mt-1.5">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-teal-deep underline underline-offset-2">
           Selengkapnya soal cara upload ini bekerja
         </summary>
         <div className="mt-2 space-y-2 text-sm text-muted">
+          <p>
+            <span className="font-semibold text-ink-2">Upload ulang aman:</span> data yang sesuai diperbarui, data baru
+            ditambahkan, dan yang sudah ada tidak dihapus.
+          </p>
           <p>
             Unduh <span className="font-semibold">Rekap Penilaian</span> periode{" "}
             <span className="font-semibold">Bulanan</span> dari portal e-Kinerja BKN. Kalau satu file berisi beberapa

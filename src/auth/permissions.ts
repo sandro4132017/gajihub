@@ -334,24 +334,47 @@ export function canUploadRekapPresensi(user: AuthUser, targetSatuanKerja: string
  * Permenaker 15/2024), yang membatalkan potongan Pasal 13 ayat (2) untuk
  * semua pegawai terdampak di tanggal itu.
  *
- * SENGAJA PPABP + ADMIN saja, TIDAK termasuk KASUBAG_TU - beda dari
- * canUploadRekapPresensi di atas yang memang di-scope unit.
+ * DIPINDAH KE KASUBAG TU, PPABP DICABUT (keputusan user 2026-09-14).
  *
- * Alasannya bukan soal jenjang, tapi soal cakupan akibatnya: satu penanda
- * bisa berlaku SE-KEMENTERIAN dan menghapus potongan ribuan orang sekaligus
- * (kejadian 15-16 Juli 2026: 960 pegawai, Rp 18.178.588). Kewenangan
- * membatalkan potongan lintas unit tidak berada di unit manapun - itu ada di
- * pihak yang memang berwenang lintas satker, dan pasalnya sendiri
- * menempatkan pengesahan presensi manual pada "pimpinan Unit Kerja", bukan
- * pada pelaksana administrasinya.
+ * Sebabnya alur kerja yang sebenarnya: waktu e-Presensi error, pegawai
+ * mengirim foto bertimestamp ke petugas absensi UNITNYA, dan petugas itu yang
+ * memperbaiki jamnya di sini. Selama penandanya dipegang PPABP, petugas
+ * unit tidak bisa mulai - dia harus menunggu orang lain menandai tanggalnya
+ * lebih dulu. PPABP fokus pada hitungan.
  *
- * TODO(confirm): kalau nanti Kasubag TU perlu menandai kendala yang cuma
- * menimpa unitnya sendiri (mis. jaringan satu balai putus), fungsi ini yang
- * dilonggarkan - dengan syarat penandanya WAJIB ber-satuanKerja, tidak boleh
- * se-kementerian.
+ * TODO(confirm) lama di tempat ini sudah terjawab, dan syaratnya DIPAKAI
+ * PERSIS: penanda dari Kasubag TU WAJIB ber-satuanKerja unitnya sendiri.
+ *
+ * YANG TETAP DIJAGA - dan inilah kenapa fungsinya sekarang bercakupan:
+ * satu penanda membatalkan potongan Pasal 13 ayat (2) untuk SEMUA pegawai
+ * terdampak di tanggal itu. Penanda SE-KEMENTERIAN pernah menghapus potongan
+ * 960 pegawai senilai Rp 18.178.588 sekaligus (15-16 Juli 2026). Cakupan
+ * sebesar itu bukan keputusan satu unit, jadi ia dipisah ke
+ * `canKelolaKendalaSeKementerian` dan tinggal dipegang ADMIN.
+ *
+ * `targetSatuanKerja` kosong = pertanyaannya "akun ini boleh menandai apa
+ * pun?", dipakai untuk memutuskan merender formnya atau tidak. Untuk
+ * MENGIZINKAN sebuah penanda, SELALU berikan satuan kerjanya.
  */
-export function canKelolaKendalaEpresensi(user: AuthUser): boolean {
-  return cekPpabpAtauAdmin(user);
+export function canKelolaKendalaEpresensi(user: AuthUser, targetSatuanKerja?: string): boolean {
+  if (!user.aktif) return false;
+  if (user.role === "ADMIN") return true;
+  if (user.role !== "KASUBAG_TU") return false;
+  if (!user.satuanKerja) return false;
+  return targetSatuanKerja === undefined || user.satuanKerja === targetSatuanKerja;
+}
+
+/**
+ * Menandai/mencabut kendala yang berlaku SE-KEMENTERIAN (satuanKerja null).
+ *
+ * DIPISAH dari fungsi di atas dengan sengaja. Kalau keduanya jadi satu,
+ * pemanggil yang lupa mengisi `targetSatuanKerja` akan lolos - dan yang
+ * lolos itu justru penanda bercakupan paling luas. Di sini tidak ada
+ * parameter yang bisa lupa diisi.
+ */
+export function canKelolaKendalaSeKementerian(user: AuthUser): boolean {
+  if (!user.aktif) return false;
+  return user.role === "ADMIN";
 }
 
 /**

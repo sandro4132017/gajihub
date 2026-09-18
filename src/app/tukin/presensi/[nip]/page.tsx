@@ -54,6 +54,70 @@ const BERHAK_UANG_MAKAN = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
 const WAJIB_JAM_KERJA = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
 const WAJIB_PRESENSI = [...WAJIB_JAM_KERJA, "TIDAK_PRESENSI"];
 
+/**
+ * Satu sel jam di tabel Presensi - menampilkan jam yang DIPAKAI MENGHITUNG,
+ * dengan jam asli e-Presensi tetap terbaca di bawahnya.
+ *
+ * KENAPA HARUS DUA NILAI. `PresensiHarian.jamMasuk` menyimpan FAKTA e-Presensi
+ * apa adanya dan TIDAK PERNAH ditimpa koreksi - bahkan sesudah "Terapkan
+ * Koreksi Presensi". Lihat `presensiPdfKeRekap.ts`: baris hariannya menulis
+ * jam MENTAH (`b.jamMasukMenit`), sementara telat, pulang cepat, dan kejadian
+ * Pasal 13 ayat (2) dihitung dari `jamMasukEfektif` yang sudah dikoreksi. Itu
+ * disengaja - yang tersimpan di kolom ini dasar audit, dan koreksinya hidup di
+ * tabel sendiri lengkap dengan alasan serta siapa yang mengetiknya.
+ *
+ * Tapi sel yang cuma memajang jam mentah terbaca seperti koreksinya gagal:
+ * "masuk 09:15, telat 0 menit" tidak masuk akal bagi siapa pun yang
+ * membacanya, dan itu betul-betul terjadi. Jadi keduanya ditampilkan - yang
+ * dipakai menghitung di depan, yang asli dicoret di bawahnya.
+ *
+ * Warnanya emas, sama dengan penanda "dikoreksi" di tabel rincian jam kerja -
+ * satu arti, satu warna, di dua tabel yang memajang hari yang sama.
+ */
+function SelJam({
+  asli,
+  koreksi,
+  alasan,
+  oleh,
+  belumDiterapkan,
+}: {
+  asli: string;
+  koreksi: string | null;
+  alasan: string | null;
+  oleh: string | null;
+  belumDiterapkan: boolean;
+}) {
+  if (!koreksi) return <td className="px-3 py-2 font-mono text-ink-2">{asli}</td>;
+  return (
+    <td className="px-3 py-2 font-mono">
+      <span
+        // Garis putus-putus = koreksinya tersimpan tapi BELUM ikut menghitung.
+        // Bedanya nyata: selama masih putus-putus, jam di sel ini dan menit
+        // telat di sebelahnya berasal dari dua versi data yang berbeda.
+        className={`rounded px-1 font-semibold text-gold-deep ${
+          belumDiterapkan ? "border border-dashed border-gold bg-gold-tint" : "bg-gold-tint"
+        }`}
+        title={
+          `e-Presensi mencatat ${asli === "-" ? "tidak ada ketukan" : asli}, dikoreksi manual jadi ${koreksi}` +
+          `${oleh ? ` oleh ${oleh}` : ""}${alasan ? ` - ${alasan}` : ""}.` +
+          (belumDiterapkan ? " BELUM diterapkan: tarik ulang presensi periode ini supaya ikut menghitung." : "")
+        }
+      >
+        {koreksi}
+      </span>
+      {/* Jam asli disembunyikan kalau nilainya SAMA - form koreksi mengisi
+          kedua kolom dengan jam yang sekarang, jadi mengoreksi jam pulang saja
+          tetap menyimpan jam masuk apa adanya. Memajang "06:51" di atas
+          "06:51" yang dicoret mengaku ada yang berubah padahal tidak. */}
+      {asli !== koreksi && (
+        <span className="mt-0.5 block text-[11px] text-muted line-through">
+          {asli === "-" ? "tanpa ketukan" : asli}
+        </span>
+      )}
+    </td>
+  );
+}
+
 export default async function RincianPresensiPegawaiPage({
   params,
   searchParams,
@@ -214,6 +278,10 @@ export default async function RincianPresensiPegawaiPage({
       }),
       keteranganLibur,
       dikoreksiManual: petaKoreksi.has(iso),
+      // Per KOLOM, bukan cuma per baris: koreksi boleh menyentuh jam masuk
+      // saja, dan mewarnai dua-duanya akan mengaku mengubah yang tidak diubah.
+      masukDikoreksi: koreksiHari?.jamMasuk != null,
+      keluarDikoreksi: koreksiHari?.jamKeluar != null,
       kejadianTidakPresensi,
     };
   });
@@ -557,6 +625,9 @@ export default async function RincianPresensiPegawaiPage({
               const iso = h.tanggal.toISOString().slice(0, 10);
               const kendala = tanggalKendala.has(iso);
               const koreksi = petaKoreksi.get(iso);
+              // Sama persis dengan perbandingan yang menyusun panel peringatan
+              // di atas tabel - satu aturan, bukan dua yang bisa berbeda.
+              const koreksiBelumBerlaku = !!koreksi && (!disinkronPada || koreksi.dikoreksiPada > disinkronPada);
               return (
                 <tr key={h.id} className={`border-b border-line-2 ${akhirPekan ? "bg-surface-2" : ""}`}>
                   <td className="px-3 py-2 whitespace-nowrap">
@@ -567,8 +638,20 @@ export default async function RincianPresensiPegawaiPage({
                     <span className="ml-1.5 text-xs text-muted">{NAMA_HARI[hariKe]}</span>
                   </td>
                   <td className="px-3 py-2 text-ink-2">{LABEL_STATUS[h.statusKehadiran] ?? h.statusKehadiran}</td>
-                  <td className="px-3 py-2 font-mono text-ink-2">{jamTeks(h.jamMasuk)}</td>
-                  <td className="px-3 py-2 font-mono text-ink-2">{jamTeks(h.jamKeluar)}</td>
+                  <SelJam
+                    asli={jamTeks(h.jamMasuk)}
+                    koreksi={koreksi?.jamMasuk ? jamTeks(koreksi.jamMasuk) : null}
+                    alasan={koreksi?.alasan ?? null}
+                    oleh={koreksi?.dikoreksiOleh.nama ?? null}
+                    belumDiterapkan={koreksiBelumBerlaku}
+                  />
+                  <SelJam
+                    asli={jamTeks(h.jamKeluar)}
+                    koreksi={koreksi?.jamKeluar ? jamTeks(koreksi.jamKeluar) : null}
+                    alasan={koreksi?.alasan ?? null}
+                    oleh={koreksi?.dikoreksiOleh.nama ?? null}
+                    belumDiterapkan={koreksiBelumBerlaku}
+                  />
                   <td className="px-3 py-2 font-mono">
                     {h.menitTerlambat > 0 ? <span className="text-red">{h.menitTerlambat} mnt</span> : <span className="text-muted">-</span>}
                   </td>

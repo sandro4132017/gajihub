@@ -260,70 +260,28 @@ export default async function PredikatKinerjaPage({
         </div>
       ) : (
         <>
-          <form method="get" className="card mt-6 p-4">
-        {/* Penanda asal ikut terkirim waktu filter dipakai. Tanpa ini
-            tombol Kembali lenyap begitu periodenya diganti, dan orangnya
-            kehilangan jalan pulang di tengah pekerjaan. */}
-        {dariTukin && <input type="hidden" name="dari" value="tukin" />}
-
-            <p className="text-base font-bold text-navy">Filter</p>
-            <div className="mt-3 flex flex-wrap items-end gap-3">
-            <div>
-              <label className="field-label">Bulan</label>
-              <SearchableSelect
-                name="bulan"
-                className="w-40"
-                options={NAMA_BULAN.map((nama, i) => ({ value: String(i + 1), label: nama }))}
-                defaultValue={String(periodeBulan ?? "")}
-              />
-            </div>
-            <div>
-              <label className="field-label">Tahun</label>
-              {/* Lihat catatan `key` yang sama di src/app/tukin/presensi/page.tsx. */}
-              <input
-                key={String(periodeTahun ?? "")}
-                type="number"
-                name="tahun"
-                defaultValue={String(periodeTahun ?? "")}
-                className="field-input w-24 py-1.5"
-              />
-            </div>
-            {!satkerWajib && (
-              <div>
-                <label className="field-label">Satuan kerja</label>
-                <SearchableSelect
-                  name="satker"
-                  className="min-w-[240px]"
-                  options={satuanKerjaRows
-                    .filter((r) => r.satuanKerja.trim() !== "")
-                    .map((r) => ({ value: r.satuanKerja, label: r.satuanKerja }))}
-                  defaultValue={satker ?? ""}
-                  emptyLabel="Semua satuan kerja"
-                />
-              </div>
-            )}
-            <div className="min-w-[180px] flex-1">
-              <label className="field-label">Cari nama atau NIP</label>
-              <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
-            </div>
-              <button type="submit" className="btn btn-primary">
-                Terapkan
-              </button>
-            </div>
-          </form>
-
           {/*
-            Daftar periode dibuat sebagai panel tersendiri, bukan satu baris
-            teks: jumlah periode bertambah tiap bulan, dan pengelola perlu
-            melihat sekilas periode mana yang sudah terisi & seberapa banyak.
+            SATU KARTU untuk memilih data yang dilihat, dengan URUTAN yang
+            menyatakan mana yang utama (permintaan user 2026-09-14).
+
+            Chip periode DULUAN karena itu yang dipakai hampir selalu: ia
+            daftar periode yang datanya MEMANG ADA, sekali klik, lengkap
+            dengan jumlahnya. Bulan/Tahun turun ke baris filter di bawah dan
+            berganti nama jadi "Buka periode lain" - namanya menyebutkan
+            perannya: jalan ke periode yang belum ada isinya, mis. mau
+            menambahkan predikat satuan untuk bulan yang rekapnya belum pernah
+            diunggah. Itu sebabnya keduanya tetap ada; yang salah dulu bukan
+            keberadaannya, melainkan keduanya tampil sama besar sehingga
+            terbaca sebagai dua cara yang harus dipahami satu-satu.
           */}
-          <div className="card mt-4 p-4">
-            <p className="text-sm font-bold text-ink">Periode tersedia</p>
-            <p className="mt-0.5 text-xs text-muted">
-              Pilih periode untuk melihat data. Angka dalam kurung menunjukkan jumlah pegawai dengan predikat pada periode tersebut.
-              {satkerWajib ? ` untuk ${satkerWajib}` : " (seluruh satuan kerja)"}.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+          <form method="get" className="card mt-6 p-4">
+            {/* Penanda asal ikut terkirim waktu filter dipakai. Tanpa ini
+                tombol Kembali lenyap begitu periodenya diganti, dan orangnya
+                kehilangan jalan pulang di tengah pekerjaan. */}
+            {dariTukin && <input type="hidden" name="dari" value="tukin" />}
+
+            <p className="text-sm font-bold text-ink">Periode</p>
+            <div className="mt-2 flex flex-wrap gap-2">
               {periodeTersedia.map((p) => {
                 const aktif = p.periodeBulan === periodeBulan && p.periodeTahun === periodeTahun;
                 const tujuan = new URLSearchParams({
@@ -332,6 +290,7 @@ export default async function PredikatKinerjaPage({
                 });
                 if (satker && !satkerWajib) tujuan.set("satker", satker);
                 if (q?.trim()) tujuan.set("q", q.trim());
+                if (dariTukin) tujuan.set("dari", "tukin");
                 return (
                   <Link
                     key={`${p.periodeTahun}-${p.periodeBulan}`}
@@ -349,10 +308,9 @@ export default async function PredikatKinerjaPage({
               })}
             </div>
 
-            {/* Sebaran periode yang sedang dibuka. Satu baris, di kartu yang
-                sama - ini keterangan TENTANG periode terpilih, bukan blok
-                terpisah yang berdiri sendiri. */}
-            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-2 pt-3">
+            {/* Sebaran periode yang sedang dibuka - keterangan TENTANG chip
+                yang tersorot, jadi menempel di bawahnya. */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-2 pt-3">
               <span className="text-xs font-bold uppercase tracking-wide text-muted">Predikat {namaPeriode}</span>
               {sebaran.length === 0 && <span className="text-sm text-muted">belum ada data</span>}
               {sebaran.map((s) => (
@@ -390,7 +348,50 @@ export default async function PredikatKinerjaPage({
                 </span>
               )}
             </div>
-          </div>
+
+            <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-line-2 pt-3">
+              <div className="min-w-[180px] flex-1">
+                <label className="field-label">Cari nama atau NIP</label>
+                <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
+              </div>
+              {!satkerWajib && (
+                <div>
+                  <label className="field-label">Satuan kerja</label>
+                  <SearchableSelect
+                    name="satker"
+                    className="min-w-[240px]"
+                    options={satuanKerjaRows
+                      .filter((r) => r.satuanKerja.trim() !== "")
+                      .map((r) => ({ value: r.satuanKerja, label: r.satuanKerja }))}
+                    defaultValue={satker ?? ""}
+                    emptyLabel="Semua satuan kerja"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="field-label">Buka periode lain</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <SearchableSelect
+                    name="bulan"
+                    className="w-36"
+                    options={NAMA_BULAN.map((nama, i) => ({ value: String(i + 1), label: nama }))}
+                    defaultValue={String(periodeBulan ?? "")}
+                  />
+                  {/* Lihat catatan `key` yang sama di src/app/tukin/presensi/page.tsx. */}
+                  <input
+                    key={String(periodeTahun ?? "")}
+                    type="number"
+                    name="tahun"
+                    defaultValue={String(periodeTahun ?? "")}
+                    className="field-input mt-0 w-24 py-1.5"
+                  />
+                </div>
+              </div>
+              <button type="submit" className="btn btn-primary">
+                Terapkan
+              </button>
+            </div>
+          </form>
 
           {/*
             SEBARAN digabung ke dalam kartu periode di atas, bukan kartu
@@ -424,19 +425,6 @@ export default async function PredikatKinerjaPage({
             />
           )}
 
-          {/* Hapus massal cuma muncul kalau satuan kerjanya SUDAH dipilih -
-              tanpa itu cakupannya jadi seluruh kementerian, dan salah klik
-              di situ menghapus ribuan baris lintas unit. */}
-          {adaPeriode && satkerEfektif && (
-            <HapusPeriodeForm
-              satuanKerja={satkerEfektif}
-              periodeBulan={periodeBulan!}
-              periodeTahun={periodeTahun!}
-              namaPeriode={namaPeriode}
-              jumlahBaris={jumlahSeUnitPeriode}
-            />
-          )}
-
           <div className="card mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -463,7 +451,19 @@ export default async function PredikatKinerjaPage({
                         {b.pegawai.nama}
                       </Link>
                       <span className="block font-mono text-xs text-muted">{b.pegawai.nip}</span>
-                      <span className="block text-xs text-muted">{b.pegawai.satuanKerja}</span>
+                      {/* Satuan kerja DILEWATI untuk akun yang cakupannya sudah
+                          dipaksa satu unit (Kasubag TU): nilainya sama persis
+                          di setiap baris, sudah disebut di kepala halaman
+                          ("Kamu hanya melihat pegawai di ..."), dan mengulang
+                          nama unit sepanjang itu di tiap baris justru
+                          mendorong nama pegawainya - satu-satunya yang
+                          membedakan baris - jadi sempit.
+
+                          Role lintas satker TETAP melihatnya: di sana barisnya
+                          memang bisa datang dari unit berbeda-beda. */}
+                      {!satkerWajib && (
+                        <span className="block text-xs text-muted">{b.pegawai.satuanKerja}</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5">
                       <ChipPredikat predikat={b.predikat} />
@@ -499,21 +499,45 @@ export default async function PredikatKinerjaPage({
             </p>
           )}
 
+          {/* Dasar hukum konversinya (Lampiran Kepsekjen 82/2025) TIDAK hilang
+              dari layar walau dicabut dari kartu ini - ia tetap terbaca di
+              ikon SumberAcuan pada judul halaman, lengkap dengan angkanya.
+              Menyebutkannya dua kali di satu halaman yang sedang dipendekkan
+              cuma menambah baris tanpa menambah keterangan. */}
           <div className="card mt-6 border-l-4 border-l-gold p-4">
-            <p className="text-sm font-bold text-ink">Predikat berubah? Tukin harus dihitung ulang</p>
+            <p className="text-sm font-bold text-ink">Predikat berubah? Tukin perlu dihitung ulang</p>
             <p className="mt-1 text-sm text-muted">
-              Kalkulasi Tukin memakai predikat yang berlaku SAAT dihitung. Kalau kamu meng-upload rekap perbaikan setelah
-              Tukin periode itu terlanjur dihitung, hasil lamanya tidak ikut berubah sendiri - hitung ulang lewat{" "}
+              Perubahan predikat tidak otomatis mengubah Tukin yang sudah dihitung. Hitung ulang melalui{" "}
               <Link href="/kasubag/kalkulasi" className="font-semibold text-teal-deep underline">
                 Kalkulasi Unit
               </Link>
-              . Perlu diingat menghitung ulang akan mereset siklus approval yang sudah berjalan ke DRAFT.
+              .
+            </p>
+            <p className="mt-2 text-sm font-semibold text-gold-deep">
+              &#9888; Hitung ulang akan mengembalikan approval ke DRAFT.
             </p>
             <p className="mt-2 text-xs text-muted">
-              Konversi predikat ke persen mengikuti Lampiran Kepsekjen 82 Tahun 2025: Sangat Baik/Baik 100%, Perlu
-              Perbaikan 85%, Kurang/Sangat Kurang 60%.
+              Konversi: Sangat Baik/Baik 100% &middot; Perlu Perbaikan 85% &middot; Kurang/Sangat Kurang 60%
             </p>
           </div>
+
+          {/* PALING BAWAH HALAMAN, sesudah tabelnya - urutan itu yang jadi
+              maksudnya: unggah, lihat, perbaiki, dan baru paling ujung jalan
+              keluar yang menghapus. Sebelumnya ia duduk di ATAS tabel, jadi
+              melintas di mata tiap kali orang menggulung ke datanya.
+
+              Cuma muncul kalau satuan kerjanya SUDAH dipilih - tanpa itu
+              cakupannya jadi seluruh kementerian, dan salah klik di situ
+              menghapus ribuan baris lintas unit. */}
+          {adaPeriode && satkerEfektif && (
+            <HapusPeriodeForm
+              satuanKerja={satkerEfektif}
+              periodeBulan={periodeBulan!}
+              periodeTahun={periodeTahun!}
+              namaPeriode={namaPeriode}
+              jumlahBaris={jumlahSeUnitPeriode}
+            />
+          )}
         </>
       )}
     </main>

@@ -34,33 +34,41 @@ export function TambahPredikatForm({
   const [state, formAction, pending] = useActionState(tambahPredikatAction, INITIAL);
 
   return (
-    <div className="card mt-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-bold text-ink">Tambah predikat satuan</p>
-          <p className="text-xs text-muted">
-            Buat pegawai yang terlewat dari file rekap {namaPeriode}. Tersimpan sebagai input manual dan tercatat di
-            audit trail.
-          </p>
-        </div>
-        <button type="button" onClick={() => setBuka(!buka)} className="btn btn-ghost btn-sm shrink-0">
-          {buka ? "Tutup" : "Tambah data"}
+    // AKSI SEKUNDER, bukan kartu sendiri (permintaan user 2026-09-14).
+    // Tertutup, ia cuma satu tombol kecil di atas tabel; kartunya baru ada
+    // waktu dibuka. Sebelumnya ia kartu penuh berjudul dengan deskripsi -
+    // seukuran kartu unggah - padahal ini jalan susulan untuk segelintir
+    // orang yang terlewat dari berkas rekap.
+    //
+    // Keterangan "tersimpan sebagai input manual dan tercatat di audit trail"
+    // DICABUT seluruhnya: itu mekanisme dalam, dan jejaknya toh sudah terlihat
+    // di tempat yang benar - chip "bukan dari BKN" di kolom Sumber pada baris
+    // yang bersangkutan.
+    <div className="mt-3">
+      <div className="flex justify-end">
+        <button type="button" onClick={() => setBuka(!buka)} className="btn btn-ghost btn-sm">
+          {buka ? "Tutup" : "+ Tambah predikat"}
         </button>
       </div>
 
       {buka && (
-        <>
+        <div className="card mt-2 p-4">
           {perluPilihSatker ? (
-            <p className="mt-3 rounded-lg bg-surface-2 p-3 text-xs text-muted">
+            <p className="rounded-lg bg-surface-2 p-3 text-xs text-muted">
               Pilih <strong>satuan kerja</strong> dulu di filter di atas. Tanpa itu daftar pegawainya mencakup seluruh
               kementerian (±5.000 orang) dan tidak praktis dipilih satu per satu.
             </p>
           ) : pegawaiBelumPunya.length === 0 ? (
-            <p className="mt-3 rounded-lg bg-surface-2 p-3 text-xs text-muted">
+            <p className="rounded-lg bg-surface-2 p-3 text-xs text-muted">
               Semua pegawai pada filter ini sudah punya predikat untuk {namaPeriode} - tidak ada yang perlu ditambahkan.
             </p>
           ) : (
-            <form action={formAction} className="mt-3 flex flex-wrap items-end gap-3">
+            <form action={formAction}>
+              <p className="text-xs text-muted">
+                Tambahkan predikat <strong className="text-ink-2">{namaPeriode}</strong> untuk pegawai yang tidak ada di
+                file rekap.
+              </p>
+              <div className="mt-2 flex flex-wrap items-end gap-3">
               <input type="hidden" name="periodeBulan" value={periodeBulan} />
               <input type="hidden" name="periodeTahun" value={periodeTahun} />
               <div className="min-w-[260px] flex-1">
@@ -105,6 +113,7 @@ export function TambahPredikatForm({
               <button type="submit" disabled={pending} className="btn btn-primary">
                 {pending ? "Menyimpan..." : "Simpan"}
               </button>
+              </div>
             </form>
           )}
 
@@ -120,7 +129,7 @@ export function TambahPredikatForm({
           {state.peringatanHitungUlang && (
             <p className="mt-1 text-xs text-gold-deep">{state.peringatanHitungUlang}</p>
           )}
-        </>
+        </div>
       )}
     </div>
   );

@@ -13,7 +13,7 @@ import {
   type AuthUser,
 } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
-import { NAMA_BULAN } from "../../bulan";
+import { NAMA_BULAN, daftarTahunPeriode } from "../../bulan";
 import { SearchableSelect } from "../../SearchableSelect";
 import { periodePunyaRekapPresensi, resolvePeriode } from "../../periodeDefault";
 import { UploadPresensiForm } from "./UploadPresensiForm";
@@ -40,10 +40,20 @@ export default async function PresensiTukinPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    bulan?: string;
-    tahun?: string;
+    /**
+     * BISA DATANG GANDA, dan itu bukan kasus teoretis: `SearchableSelect`
+     * merender `<input type="hidden">` DAN `<select>` native di dalam
+     * `<noscript>`, keduanya bernama sama. Waktu JavaScript mati, browser
+     * menghidupkan isi `<noscript>` sehingga dua-duanya ikut terkirim -
+     * dan `Number(["8","9"])` itu NaN, jadi periodenya diam-diam jatuh ke
+     * bawaan. Yang sah adalah yang TERAKHIR: select native berada di bawah
+     * input tersembunyinya.
+     */
+    bulan?: string | string[];
+    tahun?: string | string[];
     q?: string;
-    satker?: string;
+    /** Bisa ganda juga - sumbernya SearchableSelect. Lihat catatan `bulan`. */
+    satker?: string | string[];
     hal?: string;
     per?: string;
     /** "tukin" = dibuka dari Dashboard Tukin, bukan dari sidebar. */
@@ -51,6 +61,8 @@ export default async function PresensiTukinPage({
   }>;
 }) {
   const { bulan, tahun, q, satker, hal, per, dari } = await searchParams;
+  /** Nilai terakhir kalau sebuah parameter datang lebih dari sekali. */
+  const satuNilai = (v: string | string[] | undefined) => (Array.isArray(v) ? v[v.length - 1] : v);
 
   const akun = await getSessionAccount();
   const authUser: AuthUser | null =
@@ -63,9 +75,10 @@ export default async function PresensiTukinPage({
   // di action rekonsiliasinya, jadi berkas lintas unit tetap tersaring.
   const bolehRekonsiliasi = canUploadRekapPresensi(authUser, authUser.satuanKerja ?? "");
 
-  // Dua keadaan yang BOLEH DILIHAT semua orang di halaman ini, tapi cuma boleh
-  // DIUBAH PPABP/Admin - keduanya berlaku se-kementerian. Lihat catatan di
-  // canLihatKendalaEpresensi (permissions.ts).
+  // Dua keadaan yang BOLEH DILIHAT semua orang di halaman ini, tapi tidak
+  // semua boleh MENGUBAH - dan sejak 2026-09-14 cakupan keduanya BERBEDA:
+  // kendala e-Presensi kini milik Kasubag TU (unitnya sendiri), sementara
+  // kalender hari libur tetap PPABP/Admin karena berlaku se-kementerian.
   const bolehTandaiKendala = canKelolaKendalaEpresensi(authUser);
   const bolehIsiKalender = canKelolaHariLibur(authUser);
 
@@ -74,21 +87,62 @@ export default async function PresensiTukinPage({
   // periode yang benar-benar punya rekap - bukan bulan berjalan, yang rekapnya
   // baru ada setelah bulannya lewat dan disinkronkan.
   const { bulan: periodeBulan, tahun: periodeTahun } = resolvePeriode(
-    bulan,
-    tahun,
+    satuNilai(bulan),
+    satuNilai(tahun),
     await periodePunyaRekapPresensi(satkerWajib ?? undefined)
   );
 
   // KASUBAG_TU tetap DIPAKSA ke unitnya - `?satker=` dari luar diabaikan,
   // bukan cuma disembunyikan dropdown-nya. Role lintas satker (PPABP/ADMIN)
   // boleh memilih; kosong berarti semua unit.
-  const satkerEfektif = satkerWajib ?? (satker?.trim() || null);
+  const satkerEfektif = satkerWajib ?? (satuNilai(satker)?.trim() || null);
 
   // Unduhan WAJIB punya satu unit yang jelas. Buat KASUBAG_TU selalu terpenuhi
   // (unitnya dipaksa di atas); buat PPABP/ADMIN yang belum memilih unit,
   // tombolnya tidak muncul - berkas berisi seluruh kementerian bukan yang
   // dimaksud siapa pun, dan route-nya memang menolaknya dengan 400.
   const bolehExport = satkerEfektif !== null && canExportRekapUnit(authUser, satkerEfektif);
+
+  // KOREKSI JAM YANG BELUM DITERAPKAN.
+  //
+  // Koreksi disimpan sebagai baris pengganti, dan baru ikut menghitung saat
+  // presensi DITARIK ULANG - `muatKoreksiPeriode()` disuapkan ke penarikan.
+  // Jadi "belum diterapkan" = koreksinya lebih baru daripada tarikan terakhir
+  // rekap pegawai itu. Bentuk perbandingan yang sama dengan penanda "angka
+  // basi" di Kalkulasi Unit.
+  //
+  // Tanpa angka ini, satu-satunya yang memberi tahu orang bahwa dia masih
+  // punya pekerjaan tertinggal adalah kalimat di pesan sukses yang sudah
+  // lenyap begitu halaman berpindah - dan kalau terlewat, gejalanya diam:
+  // angkanya tetap salah dan rekapnya terkirim apa adanya.
+  //
+  // Dua query kecil, bukan join mentah: koreksi itu jalur pengecualian, jadi
+  // barisnya sedikit.
+  const awalPeriode = new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1));
+  const akhirPeriode = new Date(Date.UTC(periodeTahun, periodeBulan, 1));
+  const koreksiPeriode = await prisma.koreksiPresensiHarian.findMany({
+    where: {
+      tanggal: { gte: awalPeriode, lt: akhirPeriode },
+      ...(satkerEfektif ? { pegawai: { satuanKerja: satkerEfektif } } : {}),
+    },
+    select: { pegawaiId: true, dikoreksiPada: true },
+  });
+  const waktuTarikan = koreksiPeriode.length
+    ? await prisma.rekapPresensiPeriode.findMany({
+        where: {
+          periodeBulan,
+          periodeTahun,
+          pegawaiId: { in: [...new Set(koreksiPeriode.map((k) => k.pegawaiId))] },
+        },
+        select: { pegawaiId: true, diunggahPada: true },
+      })
+    : [];
+  const petaTarikan = new Map(waktuTarikan.map((r) => [r.pegawaiId, r.diunggahPada]));
+  const koreksiMenunggu = koreksiPeriode.filter((k) => {
+    const ditarik = petaTarikan.get(k.pegawaiId);
+    // Belum punya rekap sama sekali berarti koreksinya juga belum pernah ikut.
+    return !ditarik || k.dikoreksiPada > ditarik;
+  }).length;
 
   const sumberData = await ambilSumberData({ satuanKerja: satkerEfektif, periodeBulan, periodeTahun });
 
@@ -132,7 +186,7 @@ export default async function PresensiTukinPage({
   const paramPaginasi = new URLSearchParams();
   if (periodeBulan) paramPaginasi.set("bulan", String(periodeBulan));
   if (periodeTahun) paramPaginasi.set("tahun", String(periodeTahun));
-  if (satker && !satkerWajib) paramPaginasi.set("satker", satker);
+  if (satkerEfektif && !satkerWajib) paramPaginasi.set("satker", satkerEfektif);
   if (q?.trim()) paramPaginasi.set("q", q.trim());
   if (dari === "tukin") paramPaginasi.set("dari", "tukin");
 
@@ -204,11 +258,11 @@ export default async function PresensiTukinPage({
       </h1>
       <p className="mt-0.5 text-sm font-bold text-ink">Komponen 30% Tunjangan Kinerja (Tukin)</p>
       <p className="mt-2 text-sm text-biru">
-        Kelola data kehadiran: sinkronisasi e-Presensi, rekap presensi, dan validasi data kehadiran.
+        Kelola sinkronisasi dan rekap data kehadiran.
       </p>
       {satkerWajib && (
         <p className="mt-1 text-sm text-muted">
-          Kamu hanya melihat pegawai di <strong className="text-ink">{satkerWajib}</strong>.
+          Data yang ditampilkan hanya pegawai <strong className="text-ink">{satkerWajib}</strong>.
         </p>
       )}
 
@@ -216,65 +270,17 @@ export default async function PresensiTukinPage({
           kalender libur, dan dua jalur manual (PDF & template Excel) semuanya
           di BAWAH: yang dipakai tiap periode tidak boleh terdorong turun oleh
           yang dibuka beberapa kali setahun. */}
-      <SinkronisasiPresensi defaultBulan={periodeBulan} defaultTahun={periodeTahun} />
-
-      <form method="get" className="card mt-6 flex flex-wrap items-end gap-3 p-4">
-        {/* Penanda asal ikut terkirim waktu filter dipakai. Tanpa ini
-            tombol Kembali lenyap begitu periodenya diganti, dan orangnya
-            kehilangan jalan pulang di tengah pekerjaan. */}
-        {dariTukin && <input type="hidden" name="dari" value="tukin" />}
-        <div className="w-full text-xs text-muted">
-          Pilih periode dan kriteria untuk menampilkan data pada tabel di bawah.
-        </div>
-        <div>
-          <label className="field-label">Bulan</label>
-          <SearchableSelect
-            name="bulan"
-            className="w-36"
-            options={NAMA_BULAN.map((nama, i) => ({ value: String(i + 1), label: nama }))}
-            defaultValue={String(periodeBulan)}
-          />
-        </div>
-        <div>
-          <label className="field-label">Tahun</label>
-          {/* `key` WAJIB: <input> tak-terkendali cuma membaca defaultValue
-              saat dipasang. Tanpa ini, navigasi lunak yang memindahkan periode
-              (mis. sesudah tarik presensi) mengubah judul & tabel tapi
-              meninggalkan kotak tahun di nilai lama. */}
-          <input
-            key={periodeTahun}
-            type="number"
-            name="tahun"
-            defaultValue={periodeTahun}
-            className="field-input w-28 py-1.5"
-          />
-        </div>
-        {/* Dropdown satuan kerja cuma dirender untuk yang memang boleh
-            memilih. Buat KASUBAG_TU tidak ada gunanya - unitnya sudah dipaksa
-            di sisi query, jadi menampilkannya cuma memberi kesan bisa diubah. */}
-        {!satkerWajib && (
-          <div>
-            <label className="field-label">Satuan kerja</label>
-            <SearchableSelect
-              name="satker"
-              className="min-w-[240px]"
-              options={satuanKerjaRows
-                .map((r) => r.satuanKerja)
-                .filter((s): s is string => Boolean(s?.trim()))
-                .map((s) => ({ value: s, label: s }))}
-              defaultValue={satkerEfektif ?? ""}
-              emptyLabel="Semua satuan kerja"
-            />
-          </div>
-        )}
-        <div className="min-w-[200px] flex-1">
-          <label className="field-label">Cari nama atau NIP</label>
-          <PencarianDebounce defaultValue={q} placeholder="Cari pegawai..." />
-        </div>
-        <button type="submit" className="btn btn-primary">
-          Terapkan
-        </button>
-      </form>
+      <SinkronisasiPresensi
+        defaultBulan={periodeBulan}
+        defaultTahun={periodeTahun}
+        tahunOpsi={daftarTahunPeriode()}
+        koreksiMenunggu={koreksiMenunggu}
+        paramDipertahankan={{
+          ...(dariTukin ? { dari: "tukin" } : {}),
+          ...(q?.trim() ? { q: q.trim() } : {}),
+          ...(satkerEfektif && !satkerWajib ? { satker: satkerEfektif } : {}),
+        }}
+      />
 
       <div className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -302,7 +308,50 @@ export default async function PresensiTukinPage({
             </a>
           )}
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2">
+
+        {/* PERIODE TIDAK ADA DI SINI LAGI - satu-satunya kendali periode
+            halaman ini ada di kartu sinkronisasi di atas. Dulu ada dua, dan
+            keduanya bisa menunjuk bulan yang berbeda.
+
+            Periodenya tetap DIBAWA sebagai input tersembunyi: tanpa itu,
+            menekan Terapkan membuang periode dari URL dan halaman melompat
+            ke periode default. */}
+        <form method="get" className="mt-3 flex flex-wrap items-end gap-3">
+          {dariTukin && <input type="hidden" name="dari" value="tukin" />}
+          <input type="hidden" name="bulan" value={periodeBulan} />
+          <input type="hidden" name="tahun" value={periodeTahun} />
+          {/* Dropdown satuan kerja cuma dirender untuk yang memang boleh
+              memilih. Buat KASUBAG_TU tidak ada gunanya - unitnya sudah
+              dipaksa di sisi query, jadi menampilkannya cuma memberi kesan
+              bisa diubah. */}
+          {!satkerWajib && (
+            <div>
+              <label className="field-label">Satuan kerja</label>
+              <SearchableSelect
+                name="satker"
+                className="min-w-[240px]"
+                options={satuanKerjaRows
+                  .map((r) => r.satuanKerja)
+                  .filter((s): s is string => Boolean(s?.trim()))
+                  .map((s) => ({ value: s, label: s }))}
+                defaultValue={satkerEfektif ?? ""}
+                emptyLabel="Semua satuan kerja"
+              />
+            </div>
+          )}
+          <div className="min-w-[240px] flex-1">
+            <label className="field-label">Cari nama atau NIP</label>
+            <PencarianDebounce defaultValue={q} placeholder="Cari nama atau NIP..." />
+          </div>
+          {/* Tombolnya TIDAK dihapus walau pencarian sudah menembak sendiri
+              400 ms sesudah berhenti mengetik - tanpa JavaScript, ini
+              satu-satunya cara menerapkan pencarian & satuan kerja. */}
+          <button type="submit" className="btn btn-primary">
+            Terapkan
+          </button>
+        </form>
+
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="inline-flex items-center gap-2 text-sm">
             <span className="grid size-7 flex-none place-items-center rounded-lg bg-teal-tint text-teal-deep">
               <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -378,7 +427,14 @@ export default async function PresensiTukinPage({
                       </Link>
                       <BadgePejabatEselon kelasJabatan={r.pegawai.kelasJabatan} />
                       <span className="block font-mono text-xs text-muted">{r.pegawai.nip}</span>
-                      <span className="block text-xs text-muted">{r.sourceSystem}</span>
+                      {/* Sumber datanya TIDAK lagi disebut per baris. Nilainya
+                          sama untuk seluruh baris dalam satu periode - diukur
+                          2026-09-14: 9 dari 9 periode seragam - jadi yang
+                          tampil dulu cuma satu kalimat yang diulang 200 kali
+                          dan melebarkan kolom nama. Keterangannya sudah ada
+                          sekali di panel SumberAcuan di kepala halaman,
+                          LENGKAP dengan kapan ditariknya, dan per pegawai di
+                          /tukin/presensi/[nip]. */}
                     </td>
                     <td className="px-3 py-2.5 font-mono font-bold text-ink">{r.jumlahHariKerja}</td>
                     <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariWfo)}`}>{r.jumlahHariWfo}</td>
@@ -428,31 +484,6 @@ export default async function PresensiTukinPage({
         </div>
       </div>
 
-      <div className="mt-3 rounded-xl border border-line-2 bg-surface-2 p-3.5">
-        <p className="text-xs font-bold uppercase tracking-wide text-muted">Keterangan kolom</p>
-        <dl className="mt-2 grid gap-x-8 gap-y-1.5 text-xs text-muted sm:grid-cols-2">
-          <div className="flex gap-2">
-            <dt className="shrink-0 font-bold text-ink-2">Lupa absen</dt>
-            <dd>tidak melakukan presensi masuk atau pulang</dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="shrink-0 font-bold text-ink-2">Dinas luar &amp; diklat</dt>
-            <dd>tetap dihitung hadir, tapi tidak dapat uang makan</dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="shrink-0 font-bold text-ink-2">Cuti</dt>
-            <dd>total hari semua jenis - jenisnya disebut di bawah angkanya, karena Pasal 14 memotong berbeda per jenis</dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="shrink-0 font-bold text-ink-2">Tidak berkolom</dt>
-            <dd>meninggalkan kantor &amp; tidak ikut upacara tetap dihitung, tapi e-Presensi tidak mencatatnya (selalu 0 kecuali diisi lewat template Excel)</dd>
-          </div>
-        </dl>
-        <p className="mt-2.5 border-t border-line-2 pt-2 text-xs text-muted">
-          Klik nama pegawai untuk melihat rincian per tanggal.
-        </p>
-      </div>
-
       {/* ------------------------------------------------------------------
           PENGATURAN PERIODE - dibuka beberapa kali setahun, bukan tiap hari
           ------------------------------------------------------------------ */}
@@ -481,7 +512,7 @@ export default async function PresensiTukinPage({
                     .{" "}
                     {bolehTandaiKendala
                       ? "Kalau absen gagal massal karena sistemnya, tandai tanggalnya sekali - tidak perlu mengoreksi pegawai satu per satu."
-                      : "Kalau absen di unitmu gagal massal karena sistemnya, sampaikan tanggalnya ke PPABP."}
+                      : "Kalau absen di unitmu gagal massal karena sistemnya, sampaikan tanggalnya ke Kasubag TU unitmu."}
                   </>
                 )}
               </p>
@@ -498,7 +529,8 @@ export default async function PresensiTukinPage({
                 </Link>
               ) : (
                 <p className={CATATAN_HANYA_LIHAT}>
-                  Penandaan dikerjakan PPABP - satu tanggal berlaku se-kementerian, bukan per unit.
+                  Penandaan dikerjakan Kasubag TU untuk unitnya sendiri. Cakupan seluruh kementerian hanya bisa
+                  dibuat Admin.
                 </p>
               )}
             </div>

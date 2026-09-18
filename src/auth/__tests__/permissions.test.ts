@@ -52,6 +52,7 @@ import {
   canEditDataPegawai,
   canPindahSatuanKerjaPegawai,
   canKelolaKendalaEpresensi,
+  canKelolaKendalaSeKementerian,
   canKelolaHariLibur,
   canLihatKendalaEpresensi,
   canLihatHariLibur,
@@ -605,31 +606,70 @@ describe("Akun multi-role sedang memakai role PPABP (satuanKerja terisi buat Kas
 });
 
 describe("canKelolaKendalaEpresensi - menandai tanggal e-Presensi bermasalah", () => {
-  it("PPABP dan ADMIN boleh", () => {
-    expect(canKelolaKendalaEpresensi(buatUser({ role: "PPABP" }))).toBe(true);
-    expect(canKelolaKendalaEpresensi(buatUser({ role: "ADMIN" }))).toBe(true);
+  // DIPINDAH KE KASUBAG TU 2026-09-14 (keputusan user). Petugas absensi unit
+  // yang memperbaiki jam dari foto bertimestamp, jadi penandanya tidak boleh
+  // menunggu orang lain. Yang TIDAK ikut berpindah: cakupan se-kementerian.
+  const kasubag = () => buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM });
+
+  it("KASUBAG_TU boleh - untuk unitnya sendiri", () => {
+    expect(canKelolaKendalaEpresensi(kasubag(), BIRO_UMUM)).toBe(true);
   });
 
-  it("KASUBAG_TU TIDAK boleh - satu penanda bisa berlaku lintas satker", () => {
-    // Beda dari canUploadRekapPresensi yang memang di-scope unit: penanda ini
-    // bisa menghapus potongan ribuan orang di luar unitnya sekaligus.
-    expect(canKelolaKendalaEpresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }))).toBe(false);
+  it("KASUBAG_TU DITOLAK untuk unit lain", () => {
+    // Satu penanda membatalkan potongan semua pegawai di tanggal itu; kalau
+    // unitnya bebas dipilih, satu petugas bisa menaikkan bayaran unit lain.
+    expect(canKelolaKendalaEpresensi(kasubag(), "Pusdatik")).toBe(false);
+  });
+
+  it("KASUBAG_TU tanpa satuanKerja ditolak - tidak ada unit yang bisa jadi cakupannya", () => {
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: null }))).toBe(false);
+  });
+
+  it("PPABP TIDAK boleh lagi - kewenangannya dicabut, fokus ke hitungan", () => {
+    // Kalau suatu saat PPABP dikembalikan ke sini tanpa disengaja, test ini
+    // yang jatuh duluan.
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "PPABP" }))).toBe(false);
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "PPABP" }), BIRO_UMUM)).toBe(false);
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "PPABP", satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(false);
+  });
+
+  it("ADMIN boleh untuk unit mana pun", () => {
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "ADMIN" }), "Pusdatik")).toBe(true);
   });
 
   it("OSDMA, PIMPINAN, dan PEGAWAI TIDAK boleh", () => {
     for (const role of ["OSDMA", "PIMPINAN", "PEGAWAI"] as const) {
-      expect(canKelolaKendalaEpresensi(buatUser({ role }))).toBe(false);
+      expect(canKelolaKendalaEpresensi(buatUser({ role }), BIRO_UMUM)).toBe(false);
     }
   });
 
-  it("akun nonaktif ditolak walau role-nya PPABP", () => {
-    expect(canKelolaKendalaEpresensi(buatUser({ role: "PPABP", aktif: false }))).toBe(false);
+  it("akun nonaktif ditolak walau role-nya cocok", () => {
+    expect(
+      canKelolaKendalaEpresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM, aktif: false }), BIRO_UMUM)
+    ).toBe(false);
+    expect(canKelolaKendalaEpresensi(buatUser({ role: "ADMIN", aktif: false }), BIRO_UMUM)).toBe(false);
   });
 
-  it("PPABP yang kebetulan punya satuanKerja TETAP boleh - PPABP selalu lintas satker", () => {
-    // Kolom satuanKerja milik KASUBAG_TU; akun multi-role bisa punya isinya.
-    // Kalau dipakai men-scope PPABP, bug lama terulang.
-    expect(canKelolaKendalaEpresensi(buatUser({ role: "PPABP", satuanKerja: BIRO_UMUM }))).toBe(true);
+  it("tanpa targetSatuanKerja artinya 'boleh menandai apa pun?', BUKAN izin se-kementerian", () => {
+    // Bentuk tanpa target dipakai memutuskan merender form atau tidak. Kalau
+    // ia sampai mengizinkan penanda bercakupan kementerian, satu pemanggil
+    // yang lupa mengisi target langsung membuka lubang terbesarnya - itu
+    // sebabnya cakupan kementerian punya fungsinya sendiri.
+    expect(canKelolaKendalaEpresensi(kasubag())).toBe(true);
+    expect(canKelolaKendalaSeKementerian(kasubag())).toBe(false);
+  });
+});
+
+describe("canKelolaKendalaSeKementerian - penanda yang berlaku lintas unit", () => {
+  it("HANYA ADMIN", () => {
+    expect(canKelolaKendalaSeKementerian(buatUser({ role: "ADMIN" }))).toBe(true);
+    for (const role of ["KASUBAG_TU", "PPABP", "OSDMA", "PIMPINAN", "PEGAWAI"] as const) {
+      expect(canKelolaKendalaSeKementerian(buatUser({ role, satuanKerja: BIRO_UMUM })), role).toBe(false);
+    }
+  });
+
+  it("akun nonaktif ditolak walau ADMIN", () => {
+    expect(canKelolaKendalaSeKementerian(buatUser({ role: "ADMIN", aktif: false }))).toBe(false);
   });
 });
 
@@ -667,11 +707,12 @@ describe("canLihat* kendala & hari libur - MELIHAT dipisah dari MENGUBAH", () =>
     expect(canLihatHariLibur(kasubag)).toBe(true);
   });
 
-  it("tapi TETAP tidak boleh MENGUBAH - tidak ada wewenang yang berpindah", () => {
-    // Test ini yang menjaga maksud seluruh perubahan: kalau suatu saat
-    // canKelola* ikut dilonggarkan tanpa disengaja, di sinilah ketahuannya.
+  it("KALENDER HARI LIBUR tetap tidak boleh diubah Kasubag TU", () => {
+    // Kendala e-Presensi sudah berpindah ke unit (2026-09-14), hari libur
+    // TIDAK - satu tanggal libur berlaku se-kementerian dan mengubah tiga hal
+    // sekaligus buat semua orang. Test ini menjaga keduanya tidak ikut
+    // berpindah gara-gara dulu ditulis berdampingan.
     const kasubag = buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM });
-    expect(canKelolaKendalaEpresensi(kasubag)).toBe(false);
     expect(canKelolaHariLibur(kasubag)).toBe(false);
   });
 

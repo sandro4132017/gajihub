@@ -120,8 +120,9 @@ export function PegawaiEditForm({
             className="field-input"
           />
           <p className="mt-1 text-xs text-muted">
-             ke kolom <strong>Nomor SK</strong> di berkas ADK Tunjangan Kinerja. Dikosongkan
-            berarti kolom itu ikut kosong di berkasnya.
+            <strong>Cadangan</strong> untuk kolom Nomor SK di berkas ADK. Yang didahulukan SK grading yang berlaku
+            pada periode berkasnya - lihat panel <strong>SK Grading</strong> di atas. Kolom ini dipakai hanya kalau
+            pegawai ini belum punya SK grading tercatat, dan kalau dua-duanya kosong kolomnya ikut kosong.
           </p>
         </div>
 

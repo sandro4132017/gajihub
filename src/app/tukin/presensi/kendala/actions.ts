@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../../lib/prisma";
 import { ambilUserSesi } from "../../../../auth/getSessionAccount";
-import { canKelolaKendalaEpresensi, type AuthUser } from "../../../../auth/permissions";
+import {
+  canKelolaKendalaEpresensi,
+  canKelolaKendalaSeKementerian,
+  type AuthUser,
+} from "../../../../auth/permissions";
+import { tglTampil } from "../../../tanggalTampil";
 
 export interface KendalaFormState {
   error?: string;
@@ -24,18 +29,45 @@ function tanggalUtcDariIso(iso: string): Date | null {
   return d;
 }
 
+/**
+ * Tanggal datang sebagai TIGA field (hari, bulan, tahun), bukan satu string
+ * ISO dari `<input type="date">`. Alasannya ada di KendalaForms.tsx: urutan
+ * tampil field itu ditentukan locale BROWSER, jadi tidak bisa dijamin
+ * hari-dulu. Yang dirakit di sini tetap bentuk ISO yang sama, supaya
+ * `tanggalUtcDariIso()` - termasuk penolakan tanggal yang tidak ada di
+ * kalender - berlaku persis seperti sebelumnya.
+ */
+function isoDariBagian(formData: FormData): string {
+  const hari = String(formData.get("tanggalHari") ?? "").trim();
+  const bulan = String(formData.get("tanggalBulan") ?? "").trim();
+  const tahun = String(formData.get("tanggalTahun") ?? "").trim();
+  if (!hari || !bulan || !tahun) return "";
+  return `${tahun}-${bulan.padStart(2, "0")}-${hari.padStart(2, "0")}`;
+}
+
 export async function tandaiKendalaAction(
   _state: KendalaFormState,
   formData: FormData
 ): Promise<KendalaFormState> {
   const user = await ambilUserSesi();
   if (!user) return { error: "Sesi login sudah habis - silakan login ulang." };
-  if (!canKelolaKendalaEpresensi(keAuthUser(user))) {
+  const authUser = keAuthUser(user);
+  if (!canKelolaKendalaEpresensi(authUser)) {
     return { error: "Kamu tidak berwenang menandai tanggal kendala e-Presensi." };
   }
 
-  const tanggal = tanggalUtcDariIso(String(formData.get("tanggal") ?? ""));
-  if (!tanggal) return { error: "Tanggal tidak valid." };
+  const tanggalIso = isoDariBagian(formData);
+  const tanggal = tanggalUtcDariIso(tanggalIso);
+  if (!tanggal) {
+    // Dua sebab yang beda tindak lanjutnya: belum dipilih, atau dipilih tapi
+    // hari itu memang tidak ada di bulan tersebut (31 Februari) - daftar hari
+    // di form sengaja selalu 1-31 supaya tetap jalan tanpa JavaScript.
+    return {
+      error: tanggalIso
+        ? `Tanggal ${tglTampil(tanggalIso)} tidak ada di kalender - periksa lagi hari dan bulannya.`
+        : "Tanggal belum lengkap - pilih hari, bulan, dan tahunnya.",
+    };
+  }
 
   const alasan = String(formData.get("alasan") ?? "").trim();
   // Alasan WAJIB. Satu baris ini yang dibaca auditor ketika bertanya kenapa
@@ -45,8 +77,28 @@ export async function tandaiKendalaAction(
     return { error: "Alasan wajib diisi minimal 10 karakter - ini yang dibaca kalau angkanya dipertanyakan." };
   }
 
+  // CAKUPAN DITENTUKAN SERVER, BUKAN FORM.
+  //
+  // Kasubag TU DIPAKSA ke unitnya sendiri - isian `satuanKerja` dari form
+  // tidak dipercaya sama sekali. Kalau dipercaya, satu petugas unit bisa
+  // mengirim nilai kosong dan membatalkan potongan SE-KEMENTERIAN; itu
+  // persis batas yang dijaga waktu kewenangan ini dipindah ke unit.
+  //
+  // Cuma ADMIN yang boleh memilih, termasuk memilih cakupan kementerian.
   const satkerRaw = String(formData.get("satuanKerja") ?? "").trim();
-  const satuanKerja = satkerRaw === "" ? null : satkerRaw;
+  const satuanKerja =
+    authUser.role === "ADMIN" ? (satkerRaw === "" ? null : satkerRaw) : (authUser.satuanKerja ?? null);
+
+  if (satuanKerja === null && !canKelolaKendalaSeKementerian(authUser)) {
+    return {
+      error:
+        "Penanda seluruh kementerian hanya boleh dibuat Admin. Akunmu menandai untuk satuan kerjanya sendiri, " +
+        "dan satuan kerja akun ini belum diisi - minta Admin melengkapinya.",
+    };
+  }
+  if (satuanKerja !== null && !canKelolaKendalaEpresensi(authUser, satuanKerja)) {
+    return { error: `Di luar kewenangan kamu (${satuanKerja}).` };
+  }
 
   // Penanda se-kementerian sudah mencakup semuanya - menambah penanda per
   // satker di atasnya cuma bikin dua baris yang artinya sama.
@@ -55,7 +107,7 @@ export async function tandaiKendalaAction(
   });
   if (sudahSeKementerian) {
     return {
-      error: `Tanggal ${String(formData.get("tanggal"))} sudah ditandai kendala untuk SELURUH kementerian - tidak perlu ditandai lagi per satuan kerja.`,
+      error: `Tanggal ${tglTampil(tanggalIso)} sudah ditandai kendala untuk SELURUH kementerian - tidak perlu ditandai lagi per satuan kerja.`,
     };
   }
   const sudahAda = await prisma.kendalaEpresensi.findFirst({ where: { tanggal, satuanKerja } });
@@ -88,7 +140,7 @@ export async function tandaiKendalaAction(
   revalidatePath("/tukin/presensi");
   return {
     sukses:
-      `Tanggal ${tanggal.toISOString().slice(0, 10)} ditandai kendala e-Presensi` +
+      `Tanggal ${tglTampil(tanggal.toISOString().slice(0, 10))} ditandai kendala e-Presensi` +
       `${satuanKerja ? ` untuk ${satuanKerja}` : " (seluruh kementerian)"}. ` +
       "Angkanya BELUM berubah - tarik ulang presensi periode itu supaya berlaku.",
   };
@@ -100,13 +152,26 @@ export async function cabutKendalaAction(
 ): Promise<KendalaFormState> {
   const user = await ambilUserSesi();
   if (!user) return { error: "Sesi login sudah habis - silakan login ulang." };
-  if (!canKelolaKendalaEpresensi(keAuthUser(user))) {
-    return { error: "Kamu tidak berwenang mencabut penanda kendala e-Presensi." };
-  }
+  const authUser = keAuthUser(user);
 
   const id = String(formData.get("id") ?? "");
   const baris = await prisma.kendalaEpresensi.findUnique({ where: { id } });
   if (!baris) return { error: "Penanda itu sudah tidak ada." };
+
+  // DIPERIKSA TERHADAP CAKUPAN BARIS YANG DISENTUH, bukan sekadar "boleh
+  // mencabut sesuatu". Mencabut penanda membuat potongan Pasal 13 ayat (2)
+  // BERLAKU LAGI untuk semua orang di tanggal itu - kalau barisnya milik
+  // unit lain, itu menurunkan bayaran orang yang bukan urusannya.
+  const boleh = baris.satuanKerja
+    ? canKelolaKendalaEpresensi(authUser, baris.satuanKerja)
+    : canKelolaKendalaSeKementerian(authUser);
+  if (!boleh) {
+    return {
+      error: baris.satuanKerja
+        ? `Penanda itu milik ${baris.satuanKerja} - di luar kewenangan kamu.`
+        : "Penanda seluruh kementerian hanya boleh dicabut Admin.",
+    };
+  }
 
   await prisma.$transaction([
     prisma.kendalaEpresensi.delete({ where: { id } }),
@@ -132,7 +197,7 @@ export async function cabutKendalaAction(
   revalidatePath("/tukin/presensi");
   return {
     sukses:
-      `Penanda ${baris.tanggal.toISOString().slice(0, 10)} dicabut. ` +
+      `Penanda ${tglTampil(baris.tanggal.toISOString().slice(0, 10))} dicabut. ` +
       "Potongan Pasal 13 ayat (2) di tanggal itu akan berlaku lagi setelah presensi ditarik ulang.",
   };
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "../../../../lib/prisma";
 import { ambilUserSesi } from "../../../../auth/getSessionAccount";
 import { canUploadRekapPresensi, type AuthUser } from "../../../../auth/permissions";
+import { tglTampil } from "../../../tanggalTampil";
 
 /**
  * KOREKSI JAM PRESENSI SATU HARI - Pasal 10 ayat (2) Permenaker 15/2024.
@@ -86,7 +87,8 @@ export async function koreksiJamPresensiAction(
     return {
       error:
         `Tanggal ${String(formData.get("tanggal"))} belum ditandai sebagai kendala e-Presensi, jadi jamnya tidak boleh ` +
-        "diubah. Minta PPABP menandai tanggal itu dulu di halaman Kendala e-Presensi.",
+        "diubah. Tandai dulu tanggal itu di halaman Kendala e-Presensi - penanda itu yang membatalkan potongan " +
+        "\"tidak melakukan presensi\" bagi semua pegawai terdampak, termasuk yang tidak mengirim bukti foto.",
     };
   }
 
@@ -156,8 +158,10 @@ export async function koreksiJamPresensiAction(
   revalidatePath(`/tukin/presensi/${nip}`);
   return {
     sukses:
-      `Jam ${tanggal.toISOString().slice(0, 10)} dikoreksi (masuk ${jm(jamMasuk) ?? "tetap"}, pulang ${jm(jamKeluar) ?? "tetap"}). ` +
-      "Angkanya BELUM berubah - tarik ulang presensi periode ini supaya berlaku.",
+      `Jam ${tglTampil(tanggal.toISOString().slice(0, 10))} dikoreksi (masuk ${jm(jamMasuk) ?? "tetap"}, pulang ${jm(jamKeluar) ?? "tetap"}). ` +
+      // Cara menerapkannya TIDAK diulang di sini - tombolnya berdiri tepat di
+      // bawah pesan ini (AjakanTerapkan di KoreksiJamForm).
+      "Angkanya belum berubah sampai koreksi diterapkan.",
   };
 }
 
@@ -203,5 +207,5 @@ export async function hapusKoreksiJamAction(
   ]);
 
   revalidatePath(`/tukin/presensi/${baris.pegawai.nip}`);
-  return { sukses: "Koreksi dihapus - jam dari e-Presensi berlaku lagi setelah presensi ditarik ulang." };
+  return { sukses: "Koreksi dihapus. Jam asli dari e-Presensi berlaku lagi setelah koreksi diterapkan." };
 }

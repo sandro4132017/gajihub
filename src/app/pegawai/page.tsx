@@ -7,12 +7,14 @@ import {
   canEditDataPegawai,
   canPindahSatuanKerjaPegawai,
   canBukaHalamanPredikatKinerja,
+  canKelolaSkGrade,
   type AuthUser,
 } from "../../auth/permissions";
 import { daftarRoleTersedia } from "../../auth/roleAktif";
 import { labelRole } from "../../auth/roleLabel";
 import { AksesDitolak } from "../AksesDitolak";
 import { NAMA_BULAN } from "../bulan";
+import { SkGradeForm } from "./SkGradeForm";
 import { PegawaiEditForm } from "./PegawaiEditForm";
 import { PencarianDebounce } from "../PencarianDebounce";
 import { Paginasi, hitungPaginasi } from "../Paginasi";
@@ -138,6 +140,19 @@ export default async function DataPegawaiPage({
       })
     : [];
 
+  // Riwayat SK GRADING - dasar kolom "Nomor SK" di berkas ADK. Diurut dari
+  // yang TERBARU supaya baris pertama bisa langsung diadu ke kelas jabatan
+  // yang sedang dipakai menghitung tarif. Urutannya `tmtBerlaku`, bukan
+  // `tanggalSk`: yang menentukan SK mana yang berlaku adalah tanggal mulai
+  // berlakunya - SK bertanggal Juli bisa berlaku surut sejak Januari.
+  const riwayatSkGrade = pegawaiTerpilih
+    ? await prisma.skGrade.findMany({
+        where: { pegawaiId: pegawaiTerpilih.id },
+        orderBy: [{ tmtBerlaku: "desc" }, { tanggalSk: "desc" }],
+        include: { dicatatOleh: { select: { nama: true } } },
+      })
+    : [];
+
   // KASUBAG_TU tidak boleh memilih unit - unitnya sudah dipaksa di level
   // query lewat `satkerWajib`. Menampilkan penyaring yang tidak berpengaruh
   // apa-apa lebih buruk daripada tidak menampilkannya: yang mencoba
@@ -246,6 +261,26 @@ export default async function DataPegawaiPage({
             </div>
 
             <AkunTerkait akun={akunTerkait} satuanKerjaPegawai={pegawaiTerpilih.satuanKerja} bolehKelolaAkun={authUser.role === "ADMIN"} />
+
+            <SkGradeForm
+              pegawaiId={pegawaiTerpilih.id}
+              namaPegawai={pegawaiTerpilih.nama}
+              kelasJabatanBerlaku={pegawaiTerpilih.kelasJabatan}
+              bolehKelola={canKelolaSkGrade(authUser, pegawaiTerpilih.satuanKerja)}
+              riwayat={riwayatSkGrade.map((r) => ({
+                id: r.id,
+                nomorSk: r.nomorSk,
+                // Dipotong DI SERVER jadi teks ISO, bukan dikirim sebagai
+                // Date: komponennya client, dan Date yang menyeberang batas
+                // itu diformat ulang di zona waktu pembaca - tanggal yang
+                // disimpan sebagai tengah malam UTC bisa mundur sehari.
+                tanggalSk: r.tanggalSk.toISOString().slice(0, 10),
+                tmtBerlaku: r.tmtBerlaku.toISOString().slice(0, 10),
+                kelasJabatan: r.kelasJabatan,
+                keterangan: r.keterangan,
+                dicatatOleh: r.dicatatOleh.nama,
+              }))}
+            />
 
             <PegawaiEditForm
               pegawai={pegawaiTerpilih}

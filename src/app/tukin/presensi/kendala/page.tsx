@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canKelolaKendalaEpresensi, type AuthUser } from "../../../../auth/permissions";
 import { AksesDitolak } from "../../../AksesDitolak";
+import { HALAMAN } from "../../../layoutHalaman";
 import { NAMA_BULAN } from "../../../bulan";
 import { SearchableSelect } from "../../../SearchableSelect";
 import { periodePunyaRekapPresensi, resolvePeriode } from "../../../periodeDefault";
@@ -13,6 +14,7 @@ import {
   type StatistikTanggal,
 } from "../../../../business-logic/kendalaEpresensi";
 import { TandaiKendalaForm, CabutKendalaForm } from "./KendalaForms";
+import { tglTampil } from "../../../tanggalTampil";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +69,9 @@ export default async function KendalaEpresensiPage({
   const authUser: AuthUser | null =
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canKelolaKendalaEpresensi(authUser)) {
-    return <AksesDitolak pesan="Hanya PPABP dan Admin yang bisa menandai tanggal kendala e-Presensi." />;
+    return (
+      <AksesDitolak pesan="Hanya Kasubag TU (untuk unitnya sendiri) dan Admin yang bisa menandai tanggal kendala e-Presensi." />
+    );
   }
 
   const { bulan: periodeBulan, tahun: periodeTahun } = resolvePeriode(
@@ -143,16 +147,40 @@ export default async function KendalaEpresensiPage({
   const td = "px-3 py-2.5 text-sm text-ink-2";
 
   return (
-    <div className="space-y-5">
+    // `<main className={HALAMAN}>`, BUKAN <div> polos. Halaman ini satu-satunya
+    // di bawah /tukin yang dulu terlewat: tanpa pembungkus itu ia tidak punya
+    // padding kiri-kanan maupun batas lebar, jadi isinya menempel ke tepi
+    // layar sementara halaman tetangganya tidak - dan lebar yang berubah tiap
+    // berpindah menu terbaca seperti dua aplikasi berbeda.
+    <main className={`${HALAMAN} space-y-5`}>
       <div>
-        <h1 className="text-xl font-bold text-ink">Kendala e-Presensi</h1>
-        <p className="mt-1 text-sm text-muted">
-          Pasal 10 ayat (2) Permenaker 15/2024 - kalau presensi elektronik bermasalah, presensi dilakukan manual
-          dengan sepengetahuan pimpinan Unit Kerja. Tanggal yang ditandai di sini <strong>tidak</strong> dikenai
-          potongan &quot;tidak melakukan presensi&quot;.{" "}
-          <Link href="/tukin/presensi" className="link">
-            Kembali ke Presensi
-          </Link>
+        {/* Tautan kembali di ATAS judul, bukan menyelip di ekor paragraf
+            penjelas. Halaman ini selalu dibuka DARI /tukin/presensi, jadi
+            jalan pulangnya bagian dari navigasi - bukan catatan kaki. */}
+        <Link
+          href="/tukin/presensi"
+          className="inline-flex items-center gap-2 text-sm font-bold text-teal-deep transition hover:text-biru"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="size-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          <span className="underline underline-offset-2">Kembali ke Presensi</span>
+        </Link>
+
+        <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">Kendala e-Presensi</h1>
+        <p className="mt-0.5 text-sm font-bold text-ink">Pasal 10 ayat (2) Permenaker 15/2024</p>
+        <p className="mt-2 text-sm text-biru">
+          Kalau presensi elektronik bermasalah, presensi dilakukan manual dengan sepengetahuan pimpinan Unit Kerja.
+          Tanggal yang ditandai di sini <strong>tidak</strong> dikenai potongan &quot;tidak melakukan
+          presensi&quot;.
         </p>
       </div>
 
@@ -188,7 +216,7 @@ export default async function KendalaEpresensiPage({
           <ul className="mt-2 space-y-1 text-xs text-ink-2">
             {belumDitandai.map((j) => (
               <li key={j.tanggalIso}>
-                <strong>{j.tanggalIso}</strong> ({NAMA_HARI[new Date(j.tanggalIso + "T00:00:00Z").getUTCDay()]}) -{" "}
+                <strong>{tglTampil(j.tanggalIso)}</strong> ({NAMA_HARI[new Date(j.tanggalIso + "T00:00:00Z").getUTCDay()]}) -{" "}
                 {j.kejadian.toLocaleString("id-ID")} dari {j.hariKerja.toLocaleString("id-ID")} hari kerja ={" "}
                 <strong>{j.persen.toFixed(1)}%</strong>, sekitar {j.kelipatan === Infinity ? "-" : j.kelipatan.toFixed(1)}x
                 hari biasa ({j.medianPersen.toFixed(1)}%)
@@ -238,7 +266,7 @@ export default async function KendalaEpresensiPage({
                   const persen = s.hariKerja > 0 ? (s.kejadian / s.hariKerja) * 100 : 0;
                   return (
                     <tr key={s.tanggalIso} className={j && !ditandai ? "bg-red-tint" : undefined}>
-                      <td className={`${td} font-mono`}>{s.tanggalIso}</td>
+                      <td className={`${td} font-mono`}>{tglTampil(s.tanggalIso)}</td>
                       <td className={td}>{NAMA_HARI[new Date(s.tanggalIso + "T00:00:00Z").getUTCDay()]}</td>
                       <td className={`${td} font-mono`}>{s.hariKerja.toLocaleString("id-ID")}</td>
                       <td className={`${td} font-mono`}>{s.kejadian.toLocaleString("id-ID")}</td>
@@ -285,7 +313,7 @@ export default async function KendalaEpresensiPage({
                   const iso = p.tanggal.toISOString().slice(0, 10);
                   return (
                     <tr key={p.id}>
-                      <td className={`${td} font-mono`}>{iso}</td>
+                      <td className={`${td} font-mono`}>{tglTampil(iso)}</td>
                       <td className={td}>
                         {p.satuanKerja ?? <span className="chip chip-amber">Seluruh kementerian</span>}
                       </td>
@@ -293,11 +321,11 @@ export default async function KendalaEpresensiPage({
                       <td className={td}>
                         {p.ditandaiOleh.nama}
                         <span className="block text-xs text-muted">
-                          {p.ditandaiPada.toLocaleDateString("id-ID")}
+                          {p.ditandaiPada.toLocaleDateString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" })}
                         </span>
                       </td>
                       <td className={td}>
-                        <CabutKendalaForm id={p.id} tanggal={iso} />
+                        <CabutKendalaForm id={p.id} tanggal={tglTampil(iso)} />
                       </td>
                     </tr>
                   );
@@ -318,7 +346,15 @@ export default async function KendalaEpresensiPage({
         </div>
       </div>
 
-      <TandaiKendalaForm daftarSatker={daftarSatker} tanggalDisarankan={belumDitandai[0]?.tanggalIso} />
-    </div>
+      {/* Cakupan cuma bisa DIPILIH oleh Admin. Buat Kasubag TU nilainya
+          dipaksa ke unitnya di sisi server juga (lihat actions.ts) -
+          penguncian di sini semata supaya yang tampil tidak menjanjikan
+          pilihan yang nanti ditolak. */}
+      <TandaiKendalaForm
+        daftarSatker={daftarSatker}
+        satkerTerkunci={authUser.role === "ADMIN" ? null : authUser.satuanKerja}
+        tanggalDisarankan={belumDitandai[0]?.tanggalIso}
+      />
+    </main>
   );
 }

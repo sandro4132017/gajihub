@@ -4,6 +4,7 @@ import { canUploadRekapPresensi, type AuthUser } from "../../../../auth/permissi
 import { AksesDitolak } from "../../../AksesDitolak";
 import { SumberAcuan } from "../../../SumberAcuan";
 import { RekonsiliasiForm } from "./RekonsiliasiForm";
+import { HALAMAN } from "../../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,10 @@ export default async function RekonsiliasiPresensiPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    // Dulu menulis ukurannya sendiri ("px-4 py-8 sm:px-6") - lebarnya
+    // kebetulan sama, tapi jarak atas-bawah & padding lg-nya beda, jadi
+    // isinya bergeser tiap berpindah dari halaman tetangga.
+    <main className={HALAMAN}>
       <Link href="/tukin/presensi" className="text-sm font-semibold text-biru hover:underline">
         &larr; Kembali ke Presensi
       </Link>
@@ -74,6 +78,6 @@ export default async function RekonsiliasiPresensiPage() {
       </div>
 
       <RekonsiliasiForm />
-    </div>
+    </main>
   );
 }

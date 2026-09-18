@@ -62,10 +62,23 @@ model Pegawai {
   /// nomor SK dipertanyakan Itjen atau Rokeu, jawabannya ada di baris yang
   /// sama, bukan di lemari arsip.
   ///
-  /// SAMA SEPERTI `nomorSk`, ketiganya TIDAK ADA di SIAP dan karena itu tidak
-  /// boleh ditimpa sinkronisasi. Perlindungannya otomatis: importPegawaiSiap
-  /// cuma menulis kolom yang ia susun sendiri di `isi`, dan ketiganya tidak
-  /// ada di sana - jangan pernah menambahkannya ke situ.
+  /// TIDAK BOLEH ditimpa sinkronisasi. Perlindungannya otomatis:
+  /// importPegawaiSiap cuma menulis kolom yang ia susun sendiri di `isi`, dan
+  /// ketiganya tidak ada di sana - jangan pernah menambahkannya ke situ.
+  ///
+  /// KOREKSI 2026-09-14: catatan lama di sini menulis "ketiganya TIDAK ADA di
+  /// SIAP". Itu keliru, dan justru menghalangi orang mencarinya. Yang benar,
+  /// diukur langsung ke SIAP: `RIWAYATJABATAN` memuat NOSK (5.067 dari 5.073
+  /// pegawai aktif), TGLSK, NAMAPENETAP, dan NAMAJABATAN; `VWPANGKATTERAKHIR`
+  /// memuat NOSK SK pangkat (5.023). Yang memang TIDAK ada cuma dua: uraian
+  /// SK sebagai kolom tersendiri, dan nomor SK GRADING - tabel
+  /// `MANJAB_PENERBITAN_*` yang seharusnya memuatnya nol baris, dan
+  /// `PEGAWAI.JOBGRADE` terisi 0 dari 5.073.
+  ///
+  /// Dua jebakan kalau suatu saat jadi ditarik: `VWJABATANTERAKHIR` - yang
+  /// namanya paling menjanjikan - mengembalikan NOL BARIS untuk pegawai
+  /// aktif, yang berisi tabel mentah `RIWAYATJABATAN`; dan 525 dari 5.067
+  /// nomornya berawalan teks "NOMOR ", jadi perlu dinormalkan dulu.
 
   /// Uraian isi SK, mis. "Penetapan Kelas Jabatan Pelaksana".
   uraianSk      String?   @map("uraian_sk")

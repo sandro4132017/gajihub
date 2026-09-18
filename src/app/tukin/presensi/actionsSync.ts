@@ -20,6 +20,7 @@ import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canUploadRekapPresensi, type AuthUser } from "../../../auth/permissions";
+import { satkerTerkunciUntukAkun } from "../../dashboardScope";
 import { tarikPresensiPeriode } from "../../../adapters/EpresensiAdapter";
 import { simpanHasilPresensi } from "../../../jobs/simpanRekapPresensi";
 import { muatKendalaPeriode, muatKoreksiPeriode } from "../../../lib/kendalaPresensi";
@@ -80,6 +81,23 @@ export async function tarikPresensiEpresensiAction(
     });
     const peta = new Map(pegawaiDb.map((p) => [p.nip, p]));
 
+    // AKUN YANG TERKUNCI SATU UNIT TIDAK DIBERI DAFTAR UNIT LAIN.
+    //
+    // Tarikan ini selalu mengambil seluruh kementerian, jadi buat Kasubag TU
+    // yang berwenang atas satu unit, hampir semua baris berakhir sebagai
+    // "di luar kewenangan" - 70-an alasan tentang unit yang memang bukan
+    // urusannya. Daftar sepanjang itu menenggelamkan alasan yang BENAR-BENAR
+    // perlu dia baca, yaitu yang menyangkut pegawainya sendiri (mis. NIP yang
+    // belum ada di data Pegawai).
+    //
+    // Diringkas jadi SATU teks alasan, dan pengelompokannya terjadi sendiri
+    // karena Map di bawah memang berkunci teks.
+    //
+    // Tidak disembunyikan sama sekali: tanpa satu baris ini, selisih antara
+    // "5.183 pegawai di e-Presensi" dan "48 tersimpan" jadi tidak punya
+    // penjelasan apa pun, dan itu terbaca seperti tarikan yang gagal.
+    const terkunciSatuUnit = satkerTerkunciUntukAkun(authUser);
+
     const alasanDilewati = new Map<string, number>();
     const catat = (alasan: string) => alasanDilewati.set(alasan, (alasanDilewati.get(alasan) ?? 0) + 1);
     for (const d of tarikan.dilewati) catat(d.alasan);
@@ -93,7 +111,11 @@ export async function tarikPresensiEpresensiAction(
         continue;
       }
       if (!canUploadRekapPresensi(authUser, pegawai.satuanKerja)) {
-        catat(`di luar kewenangan kamu (pegawai ${pegawai.satuanKerja})`);
+        catat(
+          terkunciSatuUnit
+            ? "di luar unit kamu"
+            : `di luar kewenangan kamu (pegawai ${pegawai.satuanKerja})`
+        );
         continue;
       }
       // Dihitung dari yang BENAR-BENAR tersimpan, bukan dari seluruh tarikan -

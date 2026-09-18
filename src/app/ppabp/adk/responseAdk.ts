@@ -24,21 +24,19 @@ export function responseAdk({
   format,
   header,
   baris,
-  total,
   namaSheet,
   namaFile,
 }: {
   format: string | null;
   header: readonly string[];
   baris: SelAdk[][];
-  total: SelAdk[];
   namaSheet: string;
   namaFile: string;
 }): Response {
   if (format === "txt") {
     // `header` sengaja TIDAK diteruskan - muatan .txt tanpa nama kolom.
     // Ia tetap dipakai sheet .xlsx di bawah; lihat rakitTeksAdk().
-    const teks = rakitTeksAdk(baris, total);
+    const teks = rakitTeksAdk(baris);
     return new Response(teks, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -49,7 +47,10 @@ export function responseAdk({
 
   // Default xlsx - termasuk kalau ?format= tidak diisi, supaya link lama
   // tetap menghasilkan file yang bisa dibuka.
-  const ws = utils.aoa_to_sheet([[...header], ...baris, total]);
+  // Tanpa baris TOTAL (2026-09-14) - isinya harus sama persis dengan muatan
+  // .txt di atas, kalau tidak dua bentuk berkas yang sama punya jumlah baris
+  // berbeda.
+  const ws = utils.aoa_to_sheet([[...header], ...baris]);
   const wb = utils.book_new();
   // Nama sheet dibatasi 31 karakter oleh format xlsx-nya sendiri.
   utils.book_append_sheet(wb, ws, namaSheet.slice(0, 31));

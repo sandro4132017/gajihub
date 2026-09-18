@@ -22,10 +22,8 @@ export const KOLOM_ADK_TUKIN = [
   "Nomor Tukin Baru",
 ] as const;
 
-// Indeks Nilai Bruto / Potongan / Bersih. Bergeser satu ke kiri sejak
-// kolom "NO" dihapus (permintaan user 2026-09-02) - penomoran baris tidak
-// dipakai Web Gaji dan cuma bikin selisih kalau file digabung antar unit.
-export const KOLOM_TOTAL_ADK_TUKIN = [7, 8, 9];
+// KOLOM_TOTAL_ADK_TUKIN DICABUT bersama baris TOTAL-nya (permintaan user
+// 2026-09-14). Tidak ada lagi kolom yang dijumlahkan di berkas ADK.
 
 export type SelAdk = string | number | null;
 
@@ -89,47 +87,67 @@ export function nilaiUangAdkTukin(r: Pick<SumberBarisAdkTukin, "tarifPenuhKelasJ
 }
 
 /**
- * Periode KERJA yang dibayar oleh satu berkas ADK - isi kolom "Bulan Awal",
- * "Tahun Awal", "Bulan Akhir", dan "Tahun Akhir".
+ * Bulan & tahun PENGERJAAN - isi kolom "Bulan" dan "Tahun" berkas ADK.
  *
- * SATU BULAN SEBELUM periode berkasnya (aturan user 2026-09-03): Tukin atas
- * kerja bulan N dibayarkan pada bulan N+1. Berkas berlabel Juli 2026 karena
- * itu membayar kerja bulan Juni - dan keempat kolom ini yang menyatakannya.
- * Awal = Akhir karena satu berkas selalu satu bulan; kolomnya berpasangan
- * supaya format yang sama bisa dipakai untuk rapel beberapa bulan sekaligus,
- * yang belum pernah dipakai di sini.
+ * ATURAN USER 2026-09-14: kedua kolom itu menyatakan KAPAN berkasnya dibuat,
+ * bukan periode yang dibayar. Tukin Januari bisa saja baru dikerjakan Agustus,
+ * dan yang perlu terbaca di situ adalah saat pengerjaannya. Periode yang
+ * dibayar pindah seluruhnya ke kolom "Bulan Awal/Akhir", yang diisi persis
+ * periode yang dipilih PPABP di filter.
  *
- * JANUARI MUNDUR KE DESEMBER TAHUN SEBELUMNYA - DIKONFIRMASI USER 2026-09-03,
- * bukan turunan. Tahunnya tahun KERJANYA, bukan tahun berkasnya: ekspor
- * Januari 2027 membayar kerja Desember 2026, jadi 12/2026 - bukan 12/2027
- * yang berarti masa depan, dan bukan 0/2027 yang bukan bulan.
+ * MENGGANTIKAN aturan lama (dikonfirmasi user 2026-09-03) yang mengisi
+ * Bulan/Tahun dengan periode berkas dan Awal/Akhir dengan periode itu MINUS
+ * SATU BULAN. Aturan itu berangkat dari anggapan bahwa periode di filter
+ * berarti bulan PEMBAYARAN; sekarang periode di filter berarti bulan KERJA,
+ * jadi tidak ada lagi yang dikurangi satu.
+ *
+ * WAKTUNYA MASUK LEWAT PARAMETER, bukan `new Date()` di dalam sini - engine
+ * ini pure dan hasilnya diuji; fungsi yang membaca jam sendiri tidak bisa
+ * diuji tanpa memalsukan waktu sistem.
+ *
+ * OFFSET WIB DIHITUNG TETAP +7 JAM, bukan lewat `Intl`/`toLocaleString`.
+ * Dua sebabnya: engine ini tidak boleh bergantung pada data lokal milik
+ * runtime, dan WIB tidak mengenal daylight saving jadi offsetnya memang
+ * tetap. Ini bukan kerapian - server yang berjalan di UTC akan menyebut
+ * "31 Agustus" pada pukul 06.00 WIB tanggal 1 September, dan berkas
+ * pembayarannya berlabel bulan yang salah tepat di pergantian bulan.
  */
-export function periodeKerjaAdkTukin(
-  periodeBulan: number,
-  periodeTahun: number
-): { bulan: number; tahun: number } {
-  if (periodeBulan === 1) return { bulan: 12, tahun: periodeTahun - 1 };
-  return { bulan: periodeBulan - 1, tahun: periodeTahun };
+const MENIT_WIB = 7 * 60;
+
+export function bulanPengerjaanAdk(dibuatPada: Date): { bulan: number; tahun: number } {
+  const wib = new Date(dibuatPada.getTime() + MENIT_WIB * 60_000);
+  return { bulan: wib.getUTCMonth() + 1, tahun: wib.getUTCFullYear() };
 }
 
 export function susunBarisAdkTukin(
   sumber: SumberBarisAdkTukin[],
   periodeBulan: number,
-  periodeTahun: number
+  periodeTahun: number,
+  /**
+   * Saat berkasnya dibuat - mengisi kolom "Bulan" & "Tahun". Diminta sebagai
+   * parameter supaya fungsi ini tetap pure; pemanggilnya mengirim `new Date()`.
+   */
+  dibuatPada: Date
 ): SelAdk[][] {
-  const bulanPad = String(periodeBulan).padStart(2, "0");
-  // Periode kerja yang dibayar - lihat periodeKerjaAdkTukin(). Dihitung SEKALI
-  // di luar map: nilainya sama untuk seluruh baris, dan menghitungnya per
-  // pegawai cuma membuka peluang dua baris berbeda periodenya.
-  const kerja = periodeKerjaAdkTukin(periodeBulan, periodeTahun);
-  const kerjaBulanPad = String(kerja.bulan).padStart(2, "0");
-  const kerjaTahun = String(kerja.tahun);
+  // DUA PASANG KOLOM YANG ARTINYA BERBEDA, dan tertukarnya tidak akan terlihat
+  // di berkas - keduanya cuma dua digit:
+  //   "Bulan"/"Tahun"           -> KAPAN berkas ini dikerjakan (hari ini)
+  //   "Bulan Awal/Akhir" + thn  -> periode KERJA yang dibayar (pilihan filter)
+  //
+  // Dihitung SEKALI di luar map: nilainya sama untuk seluruh baris, dan
+  // menghitungnya per pegawai cuma membuka peluang dua baris berbeda isinya -
+  // termasuk kalau ekspornya kebetulan berjalan melewati tengah malam.
+  const kerja = bulanPengerjaanAdk(dibuatPada);
+  const bulanPad = String(kerja.bulan).padStart(2, "0");
+  const tahunKerja = String(kerja.tahun);
+  const periodeBulanPad = String(periodeBulan).padStart(2, "0");
+  const periodeTahunTeks = String(periodeTahun);
   return sumber.map((r) => {
     const uang = nilaiUangAdkTukin(r);
     return [
     r.kodeSatker ?? "",
-    bulanPad,
-    String(periodeTahun),
+    bulanPad, // Bulan - pengerjaan
+    tahunKerja, // Tahun - pengerjaan
     r.nip,
     r.nama,
     r.nomorSk ?? "",
@@ -141,10 +159,14 @@ export function susunBarisAdkTukin(
     r.namaBank ?? "",
     r.nomorRekening ?? "",
     r.namaRekening ?? r.nama,
-    kerjaBulanPad, // Bulan Awal
-    kerjaTahun, // Tahun Awal
-    kerjaBulanPad, // Bulan Akhir
-    kerjaTahun, // Tahun Akhir
+    // Periode yang dipilih PPABP di filter, apa adanya. Awal = Akhir karena
+    // satu berkas selalu satu bulan; kolomnya berpasangan supaya format yang
+    // sama bisa dipakai untuk rapel beberapa bulan sekaligus, yang belum
+    // pernah dipakai di sini.
+    periodeBulanPad, // Bulan Awal
+    periodeTahunTeks, // Tahun Awal
+    periodeBulanPad, // Bulan Akhir
+    periodeTahunTeks, // Tahun Akhir
     1, // Tukin Kali
     "", // Nomor Tukin Lama
     "", // Nomor Tukin Baru
@@ -152,6 +174,14 @@ export function susunBarisAdkTukin(
   });
 }
 
+/**
+ * Baris penjumlahan untuk sebuah tabel.
+ *
+ * TIDAK LAGI DIPAKAI BERKAS ADK - baris totalnya dicabut 2026-09-14. Yang
+ * memakainya sekarang tinggal rekap unit Excel (`rekapUnitExcel.ts`), yang
+ * memang dibuka manusia untuk diperiksa, bukan disetorkan ke mesin. Jangan
+ * dihapus sebagai kode mati - namanya saja yang masih berawalan "Adk".
+ */
 export function susunBarisTotalAdk(baris: SelAdk[][], kolomTotal: number[], jumlahKolom: number): SelAdk[] {
   const total: SelAdk[] = Array.from({ length: jumlahKolom }, () => "");
   for (const idx of kolomTotal) {
@@ -160,31 +190,36 @@ export function susunBarisTotalAdk(baris: SelAdk[][], kolomTotal: number[], juml
   return total;
 }
 
-export function selKeTeks(nilai: SelAdk, barisTotal = false): string {
+/**
+ * Satu sel jadi teks untuk muatan .txt.
+ *
+ * ANGKA SELALU DITULIS APA ADANYA, tanpa pemisah ribuan. Dulu ada cabang
+ * kedua yang menulis ` 461.029.358 ` (bertitik, berspasi pengapit) khusus
+ * untuk baris TOTAL, meniru berkas contoh. Baris itu sudah dicabut, jadi
+ * satu-satunya bentuk angka yang sah di berkas ini tinggal bentuk mentah -
+ * dan itu memang yang bisa dibaca mesin di seberang.
+ */
+export function selKeTeks(nilai: SelAdk): string {
   if (nilai === null || nilai === undefined) return "";
-  if (typeof nilai === "number") {
-    return barisTotal ? ` ${new Intl.NumberFormat("id-ID").format(nilai)} ` : String(nilai);
-  }
-  
+  if (typeof nilai === "number") return String(nilai);
   return nilai.replace(/[\t\r\n]+/g, " ");
 }
 
 /**
- * Muatan .txt ADK Tunjangan Kinerja - tab-separated, diakhiri baris TOTAL.
+ * Muatan .txt ADK Tunjangan Kinerja - tab-separated, ISI DATA SAJA.
  *
- * TANPA BARIS HEADER (permintaan user 2026-09-03), dan karena itu parameter
- * `header` sudah tidak ada lagi di sini. Versi .xlsx TETAP memakainya, dan
- * bedanya bukan selera: yang .xlsx dibuka manusia untuk diperiksa, sementara
- * yang .txt disetorkan ke Web Gaji - di sana nama kolom bukan keterangan,
- * melainkan satu baris tambahan yang ikut terbaca sebagai data.
+ * TANPA BARIS HEADER (permintaan user 2026-09-03) dan kini TANPA BARIS TOTAL
+ * (permintaan user 2026-09-14). Alasan keduanya sama, dan baris total
+ * sebetulnya kasus yang lebih tajam: berkas ini disetorkan ke Web Gaji, dan
+ * di sana baris berkolom-NIP-kosong berisi angka bertitik bukan ringkasan -
+ * ia baris ke-N yang ikut terbaca sebagai data pegawai.
  *
- * Baris TOTAL DIPERTAHANKAN - berkas contoh dari PPABP memuatnya, dan yang
- * diminta dihapus cuma headernya.
+ * Versi .xlsx ikut kehilangan baris itu supaya kedua bentuk berisi hal yang
+ * sama persis. Kalau .xlsx menampilkan total sementara .txt tidak, dua orang
+ * yang memeriksa berkas periode yang sama bisa menyebut jumlah baris yang
+ * berbeda.
  */
-export function rakitTeksAdk(baris: SelAdk[][], barisTotal: SelAdk[]): string {
-  const garis = [
-    ...baris.map((b) => b.map((s) => selKeTeks(s)).join("\t")),
-    barisTotal.map((s) => selKeTeks(s, true)).join("\t"),
-  ];
-  return garis.join("\r\n") + "\r\n";
+export function rakitTeksAdk(baris: SelAdk[][]): string {
+  if (baris.length === 0) return "";
+  return baris.map((b) => b.map((s) => selKeTeks(s)).join("\t")).join("\r\n") + "\r\n";
 }

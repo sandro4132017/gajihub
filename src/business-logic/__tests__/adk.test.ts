@@ -1,12 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   KOLOM_ADK_TUKIN,
-  KOLOM_TOTAL_ADK_TUKIN,
   susunBarisAdkTukin,
   susunBarisTotalAdk,
   selKeTeks,
   rakitTeksAdk,
-  periodeKerjaAdkTukin,
+  bulanPengerjaanAdk,
   type SumberBarisAdkTukin,
   nilaiUangAdkTukin,
 } from "../adk";
@@ -16,6 +15,17 @@ import {
  * ("export txt adk_tunkin-PNS_ROMUM_JUni__2026.xlsx" + .txt-nya) - bukan
  * karangan, supaya kalau formatnya bergeser test ini yang jatuh duluan.
  */
+/**
+ * Saat berkas "dikerjakan" untuk seluruh test di bawah - TETAP, bukan
+ * `new Date()`. Sengaja jatuh di bulan yang BERBEDA dari periode yang diuji
+ * (6/2026 dan 7/2026): kalau keduanya kebetulan sama, test tidak akan pernah
+ * memergoki kolom pengerjaan dan kolom periode yang tertukar.
+ *
+ * 14 September 2026 pukul 03.00 WIB = 13 September 19.00 UTC - sekalian
+ * menguji bahwa yang dibaca bulan WIB-nya, bukan bulan UTC.
+ */
+const DIBUAT = new Date("2026-09-13T20:00:00Z");
+
 const SUMBER: SumberBarisAdkTukin[] = [
   {
     nip: "197509082006042003",
@@ -58,30 +68,25 @@ describe("KOLOM_ADK_TUKIN - header persis file contoh", () => {
     expect(KOLOM_ADK_TUKIN[9]).toBe("Nilai Bersih");
     expect(KOLOM_ADK_TUKIN[20]).toBe("Nomor Tukin Baru");
   });
-
-  it("kolom yang dijumlahkan menunjuk ke tiga kolom nilai uang", () => {
-    expect(KOLOM_TOTAL_ADK_TUKIN.map((i) => KOLOM_ADK_TUKIN[i])).toEqual([
-      "Nilai Bruto",
-      "Nilai Potongan",
-      "Nilai Bersih",
-    ]);
-  });
 });
 
 describe("susunBarisAdkTukin", () => {
-  const baris = susunBarisAdkTukin(SUMBER, 6, 2026);
+  const baris = susunBarisAdkTukin(SUMBER, 6, 2026, DIBUAT);
 
   it("baris pertama cocok dengan baris pertama file contoh", () => {
-    // KEEMPAT KOLOM PERIODE KERJA (indeks 14-17) SENGAJA BERBEDA DARI FILE
-    // CONTOH. Di berkas contoh PPABP keempatnya KOSONG; user menetapkan
-    // (2026-09-03) bahwa keduanya harus diisi periode kerja yang dibayar -
-    // satu bulan sebelum periode berkasnya. Berkas contoh ini periode Juni,
-    // jadi periode kerjanya Mei 2026.
+    // DUA TEMPAT YANG SENGAJA BERBEDA DARI FILE CONTOH PPABP:
+    //
+    // 1. Kolom periode kerja (indeks 14-17) KOSONG di berkas contoh. User
+    //    menetapkan keempatnya harus terisi - dan sejak 2026-09-14 isinya
+    //    periode yang DIPILIH DI FILTER apa adanya, jadi berkas periode Juni
+    //    menulis 06/2026, bukan lagi 05/2026.
+    // 2. Kolom Bulan/Tahun (indeks 1-2) sekarang saat PENGERJAAN, bukan
+    //    periode berkas - DIBUAT jatuh di September 2026.
     expect(baris[0]).toEqual([
-      "450938", "06", "2026", "197509082006042003", "TUTI HARYANTI, ST.",
+      "450938", "09", "2026", "197509082006042003", "TUTI HARYANTI, ST.",
       "1234/SJ/KP.03.00/VII/2026", "15", 19_280_000, 2_892_000, 16_388_000,
       "520002000990", "Bank Rakyat Indonesia", "076301015957537", "TUTI HARYANTI",
-      "05", "2026", "05", "2026", 1, "", "",
+      "06", "2026", "06", "2026", 1, "", "",
     ]);
   });
 
@@ -90,8 +95,9 @@ describe("susunBarisAdkTukin", () => {
   });
 
   it("bulan & kode grade di-pad dua digit seperti file contoh", () => {
-    const b = susunBarisAdkTukin([{ ...SUMBER[0], kelasJabatan: 7 }], 6, 2026)[0];
-    expect(b[1]).toBe("06");
+    const b = susunBarisAdkTukin([{ ...SUMBER[0], kelasJabatan: 7 }], 6, 2026, DIBUAT)[0];
+    expect(b[1]).toBe("09"); // bulan pengerjaan, bukan "9"
+    expect(b[14]).toBe("06"); // bulan periode, bukan "6"
     expect(b[6]).toBe("07"); // bukan "7"
   });
 
@@ -102,7 +108,7 @@ describe("susunBarisAdkTukin", () => {
   });
 
   it("kode satker dikosongkan kalau gaji induk periode itu belum diupload", () => {
-    const b = susunBarisAdkTukin([{ ...SUMBER[0], kodeSatker: null }], 6, 2026)[0];
+    const b = susunBarisAdkTukin([{ ...SUMBER[0], kodeSatker: null }], 6, 2026, DIBUAT)[0];
     expect(b[0]).toBe("");
   });
 
@@ -118,7 +124,8 @@ describe("susunBarisAdkTukin", () => {
     const b = susunBarisAdkTukin(
       [{ ...SUMBER[0], kodeBankSpan: null, namaBank: null, nomorRekening: null, namaRekening: null }],
       6,
-      2026
+      2026,
+      DIBUAT
     )[0];
     expect(b[10]).toBe("");
     expect(b[11]).toBe("");
@@ -154,10 +161,16 @@ describe("susunBarisAdkTukin", () => {
   });
 });
 
+// Fungsinya TIDAK lagi dipakai berkas ADK - baris totalnya dicabut
+// 2026-09-14 - tapi rekap unit Excel masih memakainya, jadi tetap diuji di
+// sini. Indeks kolom uangnya sekarang milik test ini sendiri, bukan lagi
+// konstanta ADK.
+const KOLOM_UANG = [7, 8, 9];
+
 describe("susunBarisTotalAdk", () => {
   it("menjumlahkan hanya kolom nilai uang, sisanya kosong", () => {
-    const baris = susunBarisAdkTukin(SUMBER, 6, 2026);
-    const total = susunBarisTotalAdk(baris, KOLOM_TOTAL_ADK_TUKIN, KOLOM_ADK_TUKIN.length);
+    const baris = susunBarisAdkTukin(SUMBER, 6, 2026, DIBUAT);
+    const total = susunBarisTotalAdk(baris, KOLOM_UANG, KOLOM_ADK_TUKIN.length);
     expect(total[7]).toBe(19_280_000 + 9_896_000);
     expect(total[8]).toBe(2_892_000 + 29_688);
     expect(total[9]).toBe(16_388_000 + 9_866_312);
@@ -167,8 +180,8 @@ describe("susunBarisTotalAdk", () => {
   });
 
   it("total tetap konsisten: total bruto - total potongan = total bersih", () => {
-    const baris = susunBarisAdkTukin(SUMBER, 6, 2026);
-    const t = susunBarisTotalAdk(baris, KOLOM_TOTAL_ADK_TUKIN, KOLOM_ADK_TUKIN.length);
+    const baris = susunBarisAdkTukin(SUMBER, 6, 2026, DIBUAT);
+    const t = susunBarisTotalAdk(baris, KOLOM_UANG, KOLOM_ADK_TUKIN.length);
     expect((t[7] as number) - (t[8] as number)).toBe(t[9]);
   });
 });
@@ -178,9 +191,11 @@ describe("format teks tab-separated", () => {
     expect(selKeTeks(19_280_000)).toBe("19280000");
   });
 
-  it("baris total: pakai pemisah ribuan + spasi pengapit, seperti file .txt contoh", () => {
-    // Di file contoh baris totalnya tertulis " 461.029.358 ".
-    expect(selKeTeks(461_029_358, true)).toBe(" 461.029.358 ");
+  it("angka TIDAK pernah dapat pemisah ribuan - satu-satunya bentuk yang sah", () => {
+    // Dulu ada bentuk kedua " 461.029.358 " khusus baris TOTAL, meniru berkas
+    // contoh. Baris itu dicabut 2026-09-14; kalau bentuk bertitik muncul lagi
+    // di berkas yang dibaca mesin, angkanya berhenti terbaca sebagai angka.
+    expect(selKeTeks(461_029_358)).toBe("461029358");
   });
 
   it("tab & newline di dalam teks dibuang supaya kolom tidak rusak", () => {
@@ -191,16 +206,13 @@ describe("format teks tab-separated", () => {
     expect(selKeTeks(null)).toBe("");
   });
 
-  it("rakitTeksAdk menghasilkan data + baris total TANPA header, dipisah tab", () => {
-    const baris = susunBarisAdkTukin(SUMBER, 6, 2026);
-    const total = susunBarisTotalAdk(baris, KOLOM_TOTAL_ADK_TUKIN, KOLOM_ADK_TUKIN.length);
-    const teks = rakitTeksAdk(baris, total);
-    // JANGAN trimEnd() - baris total berakhir dengan banyak tab (kolom
-    // kosong), dan trim akan menghapusnya sehingga jumlah kolomnya salah.
+  it("rakitTeksAdk menghasilkan DATA SAJA - tanpa header, tanpa baris total", () => {
+    const baris = susunBarisAdkTukin(SUMBER, 6, 2026, DIBUAT);
+    const teks = rakitTeksAdk(baris);
     const garis = teks.split("\r\n").slice(0, -1);
 
-    // Data + total saja - tidak ada lagi "1 +" untuk baris headernya.
-    expect(garis).toHaveLength(SUMBER.length + 1);
+    // Sebanyak barisnya, tidak lebih. Dulu ada "+1" untuk baris total.
+    expect(garis).toHaveLength(SUMBER.length);
     // Baris PERTAMA langsung data, bukan nama kolom. Kalau suatu saat
     // header kembali diam-diam, dua harapan di bawah ini yang menangkapnya.
     expect(garis[0].split("\t")[4]).toBe("TUTI HARYANTI, ST.");
@@ -208,7 +220,15 @@ describe("format teks tab-separated", () => {
     // Tiap baris punya jumlah kolom yang sama - kalau tidak, file ditolak
     // aplikasi tujuan.
     for (const g of garis) expect(g.split("\t")).toHaveLength(KOLOM_ADK_TUKIN.length);
-    expect(garis[garis.length - 1].split("\t")[7]).toBe(" 29.176.000 ");
+    // TIDAK BOLEH ada baris ber-NIP kosong. Itulah bentuk baris total, dan
+    // di berkas yang dibaca mesin ia terbaca sebagai pegawai tanpa NIP.
+    for (const g of garis) expect(g.split("\t")[3]).not.toBe("");
+    // Baris TERAKHIR pegawai sungguhan, bukan ringkasan.
+    expect(garis[garis.length - 1].split("\t")[4]).toBe(SUMBER[SUMBER.length - 1].nama);
+  });
+
+  it("tanpa baris sama sekali: berkasnya kosong, bukan berisi satu baris total", () => {
+    expect(rakitTeksAdk([])).toBe("");
   });
 });
 
@@ -217,7 +237,8 @@ describe("pembulatan nilai uang", () => {
     const b = susunBarisAdkTukin(
       [{ ...SUMBER[0], tarifPenuhKelasJabatan: 5_824_937.4, tukinBersih: 5_824_937.1 }],
       6,
-      2026
+      2026,
+      DIBUAT
     )[0];
     expect(b[7]).toBe(5_824_937);
     expect(b[8]).toBe(0);
@@ -232,9 +253,10 @@ describe("pembulatan nilai uang", () => {
         { ...SUMBER[1], tarifPenuhKelasJabatan: 200.5, tukinBersih: 200.5 },
       ],
       6,
-      2026
+      2026,
+      DIBUAT
     );
-    const total = susunBarisTotalAdk(baris, KOLOM_TOTAL_ADK_TUKIN, KOLOM_ADK_TUKIN.length);
+    const total = susunBarisTotalAdk(baris, KOLOM_UANG, KOLOM_ADK_TUKIN.length);
     // 101 + 201 = 302 (bukan Math.round(301) = 301 dari penjumlahan pecahan)
     expect(total[7]).toBe((baris[0][7] as number) + (baris[1][7] as number));
     expect(Number.isInteger(total[7] as number)).toBe(true);
@@ -291,49 +313,72 @@ describe("nilaiUangAdkTukin - Nilai Bruto adalah tarif PENUH, bukan hasil setela
   });
 });
 
-describe("periodeKerjaAdkTukin - kolom Bulan/Tahun Awal & Akhir", () => {
-  it("satu bulan sebelum periode berkasnya - contoh user: Juli 2026 -> 6", () => {
-    expect(periodeKerjaAdkTukin(7, 2026)).toEqual({ bulan: 6, tahun: 2026 });
+describe("bulanPengerjaanAdk - kolom Bulan & Tahun", () => {
+  it("mengambil bulan WIB, bukan bulan UTC", () => {
+    // 1 September 06.00 WIB masih 31 Agustus di UTC. Server yang berjalan di
+    // UTC akan melabeli berkasnya Agustus persis di pergantian bulan - kasus
+    // yang ditutup offset tetap +7.
+    expect(bulanPengerjaanAdk(new Date("2026-08-31T23:00:00Z"))).toEqual({ bulan: 9, tahun: 2026 });
   });
 
-  it("Februari -> Januari tahun yang sama", () => {
-    expect(periodeKerjaAdkTukin(2, 2026)).toEqual({ bulan: 1, tahun: 2026 });
+  it("pergantian TAHUN ikut WIB", () => {
+    // 1 Januari 2027 pukul 01.00 WIB = 31 Desember 2026 pukul 18.00 UTC.
+    expect(bulanPengerjaanAdk(new Date("2026-12-31T18:00:00Z"))).toEqual({ bulan: 1, tahun: 2027 });
   });
 
-  it("Januari mundur ke Desember TAHUN SEBELUMNYA", () => {
-    // Dikonfirmasi user 2026-09-03. Bukan bulan 0 (bukan bulan), dan bukan
-    // 12 di tahun yang sama (masa depan): ekspor Januari 2027 membayar kerja
-    // Desember 2026.
-    expect(periodeKerjaAdkTukin(1, 2027)).toEqual({ bulan: 12, tahun: 2026 });
+  it("siang hari biasa - WIB dan UTC sama bulannya", () => {
+    expect(bulanPengerjaanAdk(new Date("2026-09-14T05:00:00Z"))).toEqual({ bulan: 9, tahun: 2026 });
   });
 
   it("tidak pernah menghasilkan bulan di luar 1-12", () => {
-    for (let b = 1; b <= 12; b++) {
-      const k = periodeKerjaAdkTukin(b, 2026);
+    for (let b = 0; b < 12; b++) {
+      const d = new Date(Date.UTC(2026, b, 15, 12));
+      const k = bulanPengerjaanAdk(d);
       expect(k.bulan).toBeGreaterThanOrEqual(1);
       expect(k.bulan).toBeLessThanOrEqual(12);
     }
   });
 });
 
-describe("baris ADK Tukin memuat periode kerja", () => {
-  it("keempat kolom terisi, Awal sama dengan Akhir", () => {
-    // Satu berkas = satu bulan, jadi Awal dan Akhir wajib sama. Kalau suatu
+describe("baris ADK Tukin - dua pasang kolom bulan yang artinya berbeda", () => {
+  it("Bulan Awal/Akhir = periode yang DIPILIH PPABP, apa adanya", () => {
+    // Aturan user 2026-09-14. Tidak ada lagi pengurangan satu bulan: periode
+    // di filter memang periode kerja yang dibayar.
+    //
+    // Awal dan Akhir wajib SAMA - satu berkas selalu satu bulan. Kalau suatu
     // saat berbeda, Web Gaji akan membayar rentang yang tidak dimaksudkan.
-    const baris = susunBarisAdkTukin(SUMBER, 7, 2026)[0];
-    expect(baris[14]).toBe("06"); // Bulan Awal
+    const baris = susunBarisAdkTukin(SUMBER, 7, 2026, DIBUAT)[0];
+    expect(baris[14]).toBe("07"); // Bulan Awal
     expect(baris[15]).toBe("2026"); // Tahun Awal
-    expect(baris[16]).toBe("06"); // Bulan Akhir
+    expect(baris[16]).toBe("07"); // Bulan Akhir
     expect(baris[17]).toBe("2026"); // Tahun Akhir
     expect(baris[14]).toBe(baris[16]);
     expect(baris[15]).toBe(baris[17]);
   });
 
-  it("kolom Bulan/Tahun berkas TETAP periode ekspornya, bukan periode kerja", () => {
-    // Dua pasang kolom yang gampang tertukar: kolom 1-2 periode BERKAS,
-    // kolom 14-17 periode KERJA yang dibayar. Bedanya satu bulan.
-    const baris = susunBarisAdkTukin(SUMBER, 7, 2026)[0];
-    expect(baris[1]).toBe("07");
+  it("Bulan/Tahun = saat PENGERJAAN, bukan periode yang dibayar", () => {
+    // Inti aturannya: Tukin Januari boleh saja baru dikerjakan Agustus.
+    // DIBUAT jatuh di September 2026 sementara periodenya Juli 2026, jadi
+    // kolom yang tertukar langsung ketahuan di sini.
+    const baris = susunBarisAdkTukin(SUMBER, 7, 2026, DIBUAT)[0];
+    expect(baris[1]).toBe("09");
     expect(baris[2]).toBe("2026");
+  });
+
+  it("periode LAMA yang baru dikerjakan sekarang - contoh user: Tukin Januari, dikerjakan September", () => {
+    const baris = susunBarisAdkTukin(SUMBER, 1, 2026, DIBUAT)[0];
+    expect(baris[1]).toBe("09"); // dikerjakan September 2026
+    expect(baris[2]).toBe("2026");
+    expect(baris[14]).toBe("01"); // membayar kerja Januari 2026
+    expect(baris[15]).toBe("2026");
+  });
+
+  it("seluruh baris dalam satu berkas memakai bulan yang sama", () => {
+    // Dihitung sekali di luar map. Kalau suatu saat dipindah ke dalam,
+    // ekspor yang berjalan melewati tengah malam bisa menghasilkan dua baris
+    // berlabel bulan berbeda di satu berkas.
+    const baris = susunBarisAdkTukin(SUMBER, 7, 2026, DIBUAT);
+    expect(new Set(baris.map((b) => b[1])).size).toBe(1);
+    expect(new Set(baris.map((b) => b[14])).size).toBe(1);
   });
 });
