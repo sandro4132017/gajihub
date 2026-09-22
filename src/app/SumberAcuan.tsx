@@ -45,11 +45,24 @@ export interface BarisSumber {
 
 export function SumberAcuan({
   judul = "Sumber & acuan",
+  judulKeterangan = "Tentang halaman ini",
+  keterangan,
   acuan,
   sumber,
   catatan,
 }: {
   judul?: string;
+  judulKeterangan?: string;
+  /**
+   * Cara MEMBACA angka di halaman itu - satu kalimat per butir, ditaruh
+   * PALING ATAS di panel.
+   *
+   * Dipisah dari `acuan` karena menjawab pertanyaan yang berbeda: acuan
+   * menjawab "dasar hukumnya apa", keterangan menjawab "angka ini artinya
+   * apa". Yang kedua dibutuhkan lebih sering dan oleh lebih banyak orang,
+   * jadi ia yang lebih dulu terbaca.
+   */
+  keterangan?: string[];
   acuan: BarisAcuan[];
   /**
    * Sumber DATA beserta waktu pengambilannya - ditampilkan di bagian sendiri
@@ -79,6 +92,21 @@ export function SumberAcuan({
       {/* pointer-events-none supaya panel yang muncul tidak menghalangi klik
           elemen di bawahnya; isinya memang cuma dibaca. */}
       <span className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-30 w-[min(22rem,80vw)] -translate-x-1/2 rounded-xl border border-line bg-surface p-3 text-left opacity-0 shadow-[0_8px_24px_rgba(19,65,107,0.14)] transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        {keterangan && keterangan.length > 0 && (
+          <span className="mb-2 block border-b border-line pb-2">
+            <span className="block text-[11px] font-extrabold uppercase tracking-wide text-muted">
+              {judulKeterangan}
+            </span>
+            <span className="mt-1.5 block space-y-1">
+              {keterangan.map((k) => (
+                <span key={k} className="block text-[11.5px] leading-snug text-ink-2">
+                  {k}
+                </span>
+              ))}
+            </span>
+          </span>
+        )}
+
         {sumber && sumber.length > 0 && (
           <span className="mb-2 block border-b border-line pb-2">
             <span className="block text-[11px] font-extrabold uppercase tracking-wide text-muted">Sumber data</span>

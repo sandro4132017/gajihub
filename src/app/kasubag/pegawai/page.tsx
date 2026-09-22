@@ -133,7 +133,8 @@ export default async function RosterPegawaiUnitPage({
         </p>
       )}
 
-      <div className="card mt-4 overflow-x-auto">
+      <div className="card mt-4 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
@@ -184,13 +185,16 @@ export default async function RosterPegawaiUnitPage({
             ))}
           </tbody>
         </table>
-        <Paginasi
-          basePath="/kasubag/pegawai"
-          params={paramPaginasi}
-          info={paginasi}
-          totalBaris={pegawaiList.length}
-          labelBaris="pegawai"
-        />
+        </div>
+        <div className="border-t border-line-2 px-4 py-3 sm:px-6">
+          <Paginasi
+            basePath="/kasubag/pegawai"
+            params={paramPaginasi}
+            info={paginasi}
+            totalBaris={pegawaiList.length}
+            labelBaris="pegawai"
+          />
+        </div>
       </div>
     </main>
   );

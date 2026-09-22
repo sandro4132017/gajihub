@@ -1158,6 +1158,19 @@ model RekapPresensiPeriode {
   totalJamLemburHariLibur        Float @default(0) @map("total_jam_lembur_hari_libur")
   jumlahHariMakanLembur          Int   @default(0) @map("jumlah_hari_makan_lembur")
   jumlahHariMakanLemburHariLibur Int   @default(0) @map("jumlah_hari_makan_lembur_hari_libur")
+  // Jumlah HARI lembur hari kerja - bukan jumlah jamnya, dan bukan duplikasi
+  // dari kolom di atas: yang di atas cuma menghitung hari yang lemburnya >= 2
+  // jam (syarat uang makan lembur), yang ini SEMUA hari yang ada lemburnya.
+  //
+  // Dibutuhkan karena pengali jam pertama (1,5x) berlaku PER HARI: total
+  // sebulan = tarif x (2J - 0,5D). Tanpa D, potongan setengah tarif itu cuma
+  // jatuh sekali sebulan alih-alih sekali per hari lembur, dan pegawainya
+  // dibayar lebih rendah dari semestinya.
+  //
+  // Hari libur TIDAK punya pasangan kolom ini: di sana seluruh jam dikali 2
+  // rata, tidak ada aturan jam pertama, jadi jumlah harinya tidak mengubah
+  // rupiah apa pun.
+  jumlahHariLemburHariKerja      Int   @default(0) @map("jumlah_hari_lembur_hari_kerja")
 
   sourceSystem   String   @default("UPLOAD_MANUAL") @map("source_system")
   sourceFileName String?  @map("source_file_name")

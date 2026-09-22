@@ -462,6 +462,11 @@ export async function kalkulasiMassalTukinUangMakanAction(
           periodeTahun,
           totalJamLembur,
           totalJamLemburHariLibur,
+          // Jumlah HARI, bukan jam - pengali jam pertama (1,5x) berlaku per
+          // hari. Rekap lama (sebelum kolom ini ada) bernilai 0, dan
+          // hitungUangLembur memperlakukan 0 sebagai BELUM DIKETAHUI: dibayar
+          // 1x tarif plus anomali, bukan ditebak.
+          jumlahHariLemburHariKerja: rekapManual?.jumlahHariLemburHariKerja ?? 0,
           tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM[gol],
           jumlahHariMakanLembur: rekapManual?.jumlahHariMakanLembur ?? 0,
           jumlahHariMakanLemburHariLibur: rekapManual?.jumlahHariMakanLemburHariLibur ?? 0,
@@ -588,11 +593,21 @@ export async function koreksiUangLemburAction(
 
     await prisma.uangLembur.upsert({
       where: { pegawaiId_periodeBulan_periodeTahun: { pegawaiId, periodeBulan, periodeTahun } },
+      // Rincian hari kerja & hari libur IKUT DITULIS, tidak dibiarkan
+      // memegang nilai lama. Form koreksi ini cuma menerima satu angka total,
+      // dan `hitungUangLembur` di atas memperlakukannya sepenuhnya sebagai
+      // lembur HARI KERJA - jadi rupiah yang tersimpan memang sudah dihitung
+      // dengan jam hari libur nol. Membiarkan kolom rinciannya tetap berisi
+      // angka dari kalkulasi sebelumnya berarti menyimpan rincian yang tidak
+      // pernah dipakai menghitung uangnya, dan sejak halaman /uang-lembur
+      // menampilkan kedua kolom itu, selisihnya langsung terbaca di layar.
       create: {
         pegawaiId,
         periodeBulan,
         periodeTahun,
         totalJamLembur,
+        jamLemburHariKerja: hasilLembur.jamLemburHariKerja,
+        jamLemburHariLibur: hasilLembur.jamLemburHariLibur,
         tarifPerJam,
         totalUangLembur: hasilLembur.totalUangLembur,
         status: "DRAFT",
@@ -600,6 +615,8 @@ export async function koreksiUangLemburAction(
       },
       update: {
         totalJamLembur,
+        jamLemburHariKerja: hasilLembur.jamLemburHariKerja,
+        jamLemburHariLibur: hasilLembur.jamLemburHariLibur,
         tarifPerJam,
         totalUangLembur: hasilLembur.totalUangLembur,
         status: "DRAFT",

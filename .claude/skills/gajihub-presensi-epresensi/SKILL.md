@@ -167,15 +167,35 @@ Jam yang melewati tengah malam ditulis `08:26 +1`, bukan `32:26` maupun `08:26`
 polos - Excel membungkusnya diam-diam jadi bentuk terakhir dan itu terbaca
 seperti pagi hari yang sama.
 
-**TODO(confirm) yang TETAP terbuka - batasnya JAM DINDING, bukan "7,5 jam sudah
-terpenuhi".** Pegawai yang masuk 10:00 lalu lembur sampai 20:00 dapat **3 jam**
-lembur, sama persis dengan yang masuk 07:30 dan lembur di rentang yang sama,
-padahal jam kerja hariannya masih kurang 2,5 jam. Yang pertama tetap kena
-potongan Pasal 13 ayat (3) atas keterlambatannya (90 menit setelah toleransi =
-0,9% bobot kehadiran) - tapi potongan itu ada di **Tunjangan Kinerja**,
-sementara **uang lemburnya utuh**. SENGAJA tidak diperbaiki sepihak: itu
-kebijakan, dan dokumennya sama dengan yang di atas. Sekarang DORMAN - nol dari
-1.109 hari lembur yang juga punya keterlambatan.
+**TERJAWAB 2026-09-21 - lembur mulai setelah 7,5 jam TERPENUHI, bukan di jam
+dinding.** Dulu pegawai yang masuk 10:00 lalu pulang 20:00 dapat jam lembur
+yang sama dengan yang masuk 07:30 - jadi terlambat justru memajukan mulainya
+lembur. Sekarang titik mulainya `batasLemburMenit()`: jam masuk + 7,5 jam +
+istirahat, berlantai jam pulang wajib, **tanpa batas atas**. Yang tap 09:10
+mulai berlembur 17:40.
+
+**DUA BATAS YANG TIDAK BOLEH DISATUKAN**, dan ini jebakan yang mahal:
+
+| | Batas atas | Tugasnya |
+|---|---|---|
+| `batasCheckoutMenit()` | **ADA** (jam pulang wajib + 60) | potongan pulang cepat Pasal 13 ayat (3) |
+| `batasLemburMenit()` | **TIDAK ADA** | titik mulai jam lembur |
+
+Selisih keduanya **selalu persis sama dengan menit keterlambatan** orang itu -
+dua-duanya `jam masuk - 08:30`. Jadi mencabut batas atas pada yang PERTAMA
+berarti menagih menit yang sama dua kali: diukur ke Juli 2026, pulang cepat
+melonjak dari 38.367 ke **137.522 menit**, dan **seluruh 99.155 menit
+tambahannya** menit yang sudah ditagih sebagai keterlambatan - **852 pegawai,
+2.087 hari**. Ada test penjagaan yang jatuh kalau keduanya dirapikan jadi satu.
+
+Dampak ke lembur (Juli 2026, jalur ketukan hari kerja): **39.323 -> 38.292
+jam**, turun 1.031 jam di 4.947 hari yang datangnya lewat 08:30.
+
+Konsekuensi yang diterima sadar: kolom "Jam Harus Checkout" Gajihub sekarang
+**berbeda dari berkas hitung petugas** pada hari-hari itu - berkas mereka
+memakai bentuk ber-batas atas (cocok 1.099 dari 1.133 baris). Yang dipakai
+membayar potongan tetap bentuk lama, jadi yang bergeser cuma kolom tampilan
+dan jam lembur.
 
 **Lembur hari libur & pengecualian WFH/WFA** (permintaan susulan user):
 - Jam lembur dipisah **hari kerja vs hari libur/tanggal merah**; yang hari

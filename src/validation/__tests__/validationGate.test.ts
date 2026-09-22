@@ -151,6 +151,9 @@ describe("validasiUangLembur", () => {
       periodeBulan: 7,
       periodeTahun: 2026,
       totalJamLembur: 10,
+      // Wajib diisi sejak pengali jam pertama berlaku (2026-09-18): tanpa
+      // jumlah HARI-nya, mesin menolak menebak dan menandainya anomali.
+      jumlahHariLemburHariKerja: 4,
       tarifPerJam: 25000,
     });
 

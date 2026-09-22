@@ -6,22 +6,6 @@ import { Modal } from "../../Modal";
 
 const INITIAL_STATE: KirimFormState = {};
 
-/**
- * Panel "Kirim rekap ke PPABP" - pengganti tombol approval berjenjang.
- *
- * SATU keputusan untuk seluruh unit, bukan ratusan keputusan per pegawai.
- *
- * TIGA LAPIS PERINGATAN, DAN URUTANNYA DISENGAJA:
- *   1. Daftar akibat yang tertulis di halaman - dibaca sebelum apa pun.
- *   2. Kotak centang pernyataan - harus dicentang sadar, dan dicek lagi di
- *      server (lihat ./actions.ts) supaya bukan sekadar hiasan.
- *   3. Dialog konfirmasi berisi ANGKA nyata unit ini.
- *
- * Yang dihindari: dialog "Anda yakin?" tanpa isi. Kalimat itu sudah lama
- * berhenti dibaca orang, dan yang menekan "OK" secara refleks tidak lebih
- * yakin daripada sebelum ditanya. Karena itu tiap lapis menyebut AKIBAT yang
- * konkret, bukan meminta penegasan kosong.
- */
 export function KirimRekapForm({
   periodeBulan,
   periodeTahun,
@@ -35,35 +19,10 @@ export function KirimRekapForm({
   periodeBulan: number;
   periodeTahun: number;
   satuanKerja: string;
-  /** Pegawai AKTIF saja - lihat catatan di pemanggilnya. */
   jumlahPegawai: number;
   jumlahKalkulasi: number;
-  /** Diisi kalau belum boleh dikirim - ditampilkan sebagai ganti tombolnya. */
   alasanTertahan: string | null;
-  /**
-   * Alasan PPABP mengembalikan rekap ini. null = tidak sedang dikembalikan.
-   *
-   * DITAMPILKAN DI PANEL INI, bukan di puncak halaman. Alasannya soal KAPAN
-   * dibacanya: catatan revisi di atas dibaca sekali waktu halaman dibuka,
-   * lalu tergulir hilang selama orang memperbaiki data - dan tidak terlihat
-   * lagi tepat pada saat paling dibutuhkan, yaitu sedetik sebelum mengirim
-   * ulang. Di sini catatannya jadi hal terakhir yang dilihat, sehingga bisa
-   * diadu dengan perbaikan yang barusan dikerjakan.
-   *
-   * Di puncak halaman tetap ada penanda, tapi cuma berupa badge status -
-   * cukup untuk tahu halaman ini sedang dalam tahap apa.
-   */
   alasanKembali: string | null;
-  /**
-   * Rekap periode ini sudah terkirim & terkunci.
-   *
-   * KOMPONEN INI TETAP DIRENDER SAAT TERKUNCI, dan itu bukan kelalaian.
-   * Aksi kirim memanggil `revalidatePath`, jadi begitu pengiriman berhasil
-   * halaman induknya langsung dirender ulang dalam keadaan terkunci. Kalau
-   * komponennya ikut dilepas di situ, popup "berhasil dikirim" lenyap dalam
-   * sekejap dan orang tidak pernah melihat hasil dari tombol yang baru saja
-   * ditekannya. Yang disembunyikan formnya, bukan komponennya.
-   */
   terkunci: boolean;
 }) {
   const [state, formAction, pending] = useActionState(kirimRekapUnitAction, INITIAL_STATE);
@@ -211,7 +170,6 @@ export function KirimRekapForm({
               name="catatan"
               rows={2}
               className="field-input mt-1 w-full"
-              placeholder="Mis. 3 pegawai baru mutasi masuk bulan ini."
             />
 
             {/* Tombol ini TIDAK mengirim form - ia membuka dialog konfirmasi,

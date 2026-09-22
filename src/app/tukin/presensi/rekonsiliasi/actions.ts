@@ -296,6 +296,7 @@ export async function rekonsiliasiAbsensiAction(
         totalJamLemburHariLibur: rekapDbBaris.totalJamLemburHariLibur,
         jumlahHariMakanLembur: rekapDbBaris.jumlahHariMakanLembur,
         jumlahHariMakanLemburHariLibur: rekapDbBaris.jumlahHariMakanLemburHariLibur,
+        jumlahHariLemburHariKerja: rekapDbBaris.jumlahHariLemburHariKerja,
       };
 
       hasil.push(

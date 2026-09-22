@@ -127,6 +127,27 @@ export const AMBANG_KETUKAN_GANDA_MENIT = 2;
  * 18:00 sudah memenuhi - sewaktu ada jeda, batas itu baru tercapai pukul 19:00.
  */
 
+/**
+ * TIDAK ADA BATAS JAM LEMBUR di sistem ini - bukan kelalaian, keputusan
+ * (user 2026-09-21, setelah membaca PMK 32/2025 sendiri).
+ *
+ * Batas 3 jam/hari + 14 jam/minggu sempat terpasang sehari, lalu dicabut:
+ * seluruh teks SBM 2026 sudah dicari dan "3 (tiga) jam", "14 (empat belas)
+ * jam", serta "libur" NOL kemunculan. SBM cuma menetapkan tarif per jam dan
+ * syarat surat perintah. Memangkas jam pegawai tanpa dasar tertulis berarti
+ * mesin mengambil keputusan pembayaran yang tidak diberikan kepadanya - dan
+ * yang terpangkas tidak terlihat lagi di angka akhirnya.
+ *
+ * BATAS SEBENARNYA MASUK LEWAT SURAT PERINTAH LEMBUR, dokumen resmi di luar
+ * sistem ini: SPL menyebut jam yang diperintahkan, dan petugas yang mengadu
+ * hitungan ini kepadanya sebelum dibayarkan. Jadi yang dihasilkan modul ini
+ * JAM TERHITUNG, bukan hak bayar.
+ *
+ * TODO(confirm): kalau peraturan tata cara pembayaran uang lembur (PMK
+ * Pelaksanaan Anggaran / Perdirjen Perbendaharaan) ternyata menetapkan batas,
+ * pasang di sini dengan kutipan pasalnya - jangan dari ingatan atau kelaziman.
+ */
+
 export const JADWAL_KERJA_DEFAULT: JadwalKerja = {
   jamMasukWajibMenit: MENIT(7, 30),
   //        Minggu Senin        Selasa       Rabu         Kamis        Jumat         Sabtu
@@ -177,6 +198,47 @@ export function batasCheckoutMenit(
   const jamHarusPulang = jamMasukMenit + Math.round(jadwal.jamKerjaPerHari * 60) + istirahatMenit;
   const batasAtas = jamPulangWajibMenit + jadwal.toleransiTerlambatMenit;
   return Math.min(Math.max(jamHarusPulang, jamPulangWajibMenit), batasAtas);
+}
+
+/**
+ * Jam paling cepat lembur mulai dihitung - kewajiban 7,5 jam yang UTUH,
+ * TANPA batas atas.
+ *
+ * Keputusan user 2026-09-21: "seharusnya mulai jam lembur itu dimulai dari
+ * jam harus checkout... misal dia datang telat jam 9:10 berarti jam harus
+ * checkout nya jam 17:40 terus dia lembur 2 jam karena dia checkout jam
+ * 19:40."
+ *
+ * KENAPA FUNGSI TERSENDIRI, BUKAN MENCABUT BATAS ATAS DI
+ * `batasCheckoutMenit`. Satu angka itu tadinya dipakai dua pekerjaan yang
+ * berbeda, dan cuma salah satunya boleh kehilangan batas atas:
+ *
+ *   - MENGHITUNG POTONGAN pulang cepat (Pasal 13 ayat (3)) -> tetap ber-batas
+ *     atas. Menit di atas jam pulang wajib + toleransi SELALU sama persis
+ *     dengan menit keterlambatan orang itu (dua-duanya `jam masuk - 08:30`),
+ *     jadi mencabutnya berarti menagih menit yang sama dua kali. Terukur ke
+ *     Juli 2026: pulang cepat melonjak 38.367 -> 137.522 menit, dan SELURUH
+ *     99.155 menit tambahannya menit yang sudah ditagih sebagai
+ *     keterlambatan - 852 pegawai, 2.087 hari.
+ *   - MENGHITUNG LEMBUR -> tidak ber-batas atas. Lembur artinya kerja SESUDAH
+ *     kewajiban harian selesai; orang yang datang 09:10 baru menyelesaikan
+ *     7,5 jamnya pukul 17:40, jadi 17:00-17:40 masih penutup jam kerjanya.
+ *     Dengan batas atas, yang datang terlambat justru mulai menghasilkan
+ *     lembur lebih awal daripada yang datang tepat waktu.
+ *
+ * Lantai jam pulang wajib TETAP ADA: yang tap 06:00 tidak mulai berlembur
+ * pukul 14:30 (aturan user 2026-09-15 - "apapun apapun dia absen masuk mau
+ * jam subuh atau apapun, tetep jam harus pulangnya 16:00").
+ */
+export function batasLemburMenit(
+  jamMasukMenit: number | null,
+  jamPulangWajibMenit: number,
+  istirahatMenit: number,
+  jadwal: JadwalKerja = JADWAL_KERJA_DEFAULT
+): number {
+  if (jamMasukMenit === null) return jamPulangWajibMenit;
+  const jamHarusPulang = jamMasukMenit + Math.round(jadwal.jamKerjaPerHari * 60) + istirahatMenit;
+  return Math.max(jamHarusPulang, jamPulangWajibMenit);
 }
 
 /**
@@ -502,8 +564,19 @@ export function rekapDariLaporanPdf(
   const cutiTakDikenali = new Set<string>();
   let jamLemburKerja = 0;
   let jamLemburLibur = 0;
+
+
   let hariMakanLemburKerja = 0;
   let hariMakanLemburLibur = 0;
+  /**
+   * HARI lembur hari kerja - semua hari yang ada lemburnya, bukan cuma yang
+   * >= 2 jam seperti hariMakanLemburKerja.
+   *
+   * Dipakai pengali jam pertama (1,5x) yang berlaku per hari. Hari libur tidak
+   * dicacah: di sana seluruh jam dikali 2 rata, jumlah harinya tidak mengubah
+   * rupiah apa pun.
+   */
+  let hariLemburKerja = 0;
 
   const tanggalUrut = [...perTanggal.keys()].sort();
 
@@ -531,6 +604,33 @@ export function rekapDariLaporanPdf(
     // (17 tanggal di file uji punya DUA baris "Tidak Hadir" yang sama persis).
     // Kalau tidak dibuang, satu hari alpha terhitung dua kali = potongan 6%
     // padahal Pasal 13 ayat (1) cuma 3%.
+    /**
+     * LEMBUR HARI KERJA DIHITUNG SENDIRI DARI KETUKAN, bukan dari baris
+     * "Lembur" e-Presensi (keputusan user 2026-09-18).
+     *
+     * SEBABNYA TERUKUR. Juli 2026: dari 459 baris berstatus Lembur di
+     * e-Presensi, 459-nya jatuh di AKHIR PEKAN - nol di hari kerja. Padahal di
+     * ADK asli Rokeu Juni 2026, 109 dari 111 entri lembur justru hari kerja.
+     * Jadi status Lembur e-Presensi tidak merekam lembur hari kerja sama
+     * sekali, dan bersandar padanya berarti menolkan lembur yang benar-benar
+     * dibayar. Contoh nyata yang memicunya: WFO 03/08, tap 07:18 pulang 20:03,
+     * dan e-Presensi tidak punya satu pun baris Lembur hari itu.
+     *
+     * SYARAT SURAT PERINTAH TIDAK DIABAIKAN, DIPINDAH KE MANUSIA (keputusan
+     * user 2026-09-21). SBM item 23.1 mensyaratkan surat perintah, dan SPL
+     * adalah dokumen resmi di luar sistem ini - Gajihub tidak memegang
+     * arsipnya dan tidak punya jalur masuknya. Jadi yang dihasilkan di sini
+     * JAM LEMBUR TERHITUNG, bukan hak bayar: petugas yang mengadu angkanya ke
+     * SPL sebelum dibayarkan. Kewajiban modul ini karena itu bukan menyaring,
+     * melainkan MENUNJUKKAN CARANYA - jam mentah, jam dibayar, dan alasan tiap
+     * pemangkasan semuanya ikut keluar sebagai catatan.
+     *
+     * Diisi DI DALAM blok `if (terpilih)` di bawah supaya memakai
+     * `batasCheckout` dan `keluarDipercaya` yang SAMA PERSIS dengan mesin
+     * potongan - bukan salinan yang bisa menyimpang.
+     */
+    let lemburKetukanMenit: number | null = null;
+
     let terpilih = barisHarian[0] ?? null;
     if (barisHarian.length > 1) {
       const bukanTidakHadir = barisHarian.filter((x) => x.kategori !== "TIDAK_HADIR");
@@ -776,6 +876,27 @@ export function rekapDariLaporanPdf(
           const istirahat = (idxHari === null ? null : ISTIRAHAT_MENIT[idxHari]) ?? 0;
           const batasCheckout = batasCheckoutMenit(jamMasukEfektif, jamPulangWajib, istirahat, jadwal);
           menitPulangCepat = Math.max(0, batasCheckout - jamKeluarEfektif);
+          // DUA BATAS YANG BERBEDA, sengaja. Yang di atas ber-batas atas jam
+          // pulang wajib + toleransi karena ia menghitung POTONGAN; yang di
+          // bawah tidak, karena ia menghitung LEMBUR. Alasan lengkapnya di
+          // kepala `batasLemburMenit`.
+          const batasLembur = batasLemburMenit(jamMasukEfektif, jamPulangWajib, istirahat, jadwal);
+          // Menit SESUDAH kewajiban harian benar-benar selesai. Titik
+          // mulainya batasLembur, bukan jam pulang wajib dan bukan
+          // batasCheckout - yang datang 09:10 baru genap 7,5 jamnya pukul
+          // 17:40, jadi 16:00 sampai 17:40 masih penutup jam kerjanya.
+          //
+          // Cuma WFO. Pegawai WFH/WFA/dinas luar/diklat tidak dinilai
+          // kehadirannya dari ketukan gedung, jadi ketukan pulang mereka bukan
+          // bukti kerja lembur di kantor.
+          //
+          // `keluarDipercaya` di guard blok ini yang menahan bahaya terbesar:
+          // e-Presensi mengisi 23:59 saat tap pulang HILANG (4.976 baris di
+          // Juli 2026). Tanpa penjagaan itu, satu tap yang terlupa berubah jadi
+          // ~8 jam lembur - lembur karangan, untuk ribuan orang sekaligus.
+          if (kategori === "WFO" && jamKeluarEfektif > batasLembur) {
+            lemburKetukanMenit = jamKeluarEfektif - batasLembur;
+          }
         }
         // Peringatan "jam masuk janggal" tidak perlu muncul lagi kalau jamnya
         // memang sudah diperbaiki manusia - itu justru penyelesaiannya.
@@ -944,6 +1065,49 @@ export function rekapDariLaporanPdf(
     // 1.205-nya berstatus LEMBUR tanpa pendamping; menolak bentuk ini sama
     // dengan menolkan seluruh uang lembur, termasuk contoh yang diberikan
     // user sendiri (pulang wajib 16:00, pulang 20:00 = 4 jam).
+    // ------------------------------------------------------------------
+    // HARI KERJA BER-WFO: jam lemburnya dari KETUKAN, bukan dari baris Lembur.
+    // ------------------------------------------------------------------
+    // Didahulukan atas jalur baris Lembur di bawah, sesuai instruksi user
+    // "jangan pakai dari e-Presensi". Jalur lama tetap hidup untuk dua bentuk
+    // yang tidak bisa dijangkau ketukan harian: AKHIR PEKAN / hari libur (di
+    // sana seluruh 459 baris lembur berada, dan tidak ada jam pulang wajib
+    // untuk dilewati), dan hari kerja yang baris Lembur-nya BERDIRI SENDIRI
+    // tanpa baris harian pendamping.
+    //
+    // DIBULATKAN KE BAWAH PER HARI, dan ini bukan pilihan gaya. Dengan sumber
+    // baru ini 91% hari WFO melewati batas checkout - kebanyakan cuma belasan
+    // menit. Pembulatan yang selama ini terjadi atas TOTAL SEBULAN akan
+    // menumpuk remah "pulang telat sedikit" jadi jam yang dibayar: 22 hari x
+    // 50 menit = 18 jam lembur untuk orang yang tidak pernah lembur sekali
+    // pun. Dipangkas per hari, sisa di bawah satu jam hilang di hari itu juga.
+    const lemburKetukanJam = lemburKetukanMenit === null ? 0 : Math.floor(lemburKetukanMenit / 60);
+    if (!hariLibur && lemburKetukanMenit !== null) {
+      if (lemburKetukanJam > 0) {
+        hitung.hariLembur++;
+        hariLemburKerja++;
+        jamLemburKerja += lemburKetukanJam;
+        // SBM 2026 item 23.2: minimal 2 jam BERTURUT-TURUT. Rentangnya satu
+        // blok utuh (batas checkout sampai tap pulang), jadi memang berturut.
+        const berhakMakan = lemburKetukanMenit >= 120;
+        if (berhakMakan) hariMakanLemburKerja++;
+        const rincian = hari.find((h) => h.tanggalIso === iso);
+        if (rincian) {
+          rincian.jamLembur = lemburKetukanJam;
+          rincian.berhakMakanLembur = berhakMakan;
+        }
+      }
+      // Baris Lembur e-Presensi di hari yang sama SENGAJA tidak ikut dijumlah -
+      // kalau ada, ia merekam rentang yang sama dan menjumlahkannya berarti
+      // membayar jam yang itu-itu juga dua kali.
+      if (barisLembur.length > 0) {
+        catatan.push(
+          `${iso}: ada baris Lembur di e-Presensi, TAPI jam lemburnya dihitung dari ketukan pulang (${lemburKetukanJam} jam) supaya tidak terhitung dua kali.`
+        );
+      }
+      continue;
+    }
+
     const statusHarianMenolakLembur = !hariLibur && terpilih !== null && terpilih.kategori !== "WFO";
     if (barisLembur.length > 0 && statusHarianMenolakLembur) {
       catatan.push(
@@ -972,8 +1136,14 @@ export function rekapDariLaporanPdf(
         // jam pulang wajib 16:00 lalu pulang 20:00 = 4 jam. Lihat catatan
         // "TIDAK ADA JEDA SEBELUM LEMBUR" di kepala file.
         //
-        // Di hari libur tidak ada jam kerja yang harus diselesaikan dulu, jadi
-        // lembur dihitung penuh dari jam masuk.
+        // Di hari libur & akhir pekan: DARI ABSEN MASUK SAMPAI ABSEN PULANG,
+        // dan ISTIRAHAT TIDAK DIPOTONG (keputusan user 2026-09-18). Sabtu
+        // 08:00-16:00 = 8 jam, bukan 7.
+        //
+        // Bedanya dengan hari kerja berdasar, bukan kelalaian: di hari kerja
+        // istirahat ikut membentuk jam harus checkout, jadi ia sudah terpotong
+        // sebelum menit lembur pertama dihitung. Di hari libur tidak ada jam
+        // kerja yang harus ditutup - seluruh kehadirannya lembur.
         //
         // TODO(confirm) - BATASNYA JAM DINDING, BUKAN "7,5 JAM SUDAH TERPENUHI".
         // Bedanya cuma terasa kalau pegawainya datang terlambat: yang masuk
@@ -1015,14 +1185,25 @@ export function rekapDariLaporanPdf(
         if (durasi >= 120) adaBlokDuaJam = true;
       }
 
-      if (jamHariIni > 0) {
+      // METODE A - dipangkas PER HARI (keputusan user 2026-09-18), sama
+      // dengan jalur lembur hari kerja di atas. Sebelumnya jam per hari
+      // disimpan dua desimal dan pemangkasannya menunggu total sebulan; dua
+      // cara itu tidak pernah menghasilkan angka yang sama. Terukur di Juli
+      // 2026: 3.379,5 jam mentah jadi 3.249 jam kalau dipangkas per bulan,
+      // 3.197 jam kalau per hari - selisih 52 jam.
+      //
+      // Per hari yang dipilih karena satuan lembur adalah SATU KALI LEMBUR:
+      // sisa 40 menit hari Sabtu bukan cicilan yang boleh disambung ke sisa 30
+      // menit hari Minggu untuk jadi satu jam yang dibayar.
+      const jam = Math.floor(jamHariIni);
+      if (jam > 0) {
         hitung.hariLembur++;
-        const jam = bulatkan2(jamHariIni);
         if (hariLibur) {
           jamLemburLibur += jam;
           if (adaBlokDuaJam) hariMakanLemburLibur++;
         } else {
           jamLemburKerja += jam;
+          hariLemburKerja++;
           if (adaBlokDuaJam) hariMakanLemburKerja++;
           catatan.push(
             `${iso} (${namaHari ?? "hari kerja"}): lembur ${jam} jam dihitung sebagai lembur HARI KERJA (tarif 1x). Kalau tanggal itu libur nasional, tarifnya 2x dan perlu dikoreksi manual - kalender libur nasional tidak ada di sistem ini.`
@@ -1132,6 +1313,7 @@ export function rekapDariLaporanPdf(
     totalJamLemburHariLibur: bulatkan2(jamLemburLibur),
     jumlahHariMakanLembur: hariMakanLemburKerja,
     jumlahHariMakanLemburHariLibur: hariMakanLemburLibur,
+    jumlahHariLemburHariKerja: hariLemburKerja,
   };
 
   // --- 6. Cek silang dengan Summary Presensi bawaan PDF -----------------------

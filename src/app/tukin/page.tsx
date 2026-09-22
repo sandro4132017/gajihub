@@ -71,10 +71,9 @@ export default async function TukinPage({
   );
 
   // SATU PERIODE, SELALU. Sebelumnya bulan/tahun yang kosong berarti "semua
-  // periode", dan halaman ini adalah satu-satunya yang begitu - akibatnya satu
-  // pegawai muncul sekali per periode di tabel rincian, baris TOTAL
-  // menjumlahkan beberapa bulan sekaligus, dan angka yang dibaca orang sebagai
-  // "yang dibayar bulan ini" sebenarnya gabungan dua bulan.
+  // periode" - akibatnya satu pegawai muncul sekali per periode di tabel
+  // rincian, baris TOTAL menjumlahkan beberapa bulan sekaligus, dan angka yang
+  // dibaca orang sebagai "yang dibayar bulan ini" sebenarnya gabungan dua bulan.
   //
   // Bawaannya periode TERBARU yang sudah punya kalkulasi DAN bulannya sudah
   // lewat - aturan yang sama dengan seluruh halaman berperiode lain, lihat

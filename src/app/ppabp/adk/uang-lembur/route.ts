@@ -2,54 +2,49 @@ import { NextRequest } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canGenerateAdk } from "../../../../auth/permissions";
-import type { PegawaiAdkHarian } from "../../../../business-logic/adkHarian";
 import { responseAdkHarian } from "../responseAdk";
-import { ALASAN_UANG_LEMBUR_DISEMBUNYIKAN, TAMPILKAN_ADK_LEMBUR } from "../../../tampilUangLembur";
-import { bacaJenisPegawai, labelJenisPegawai, wherePegawaiJenis } from "../jenisPegawaiAdk";
+import { berkasAdkLemburXlsx } from "../berkasAdkLembur";
+import { dataUangLemburHarian } from "../dataUangLemburHarian";
+import { bacaJenisPegawai, labelJenisPegawai } from "../jenisPegawaiAdk";
 import { slugSatker } from "../slugSatker";
 
 /**
  * Export ADK Uang Lembur - dua format (.xlsx & .txt).
  *
- * FORMATNYA DIGANTI TOTAL (2026-08-10) setelah user mengirim template asli
- * `Template-ADK-Lembur.xlsm` + `Template-ADK-Lembur-txt.txt`.
+ * FORMATNYA dari template asli `Excel/Template-ADK-Lembur.xlsm` +
+ * `Excel/Template-ADK-Lembur-txt.txt` (dan berkas sungguhan
+ * `ADK-Lembur Peg.Rokeu_Juni 2026.xlsm`, 111 entri / 35 pegawai):
  *
- * Catatan lama di file ini ("format asli per-HARI dengan kolom JHARI1..JHARI31,
- * sementara skema cuma simpan total sebulan, jadi tidak dibuat") sekarang
- * SUDAH TIDAK BERLAKU pada dua hal:
- *   1. Formatnya BUKAN JHARI1..31. Yang disetor bentuk panjang:
- *      `NIP <tab> YYYY-MM-DD <tab> jumlah jam`, satu baris per hari lembur.
- *      Kolom JHARI1..31 itu tampilan grid di sheet entri operator, bukan
- *      muatan filenya.
- *   2. Rincian per hari sekarang ADA - `PresensiHarian.jamLembur` (migrasi
- *      20260810000000). Angkanya sudah lama dihitung per hari oleh
- *      rekapDariLaporanPdf(), cuma dulu dibuang setelah dijumlahkan.
+ *   NIP <tab> YYYY-MM-DD <tab> jumlah jam
  *
- * PERINGATAN ISI (bukan soal format) - baca sebelum memakai file ini:
- * Gajihub menghitung lembur HANYA dari baris berstatus "Lembur" di e-Presensi.
- * Di lapangan, lembur HARI KERJA hampir tidak pernah ditandai begitu - pegawai
- * tercatat WFO lalu pulang malam. Sepanjang Juni 2026 se-kementerian cuma ada
- * 21 baris berstatus Lembur di hari kerja (12 di antaranya di tanggal merah),
- * sementara file ADK asli SATU unit saja memuat 109 baris lembur hari kerja.
- * Jadi file yang dihasilkan di sini akan JAUH lebih sedikit dari yang
- * sebenarnya diajukan. Sumber sahnya adalah surat perintah lembur, yang tidak
- * ada di database manapun - lihat catatan di halaman /ppabp/adk.
+ * satu baris per hari lembur, tanpa header, tanpa baris total, CRLF. Kolom
+ * JHARI1..JHARI31 yang sempat disangka formatnya itu GRID ENTRI operator di
+ * sheet "depan", bukan muatan berkasnya - sheet "hasil" yang disetor, dan
+ * isinya sama persis dengan versi TXT.
+ *
+ * DUA HAL YANG BERUBAH 2026-09-22, dan keduanya mencabut catatan lama di file
+ * ini:
+ *
+ * 1. GERBANG ISINYA. Dulu `status: "APPROVED"` per baris - gerbang yang sudah
+ *    tidak berlaku sejak approval berjenjang dihapus (2026-09-02), sehingga
+ *    berkas ini SELALU kosong. Sekarang gerbangnya PENGIRIMAN UNIT, sama
+ *    persis dengan ADK Tukin & Uang Makan (lihat ../satkerTerkirim.ts).
+ *
+ * 2. SUMBER JAMNYA. Catatan lama - "Gajihub menghitung lembur HANYA dari baris
+ *    berstatus Lembur di e-Presensi, jadi berkas ini akan JAUH lebih sedikit
+ *    dari yang sebenarnya diajukan" - sudah tidak berlaku sejak 2026-09-18.
+ *    Lembur hari kerja sekarang diturunkan dari KETUKAN (jam pulang dikurangi
+ *    batas kewajiban 7,5 jam), yang memang cara lembur hari kerja tercatat di
+ *    lapangan. Sebabnya terukur: Juli 2026 punya 459 baris ber-status Lembur
+ *    di e-Presensi dan SEMUANYA di akhir pekan, nol di hari kerja, sementara
+ *    berkas ADK asli Juni 2026 justru 109 dari 111 entrinya di hari kerja.
+ *
+ * YANG TETAP BERLAKU: berkas ini berisi jam TERHITUNG, bukan hak bayar. Yang
+ * mengesahkan lembur adalah SURAT PERINTAH LEMBUR - dokumen resmi di luar
+ * sistem ini - dan petugas yang mengadu berkas ini kepadanya sebelum
+ * dibayarkan. Lihat catatan di halaman /ppabp/adk.
  */
 export async function GET(req: NextRequest) {
-  // Gerbang PALING LUAR - sebelum sesi pun dibaca.
-  //
-  // Kartu unduhnya sudah dilepas dari /ppabp/adk, tapi melepas tombol tidak
-  // menutup URL: siapa pun yang pernah mengunduh file ini punya tautannya di
-  // riwayat browser, dan tautan itu tetap bekerja. Bedanya dengan permukaan
-  // lain bukan soal kerapian - di sini yang lolos bukan angka yang salah
-  // dikutip, melainkan angka yang belum disetujui MASUK ke Web Gaji.
-  //
-  // 409 Conflict, bukan 403: yang menolak bukan wewenang orangnya, melainkan
-  // keadaan datanya. PPABP yang sama akan berhasil begitu saklarnya dibuka.
-  if (!TAMPILKAN_ADK_LEMBUR) {
-    return new Response(ALASAN_UANG_LEMBUR_DISEMBUNYIKAN, { status: 409 });
-  }
-
   const akun = await getSessionAccount();
   if (!akun) return new Response("Belum login.", { status: 401 });
   const authUser = { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
@@ -59,59 +54,23 @@ export async function GET(req: NextRequest) {
   const tahun = Number(req.nextUrl.searchParams.get("tahun"));
   if (!bulan || !tahun) return new Response("Parameter bulan dan tahun wajib diisi.", { status: 400 });
 
-  // Penyaringan PNS/P3K, sama seperti dua ADK lainnya. Gerbang isinya di
-  // sini masih `status: "APPROVED"` - route ini memang belum ikut pindah ke
-  // gerbang pengiriman unit, karena ADK Uang Lembur sedang tidak berfungsi
-  // (lihat TAMPILKAN_ADK_LEMBUR di atas).
+  // Barisnya disusun di modul bersama - halaman /ppabp/adk memakai fungsi yang
+  // SAMA untuk ringkasan & panel peringatannya, jadi yang dilihat di layar dan
+  // yang diunduh tidak bisa berbeda.
   const jenisPegawai = bacaJenisPegawai(req.nextUrl.searchParams.get("jenis"));
   const satkerDiminta = req.nextUrl.searchParams.get("satker");
-  const rows = await prisma.uangLembur.findMany({
-    where: {
-      periodeBulan: bulan,
-      periodeTahun: tahun,
-      status: "APPROVED",
-      pegawai: {
-        ...wherePegawaiJenis(jenisPegawai),
-        ...(satkerDiminta ? { satuanKerja: satkerDiminta } : {}),
-      },
-    },
-    include: { pegawai: { select: { id: true, nip: true, nama: true } } },
-    orderBy: { pegawai: { nama: "asc" } },
-  });
-
-  const awal = new Date(Date.UTC(tahun, bulan - 1, 1));
-  const akhir = new Date(Date.UTC(tahun, bulan, 1));
-  const harian = await prisma.presensiHarian.findMany({
-    where: {
-      pegawaiId: { in: rows.map((r) => r.pegawai.id) },
-      tanggal: { gte: awal, lt: akhir },
-      jamLembur: { gt: 0 },
-    },
-    select: { pegawaiId: true, tanggal: true, jamLembur: true },
-    orderBy: { tanggal: "asc" },
-  });
-
-  const perPegawai = new Map<string, { tanggalIso: string; jam: number }[]>();
-  for (const h of harian) {
-    const arr = perPegawai.get(h.pegawaiId) ?? [];
-    arr.push({ tanggalIso: h.tanggal.toISOString().slice(0, 10), jam: h.jamLembur });
-    perPegawai.set(h.pegawaiId, arr);
-  }
-
-  const pegawai: PegawaiAdkHarian[] = rows.map((r) => ({
-    nip: r.pegawai.nip,
-    nama: r.pegawai.nama,
-    hari: perPegawai.get(r.pegawai.id) ?? [],
-  }));
+  const { pegawai, totalBaris, totalJam } = await dataUangLemburHarian(
+    bulan,
+    tahun,
+    satkerDiminta,
+    jenisPegawai
+  );
 
   // Berkas ADK adalah PERINTAH BAYAR yang keluar dari sistem ini menuju Web
-  // Gaji/SAKTI. Sampai sebelum ini pengunduhannya TIDAK tercatat sama sekali -
-  // jadi pertanyaan "siapa yang menarik berkas pembayaran periode ini, kapan"
-  // tidak punya jawaban. Dicatat SETELAH otorisasi lolos & sebelum berkasnya
-  // dikirim.
+  // Gaji/SAKTI. Dicatat SETELAH otorisasi lolos & sebelum berkasnya dikirim.
   //
-  // satuanKerja NULL: berkas ini memuat SEMUA unit yang barisnya sudah
-  // disetujui, jadi memang bukan aktivitas satu unit.
+  // satuanKerja NULL: berkas ini memuat SEMUA unit yang sudah mengirim, jadi
+  // memang bukan aktivitas satu unit.
   await prisma.auditTrail.create({
     data: {
       entitas: "export_adk",
@@ -124,20 +83,46 @@ export async function GET(req: NextRequest) {
         periode: `${bulan}/${tahun}`,
         format: req.nextUrl.searchParams.get("format") ?? "xlsx",
         jenisPegawai: labelJenisPegawai(jenisPegawai),
-        satuanKerja: satkerDiminta ?? "semua unit",
+        satuanKerja: satkerDiminta ?? "semua unit terkirim",
         jumlahPegawai: pegawai.length,
+        // Jumlah baris & jam ikut dicatat: inilah yang benar-benar dibayar Web
+        // Gaji, dan tanpa angkanya di jejak audit tidak ada cara memeriksa
+        // ulang berapa jam yang pernah disetorkan untuk satu periode.
+        jumlahBaris: totalBaris,
+        totalJam,
       },
     },
   });
 
+  const namaFile = `adk-uang-lembur-${String(bulan).padStart(2, "0")}-${tahun}${slugSatker(satkerDiminta)}${
+    jenisPegawai ? `-${jenisPegawai.toLowerCase()}` : ""
+  }`;
+
+  // JALUR .xlsx BEDA DARI DUA ADK LAIN, dan sengaja: berkasnya diisi ke
+  // CETAKAN ASLI operator supaya warna, perataan, lebar kolom, dan formulanya
+  // sama persis. Lihat alasan lengkapnya di ../berkasAdkLembur.ts - ringkasnya,
+  // pustaka yang menyusun workbook dari nol tidak bisa menulis gaya sel sama
+  // sekali.
+  //
+  // .txt TETAP lewat jalur bersama: berkas teks tidak punya gaya, jadi
+  // menduplikasi penyusunnya cuma menambah tempat yang bisa berbeda.
+  const format = req.nextUrl.searchParams.get("format");
+  if (format !== "txt") {
+    const buffer = await berkasAdkLemburXlsx(pegawai, bulan, tahun);
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${namaFile}.xlsx"`,
+      },
+    });
+  }
+
   return responseAdkHarian({
-    format: req.nextUrl.searchParams.get("format"),
+    format,
     pegawai,
     periodeBulan: bulan,
     periodeTahun: tahun,
     denganJam: true,
-    namaFile: `adk-uang-lembur-${String(bulan).padStart(2, "0")}-${tahun}${slugSatker(satkerDiminta)}${
-      jenisPegawai ? `-${jenisPegawai.toLowerCase()}` : ""
-    }`,
+    namaFile,
   });
 }

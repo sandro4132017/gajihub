@@ -69,6 +69,7 @@ export async function simpanHasilPresensi(
     totalJamLemburHariLibur: d.totalJamLemburHariLibur,
     jumlahHariMakanLembur: d.jumlahHariMakanLembur,
     jumlahHariMakanLemburHariLibur: d.jumlahHariMakanLemburHariLibur,
+    jumlahHariLemburHariKerja: d.jumlahHariLemburHariKerja,
     sourceSystem,
     sourceFileName: null,
     diunggahOlehId,

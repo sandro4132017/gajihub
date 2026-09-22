@@ -155,6 +155,7 @@ export async function uploadRekapPresensiAction(
         totalJamLemburHariLibur: data.totalJamLemburHariLibur,
         jumlahHariMakanLembur: Math.round(data.jumlahHariMakanLembur),
         jumlahHariMakanLemburHariLibur: Math.round(data.jumlahHariMakanLemburHariLibur),
+        jumlahHariLemburHariKerja: Math.round(data.jumlahHariLemburHariKerja),
         sourceSystem: "UPLOAD_MANUAL",
         sourceFileName: file.name,
         diunggahOlehId: user.id,

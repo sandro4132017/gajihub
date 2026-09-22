@@ -261,6 +261,19 @@ export interface UangLemburInput {
    * SBM). Dipisah dari totalJamLembur supaya keduanya bisa ditelusuri.
    */
   totalJamLemburHariLibur?: number;
+  /**
+   * Jumlah HARI lembur hari kerja pada periode ini - bukan jumlah jamnya.
+   *
+   * Dibutuhkan karena pengali jam pertama (1,5x) berlaku PER HARI: total
+   * sebulan = tarif x (2J - 0,5D). Tanpa D, potongan setengah tarif itu cuma
+   * jatuh sekali sebulan alih-alih sekali per hari lembur.
+   *
+   * OPSIONAL karena tidak semua jalur pengisian punya angkanya - rekap yang
+   * diunggah lewat template Excel cuma membawa TOTAL jam. Kalau tidak diisi,
+   * hitungUangLembur() TIDAK menebak: seluruh jam hari kerja dibayar 1x tarif
+   * SBM polos dan alasannya ditulis sebagai anomali.
+   */
+  jumlahHariLemburHariKerja?: number;
   /** SBM 2026 item 23.1 per golongan (OJ) - lihat tarifSbm.ts. */
   tarifPerJam: number;
   /**

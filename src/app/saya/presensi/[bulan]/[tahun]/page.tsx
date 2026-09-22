@@ -4,7 +4,7 @@ import { getSessionAccount } from "../../../../../auth/getSessionAccount";
 import { canViewDataSendiri } from "../../../../../auth/permissions";
 import { AksesDitolak } from "../../../../AksesDitolak";
 import { NAMA_BULAN } from "../../../../bulan";
-import { jamTeks, labelStatus, namaHari, tanggalTeks } from "../../../../presensiTampilan";
+import { jamTeks, labelStatus, lemburTeks, namaHari, tanggalTeks } from "../../../../presensiTampilan";
 import { HALAMAN } from "../../../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
@@ -128,7 +128,7 @@ export default async function PresensiSayaPage({
             </div>
             <div className="rounded-xl border border-line bg-surface p-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Total lembur</p>
-              <p className="mt-1 font-mono text-lg font-extrabold text-ink">{totalLembur.toFixed(1)} jam</p>
+              <p className="mt-1 font-mono text-lg font-extrabold text-ink">{lemburTeks(totalLembur)}</p>
             </div>
           </div>
 
@@ -201,7 +201,7 @@ export default async function PresensiSayaPage({
                         {p.menitMeninggalkanKantor > 0 ? `${p.menitMeninggalkanKantor} mnt` : "-"}
                       </td>
                       <td className={`px-3 py-2 font-mono ${p.jamLembur > 0 ? "text-ink" : "text-muted"}`}>
-                        {p.jamLembur > 0 ? `${p.jamLembur.toFixed(1)} jam` : "-"}
+                        {lemburTeks(p.jamLembur)}
                       </td>
                     </tr>
                   );

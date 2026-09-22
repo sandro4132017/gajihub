@@ -3,6 +3,7 @@ import {
   rekapDariLaporanPdf,
   kategoriDariStatus,
   batasCheckoutMenit,
+  batasLemburMenit,
   JADWAL_KERJA_DEFAULT,
   TOLERANSI_TERLAMBAT_MENIT,
 } from "../presensiPdfKeRekap";
@@ -484,21 +485,89 @@ describe("rekapDariLaporanPdf - uang lembur", () => {
 
   it("tidak memberi uang makan lembur kalau blok lemburnya di bawah 2 jam", () => {
     // SBM 2026 item 23.2: minimal 2 jam berturut-turut.
+    //
+    // 10:00-11:30 = 1,5 jam mentah, dibayar 1 jam: metode A memangkas sisa
+    // menit PER HARI (keputusan user 2026-09-18). Syarat 2 jam untuk uang
+    // makan diukur dari durasi MENTAH blok itu, bukan dari jam yang sudah
+    // dipangkas - keduanya menjawab pertanyaan berbeda.
     const hasil = rekapDariLaporanPdf(
       laporan([baris("27-07-2025", "Minggu", "10:00", "11:30", "Lembur")])
     );
-    expect(hasil.rekap.totalJamLemburHariLibur).toBe(1.5);
+    expect(hasil.rekap.totalJamLemburHariLibur).toBe(1);
     expect(hasil.rekap.jumlahHariMakanLemburHariLibur).toBe(0);
   });
 
-  it("TIDAK menghitung lembur dari baris WFO yang pulangnya malam", () => {
-    // Lembur harus diperintahkan; pulang malam tanpa status "Lembur" cuma
-    // pulang telat. Di file uji ada WFO yang pulang 23:59.
+  it("lembur akhir pekan dihitung dari absen masuk sampai absen pulang, istirahat TIDAK dipotong", () => {
+    // Keputusan user 2026-09-18. Sabtu 08:00-16:00 = 8 jam, bukan 7 jam.
+    //
+    // Beda dengan hari kerja, dan bedanya berdasar: di hari kerja istirahat
+    // ikut membentuk jam harus checkout, jadi ia sudah terpotong sebelum
+    // lembur mulai dihitung. Di hari libur tidak ada jam kerja yang harus
+    // ditutup - seluruh kehadirannya lembur.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("26-07-2025", "Sabtu", "08:00", "16:00", "Lembur")])
+    );
+    expect(hasil.rekap.totalJamLemburHariLibur).toBe(8);
+    expect(hasil.rekap.jumlahHariMakanLemburHariLibur).toBe(1);
+  });
+
+  it("lembur akhir pekan di bawah satu jam hangus - metode A, per hari", () => {
+    // Sisa 40 menit Sabtu bukan cicilan yang boleh disambung ke sisa hari lain
+    // sampai genap satu jam yang dibayar.
+    const hasil = rekapDariLaporanPdf(
+      laporan([
+        baris("26-07-2025", "Sabtu", "08:00", "08:40", "Lembur"),
+        baris("27-07-2025", "Minggu", "09:00", "09:30", "Lembur"),
+      ])
+    );
+    expect(hasil.rekap.totalJamLemburHariLibur).toBe(0);
+  });
+
+  it("menghitung lembur hari kerja dari ketukan pulang WFO, dari batas checkout", () => {
+    // DIBALIK 2026-09-18 atas instruksi user. Sebelumnya test ini mengunci
+    // "pulang malam tanpa status Lembur bukan lembur". Alasannya gugur oleh
+    // data: seluruh 459 baris berstatus Lembur di e-Presensi (Juli 2026)
+    // jatuh di AKHIR PEKAN, nol di hari kerja - sementara ADK asli Rokeu Juni
+    // 2026 justru 109 dari 111 entrinya hari kerja. Bersandar pada status itu
+    // menolkan lembur hari kerja seluruhnya.
+    //
+    // Masuk 08:10 Selasa -> batas checkout 08:10 + 450 + 60 istirahat = 16:40.
+    // Pulang 22:00 -> 5 jam 20 menit, dipangkas per hari jadi 5 jam.
     const hasil = rekapDariLaporanPdf(
       laporan([baris("01-07-2025", "Selasa", "08:10", "22:00", "WFO")])
     );
-    expect(hasil.rekap.totalJamLembur).toBe(0);
+    expect(hasil.rekap.totalJamLembur).toBe(5);
     expect(hasil.rekap.totalJamLemburHariLibur).toBe(0);
+    expect(hasil.rekap.jumlahHariMakanLembur).toBe(1); // blok > 2 jam berturut
+  });
+
+  it("pulang telat di bawah satu jam TIDAK jadi lembur - dipangkas per hari", () => {
+    // Inti penjagaannya: 91% hari WFO melewati batas checkout, kebanyakan cuma
+    // belasan menit. Kalau remahnya dibiarkan menumpuk sampai pembulatan
+    // bulanan, orang yang tidak pernah lembur sekali pun tetap dibayar lembur.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("01-07-2025", "Selasa", "07:30", "16:45", "WFO")])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+  });
+
+  it("lembur hari kerja hanya untuk WFO - WFH yang pulang malam tidak dihitung", () => {
+    // Kehadiran WFH tidak dinilai dari ketukan gedung, jadi ketukan pulangnya
+    // bukan bukti kerja lembur di kantor.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("01-07-2025", "Selasa", "07:30", "22:00", "WFH")])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+  });
+
+  it("tap pulang yang HILANG (23:59) tidak pernah jadi lembur", () => {
+    // e-Presensi mengisi 23:59 saat tap pulang tidak ada - 4.976 baris di Juli
+    // 2026. Tanpa penjagaan ini, satu tap yang terlupa berubah jadi ~7 jam
+    // lembur karangan.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("01-07-2025", "Selasa", "07:30", "23:59", "WFO")])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
   });
 });
 
@@ -703,6 +772,82 @@ describe("rekapDariLaporanPdf - cuti & bulan ke-berapa (Pasal 14)", () => {
 // memang berisi baris Lembur (12 dan 7 baris) yang sebelum kalender ini ada
 // dibayar tarif 1x - separuh dari yang seharusnya.
 // ============================================================================
+describe("rekapDariLaporanPdf - jumlah HARI lembur hari kerja", () => {
+  // Dipakai pengali jam pertama (1,5x) yang berlaku PER HARI. Tanpa angka ini
+  // mesin uang menolak memakai pengalinya dan membayar 1x tarif - jadi
+  // cacahnya harus benar, bukan sekadar ada.
+
+  it("mencacah HARI, bukan jam", () => {
+    const hari: [string, string][] = [
+      ["06-07-2026", "Senin"],
+      ["07-07-2026", "Selasa"],
+      ["08-07-2026", "Rabu"],
+    ];
+    const hasil = rekapDariLaporanPdf(
+      laporan(hari.map(([t, h]) => baris(t, h, "07:30", "19:00", "WFO")))
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(9); // 3 jam x 3 hari
+    expect(hasil.rekap.jumlahHariLemburHariKerja).toBe(3);
+  });
+
+  it("hari yang lemburnya di bawah satu jam tidak ikut dicacah", () => {
+    // Dipotong jadi 0 jam, jadi tidak ada "jam pertama" untuk dibayar 1,5x.
+    // Ikut mencacahnya akan MENGURANGI bayaran: rumusnya 2J - 0,5D.
+    const hasil = rekapDariLaporanPdf(
+      laporan([
+        baris("06-07-2026", "Senin", "07:30", "19:00", "WFO"),
+        baris("07-07-2026", "Selasa", "07:30", "16:45", "WFO"),
+      ])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(3);
+    expect(hasil.rekap.jumlahHariLemburHariKerja).toBe(1);
+  });
+
+  it("lembur akhir pekan TIDAK ikut dicacah", () => {
+    // Di hari libur seluruh jam dikali 2 rata - tidak ada aturan jam pertama,
+    // jadi jumlah harinya tidak mengubah rupiah apa pun. Ikut dicacah justru
+    // akan memotong bayaran hari kerja yang tidak ada hubungannya.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("11-07-2026", "Sabtu", "08:00", "14:00", "Lembur")])
+    );
+    expect(hasil.rekap.totalJamLemburHariLibur).toBe(6);
+    expect(hasil.rekap.jumlahHariLemburHariKerja).toBe(0);
+  });
+});
+
+describe("rekapDariLaporanPdf - TIDAK ADA batas jam lembur", () => {
+  // Keputusan user 2026-09-21, setelah membaca PMK 32/2025 sendiri: SBM tidak
+  // menetapkan batas jam lembur per hari, per minggu, maupun per bulan.
+  // "3 (tiga) jam", "14 (empat belas) jam", dan "libur" nol kemunculan di
+  // seluruh dokumen. Batas 3/14 sempat terpasang sehari lalu dicabut.
+  //
+  // Test ini ada supaya batas tidak kembali masuk diam-diam: yang membatasi
+  // lembur adalah SURAT PERINTAH, dokumen di luar sistem ini.
+
+  it("hari kerja belasan jam tidak dipangkas", () => {
+    // Selasa, 07:30-23:00. Batas checkout 16:00, jadi 7 jam lembur.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("07-07-2026", "Selasa", "07:30", "23:00", "WFO")])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(7);
+  });
+
+  it("satu minggu penuh lembur panjang tidak kena plafon mingguan", () => {
+    const hari: [string, string][] = [
+      ["06-07-2026", "Senin"],
+      ["07-07-2026", "Selasa"],
+      ["08-07-2026", "Rabu"],
+      ["09-07-2026", "Kamis"],
+      ["10-07-2026", "Jumat"],
+    ];
+    const hasil = rekapDariLaporanPdf(
+      laporan(hari.map(([t, h]) => baris(t, h, "07:30", "21:00", "WFO")))
+    );
+    // Senin-Kamis 16:00->21:00 = 5 jam; Jumat batas checkout 16:30 = 4,5 -> 4.
+    expect(hasil.rekap.totalJamLembur).toBe(24);
+  });
+});
+
 describe("rekapDariLaporanPdf - hari libur nasional", () => {
   const LIBUR = new Map([["2026-06-01", "Hari Lahir Pancasila"]]);
 
@@ -960,5 +1105,103 @@ describe("batasCheckoutMenit - Pasal 9 ayat (1) & (3)", () => {
 
   it("tanpa jam masuk: tidak ada yang bisa digeser, batasnya jam pulang wajib", () => {
     expect(batasCheckoutMenit(null, pulangWajibSenin, 60)).toBe(pulangWajibSenin);
+  });
+});
+
+// ============================================================================
+// BATAS LEMBUR - titik mulai jam lembur, TANPA batas atas (keputusan user
+// 2026-09-21). Dipisah dari batasCheckoutMenit karena cuma salah satunya
+// boleh kehilangan batas atas: yang ini menghitung LEMBUR, yang itu
+// menghitung POTONGAN, dan mencabut batas atas pada yang kedua berarti
+// menagih menit keterlambatan dua kali.
+// ============================================================================
+describe("batasLemburMenit - kewajiban 7,5 jam yang utuh", () => {
+  const SENIN = 1;
+  const JUMAT = 5;
+  const pulangWajibSenin = JADWAL_KERJA_DEFAULT.jamPulangWajibMenit[SENIN]!;
+  const pulangWajibJumat = JADWAL_KERJA_DEFAULT.jamPulangWajibMenit[JUMAT]!;
+
+  it("datang tepat waktu: mulai lembur persis di jam pulang wajib", () => {
+    expect(batasLemburMenit(jam("07:30"), pulangWajibSenin, 60)).toBe(pulangWajibSenin);
+  });
+
+  it("terlambat menggeser titik mulai SEPENUHNYA - tidak dikunci di 17:00", () => {
+    // Kasus nyata IRMA PUSPITA, 9 Juli 2026: tap 09:10, jadi 7,5 jamnya baru
+    // genap 17:40. Dengan batas atas yang lama angkanya 17:00.
+    expect(batasLemburMenit(jam("09:10"), pulangWajibSenin, 60)).toBe(jam("17:40"));
+    expect(batasLemburMenit(jam("14:00"), pulangWajibSenin, 60)).toBe(jam("22:30"));
+  });
+
+  it("datang lebih awal TIDAK memajukan - lantainya tetap jam pulang wajib", () => {
+    // Yang tap subuh tidak mulai berlembur pukul 14:30.
+    expect(batasLemburMenit(jam("06:00"), pulangWajibSenin, 60)).toBe(pulangWajibSenin);
+  });
+
+  it("Jumat memakai istirahat 90 menit dan jam pulang wajib 16.30", () => {
+    expect(batasLemburMenit(jam("07:30"), pulangWajibJumat, 90)).toBe(pulangWajibJumat);
+    expect(batasLemburMenit(jam("10:00"), pulangWajibJumat, 90)).toBe(jam("19:00"));
+  });
+
+  it("tanpa jam masuk: tidak ada yang bisa digeser", () => {
+    expect(batasLemburMenit(null, pulangWajibSenin, 60)).toBe(pulangWajibSenin);
+  });
+
+  it("PENJAGAAN: batasCheckoutMenit TETAP ber-batas atas - jangan disatukan", () => {
+    // Kalau suatu saat seseorang merapikan dua fungsi ini jadi satu, test ini
+    // yang jatuh duluan. Menyatukannya berarti menit keterlambatan ditagih
+    // dua kali - terukur 99.155 menit pada Juli 2026, 852 pegawai.
+    expect(batasCheckoutMenit(jam("09:10"), pulangWajibSenin, 60)).toBe(jam("17:00"));
+    expect(batasLemburMenit(jam("09:10"), pulangWajibSenin, 60)).toBe(jam("17:40"));
+
+    // Selisih keduanya SELALU sama persis dengan menit keterlambatan orang
+    // itu - itulah menit yang tidak boleh ditagih dua kali.
+    const masuk = jam("09:10")!;
+    const terlambat = Math.max(
+      0,
+      masuk - JADWAL_KERJA_DEFAULT.jamMasukWajibMenit - JADWAL_KERJA_DEFAULT.toleransiTerlambatMenit
+    );
+    expect(
+      batasLemburMenit(masuk, pulangWajibSenin, 60) - batasCheckoutMenit(masuk, pulangWajibSenin, 60)
+    ).toBe(terlambat);
+  });
+});
+
+describe("lembur hari kerja dihitung dari batas lembur, bukan batas potongan", () => {
+  it("kasus IRMA PUSPITA 9 Juli 2026: 09:10 -> 18:26 = NOL jam lembur", () => {
+    // 18:26 - 17:40 = 46 menit, belum genap satu jam. Dengan batas atas 17:00
+    // yang lama, hari ini berbunyi 1 jam - lembur yang sebenarnya masih
+    // penutup jam kerjanya sendiri.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "09:10", "18:26", "WFO")])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+  });
+
+  it("contoh user: 09:10 -> 19:40 = 2 jam", () => {
+    // "dia lembur 2 jam karena dia checkout jam 19:40" - 19:40 - 17:40.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "09:10", "19:40", "WFO")])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(2);
+  });
+
+  it("terlambat memangkas lembur, tidak menambahnya", () => {
+    // Dua orang pulang di jam yang sama. Yang datang tepat waktu dapat LEBIH
+    // banyak - dengan batas atas yang lama, justru sebaliknya.
+    const telat = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "09:10", "19:00", "WFO")])
+    );
+    const tepatWaktu = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "07:30", "19:00", "WFO")])
+    );
+    expect(telat.rekap.totalJamLembur).toBe(1); // 19:00 - 17:40 = 80 menit
+    expect(tepatWaktu.rekap.totalJamLembur).toBe(3); // 19:00 - 16:00
+  });
+
+  it("datang tepat waktu: angkanya TIDAK berubah oleh aturan baru ini", () => {
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO")])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(4);
   });
 });

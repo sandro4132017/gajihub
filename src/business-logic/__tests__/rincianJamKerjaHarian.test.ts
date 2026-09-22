@@ -76,6 +76,27 @@ describe("rincianJamKerjaHari - batas checkout bergeser tapi dibatasi toleransi 
     expect(r.totalMenitKekuranganHarian).toBe(90);
   });
 
+  it("kolom Jam harus pulang memajang batas LEMBUR, bukan batas potongan", () => {
+    // Masuk 09:10 (kasus IRMA PUSPITA 9 Juli 2026). Dua angka berbeda hidup
+    // berdampingan di baris yang sama, dan itu disengaja:
+    //   17:40 - kewajiban 7,5 jam yang utuh, dipajang & titik mulai lembur;
+    //   17:00 - ber-batas atas, dipakai mesin POTONGAN supaya 40 menit
+    //           keterlambatannya tidak ditagih dua kali.
+    const r = rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(9, 10), jamKeluarMenit: MENIT(18, 26) });
+
+    expect(r.batasLemburMenit).toBe(MENIT(17, 40));
+    expect(r.batasCheckoutMenit).toBe(MENIT(17, 0));
+    expect(r.menitTerlambat).toBe(40);
+    // Selisih kedua batas itu PERSIS menit keterlambatannya.
+    expect(r.batasLemburMenit! - r.batasCheckoutMenit!).toBe(r.menitTerlambat);
+  });
+
+  it("yang tap subuh tidak mulai berlembur pukul 14:30 - lantainya tetap 16:00", () => {
+    const r = rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(6, 0), jamKeluarMenit: MENIT(15, 0) });
+    expect(r.jamHarusPulangMenit).toBe(MENIT(14, 30)); // langkah antara
+    expect(r.batasLemburMenit).toBe(MENIT(16, 0));
+  });
+
   it("PENTING: kekurangan jam kerja BUKAN pulang cepat - orang ini pulang tepat waktu", () => {
     const r = rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(9, 0), jamKeluarMenit: MENIT(16, 0) });
 
@@ -90,6 +111,9 @@ describe("rincianJamKerjaHari - batas checkout bergeser tapi dibatasi toleransi 
     // Masuk 06:00 -> 06:00 + 7,5 jam + 60 = 14:30, TAPI batasnya tetap 16:00.
     const r = rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(6, 0), jamKeluarMenit: MENIT(15, 0) });
 
+    // 14:30 langkah antara dan TIDAK pernah muncul di layar - kolom "Jam
+    // harus pulang" memajang batasCheckoutMenit. Memajang yang pertama
+    // pernah berbunyi "harus pulang 14:30" bagi yang tap subuh.
     expect(r.jamHarusPulangMenit).toBe(MENIT(14, 30));
     expect(r.batasCheckoutMenit).toBe(MENIT(16, 0)); // max(...) menjaga lantainya
     expect(r.kekuranganJamKerjaMenit).toBe(60);

@@ -7,9 +7,9 @@ import { AksesDitolak } from "../../AksesDitolak";
 import { NAMA_BULAN } from "../../bulan";
 import { periodePunyaTukin, resolvePeriode } from "../../periodeDefault";
 import { kelompokkanPerBank } from "../../../business-logic/rekeningPegawai";
-import { akhirPekan } from "../../../business-logic/adkHarian";
 import { STATUS_BERHAK_UANG_MAKAN } from "./statusUangMakan";
 import { dataUangMakanHarian } from "./dataUangMakanHarian";
+import { dataUangLemburHarian } from "./dataUangLemburHarian";
 import { PratinjauAdkUangMakan } from "./PratinjauAdkUangMakan";
 import { TAMPILKAN_ADK_LEMBUR, TAMPILKAN_NOMINAL_LEMBUR } from "../../tampilUangLembur";
 import { PapanProgres } from "../../kasubag/kirim/PapanProgres";
@@ -137,15 +137,18 @@ export default async function ExportAdkPage({
   // Pratinjau isi ADK Uang Makan - dari fungsi yang SAMA dengan yang menyusun
   // berkasnya, jadi yang terlihat di layar persis yang terunduh.
   const pratinjauUm = await dataUangMakanHarian(bln, thn, satkerTerpilih || null, jenisPegawai);
+  // Idem untuk Uang Lembur. Angka di layar TIDAK dihitung ulang di halaman ini -
+  // dulu begitu, dan akibatnya keterangan "sekian hari lembur" memakai populasi
+  // yang tidak sama dengan isi berkasnya.
+  const pratinjauLembur = await dataUangLemburHarian(bln, thn, satkerTerpilih || null, jenisPegawai);
 
   // CATATAN PERBAIKAN: dua angka di bawah dulu memakai POPULASI YANG BERBEDA
   // dan disandingkan dalam satu kalimat - jumlah pegawai disaring, jumlah hari
   // tidak. Hasilnya kalimat seperti "7 pegawai, 97.008 hari hadir", yang
   // membuat orang mengira berkasnya memuat 97 ribu baris. Sekarang keduanya
   // disaring dengan cara yang sama.
-  const [umIkut, lemburIkut, hariUm, hariLembur] = await Promise.all([
+  const [umIkut, hariUm] = await Promise.all([
     prisma.uangMakan.count({ where: whereIkutAdk(bln, thn, satkerDipakai, jenisPegawai) }),
-    prisma.uangLembur.count({ where: whereIkutAdk(bln, thn, satkerDipakai, jenisPegawai) }),
     prisma.presensiHarian.count({
       where: {
         tanggal: { gte: awalPeriode, lt: akhirPeriode },
@@ -153,19 +156,9 @@ export default async function ExportAdkPage({
         pegawai: { satuanKerja: { in: satkerDipakai } },
       },
     }),
-    prisma.presensiHarian.findMany({
-      where: {
-        tanggal: { gte: awalPeriode, lt: akhirPeriode },
-        jamLembur: { gt: 0 },
-        pegawai: { satuanKerja: { in: satkerDipakai } },
-      },
-      select: { tanggal: true },
-    }),
   ]);
-  const jamLemburHariKerja = hariLembur.filter((h) => !akhirPekan(h.tanggal.toISOString().slice(0, 10))).length;
   const ringkasUm = `${umIkut} pegawai dari unit yang sudah mengirim, ${hariUm.toLocaleString("id-ID")} hari hadir mereka di periode ini.`;
-  const ringkasLembur = `${lemburIkut} pegawai dari unit yang sudah mengirim, ${hariLembur.length} hari lembur (${jamLemburHariKerja} di hari kerja).`;
-  const lemburSepi = lemburIkut > 0 && jamLemburHariKerja < 20;
+  const ringkasLembur = `${pratinjauLembur.pegawai.length} pegawai dari unit yang sudah mengirim, ${pratinjauLembur.totalBaris} hari lembur, ${pratinjauLembur.totalJam} jam.`;
 
   // Berapa yang SUDAH dihitung tapi unitnya BELUM mengirim. Tanpa angka ini,
   // periode yang tinggal menunggu unit menekan Kirim tidak bisa dibedakan dari
@@ -177,7 +170,7 @@ export default async function ExportAdkPage({
     prisma.uangMakan.count({ where: belumKirim }),
     prisma.uangLembur.count({ where: belumKirim }),
   ]);
-  const totalApproved = tukinPeriode.length + umIkut + lemburIkut;
+  const totalApproved = tukinPeriode.length + umIkut + pratinjauLembur.pegawai.length;
   const totalBelumApproved = tukinDraft + umDraft + lemburDraft;
 
   // --- Berapa yang TERSINGKIR oleh penyaring jenis -------------------------
@@ -226,7 +219,7 @@ export default async function ExportAdkPage({
         : tukinPeriode.length
       : adkDipilih === "uang-makan"
         ? umIkut
-        : lemburIkut;
+        : pratinjauLembur.pegawai.length;
   const keteranganBerkas =
     adkDipilih === "tukin"
       ? bankTerpilih
@@ -665,32 +658,61 @@ export default async function ExportAdkPage({
         </ul>
       </div>
 
-      {lemburSepi && (
+      {/* PERINGATAN ISI ADK UANG LEMBUR.
+          Panel lama di sini bercerita bahwa Gajihub cuma membaca baris
+          ber-status "Lembur" di e-Presensi sehingga berkasnya jauh lebih
+          sedikit dari yang diajukan. Itu sudah tidak benar sejak 2026-09-18 -
+          lembur hari kerja sekarang diturunkan dari ketukan. Yang
+          menggantikannya dua hal yang MEMANG masih bisa membuat berkas ini
+          salah, dan dua-duanya diturunkan dari data periode ini, bukan dari
+          kalimat umum. */}
+      {(pratinjauLembur.tanpaKalkulasi.length > 0 || pratinjauLembur.selisih.length > 0) && (
         <div className="card mt-4 border-l-4 border-l-gold p-4">
-          <p className="text-sm font-bold text-ink">
-            Perhatian: data ADK Uang Lembur mungkin belum lengkap
-          </p>
-          {/* Ditutup dengan TINDAKAN, bukan penjelasan. Yang membaca ini
-              sedang memutuskan apakah berkasnya bisa langsung dipakai, dan
-              jawabannya - belum - harus terbaca tanpa menelusuri alasannya
-              dulu. */}
+          <p className="text-sm font-bold text-ink">Periksa dulu sebelum ADK Uang Lembur dikirim</p>
           <ul className="mt-2 space-y-1.5 text-sm text-muted">
-            <li>
-              <strong className="text-ink-2">Yang bisa ditarik sekarang.</strong> Gajihub hanya membaca baris
-              berstatus <strong>&quot;Lembur&quot;</strong> di e-Presensi. Periode ini tercatat{" "}
-              <span className="font-semibold text-ink">{jamLemburHariKerja} hari lembur di hari kerja</span>{" "}
-              se-kementerian.
-            </li>
-            <li>
-              <strong className="text-ink-2">Kenapa begitu.</strong> Lembur hari kerja sering tercatat sebagai
-              WFO biasa di lapangan, dan basis data surat perintah lembur belum terintegrasi ke Gajihub.
-            </li>
-            <li>
-              <strong className="text-ink-2">Tindakan.</strong> Berkas ini{" "}
-              <strong>belum bisa menggantikan pengisian manual</strong>. Data lembur tetap perlu dilengkapi
-              berdasarkan surat perintah lembur fisik.
-            </li>
+            {pratinjauLembur.tanpaKalkulasi.length > 0 && (
+              <li>
+                <strong className="text-ink-2">
+                  {pratinjauLembur.tanpaKalkulasi.length} pegawai punya jam lembur tapi TIDAK masuk berkas.
+                </strong>{" "}
+                Jam mereka tercatat di presensi, tapi rekap Uang Lembur-nya belum pernah dihitung - jadi
+                jamnya hilang dari berkas tanpa tanda apa pun. Jalankan Kalkulasi Unit lalu kirim ulang.
+                Terbanyak:{" "}
+                {pratinjauLembur.tanpaKalkulasi.slice(0, 3).map((p, i) => (
+                  <span key={p.nip}>
+                    {i > 0 && ", "}
+                    <span className="font-semibold text-ink">{p.nama}</span> ({p.jam} jam)
+                  </span>
+                ))}
+                {pratinjauLembur.tanpaKalkulasi.length > 3 && `, dan ${pratinjauLembur.tanpaKalkulasi.length - 3} lainnya`}.
+              </li>
+            )}
+            {pratinjauLembur.selisih.length > 0 && (
+              <li>
+                <strong className="text-ink-2">
+                  {pratinjauLembur.selisih.length} pegawai jamnya beda dari rekap bulanan.
+                </strong>{" "}
+                Yang dibayar Web Gaji adalah jam di berkas ini, bukan angka yang tersimpan. Biasanya karena
+                presensinya berubah setelah rekapnya dihitung - hitung ulang supaya keduanya sama.
+              </li>
+            )}
           </ul>
+        </div>
+      )}
+
+      {/* Yang ini BUKAN kekurangan sistem, jadi tidak bergantung pada data:
+          selalu tampil selama ADK Uang Lembur bisa diunduh. Pembagian kerjanya
+          memang begitu - mesin menghitung jamnya, petugas mengesahkannya. */}
+      {TAMPILKAN_ADK_LEMBUR && (
+        <div className="card mt-4 border-l-4 border-l-teal-deep p-4">
+          <p className="text-sm font-bold text-ink">ADK Uang Lembur = jam terhitung, bukan hak bayar</p>
+          <p className="mt-2 text-sm text-muted">
+            Jam di berkas ini diturunkan dari ketukan presensi: hari kerja dihitung dari jam pulang dikurangi
+            batas kewajiban 7,5 jam, hari libur dari jam masuk sampai jam pulang. Yang{" "}
+            <strong className="text-ink-2">mengesahkan</strong> lembur tetap{" "}
+            <strong className="text-ink-2">surat perintah lembur</strong> - dokumen resmi di luar sistem ini.
+            Petugas yang mengadu berkas ini kepadanya sebelum dibayarkan.
+          </p>
         </div>
       )}
     </main>

@@ -28,6 +28,7 @@ const REKAP_NOL: BarisRekapPresensi = {
   totalJamLemburHariLibur: 0,
   jumlahHariMakanLembur: 0,
   jumlahHariMakanLemburHariLibur: 0,
+  jumlahHariLemburHariKerja: 0,
 };
 
 const rekap = (o: Partial<BarisRekapPresensi>): BarisRekapPresensi => ({ ...REKAP_NOL, ...o });

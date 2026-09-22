@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { jamDariMenit, type BarisRincianJamKerja } from "../../../../business-logic/rincianJamKerjaHarian";
+import { lemburTeks } from "../../../presensiTampilan";
 
 /**
  * Tabel rincian JAM KERJA harian - bentuk yang selama ini direkap petugas di
@@ -22,6 +23,15 @@ export interface BarisTabelRincianJamKerja {
   potonganPersen: number;
   /** Kejadian Pasal 13 ayat (2) hari itu - ikut menyusun % potongan. */
   kejadianTidakPresensi: number;
+  /**
+   * Jam lembur yang TEREKAM hari itu (desimal, dari PresensiHarian.jamLembur).
+   *
+   * Sengaja berdampingan dengan kolom kekurangan jam kerja: keduanya mengukur
+   * hal yang berlawanan pada hari yang sama, dan di berkas petugas keduanya
+   * tidak pernah berada di satu halaman - jadi tidak ada yang pernah melihat
+   * bahwa seseorang bisa kurang jam kerja DAN tercatat lembur di hari itu juga.
+   */
+  jamLembur: number;
   keteranganLibur: string | null;
   dikoreksiManual: boolean;
   /**
@@ -91,26 +101,24 @@ export function TabelRincianJamKerja({ baris }: { baris: BarisTabelRincianJamKer
           <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
             <th className="px-3 py-2.5">Tanggal</th>
             <th className="px-3 py-2.5">Status</th>
-            <th className="px-3 py-2.5">Masuk</th>
-            <th className="px-3 py-2.5">Pulang</th>
-            <th className={`px-3 py-2.5 ${pisah}`}>
-              Jam harus pulang
-            </th>
             <th className="px-3 py-2.5">Jam masuk</th>
-            <th className="px-3 py-2.5">Tol. masuk</th>
+            <th className={`px-3 py-2.5 ${pisah}`}>Jam harus pulang</th>
             <th className="px-3 py-2.5">Jam pulang</th>
-            <th className="px-3 py-2.5">Tol. pulang</th>
+            <th className="px-3 py-2.5">Lembur</th>
             <th className={`px-3 py-2.5 ${pisah}`}>Terlambat</th>
+            {/* "Menit kerja", BUKAN "Jam kerja" - isinya menit (450 = 7,5 jam)
+                dan bisa melebihi 450. Judul berbunyi jam di atas angka 450
+                akan terbaca 450 jam. */}
             <th className="px-3 py-2.5">Menit kerja</th>
-            <th className="px-3 py-2.5">Kekurangan jam kerja</th>
-            <th className="px-3 py-2.5">Jml menit kekurangan</th>
+            <th className="px-3 py-2.5">Kekurangan</th>
+            <th className="px-3 py-2.5">Menit kekurangan</th>
             <th className="px-3 py-2.5">% Potongan</th>
           </tr>
         </thead>
         <tbody>
           {baris.length === 0 && (
             <tr>
-              <td colSpan={14} className="px-3 py-6 text-center text-muted">
+              <td colSpan={11} className="px-3 py-6 text-center text-muted">
                 Periode ini belum dilakukan sinkronisasi.
               </td>
             </tr>
@@ -141,18 +149,45 @@ export function TabelRincianJamKerja({ baris }: { baris: BarisTabelRincianJamKer
                 <td className="px-3 py-2 text-ink-2">
                   <JamKoreksi teks={jam(r.jamMasukMenit)} dikoreksi={b.masukDikoreksi} />
                 </td>
+                {/* batasLemburMenit - kewajiban 7,5 jam yang UTUH, dan sejak
+                    2026-09-21 juga titik mulai jam lembur. Yang datang 09:10
+                    berbunyi 17:40, bukan 17:00.
+
+                    BUKAN jamHarusPulangMenit: yang itu belum kena lantai jam
+                    pulang wajib, jadi bagi yang tap 06:00 ia berbunyi 14:30 -
+                    jam yang tidak berlaku bagi siapa pun.
+
+                    BUKAN pula batasCheckoutMenit: yang itu ber-batas atas
+                    17:00 / Jumat 17:30 karena tugasnya menghitung POTONGAN,
+                    dan batas atas itu yang menjaga menit keterlambatan tidak
+                    ditagih dua kali. Di kolom ini yang dijawab "kapan
+                    kewajiban hari ini selesai", bukan "berapa yang dipotong".
+
+                    Null (hari libur / tap tidak wajar) jadi "-" sendirinya. */}
+                <td className={`px-3 py-2 text-ink-2 ${pisah}`}>{jam(r.batasLemburMenit)}</td>
                 <td className="px-3 py-2 text-ink-2">
                   <JamKoreksi teks={jam(r.jamKeluarMenit)} dikoreksi={b.keluarDikoreksi} />
                 </td>
-                {/* Ketukan yang tidak dipercaya mesin yang membayar: SEMBILAN
-                    kolom turunannya diganti satu keterangan. Memajang jadwal
-                    kerja lengkap untuk baris yang tapnya sampah tidak menambah
-                    apa pun - yang perlu diketahui pembaca cuma bahwa angkanya
-                    tidak bisa dihitung, dan apa yang ditagih sebagai gantinya.
-                    Kolom % Potongan TETAP tampil: itu angka tersimpan, yang
-                    benar-benar dipotong. */}
+                {/* Lembur DI LUAR blok "tap tidak wajar" di bawah: ketukan yang
+                    tidak dipercaya membatalkan jam turunan, tapi lembur datang
+                    dari baris Lembur tersendiri di e-Presensi, bukan dari
+                    ketukan itu. Mengosongkannya berarti menghapus jam yang
+                    benar-benar tercatat. */}
+                <td className="px-3 py-2 text-xs">
+                  {b.jamLembur > 0 ? (
+                    <span className="font-mono text-ink">{lemburTeks(b.jamLembur)}</span>
+                  ) : (
+                    <span className="text-muted">-</span>
+                  )}
+                </td>
+                {/* Ketukan yang tidak dipercaya mesin yang membayar: EMPAT
+                    kolom turunannya diganti satu keterangan. Yang perlu
+                    diketahui pembaca cuma bahwa angkanya tidak bisa dihitung,
+                    dan apa yang ditagih sebagai gantinya. Kolom % Potongan
+                    TETAP tampil: itu angka tersimpan, yang benar-benar
+                    dipotong. */}
                 {r.tapTidakWajar ? (
-                  <td className={`px-3 py-2 ${pisah}`} colSpan={9}>
+                  <td className={`px-3 py-2 ${pisah}`} colSpan={4}>
                     <span
                       className="rounded bg-gold-tint px-1.5 py-0.5 text-[11px] font-semibold text-gold-deep"
                       title="Jam masuk/pulang di baris ini tidak mungkin - mustahil sebagai kedatangan, mustahil sebagai kepulangan, atau satu ketukan tersalin ke dua kolom. Terlambat & pulang cepat TIDAK ditagih per menit; hari ini dihitung 1 kejadian tidak melakukan presensi (Pasal 13 ayat (2))."
@@ -165,11 +200,6 @@ export function TabelRincianJamKerja({ baris }: { baris: BarisTabelRincianJamKer
                   </td>
                 ) : (
                   <>
-                    <td className={`px-3 py-2 text-ink-2 ${pisah}`}>{jam(r.jamHarusPulangMenit)}</td>
-                    <td className="px-3 py-2 text-muted">{jam(r.jamMasukWajibMenit)}</td>
-                    <td className="px-3 py-2 text-muted">{jam(r.jamToleransiMasukMenit)}</td>
-                    <td className="px-3 py-2 text-muted">{jam(r.jamPulangWajibMenit)}</td>
-                    <td className="px-3 py-2 text-muted">{jam(r.jamToleransiPulangMenit)}</td>
                     <td className={`px-3 py-2 ${pisah}`}>{menitTeks(r.hariLibur ? null : r.menitTerlambat, true)}</td>
                     <td className="px-3 py-2">{menitTeks(r.menitKerja)}</td>
                     <td className="px-3 py-2">{menitTeks(r.kekuranganJamKerjaMenit, true)}</td>

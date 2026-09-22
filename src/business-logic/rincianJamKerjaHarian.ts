@@ -36,6 +36,7 @@ import {
   JADWAL_KERJA_DEFAULT,
   JAM_TAP_PULANG_HILANG,
   batasCheckoutMenit,
+  batasLemburMenit,
   tapKetukanGanda,
   tapKeluarMustahil,
   tapMasukMustahil,
@@ -89,6 +90,16 @@ export interface BarisRincianJamKerja {
   /** 17:00, Jumat 17:30 = jam pulang wajib + toleransi yang sama. */
   jamToleransiPulangMenit: number | null;
   /** checkin + 7,5 jam + istirahat. null kalau tidak ada ketukan masuk. */
+  /**
+   * LANGKAH ANTARA, JANGAN DIPAJANG. Kewajiban Pasal 9 ayat (1) mentah: jam
+   * masuk + 7,5 jam + istirahat, belum kena lantai jam pulang wajib maupun
+   * langit-langit toleransi. Untuk yang tap 06:00 nilainya 14:30 - jam yang
+   * tidak berlaku bagi siapa pun.
+   *
+   * Yang mengikat, dan yang dipakai mesin yang membayar, `batasCheckoutMenit`
+   * di bawah. Field ini dipertahankan karena test menurunkan hasil akhirnya
+   * dari sini, bukan untuk ditampilkan.
+   */
   jamHarusPulangMenit: number | null;
   /**
    * Sesudah toleransi 60 menit - angka yang SAMA dengan yang dibayarkan.
@@ -104,8 +115,21 @@ export interface BarisRincianJamKerja {
   /**
    * Batas checkout yang dipakai menghitung kekurangan, supaya angkanya bisa
    * ditelusuri tanpa menghitung ulang di kepala.
+   *
+   * BER-BATAS ATAS jam pulang wajib + toleransi, karena inilah angka yang
+   * dipakai mesin POTONGAN - lihat `batasCheckoutMenit` di
+   * presensiPdfKeRekap.ts.
    */
   batasCheckoutMenit: number | null;
+  /**
+   * Kewajiban 7,5 jam yang UTUH - jam masuk + 7,5 jam + istirahat, berlantai
+   * jam pulang wajib, TANPA batas atas. Ini yang dipajang kolom "Jam harus
+   * pulang" dan ini titik mulai jam lembur (keputusan user 2026-09-21).
+   *
+   * Beda dari `jamHarusPulangMenit` di atas: yang itu belum kena lantai jam
+   * pulang wajib, jadi bagi yang tap 06:00 berbunyi 14:30.
+   */
+  batasLemburMenit: number | null;
   /**
    * Ketukannya tidak dipercaya mesin yang membayar - mustahil sebagai
    * kedatangan, mustahil sebagai kepulangan, atau satu tap tersalin ke dua
@@ -157,6 +181,7 @@ export function rincianJamKerjaHari(
       kekuranganJamKerjaMenit: null,
       totalMenitKekuranganHarian: null,
       batasCheckoutMenit: null,
+      batasLemburMenit: null,
       tapTidakWajar: false,
     };
   }
@@ -193,6 +218,7 @@ export function rincianJamKerjaHari(
       kekuranganJamKerjaMenit: null,
       totalMenitKekuranganHarian: null,
       batasCheckoutMenit: null,
+      batasLemburMenit: null,
       tapTidakWajar: true,
     };
   }
@@ -209,6 +235,7 @@ export function rincianJamKerjaHari(
   // yang membayar. Tabel ini menampilkan angka yang benar-benar dipotong,
   // bukan hitungan sejajar yang bisa menyimpang diam-diam.
   const batasCheckout = batasCheckoutMenit(jamMasukMenit, jamPulangWajibMenit, istirahatMenit, jadwal);
+  const batasLembur = batasLemburMenit(jamMasukMenit, jamPulangWajibMenit, istirahatMenit, jadwal);
 
   const kekuranganJamKerjaMenit =
     jamKeluarMenit === null ? null : Math.max(0, batasCheckout - jamKeluarMenit);
@@ -231,6 +258,7 @@ export function rincianJamKerjaHari(
     totalMenitKekuranganHarian:
       kekuranganJamKerjaMenit === null ? null : menitTerlambat + kekuranganJamKerjaMenit,
     batasCheckoutMenit: batasCheckout,
+    batasLemburMenit: batasLembur,
     tapTidakWajar: false,
   };
 }

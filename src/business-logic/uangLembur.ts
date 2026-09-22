@@ -39,9 +39,25 @@
 // ============================================================================
 
 import type { UangLemburInput, UangLemburResult } from "../types/index";
-import { PENGALI_LEMBUR_HARI_LIBUR, PENGALI_MAKAN_LEMBUR_HARI_LIBUR } from "./tarifSbm";
+import {
+  PENGALI_LEMBUR_HARI_LIBUR,
+  PENGALI_LEMBUR_JAM_BERIKUTNYA,
+  PENGALI_LEMBUR_JAM_PERTAMA,
+  PENGALI_MAKAN_LEMBUR_HARI_LIBUR,
+} from "./tarifSbm";
 
-const BATAS_DEFAULT_JAM_LEMBUR_PER_BULAN = 40; // TODO(confirm): tidak diatur di SBM
+/**
+ * TIDAK ADA PLAFON BULANAN BAWAAN (keputusan user 2026-09-21).
+ *
+ * Dulu 40 jam/bulan. Dicabut bersama batas harian & mingguan begitu terbukti
+ * SBM tidak mengatur batas jam lembur sama sekali - lihat catatan panjang di
+ * presensiPdfKeRekap.ts. Memotong tanpa dasar tertulis berarti mengurangi
+ * pembayaran atas nama aturan yang tidak ada.
+ *
+ * `batasMaksimalJamLembur` di input TETAP ADA dan masih memotong kalau diisi.
+ * Jalur itu dipakai job lama dan akan berguna kalau suatu saat plafon benar-
+ * benar ditetapkan. Yang berubah: tidak ada plafon kalau tidak diminta.
+ */
 const MINIMAL_JAM_LEMBUR_DAPAT_MAKAN = 2; // SBM hal. -51-, penjelasan item 23.2
 
 /**
@@ -49,15 +65,22 @@ const MINIMAL_JAM_LEMBUR_DAPAT_MAKAN = 2; // SBM hal. -51-, penjelasan item 23.2
  * TIDAK dibayar (aturan user 2026-08-06). Lembur 1 jam 59 menit dibayar 1 jam,
  * bukan 2 jam dan bukan 1,98 jam.
  *
- * PERHATIKAN DI MANA PEMBULATAN INI TERJADI - ini menentukan hasilnya.
- * Fungsi ini menerima TOTAL jam sebulan, jadi yang dibulatkan adalah totalnya.
- * Kalau pegawai lembur 1j59m pada dua hari berbeda:
- *   - dibulatkan per HARI  : 1 + 1            = 2 jam  <- lebih tepat
- *   - dibulatkan per BULAN : floor(3,97)      = 3 jam  <- yang terjadi di sini
- * Jadi pembulatan di sini bersifat JARING PENGAMAN, bukan tempat yang ideal.
- * Idealnya sisa menit sudah dipangkas per hari SAAT REKAP DIISI - jalur PDF
- * e-Presensi sudah melakukannya per blok lembur (lihat presensiPdfKeRekap.ts),
- * sementara pengisian manual lewat template bergantung pada pengisinya.
+ * METODE A - PEMANGKASANNYA PER HARI, DAN TERJADI DI HULU.
+ * Keputusan user 2026-09-18. `presensiPdfKeRekap.ts` memangkas sisa menit di
+ * hari itu juga, jadi total sebulan yang sampai ke sini sudah berupa jumlahan
+ * jam penuh. Bedanya bukan soal rapi-rapian: lembur 1j59m pada dua hari
+ * berbeda jadi 1 + 1 = 2 jam, bukan floor(3,97) = 3 jam. Terukur ke Juli 2026
+ * pada jalur akhir pekan: 3.379,5 jam mentah -> 3.249 jam kalau dipangkas per
+ * bulan, 3.197 jam per hari. Selisih 52 jam.
+ *
+ * `bulatkanKeJamPenuh` di bawah SEKARANG JARING PENGAMAN, bukan tempat
+ * pemangkasan utama - atas jumlahan bilangan bulat ia tidak mengubah apa pun.
+ * Yang masih dijaganya: rekap yang diisi manual lewat template Excel, yang
+ * angkanya bergantung pengisinya dan bisa datang berkoma.
+ *
+ * JANGAN memindahkannya kembali ke pemangkasan bulanan tanpa mengubah hulunya
+ * juga - dua tempat memangkas dengan cara berbeda tidak pernah menghasilkan
+ * angka yang sama, dan selisihnya rupiah.
  *
  * TODO(confirm): belum ada rujukan pasal/SBM untuk pembulatan ke bawah ini -
  * SBM 2026 item 23.1 cuma menetapkan besaran per jam tanpa menyebut perlakuan
@@ -81,12 +104,13 @@ export function hitungHariBerhakMakanLembur(rincianJamPerHari: number[]): number
 
 export function hitungUangLembur(input: UangLemburInput): UangLemburResult {
   const anomali: string[] = [];
-  const batasMaksimal = input.batasMaksimalJamLembur ?? BATAS_DEFAULT_JAM_LEMBUR_PER_BULAN;
+  const batasMaksimal = input.batasMaksimalJamLembur ?? Number.POSITIVE_INFINITY;
 
   if (input.totalJamLembur < 0) {
     anomali.push("Total jam lembur hari kerja tidak boleh bernilai negatif.");
   }
-  if (input.totalJamLembur + (input.totalJamLemburHariLibur ?? 0) > batasMaksimal) {
+  const totalJamMentahSemua = input.totalJamLembur + (input.totalJamLemburHariLibur ?? 0);
+  if (totalJamMentahSemua > batasMaksimal) {
     anomali.push(
       `Total jam lembur ${input.totalJamLembur + (input.totalJamLemburHariLibur ?? 0)} jam melebihi batas maksimal ${batasMaksimal} jam per bulan\u2014kelebihannya tidak dibayarkan. Perlu verifikasi ke atasan langsung.`
     );
@@ -125,9 +149,34 @@ export function hitungUangLembur(input: UangLemburInput): UangLemburResult {
   const jamLemburDihitung = jamLemburHariKerja + jamLemburHariLibur;
 
   // --- Komponen 1: uang lembur (per JAM), hari libur dikali pengali ---
+  // HARI KERJA: jam pertama tiap hari 1,5x, jam berikutnya 2x. Dijumlah
+  // sebulan bentuknya tarif x (2J - 0,5D) - J total jam, D jumlah hari lembur.
+  //
+  // Turunannya: tiap hari menyumbang 1,5 + 2(jam_hari - 1) = 2 x jam_hari -
+  // 0,5. Dijumlah D hari jadi 2J - 0,5D. Bentuk ini dipakai supaya rincian
+  // harian tidak perlu ikut masuk ke mesin ini.
+  //
+  // TANPA D TIDAK MENEBAK. Rekap yang datang dari template Excel cuma membawa
+  // total jam; memakai D = 1 akan memberi satu potongan setengah tarif untuk
+  // sebulan penuh (membayar lebih), memakai D = J akan menganggap tiap hari
+  // cuma satu jam (membayar kurang). Dua-duanya salah diam-diam, jadi yang
+  // dilakukan: bayar 1x tarif SBM polos dan katakan alasannya.
+  const hariLemburKerja = input.jumlahHariLemburHariKerja;
+  const pengaliDiketahui = hariLemburKerja !== undefined && hariLemburKerja > 0;
+  if (jamLemburHariKerja > 0 && !pengaliDiketahui) {
+    anomali.push(
+      "Jumlah HARI lembur hari kerja belum tersimpan di sistem, jadi pengali jam pertama (1,5x) tidak bisa diterapkan—jam lembur hari kerja dibayar 1x tarif SBM, LEBIH RENDAH dari semestinya. Angka ini belum final; laporkan ke pengelola aplikasi."
+    );
+  }
+  const uangLemburHariKerja = pengaliDiketahui
+    ? input.tarifPerJam *
+      (PENGALI_LEMBUR_JAM_BERIKUTNYA * jamLemburHariKerja -
+        (PENGALI_LEMBUR_JAM_BERIKUTNYA - PENGALI_LEMBUR_JAM_PERTAMA) *
+          Math.min(hariLemburKerja!, jamLemburHariKerja))
+    : jamLemburHariKerja * input.tarifPerJam;
+
   const uangLembur =
-    jamLemburHariKerja * input.tarifPerJam +
-    jamLemburHariLibur * input.tarifPerJam * PENGALI_LEMBUR_HARI_LIBUR;
+    uangLemburHariKerja + jamLemburHariLibur * input.tarifPerJam * PENGALI_LEMBUR_HARI_LIBUR;
 
   // --- Komponen 2: uang makan lembur (per HARI, syarat >= 2 jam berturut-turut) ---
   const hariMakanKerja = Math.max(0, input.jumlahHariMakanLembur ?? 0);

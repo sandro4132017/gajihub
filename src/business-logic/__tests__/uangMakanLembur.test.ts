@@ -225,6 +225,46 @@ describe("hitungUangLembur - sisa menit dipangkas ke jam penuh", () => {
 // ---------------------------------------------------------------------------
 // Uang lembur - dua komponen, syarat 2 jam
 // ---------------------------------------------------------------------------
+describe("hitungUangLembur - pengali jam pertama 1,5x, jam berikutnya 2x", () => {
+  const lembur = (over: Partial<Parameters<typeof hitungUangLembur>[0]> = {}) =>
+    hitungUangLembur({ ...dasar, totalJamLembur: 0, tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM.III, ...over });
+
+  it("satu hari 3 jam = 1,5x + 2x + 2x", () => {
+    const hasil = lembur({ totalJamLembur: 3, jumlahHariLemburHariKerja: 1 });
+    expect(hasil.uangLembur).toBe((1.5 + 2 + 2) * 30_000); // 165.000
+  });
+
+  it("jam pertama berlaku PER HARI, bukan sekali sebulan", () => {
+    // 3 hari x 2 jam. Per hari: (1,5 + 2) x 3 hari = 10,5 tarif.
+    // Kalau "jam pertama" jatuh sekali sebulan, hasilnya 11,5 tarif - satu
+    // potongan setengah tarif untuk tiga hari lembur, bukan tiga.
+    const hasil = lembur({ totalJamLembur: 6, jumlahHariLemburHariKerja: 3 });
+    expect(hasil.uangLembur).toBe(10.5 * 30_000); // 315.000
+    expect(hasil.uangLembur).not.toBe(11.5 * 30_000);
+  });
+
+  it("hari libur seluruh jamnya 2x, tidak kena aturan jam pertama", () => {
+    const hasil = lembur({ totalJamLemburHariLibur: 4 });
+    expect(hasil.uangLembur).toBe(4 * 2 * 30_000); // 240.000
+  });
+
+  it("tanpa jumlah hari lembur TIDAK menebak - dibayar 1x tarif + anomali", () => {
+    // Rekap dari template Excel cuma membawa total jam. Menebak D akan salah
+    // diam-diam ke dua arah, jadi yang dilakukan: bayar polos dan katakan.
+    const hasil = lembur({ totalJamLembur: 6 });
+    expect(hasil.uangLembur).toBe(6 * 30_000);
+    expect(hasil.anomali.join(" ")).toContain("LEBIH RENDAH dari semestinya");
+  });
+
+  it("hari lembur lebih banyak dari jam yang dibayar tidak membuat potongan berlebih", () => {
+    // Bisa terjadi kalau pemanggil mengirim D dari sumber lain: 5 hari lembur
+    // tapi cuma 3 jam penuh yang dibayar. Potongannya dibatasi 3, bukan 5 -
+    // kalau tidak, uang lemburnya jatuh di bawah 1,5x tarif per jam.
+    const hasil = lembur({ totalJamLembur: 3, jumlahHariLemburHariKerja: 5 });
+    expect(hasil.uangLembur).toBe((2 * 3 - 0.5 * 3) * 30_000); // 4,5 tarif
+  });
+});
+
 describe("hitungUangLembur - uang lembur + uang makan lembur", () => {
   const lembur = (over: Partial<Parameters<typeof hitungUangLembur>[0]> = {}) =>
     hitungUangLembur({
@@ -232,28 +272,32 @@ describe("hitungUangLembur - uang lembur + uang makan lembur", () => {
       totalJamLembur: 10,
       tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM.III,
       jumlahHariMakanLembur: 4,
+      jumlahHariLemburHariKerja: 4,
       tarifMakanLemburPerHari: TARIF_UANG_MAKAN_LEMBUR_PER_HARI.III,
       ...over,
     });
 
-  it("total = (jam x tarif per jam) + (hari >=2 jam x tarif makan lembur)", () => {
+  it("total = uang lembur berpengali + (hari >=2 jam x tarif makan lembur)", () => {
+    // 10 jam tersebar di 4 hari: tiap hari jam pertamanya 1,5x, sisanya 2x.
+    // Sebulan = 2 x 10 - 0,5 x 4 = 18 tarif.
     const hasil = lembur();
-    expect(hasil.uangLembur).toBe(10 * 30_000); // 300.000
+    expect(hasil.uangLembur).toBe(18 * 30_000); // 540.000
     expect(hasil.uangMakanLembur).toBe(4 * 37_000); // 148.000
-    expect(hasil.totalUangLembur).toBe(448_000);
+    expect(hasil.totalUangLembur).toBe(688_000);
     expect(hasil.anomali).toHaveLength(0);
   });
 
   it("lembur di bawah 2 jam sehari: tetap dapat uang lembur, TIDAK dapat uang makan lembur", () => {
-    const hasil = lembur({ totalJamLembur: 1, jumlahHariMakanLembur: 0 });
-    expect(hasil.uangLembur).toBe(30_000);
+    // Satu hari, satu jam: cuma jam pertama, jadi 1,5x tarif.
+    const hasil = lembur({ totalJamLembur: 1, jumlahHariLemburHariKerja: 1, jumlahHariMakanLembur: 0 });
+    expect(hasil.uangLembur).toBe(1.5 * 30_000);
     expect(hasil.uangMakanLembur).toBe(0);
-    expect(hasil.totalUangLembur).toBe(30_000);
+    expect(hasil.totalUangLembur).toBe(45_000);
   });
 
   it("uang makan lembur dihitung per HARI, bukan per jam - 3 jam sehari tetap 1 hari", () => {
-    const hasil = lembur({ totalJamLembur: 3, jumlahHariMakanLembur: 1 });
-    expect(hasil.uangLembur).toBe(3 * 30_000);
+    const hasil = lembur({ totalJamLembur: 3, jumlahHariLemburHariKerja: 1, jumlahHariMakanLembur: 1 });
+    expect(hasil.uangLembur).toBe(5.5 * 30_000); // 1,5 + 2 + 2
     expect(hasil.uangMakanLembur).toBe(1 * 37_000); // bukan 3 x 37.000
   });
 
@@ -264,17 +308,27 @@ describe("hitungUangLembur - uang lembur + uang makan lembur", () => {
   });
 
   it("jam di atas batas maksimal di-cap dan ditandai", () => {
-    const hasil = lembur({ totalJamLembur: 52, jumlahHariMakanLembur: 0 });
+    // Plafon bulanan bukan lagi bawaan: SBM tidak menetapkan batas jam lembur
+    // sama sekali (keputusan user 2026-09-21). Jalurnya masih ada dan masih
+    // memotong - tapi hanya kalau diminta eksplisit.
+    const hasil = lembur({
+      totalJamLembur: 52,
+      jumlahHariLemburHariKerja: 20,
+      jumlahHariMakanLembur: 0,
+      batasMaksimalJamLembur: 40,
+    });
     expect(hasil.jamLemburDihitung).toBe(40);
-    expect(hasil.uangLembur).toBe(40 * 30_000);
+    // Batas dipakai atas JAM, pengalinya menyusul: 2 x 40 - 0,5 x 20 = 70 tarif.
+    expect(hasil.uangLembur).toBe(70 * 30_000);
     expect(hasil.anomali.some((a) => a.includes("melebihi batas maksimal"))).toBe(true);
   });
 
   it("tarif lembur ikut golongan - Gol I dan II memang beda", () => {
     const golI = lembur({ tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM.I, jumlahHariMakanLembur: 0 });
     const golII = lembur({ tarifPerJam: TARIF_UANG_LEMBUR_PER_JAM.II, jumlahHariMakanLembur: 0 });
-    expect(golI.uangLembur).toBe(10 * 18_000);
-    expect(golII.uangLembur).toBe(10 * 24_000);
+    // 10 jam / 4 hari = 2 x 10 - 0,5 x 4 = 18 tarif, apa pun golongannya.
+    expect(golI.uangLembur).toBe(18 * 18_000);
+    expect(golII.uangLembur).toBe(18 * 24_000);
   });
 
   it("ada hari makan lembur tapi tarifnya belum diisi: dihitung 0 + ditandai", () => {
@@ -348,6 +402,8 @@ describe("hitungUangLembur - hari libur / tanggal merah", () => {
       totalJamLembur: 35,
       totalJamLemburHariLibur: 10, // total 45 > batas 40
       jumlahHariWfo: 20,
+      // Plafon bulanan sekarang opt-in - lihat catatan di uangLembur.ts.
+      batasMaksimalJamLembur: 40,
     });
     expect(hasil.jamLemburHariLibur).toBe(10);
     expect(hasil.jamLemburHariKerja).toBe(30);

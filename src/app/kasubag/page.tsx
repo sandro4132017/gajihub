@@ -5,8 +5,10 @@ import { AksesDitolak } from "../AksesDitolak";
 import { FilterBar } from "../FilterBar";
 import { resolveSatuanKerjaListUntukFilter, satkerTerkunciUntukAkun } from "../dashboardScope";
 import { kunciKirim, tallyKirim } from "../tallyKirim";
-import { rangkumProgres } from "../../business-logic/pengirimanUnit";
+import { rangkumProgres, riwayatPengirimanPeriode } from "../../business-logic/pengirimanUnit";
 import { PapanProgres } from "./kirim/PapanProgres";
+import { RiwayatKirimPeriode } from "./kirim/RiwayatKirimPeriode";
+import { periodePunyaRekapPresensi } from "../periodeDefault";
 import { ambilAksesUnit } from "./access";
 import { AngkaNaik } from "../AngkaNaik";
 import { langkahTutupBulan } from "../../business-logic/langkahTutupBulan";
@@ -235,6 +237,56 @@ export default async function KasubagDashboardPage({
     unitAktif.map((u) => u.satuanKerja),
     new Map(pengirimanSemuaUnit.map((p) => [p.satuanKerja, p]))
   );
+  // --- Riwayat pengiriman unit INI di SELURUH periode ----------------------
+  //
+  // Pertanyaan yang sebelumnya tidak bisa dijawab dari layar mana pun:
+  // "periode mana saja yang sudah saya kirim?". Satu-satunya cara menjawabnya
+  // mengganti filter periode satu per satu - dan periode yang tidak dibuka
+  // tidak pernah terlihat.
+  //
+  // Daftar periodenya dari REKAP PRESENSI unit ini, bukan dari baris
+  // pengiriman: periode yang belum pernah dikirim tidak punya baris, dan
+  // justru itu yang dicari. Prinsip yang sama persis dengan `unitAktif` di
+  // atas.
+  //
+  // Presensi, bukan kalkulasi: kalkulasi adalah HASIL pekerjaan yang ditagih
+  // panel ini, jadi memakainya sebagai daftar membuat periode yang belum
+  // pernah dihitung tidak akan pernah muncul - persis periode yang paling
+  // perlu muncul.
+  const periodePresensiUnit = await periodePunyaRekapPresensi(satkerEfektif);
+  const kalkulasiPerPeriode = await prisma.tukinCalculation.groupBy({
+    by: ["periodeBulan", "periodeTahun"],
+    where: { pegawai: { satuanKerja: satkerEfektif } },
+    _count: { _all: true },
+  });
+  const petaKalkulasi = new Map(
+    kalkulasiPerPeriode.map((k) => [`${k.periodeBulan}|${k.periodeTahun}`, k._count._all])
+  );
+  const pengirimanUnitIni = await prisma.pengirimanUnit.findMany({
+    where: { satuanKerja: satkerEfektif },
+    select: {
+      periodeBulan: true,
+      periodeTahun: true,
+      status: true,
+      dikirimPada: true,
+      alasanKembali: true,
+      dikirimOleh: { select: { nama: true } },
+    },
+  });
+  const riwayatPeriode = riwayatPengirimanPeriode(
+    periodePresensiUnit.map((p) => ({
+      periodeBulan: p.bulan,
+      periodeTahun: p.tahun,
+      jumlahKalkulasi: petaKalkulasi.get(`${p.bulan}|${p.tahun}`) ?? 0,
+    })),
+    new Map(
+      pengirimanUnitIni.map((p) => [
+        `${p.periodeBulan}|${p.periodeTahun}`,
+        { ...p, dikirimOleh: p.dikirimOleh?.nama ?? null },
+      ])
+    )
+  );
+
   const petaKirim = new Map(barisKirim ? [[kunciUnit, barisKirim.status]] : []);
 
   const tallyTukin = tallyKirim(tukinRows.map(() => kunciUnit), petaKirim);
@@ -859,6 +911,11 @@ export default async function KasubagDashboardPage({
         bolehKembalikan={false}
         satkerSorot={satkerEfektif}
       />
+
+      {/* Papan di atas menjawab "unit mana bulan ini"; yang ini menjawab
+          "periode mana untuk unit saya". Dua pertanyaan yang berbeda, dan
+          yang kedua tidak punya jawaban di layar mana pun sebelum ini. */}
+      <RiwayatKirimPeriode riwayat={riwayatPeriode} satuanKerja={satkerEfektif} />
 
       {/* ====================================================================
           4. MIDDLE SECTION: KESIAPAN DATA UNIT

@@ -329,6 +329,7 @@ export async function uploadPresensiPdfAction(
             totalJamLemburHariLibur: d.totalJamLemburHariLibur,
             jumlahHariMakanLembur: d.jumlahHariMakanLembur,
             jumlahHariMakanLemburHariLibur: d.jumlahHariMakanLemburHariLibur,
+            jumlahHariLemburHariKerja: d.jumlahHariLemburHariKerja,
             sourceSystem: "e-Presensi (PDF)",
             sourceFileName: s.namaFile,
             diunggahOlehId: user.id,

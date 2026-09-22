@@ -21,12 +21,17 @@
  * `overflow-x-auto` - di dalam kontainer itu panel melayang akan terpotong di
  * tepinya.
  *
+ * BAGIAN KOLOM CUTI cuma muncul di tampilan RINCI (`tampilRinci`), karena
+ * kolom-kolom yang dijelaskannya memang hanya ada di sana. Keterangan untuk
+ * kolom yang tidak kelihatan membuat pembaca mencari-cari kolom yang tidak
+ * pernah ada di layarnya.
+ *
  * JANGAN taruh di dalam <h2>. `<details>` itu flow content sementara heading
  * cuma boleh memuat phrasing content; parser akan menutup paksa heading-nya
  * dan DOM hasil parsing jadi berbeda dari pohon React (hydration error).
  * Tempatnya di SAMPING heading, dalam satu wadah flex.
  */
-export function BantuanRincianTukin() {
+export function BantuanRincianTukin({ tampilRinci = false }: { tampilRinci?: boolean }) {
   return (
     <details className="group relative inline-block align-middle">
       <summary
@@ -70,6 +75,53 @@ export function BantuanRincianTukin() {
         <p className="mt-2 text-xs leading-relaxed text-muted">
           <strong>Catatan:</strong> Angka yang ditampilkan adalah <strong>bruto</strong> dan belum termasuk PPh.
         </p>
+
+        {tampilRinci && (
+          <>
+            <p className="mt-3 border-t border-line-2 pt-3 text-sm font-bold text-ink">Cara membaca kolom cuti</p>
+            <dl className="mt-1.5 space-y-1 text-xs text-ink-2">
+              <div className="flex gap-2">
+                <dt className="w-14 shrink-0 font-mono text-muted">-</dt>
+                <dd>Rekap presensi periode ini belum tersedia.</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="w-14 shrink-0 text-muted">kosong</dt>
+                <dd>Rekap tersedia dan pegawai tidak tercatat cuti.</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="w-14 shrink-0 text-muted">angka</dt>
+                <dd>Jumlah hari cuti.</dd>
+              </div>
+              <div className="flex gap-2">
+                {/* "v", BUKAN centang - itu yang benar-benar dicetak selCuti().
+                    Legenda yang simbolnya beda dari selnya lebih menyesatkan
+                    daripada tidak ada legenda sama sekali. */}
+                <dt className="w-14 shrink-0 font-mono text-muted">v</dt>
+                <dd>Cuti tercatat, tetapi jumlah hari belum diisi.</dd>
+              </div>
+            </dl>
+            {/* Dipertahankan dari kartu lama: satu-satunya kalimat di situ yang
+                menyentuh rupiah. Tanpa jumlah hari, cuti gugur kandungan di
+                atas 1 bulan tidak bisa dihitung - tarifnya 1% PER HARI. */}
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              Tanda <span className="font-mono">v</span> cukup untuk cuti sakit &amp; cuti besar - yang menentukan
+              potongannya bulan ke berapa, bukan harinya. <strong>Tidak cukup</strong> untuk cuti gugur kandungan di
+              atas 1 bulan, yang tarifnya 1% per hari.
+            </p>
+
+            <p className="mt-2 text-xs font-bold text-ink">Bulan I / II / III</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted">
+              Menunjukkan bulan keberapa cuti berlangsung. Diisi melalui &quot;Bulan Cuti Ke&quot; pada template rekap
+              presensi.
+            </p>
+
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              <strong>Catatan:</strong> tarikan e-Presensi tidak dapat menentukan bulan cuti otomatis - satu bulan
+              export tidak memberi tahu cuti itu sudah berjalan berapa lama. Jika belum diisi, cuti dianggap{" "}
+              <strong>Bulan I</strong> (cuti sakit tidak dipotong, cuti besar dipotong 50%).
+            </p>
+          </>
+        )}
       </div>
     </details>
   );

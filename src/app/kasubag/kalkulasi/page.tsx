@@ -22,6 +22,7 @@ import { KoreksiLemburForm } from "./KoreksiLemburForm";
 import { Paginasi, hitungPaginasi } from "../../Paginasi";
 import { BadgePejabatEselon } from "../../BadgePejabatEselon";
 import { TAMPILKAN_NOMINAL_LEMBUR } from "../../tampilUangLembur";
+import { lemburTeks } from "../../presensiTampilan";
 import { PengecualianForm, BatalPengecualianForm } from "./PengecualianForm";
 import {
   alasanDariKode,
@@ -646,7 +647,7 @@ export default async function KalkulasiUnitPage({
           <h2 className="text-base font-bold text-ink">
             Rincian Tukin{tampilRinci && <span className="ml-2 text-sm font-normal text-muted">- rincian lengkap</span>}
           </h2>
-          <BantuanRincianTukin />
+          <BantuanRincianTukin tampilRinci={tampilRinci} />
         </div>
         <a
           href={tampilRinci ? linkRingkas : linkRinci}
@@ -657,7 +658,8 @@ export default async function KalkulasiUnitPage({
       </div>
 
       {!tampilRinci && (
-        <div className="card mt-2 overflow-x-auto">
+        <div className="card mt-2 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
@@ -761,7 +763,11 @@ export default async function KalkulasiUnitPage({
                     <td className="px-4 py-2.5 font-mono text-ink-2">
                       {/* Jam yang SUDAH dipangkas ke jam penuh dan sudah kena
                           batas maksimal - bukan jam mentah dari rekap presensi. */}
-                      {lembur ? `${lembur.totalJamLembur} jam` : "-"}
+                      {/* Bulat ke bawah. Kolom ini bisa berisi angka pecahan:
+                          koreksi manual di bawah menerima step 0,5 dan
+                          menyimpannya apa adanya, beda dari kalkulasi massal
+                          yang menyimpan jam yang sudah dipangkas. */}
+                      {lembur ? lemburTeks(lembur.totalJamLembur) : "-"}
                     </td>
                     <td className="px-4 py-2.5 font-mono font-semibold text-ink">
                       {tukin ? formatRupiah(tukin.tukinBersih) : <BelumAda judul="Tukin periode ini belum dihitung" />}
@@ -781,19 +787,23 @@ export default async function KalkulasiUnitPage({
               })}
             </tbody>
           </table>
-          <Paginasi
-            basePath="/kasubag/kalkulasi"
-            params={paramPaginasi}
-            info={paginasi}
-            totalBaris={pegawaiList.length}
-            labelBaris="pegawai"
-          />
+          </div>
+          <div className="border-t border-line-2 px-4 py-3 sm:px-6">
+            <Paginasi
+              basePath="/kasubag/kalkulasi"
+              params={paramPaginasi}
+              info={paginasi}
+              totalBaris={pegawaiList.length}
+              labelBaris="pegawai"
+            />
+          </div>
         </div>
       )}
 
       {tampilRinci && (
       <>
-      <div className="card mt-2 overflow-x-auto">
+      <div className="card mt-2 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-line bg-surface-2 text-[11px] font-bold uppercase tracking-wide text-muted">
@@ -978,35 +988,16 @@ export default async function KalkulasiUnitPage({
             })}
           </tbody>
         </table>
-        <Paginasi
-          basePath="/kasubag/kalkulasi"
-          params={paramPaginasi}
-          info={paginasi}
-          totalBaris={pegawaiList.length}
-          labelBaris="pegawai"
-        />
-      </div>
-
-      <div className="card mt-3 border-amber-300 p-4 dark:border-amber-800">
-        <h3 className="text-sm font-bold text-ink">Cara membaca kolom cuti</h3>
-        <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-muted">
-          <li>
-            <span className="font-mono">-</span> berarti <strong>rekap presensi periode ini belum ada</strong> (datanya
-            tidak diketahui). Sel <strong>kosong</strong> berarti rekapnya ada dan orangnya memang tidak cuti.
-          </li>
-          <li>
-            Angka di kolom cuti adalah <strong>jumlah hari</strong>. Tanda <span className="font-mono">v</span> berarti
-            cutinya tercatat tapi jumlah harinya tidak diisi - cukup untuk cuti sakit &amp; cuti besar (yang menentukan
-            potongannya bulan ke berapa, bukan harinya), tapi <strong>tidak cukup</strong> untuk cuti gugur kandungan di
-            atas 1 bulan yang tarifnya 1% per hari.
-          </li>
-          <li>
-            Kolom <strong>Bulan I / II / III</strong> ditentukan isian &quot;Bulan Cuti Ke&quot; di template rekap
-            presensi. Tarikan e-Presensi <strong>tidak bisa</strong> menentukannya sendiri - satu bulan export tidak
-            memberi tahu cuti itu sudah berjalan berapa lama. Selama belum diisi, cuti dianggap{" "}
-            <strong>bulan pertama</strong> (cuti sakit tidak dipotong, cuti besar dipotong 50%).
-          </li>
-        </ul>
+        </div>
+        <div className="border-t border-line-2 px-4 py-3 sm:px-6">
+          <Paginasi
+            basePath="/kasubag/kalkulasi"
+            params={paramPaginasi}
+            info={paginasi}
+            totalBaris={pegawaiList.length}
+            labelBaris="pegawai"
+          />
+        </div>
       </div>
 
           {/* ---------------------------------------------------------------- */}
@@ -1021,7 +1012,8 @@ export default async function KalkulasiUnitPage({
             Di luar cakupan rekap Excel Tukin - dipisah supaya tabel di atas
             tetap sebanding kolom per kolom.
           </p>
-          <div className="card mt-2 overflow-x-auto">
+          <div className="card mt-2 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
@@ -1055,7 +1047,7 @@ export default async function KalkulasiUnitPage({
                       {TAMPILKAN_NOMINAL_LEMBUR && (
                         <td className="px-4 py-2.5 font-mono text-ink-2">
                           {lembur
-                            ? `${formatRupiah(lembur.totalUangLembur)} (${lembur.totalJamLembur} jam)`
+                            ? `${formatRupiah(lembur.totalUangLembur)} (${lemburTeks(lembur.totalJamLembur)})`
                             : "-"}
                         </td>
                       )}
@@ -1080,13 +1072,16 @@ export default async function KalkulasiUnitPage({
                 })}
               </tbody>
             </table>
-            <Paginasi
-              basePath="/kasubag/kalkulasi"
-              params={paramPaginasi}
-              info={paginasi}
-              totalBaris={pegawaiList.length}
-              labelBaris="pegawai"
-            />
+            </div>
+            <div className="border-t border-line-2 px-4 py-3 sm:px-6">
+              <Paginasi
+                basePath="/kasubag/kalkulasi"
+                params={paramPaginasi}
+                info={paginasi}
+                totalBaris={pegawaiList.length}
+                labelBaris="pegawai"
+              />
+            </div>
           </div>
         </>
       )}

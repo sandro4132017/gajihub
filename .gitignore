@@ -15,6 +15,19 @@ docs/
 *.csv
 *.pdf
 
+# PENGECUALIAN SENGAJA: cetakan kosong ADK Uang Lembur.
+#
+# Seluruh *.xlsx di-ignore karena berkas Excel di proyek ini memuat data
+# pegawai nyata. Yang ini TIDAK: ia hasil membersihkan
+# Excel/Template-ADK-Lembur.xlsm - 770 sel data dikosongkan, sheet "pegawai"
+# dan "hasil" dibuang isinya, dan sudah diperiksa nol nilai berdigit >= 10
+# (tidak ada NIP, tidak ada nominal). Yang tersisa cuma kerangkanya: warna,
+# perataan, lebar kolom, dan formula.
+#
+# WAJIB ikut ter-commit: berkas ini dibaca saat export berjalan, jadi kalau
+# tidak ada di VPS, unduhan .xlsx-nya gagal.
+!src/app/ppabp/adk/template/adk-lembur.xlsx
+
 rekap-presensi-*
 log-sync/
 

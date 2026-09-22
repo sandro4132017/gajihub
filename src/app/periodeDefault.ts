@@ -137,6 +137,23 @@ export async function periodePunyaPredikatKinerja(satuanKerja?: string): Promise
   return rows.map((r) => ({ bulan: r.periodeBulan, tahun: r.periodeTahun }));
 }
 
+/**
+ * Periode yang punya kalkulasi Uang Lembur - dipakai halaman /uang-lembur.
+ *
+ * Bertanya ke tabel `uangLembur` sendiri, BUKAN menumpang `periodePunyaTukin`:
+ * lembur dihitung dari rekap presensi yang sama, tapi barisnya cuma terbit
+ * untuk pegawai yang memang punya jam lembur - jadi daftar periodenya bisa
+ * lebih pendek, dan memakai daftar Tukin akan mendaratkan halaman ini di
+ * periode yang belum punya satu baris lembur pun.
+ */
+export async function periodePunyaUangLembur(): Promise<Periode[]> {
+  const rows = await prisma.uangLembur.findMany({
+    distinct: ["periodeBulan", "periodeTahun"],
+    select: { periodeBulan: true, periodeTahun: true },
+  });
+  return rows.map((r) => ({ bulan: r.periodeBulan, tahun: r.periodeTahun }));
+}
+
 /** Periode yang punya kalkulasi Tukin - dipakai halaman export ADK. */
 export async function periodePunyaTukin(): Promise<Periode[]> {
   const rows = await prisma.tukinCalculation.findMany({

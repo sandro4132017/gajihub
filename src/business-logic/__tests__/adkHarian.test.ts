@@ -121,16 +121,41 @@ describe("susunGridAdkHarian", () => {
     expect(grid[0].slice(0, 2)).toEqual(["Jenis", "Lembur"]);
     expect(grid[1]).toEqual(["Tahun", 2026, "Uang_Lembur_Juni_2026"]);
     expect(grid[2]).toEqual(["Bulan", 6]);
-    expect(grid[3]).toEqual(["Batas", 30]);
+    // TEKS "30", bukan angka 30 - selnya `t=s` di kedua template asli.
+    expect(grid[3]).toEqual(["Batas", "30"]);
     expect(grid[4].slice(0, 3)).toEqual(["No", "NIP", "Nama"]);
   });
 
-  it("kolom tanggal sepanjang bulannya, bukan dipatok 30", () => {
+  it("baris judul berhenti di tanggal terakhir - kolom ringkasan tanpa label", () => {
+    // Template asli: baris 5 panjangnya 33 untuk bulan 30 hari (No+NIP+Nama+30),
+    // dan sel sesudahnya KOSONG. Label ringkasan tidak ada di berkas manapun.
     const juni = susunGridAdkHarian([], 6, 2026, { denganJam: false });
     const juli = susunGridAdkHarian([], 7, 2026, { denganJam: false });
-    // No + NIP + Nama + hari + 1 kolom ringkasan
-    expect(juni[4]).toHaveLength(3 + 30 + 1);
-    expect(juli[4]).toHaveLength(3 + 31 + 1);
+    expect(juni[4]).toHaveLength(3 + 30);
+    expect(juli[4]).toHaveLength(3 + 31);
+  });
+
+  it("baris data selalu selebar template - ringkasan dipatok di dua kolom terakhir", () => {
+    // 3 + 31 slot tanggal + 2 kolom ringkasan = 36, sama untuk bulan apa pun.
+    // Inilah yang membuat kolom ringkasan Februari dan Juli berada di tempat
+    // yang sama.
+    for (const [b, t] of [[2, 2026], [6, 2026], [7, 2026]] as const) {
+      const lembur = susunGridAdkHarian([P("X", "Uji", [])], b, t, { denganJam: true });
+      const makan = susunGridAdkHarian([P("X", "Uji", [])], b, t, { denganJam: false });
+      expect(lembur[5]).toHaveLength(36);
+      expect(makan[5]).toHaveLength(36);
+    }
+  });
+
+  it("bulan 30 hari menyisakan slot tanggal ke-31 kosong, bukan menggeser ringkasan", () => {
+    const grid = susunGridAdkHarian(
+      [P("X", "Uji", [{ tanggalIso: "2026-06-30", jam: 4 }])],
+      6, 2026, { denganJam: true }
+    );
+    const baris = grid[5];
+    expect(baris[3 + 30 - 1]).toBe(4); // tanggal 30
+    expect(baris[3 + 31 - 1]).toBe(""); // slot 31 - tidak ada di Juni
+    expect(baris.slice(-2)).toEqual([4, 0]);
   });
 
   it("lembur: dua kolom ringkasan = jam hari kerja & jam hari libur", () => {
@@ -150,13 +175,14 @@ describe("susunGridAdkHarian", () => {
     expect(baris[3 + 4 - 1]).toBe("");  // tanggal 4 kosong
   });
 
-  it("uang makan: satu kolom ringkasan = jumlah hari, sel selalu 1", () => {
+  it("uang makan: jumlah hari di kolom TERAKHIR, kolom sebelumnya kosong", () => {
     const grid = susunGridAdkHarian(
       [P("X", "Uji", [{ tanggalIso: "2026-06-02" }, { tanggalIso: "2026-06-03" }])],
       6, 2026, { denganJam: false }
     );
     const baris = grid[5];
-    expect(baris.slice(-1)).toEqual([2]);
+    // Template-ADK-UM menaruh totalnya di AJ dan membiarkan AI kosong.
+    expect(baris.slice(-2)).toEqual(["", 2]);
     expect(baris[3 + 2 - 1]).toBe(1);
     expect(baris[3 + 3 - 1]).toBe(1);
   });

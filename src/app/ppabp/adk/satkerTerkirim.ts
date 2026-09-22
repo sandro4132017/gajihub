@@ -12,8 +12,12 @@
 // approval-nya kelewat" - keadaan yang paling sering jadi sebab file ADK
 // kelihatan benar tapi kurang orang.
 //
-// BERLAKU UNTUK TUKIN & UANG MAKAN. ADK Uang Lembur tidak memakai ini karena
-// memang sedang tidak berfungsi - lihat src/app/tampilUangLembur.ts.
+// BERLAKU UNTUK KETIGA ADK - Tukin, Uang Makan, dan Uang Lembur. Yang terakhir
+// menyusul 2026-09-22; sebelum itu ia masih memakai gerbang lama
+// `status: "APPROVED"` yang sudah dihapus, sehingga berkasnya selalu kosong.
+// Kalau satu route memakai aturan berbeda, satu periode bisa menghasilkan tiga
+// berkas yang isinya orang berbeda - dan selisihnya baru ketahuan sesudah
+// ketiganya diunggah ke Web Gaji.
 // ============================================================================
 
 import type { PrismaClient } from "@prisma/client";

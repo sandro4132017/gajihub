@@ -75,3 +75,31 @@ export function tanggalTeks(tanggal: Date): string {
     timeZone: "UTC",
   }).format(tanggal);
 }
+
+/**
+ * Jam lembur jadi JAM BULAT KE BAWAH - 8,33 jam ditulis "8 jam".
+ *
+ * KENAPA KE BAWAH, BUKAN KE TERDEKAT. Angka ini mengikuti aturan
+ * pembayarannya: sisa menit yang tidak genap satu jam tidak dibayar (aturan
+ * user 2026-08-06, lihat bulatkanKeJamPenuh di business-logic/uangLembur.ts).
+ * Membulatkan 8,7 jadi 9 akan menampilkan satu jam yang tidak pernah
+ * dibayarkan - di layar yang dipakai menjawab pertanyaan pegawai soal
+ * lemburnya, itu selisih yang harus dijelaskan, bukan dibuat.
+ *
+ * "0 jam" BUKAN "-", dan bedanya disengaja. Lembur 20 menit memang menghasilkan
+ * nol jam yang dibayar, tapi harinya tetap punya baris lembur di e-Presensi;
+ * menulisnya "-" akan berbunyi "hari itu tidak lembur". Yang benar-benar tidak
+ * ada lemburnya baru dapat "-".
+ *
+ * HATI-HATI MENJUMLAHKAN ANGKA HASIL FUNGSI INI. Tiap nilai dibulatkan
+ * sendiri-sendiri, jadi jumlah tampilan harian TIDAK selalu sama dengan
+ * tampilan totalnya: dua hari 1,9 jam terbaca "1 jam" + "1 jam" sementara
+ * totalnya 3,8 jam terbaca "3 jam". Yang dipakai membayar adalah pembulatan
+ * atas TOTAL SEBULAN, bukan penjumlahan angka harian.
+ *
+ * MURNI TAMPILAN - tidak ada keputusan pembayaran yang memakai hasilnya.
+ */
+export function lemburTeks(jam: number): string {
+  if (!Number.isFinite(jam) || jam <= 0) return "-";
+  return `${Math.floor(jam)} jam`;
+}

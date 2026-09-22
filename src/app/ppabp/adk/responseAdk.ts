@@ -1,6 +1,7 @@
 import { utils, write } from "xlsx";
 import { rakitTeksAdk, type SelAdk } from "../../../business-logic/adk";
 import {
+  SLOT_TANGGAL_GRID,
   rakitTeksAdkHarian,
   susunGridAdkHarian,
   susunBarisAdkHarian,
@@ -105,6 +106,28 @@ export function responseAdkHarian({
   const wb = utils.book_new();
   const grid = susunGridAdkHarian(pegawai, periodeBulan, periodeTahun, { denganJam });
   const wsDepan = utils.aoa_to_sheet(grid);
+  // LEBAR KOLOM & MERGE disalin dari template asli (diukur dari
+  // Excel/Template-ADK-Lembur.xlsm). Keduanya memang ikut tertulis oleh
+  // SheetJS edisi komunitas - beda dari warna, perataan, dan font yang TIDAK
+  // (diuji: properti `s` hilang setelah tulis-baca, tinggal
+  // `patternType: "none"`).
+  //
+  // Tanpa lebar kolom, 31 kolom tanggal melebar sendiri mengikuti isinya dan
+  // gridnya berhenti terbaca sebagai kalender - bagian tampilan yang paling
+  // terasa, dan paling murah untuk ditiru.
+  wsDepan["!cols"] = [
+    { wch: 8.57 },  // No
+    { wch: 19.43 }, // NIP
+    { wch: 46.29 }, // Nama
+    ...Array.from({ length: SLOT_TANGGAL_GRID }, () => ({ wch: 2.86 })), // tanggal 1..31
+    // Berhenti di 34 entri, persis template: dua kolom ringkasan (AI & AJ)
+    // memang dibiarkan memakai lebar bawaan Excel di berkas asli.
+  ];
+  // Judul berkas (C2) menyatu dengan barisnya di bawah, persis template.
+  wsDepan["!merges"] = [{ s: { c: 2, r: 1 }, e: { c: 2, r: 2 } }];
+  // Bulan berformat "00" supaya terbaca 06, bukan 6 - satu-satunya format
+  // angka di template, dan format angka (`z`) memang ikut tertulis.
+  if (wsDepan["B3"]) wsDepan["B3"].z = "00";
   // Kolom NIP di grid ikut dipaksa teks - alasan yang sama dengan sheet
   // "hasil" di bawah. Baris data grid mulai setelah 5 baris kepala.
   for (let i = 5; i < grid.length; i++) {

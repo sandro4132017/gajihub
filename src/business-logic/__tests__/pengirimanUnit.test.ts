@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  cacahPeriode,
   cacahProgres,
   cekBolehKirim,
   rangkumProgres,
+  riwayatPengirimanPeriode,
   statusUnit,
   type BarisPengiriman,
 } from "../pengirimanUnit";
@@ -148,5 +150,87 @@ describe("cacahProgres", () => {
       ])
     );
     expect(cacahProgres(p)).toEqual({ TERKIRIM: 2, BELUM_KIRIM: 1, DIKEMBALIKAN: 0 });
+  });
+});
+
+describe("riwayatPengirimanPeriode - satu unit, banyak periode", () => {
+  const tersedia = [
+    { periodeBulan: 5, periodeTahun: 2026, jumlahKalkulasi: 47 },
+    { periodeBulan: 7, periodeTahun: 2026, jumlahKalkulasi: 0 },
+    { periodeBulan: 6, periodeTahun: 2026, jumlahKalkulasi: 47 },
+    { periodeBulan: 12, periodeTahun: 2025, jumlahKalkulasi: 45 },
+  ];
+
+  it("terbaru di atas, lintas tahun ikut terurut benar", () => {
+    const r = riwayatPengirimanPeriode(tersedia, new Map());
+    expect(r.map((x) => `${x.periodeBulan}/${x.periodeTahun}`)).toEqual([
+      "7/2026",
+      "6/2026",
+      "5/2026",
+      "12/2025",
+    ]);
+  });
+
+  it("periode yang TIDAK punya baris pengiriman tetap muncul - itu yang dicari", () => {
+    const r = riwayatPengirimanPeriode(tersedia, new Map([["5|2026", terkirim]]));
+    expect(r).toHaveLength(4);
+    expect(r.find((x) => x.periodeBulan === 5)!.keadaan).toBe("TERKIRIM");
+    expect(r.find((x) => x.periodeBulan === 6)!.keadaan).toBe("BELUM_KIRIM");
+  });
+
+  it("belum dihitung dibedakan dari belum kirim - tindak lanjutnya beda", () => {
+    const r = riwayatPengirimanPeriode(tersedia, new Map());
+    // 7/2026 nol kalkulasi -> harus menjalankan kalkulasi dulu.
+    expect(r.find((x) => x.periodeBulan === 7)!.keadaan).toBe("BELUM_DIHITUNG");
+    // 6/2026 sudah 47 kalkulasi -> tinggal menekan Kirim.
+    expect(r.find((x) => x.periodeBulan === 6)!.keadaan).toBe("BELUM_KIRIM");
+  });
+
+  it("yang sudah TERKIRIM tidak turun pangkat jadi belum dihitung", () => {
+    // Kalkulasinya hilang setelah dikirim (mis. pegawai pindah unit). Yang
+    // dikirim sudah dibekukan; menampilkannya sebagai "belum dihitung" akan
+    // mengundang orang menghitung ulang kiriman yang terkunci.
+    const r = riwayatPengirimanPeriode(
+      [{ periodeBulan: 6, periodeTahun: 2026, jumlahKalkulasi: 0 }],
+      new Map([["6|2026", terkirim]])
+    );
+    expect(r[0].keadaan).toBe("TERKIRIM");
+  });
+
+  it("dikembalikan membawa alasannya - unit tidak punya cara lain tahu", () => {
+    const r = riwayatPengirimanPeriode(
+      [{ periodeBulan: 6, periodeTahun: 2026, jumlahKalkulasi: 47 }],
+      new Map([["6|2026", dikembalikan]])
+    );
+    expect(r[0].keadaan).toBe("DIKEMBALIKAN");
+    expect(r[0].alasanKembali).toContain("Predikat");
+  });
+
+  it("baris pengiriman untuk periode di luar daftar diabaikan", () => {
+    const r = riwayatPengirimanPeriode(
+      [{ periodeBulan: 6, periodeTahun: 2026, jumlahKalkulasi: 47 }],
+      new Map([["1|2020", terkirim]])
+    );
+    expect(r).toHaveLength(1);
+    expect(r[0].keadaan).toBe("BELUM_KIRIM");
+  });
+});
+
+describe("cacahPeriode", () => {
+  it("menghitung tiap keadaan, termasuk yang nol", () => {
+    const r = riwayatPengirimanPeriode(
+      [
+        { periodeBulan: 5, periodeTahun: 2026, jumlahKalkulasi: 47 },
+        { periodeBulan: 6, periodeTahun: 2026, jumlahKalkulasi: 47 },
+        { periodeBulan: 7, periodeTahun: 2026, jumlahKalkulasi: 0 },
+      ],
+      new Map([["5|2026", terkirim]])
+    );
+    expect(cacahPeriode(r)).toEqual({
+      TERKIRIM: 1,
+      BELUM_KIRIM: 1,
+      BELUM_DIHITUNG: 1,
+      DIKEMBALIKAN: 0,
+    });
   });
 });

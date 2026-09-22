@@ -66,6 +66,12 @@ export interface BarisRekapPresensi {
   totalJamLemburHariLibur: number;
   jumlahHariMakanLembur: number;
   jumlahHariMakanLemburHariLibur: number;
+  /**
+   * HARI lembur hari kerja - dipakai pengali jam pertama (1,5x) yang berlaku
+   * per hari. Nol berarti BELUM DIKETAHUI, bukan "tidak ada": mesin uang
+   * menolak memakai pengali untuk nilai itu dan menulis anomali.
+   */
+  jumlahHariLemburHariKerja: number;
 }
 
 export interface BarisPresensiDilewati {
@@ -111,6 +117,10 @@ const PETA_KOLOM: { field: FieldAngka; kandidat: string[] }[] = [
   { field: "jumlahHariMakanLemburHariLibur", kandidat: ["makan lembur hari libur", "makan lembur libur"] },
   { field: "totalJamLembur", kandidat: ["jam lembur hari kerja", "jam lembur"] },
   { field: "jumlahHariMakanLembur", kandidat: ["hari makan lembur hari kerja", "hari makan lembur", "makan lembur"] },
+  // SESUDAH seluruh kandidat "makan lembur" & "jam lembur" di atas: kandidat
+  // di sini lebih pendek, jadi kalau dicek duluan ia akan menyerobot kolom
+  // "Hari Makan Lembur" yang namanya memuat kata yang sama.
+  { field: "jumlahHariLemburHariKerja", kandidat: ["hari lembur hari kerja", "hari lembur"] },
   // Ditaruh PALING BAWAH dengan sengaja: kandidat "hadir" cocok juga ke
   // "Hari Hadir", jadi kalau dicek duluan dia bisa menyerobot kolom lain.
   { field: "jumlahHariHadir", kandidat: ["hari hadir"] },
@@ -240,6 +250,7 @@ export function parseRekapPresensi(matriks: unknown[][]): HasilParseRekapPresens
       totalJamLemburHariLibur: nilai.totalJamLemburHariLibur,
       jumlahHariMakanLembur: nilai.jumlahHariMakanLembur,
       jumlahHariMakanLemburHariLibur: nilai.jumlahHariMakanLemburHariLibur,
+      jumlahHariLemburHariKerja: nilai.jumlahHariLemburHariKerja,
       jumlahHariTugasBelajar: nilai.jumlahHariTugasBelajar,
       jumlahHariAlpha: nilai.jumlahHariAlpha,
       jumlahTidakPresensi: nilai.jumlahTidakPresensi,

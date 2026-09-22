@@ -155,3 +155,93 @@ export function cacahProgres(progres: readonly ProgresUnit[]): Record<KeadaanPen
   for (const p of progres) hasil[p.keadaan]++;
   return hasil;
 }
+
+
+// ---------------------------------------------------------------------------
+// SISI SEBERANG: satu unit, BANYAK periode.
+//
+// `rangkumProgres` di atas menjawab "unit mana yang belum kirim bulan ini" -
+// pertanyaan PPABP. Yang di bawah menjawab pertanyaan Kasubag TU: "periode
+// mana saja yang sudah SAYA kirim, dan mana yang belum".
+//
+// Sebelum ini pertanyaan itu cuma bisa dijawab dengan mengganti filter
+// periode satu per satu lalu mengingat hasilnya - dan periode yang TIDAK
+// dibuka tidak pernah terlihat, persis kelemahan yang sama yang membuat
+// `rangkumProgres` harus menerima `semuaUnit` dari luar.
+// ---------------------------------------------------------------------------
+
+/**
+ * Keadaan satu periode bagi satu unit.
+ *
+ * `BELUM_DIHITUNG` BUKAN salah satu `KeadaanPengiriman` - sengaja. Unit yang
+ * belum menghitung dan unit yang sudah menghitung tapi belum menekan Kirim
+ * sama-sama "belum kirim", tapi tindak lanjutnya berbeda jauh: yang pertama
+ * harus menjalankan kalkulasi dulu, yang kedua tinggal menekan satu tombol.
+ * Menyatukan keduanya jadi satu chip abu-abu menyembunyikan beda itu.
+ */
+export type KeadaanPeriode = KeadaanPengiriman | "BELUM_DIHITUNG";
+
+export interface PeriodeUnit {
+  periodeBulan: number;
+  periodeTahun: number;
+  keadaan: KeadaanPeriode;
+  /** Berapa pegawai yang sudah punya kalkulasi Tukin pada periode ini. */
+  jumlahKalkulasi: number;
+  dikirimPada: Date | null;
+  dikirimOleh: string | null;
+  alasanKembali: string | null;
+}
+
+export interface PeriodeTersedia {
+  periodeBulan: number;
+  periodeTahun: number;
+  /** Cacah kalkulasi Tukin unit ini pada periode itu. 0 = belum dihitung. */
+  jumlahKalkulasi: number;
+}
+
+/**
+ * Riwayat pengiriman unit ini, satu baris per periode, TERBARU DI ATAS.
+ *
+ * `periodeTersedia` datang dari luar dan harus berisi SELURUH periode yang
+ * datanya ada - bukan disimpulkan dari baris pengiriman. Kalau disimpulkan,
+ * periode yang belum pernah dikirim tidak akan pernah muncul, padahal justru
+ * itu yang dicari.
+ */
+export function riwayatPengirimanPeriode(
+  periodeTersedia: readonly PeriodeTersedia[],
+  pengiriman: ReadonlyMap<string, BarisPengiriman & { dikirimOleh?: string | null }>
+): PeriodeUnit[] {
+  return [...periodeTersedia]
+    .sort((a, b) => b.periodeTahun - a.periodeTahun || b.periodeBulan - a.periodeBulan)
+    .map((p) => {
+      const baris = pengiriman.get(`${p.periodeBulan}|${p.periodeTahun}`) ?? null;
+      const st = statusUnit(baris);
+      return {
+        periodeBulan: p.periodeBulan,
+        periodeTahun: p.periodeTahun,
+        // Belum dihitung hanya berlaku kalau memang belum dikirim. Periode
+        // yang sudah terkirim TIDAK pernah turun pangkat jadi "belum
+        // dihitung" gara-gara barisnya dihapus belakangan - yang dikirim
+        // sudah dibekukan, dan menampilkannya sebagai belum dihitung akan
+        // mengundang orang menghitung ulang kiriman yang terkunci.
+        keadaan:
+          st.keadaan === "BELUM_KIRIM" && p.jumlahKalkulasi === 0 ? "BELUM_DIHITUNG" : st.keadaan,
+        jumlahKalkulasi: p.jumlahKalkulasi,
+        dikirimPada: baris?.dikirimPada ?? null,
+        dikirimOleh: baris?.dikirimOleh ?? null,
+        alasanKembali: st.alasanKembali,
+      };
+    });
+}
+
+/** Cacah per keadaan, buat kalimat "3 dari 8 periode sudah dikirim". */
+export function cacahPeriode(riwayat: readonly PeriodeUnit[]): Record<KeadaanPeriode, number> {
+  const hasil: Record<KeadaanPeriode, number> = {
+    BELUM_DIHITUNG: 0,
+    BELUM_KIRIM: 0,
+    TERKIRIM: 0,
+    DIKEMBALIKAN: 0,
+  };
+  for (const p of riwayat) hasil[p.keadaan]++;
+  return hasil;
+}

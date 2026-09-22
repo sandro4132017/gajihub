@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { uploadPresensiPdfAction, type UploadPresensiPdfFormState } from "./actionsPdf";
 import { NAMA_BULAN } from "../../bulan";
+import { lemburTeks } from "../../presensiTampilan";
 
 const INITIAL_STATE: UploadPresensiPdfFormState = {};
 
@@ -187,10 +188,10 @@ export function UploadPresensiPdfForm() {
                       {p.totalMenitTerlambat} / {p.totalMenitPulangCepat} mnt
                     </td>
                     <td className="px-3 py-2 font-mono text-ink-2">
-                      {p.totalJamLembur} jam
+                      {lemburTeks(p.totalJamLembur)}
                       {p.totalJamLemburHariLibur > 0 && (
                         <span className="block text-xs font-semibold text-gold-deep">
-                          + {p.totalJamLemburHariLibur} jam hari libur (2x)
+                          + {lemburTeks(p.totalJamLemburHariLibur)} hari libur (2x)
                         </span>
                       )}
                     </td>

@@ -53,6 +53,15 @@ export interface PegawaiAdkHarian {
   hari: { tanggalIso: string; jam?: number }[];
 }
 
+/**
+ * Lebar blok tanggal di sheet "depan" - TETAP 31, bukan sepanjang bulannya.
+ *
+ * Diukur dari kedua template asli: keduanya ber-`!ref` sampai kolom AJ, dengan
+ * 31 slot tanggal di D..AH lalu ringkasan di AI & AJ. Bulan yang lebih pendek
+ * membiarkan slot sisanya kosong.
+ */
+export const SLOT_TANGGAL_GRID = 31;
+
 /** Jumlah hari dalam satu bulan (bulan 1-12). */
 export function hariDalamBulan(bulan: number, tahun: number): number {
   return new Date(Date.UTC(tahun, bulan, 0)).getUTCDate();
@@ -142,6 +151,17 @@ export type SelGrid = string | number;
  * Web Gaji sendiri berdasarkan tanggalnya. Jadi salah klasifikasi di sini
  * tidak mengubah apa yang dibayarkan.
  */
+/**
+ * CATATAN PEMAKAIAN (2026-09-22): sheet "depan" untuk UANG LEMBUR sudah TIDAK
+ * dibangun di sini lagi - berkas .xlsx-nya diisi ke cetakan asli operator
+ * lewat `src/app/ppabp/adk/berkasAdkLembur.ts`, supaya warna, perataan, dan
+ * formulanya sama persis. Yang masih memakai fungsi ini: ADK Uang Makan
+ * (`denganJam: false`).
+ *
+ * Cabang `denganJam: true` DIPERTAHANKAN - masih diuji, dan jadi satu-satunya
+ * jalan kalau cetakannya suatu saat tidak bisa dibaca. Jangan dihapus tanpa
+ * mengganti jalur cadangannya.
+ */
 export function susunGridAdkHarian(
   pegawai: PegawaiAdkHarian[],
   periodeBulan: number,
@@ -161,14 +181,17 @@ export function susunGridAdkHarian(
     ["Jenis", judul, petunjuk],
     ["Tahun", periodeTahun, `${opsi.denganJam ? "Uang_Lembur" : "Uang_Makan"}_${namaBulan}_${periodeTahun}`],
     ["Bulan", periodeBulan],
-    ["Batas", jumlahHari],
-    [
-      "No",
-      "NIP",
-      "Nama",
-      ...hariKolom.map((h) => h),
-      ...(opsi.denganJam ? ["Jam hari kerja", "Jam hari libur"] : ["Jumlah hari"]),
-    ],
+    // TEKS, bukan angka - di kedua template asli selnya `t=s v="30"` / `"31"`.
+    // Bedanya kelihatan di layar: angka rata kanan, teks rata kiri, dan sel
+    // yang tipenya beda dari template itulah yang pertama membuat operator
+    // ragu berkasnya benar.
+    ["Batas", String(jumlahHari)],
+    // BARIS JUDUL BERHENTI DI TANGGAL TERAKHIR - tidak ada label untuk kolom
+    // ringkasan. Di kedua template asli (baris 5) sel sesudah tanggal memang
+    // KOSONG; label "Jam hari kerja"/"Jam hari libur" dulu saya karang
+    // sendiri, dan karangan itu yang membuat berkas ini tidak bisa ditumpuk
+    // dengan berkas operator untuk dibandingkan.
+    ["No", "NIP", "Nama", ...hariKolom.map((h) => h)],
   ];
 
   const isi: SelGrid[][] = pegawai.map((p, i) => {
@@ -188,12 +211,26 @@ export function susunGridAdkHarian(
         kerja += 1;
       }
     }
+    // KOLOM RINGKASAN DIPATOK DI UJUNG, bukan menempel sesudah tanggal
+    // terakhir. Kedua template asli lebarnya tetap sampai kolom AJ: 31 slot
+    // tanggal (D..AH) lalu ringkasannya di AI & AJ. Bulan 30 hari
+    // menyisakan slot ke-31 kosong - itu sebabnya di berkas Juni ada satu
+    // kolom kosong sebelum angka ringkasannya, dan bukan kebetulan.
+    //
+    // Kalau ringkasannya digeser mengikuti panjang bulan, berkas Februari dan
+    // berkas Juli menaruh angka yang sama di kolom yang berbeda - dan
+    // penerimanya membaca kolom, bukan judul (judulnya memang tidak ada).
+    const slotTanggal = Array.from({ length: SLOT_TANGGAL_GRID }, (_, idx) =>
+      idx < jumlahHari ? (perTanggal.get(idx + 1) ?? "") : ""
+    );
     return [
       i + 1,
       p.nip.trim(),
       p.nama,
-      ...hariKolom.map((h) => perTanggal.get(h) ?? ""),
-      ...(opsi.denganJam ? [kerja, libur] : [kerja]),
+      ...slotTanggal,
+      // Uang makan cuma punya SATU angka dan letaknya di AJ (kolom terakhir),
+      // jadi AI dikosongkan - persis seperti Template-ADK-UM.
+      ...(opsi.denganJam ? [kerja, libur] : ["", kerja]),
     ];
   });
 

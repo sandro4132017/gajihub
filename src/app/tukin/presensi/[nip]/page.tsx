@@ -10,7 +10,7 @@ import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../../business-logic/tarifT
 import { RincianPotonganKehadiran } from "../../../RincianPotonganKehadiran";
 import { dikecualikanPotonganKehadiran } from "../../../../business-logic/pejabatPimpinanTinggi";
 import { BadgePejabatEselon } from "../../../BadgePejabatEselon";
-import { LABEL_STATUS, NAMA_HARI, jamTeks } from "../../../presensiTampilan";
+import { LABEL_STATUS, NAMA_HARI, jamTeks, lemburTeks } from "../../../presensiTampilan";
 import { KoreksiJamForm } from "./KoreksiJamForm";
 import { TabelRincianJamKerja, type BarisTabelRincianJamKerja } from "./TabelRincianJamKerja";
 import { TabelBandingEpresensi } from "./TabelBandingEpresensi";
@@ -282,6 +282,7 @@ export default async function RincianPresensiPegawaiPage({
       // saja, dan mewarnai dua-duanya akan mengaku mengubah yang tidak diubah.
       masukDikoreksi: koreksiHari?.jamMasuk != null,
       keluarDikoreksi: koreksiHari?.jamKeluar != null,
+      jamLembur: h.jamLembur,
       kejadianTidakPresensi,
     };
   });
@@ -483,12 +484,15 @@ export default async function RincianPresensiPegawaiPage({
               <dd className="font-mono font-semibold text-ink">{rekap.totalMenitPulangCepat} menit</dd>
             </div>
             <div>
+              {/* Jam + menit, bukan "2,75 jam". Angka desimal benar tapi tidak
+                  bisa diadu dengan jam dinding oleh orang yang memeriksanya -
+                  dan memeriksanya justru gunanya halaman ini. */}
               <dt className="text-xs text-muted">Lembur hari kerja</dt>
-              <dd className="font-mono font-semibold text-ink">{rekap.totalJamLembur} jam</dd>
+              <dd className="font-mono font-semibold text-ink">{lemburTeks(rekap.totalJamLembur)}</dd>
             </div>
             <div>
               <dt className="text-xs text-muted">Lembur hari libur (2x)</dt>
-              <dd className="font-mono font-semibold text-ink">{rekap.totalJamLemburHariLibur} jam</dd>
+              <dd className="font-mono font-semibold text-ink">{lemburTeks(rekap.totalJamLemburHariLibur)}</dd>
             </div>
           </dl>
           {harian.length > 0 && (totalTelat !== rekap.totalMenitTerlambat || totalPulangCepat !== rekap.totalMenitPulangCepat) && (
@@ -607,6 +611,7 @@ export default async function RincianPresensiPegawaiPage({
               <th className="px-3 py-2.5">Pulang</th>
               <th className="px-3 py-2.5">Telat</th>
               <th className="px-3 py-2.5">Pulang cepat</th>
+              <th className="px-3 py-2.5">Lembur</th>
               <th className="px-3 py-2.5">Uang makan</th>
               {bolehKoreksi && <th className="px-3 py-2.5">Koreksi</th>}
             </tr>
@@ -614,7 +619,7 @@ export default async function RincianPresensiPegawaiPage({
           <tbody>
             {harian.length === 0 && (
               <tr>
-                <td colSpan={bolehKoreksi ? 8 : 7} className="px-3 py-6 text-center text-muted">
+                <td colSpan={bolehKoreksi ? 9 : 8} className="px-3 py-6 text-center text-muted">
                   Periode ini belum dilakukan sinkronisasi.
                 </td>
               </tr>
@@ -657,6 +662,18 @@ export default async function RincianPresensiPegawaiPage({
                   </td>
                   <td className="px-3 py-2 font-mono">
                     {h.menitPulangCepat > 0 ? <span className="text-red">{h.menitPulangCepat} mnt</span> : <span className="text-muted">-</span>}
+                  </td>
+                  {/* JAM YANG TEREKAM hari itu, bukan jam yang dibayar. Yang
+                      dibayar dipangkas ke jam penuh atas TOTAL SEBULAN (lihat
+                      uangLembur.ts), jadi angka di kolom ini memang bisa lebih
+                      besar dari yang masuk pembayaran - dan justru selisih itu
+                      yang tidak bisa dijelaskan kalau menitnya tidak tampil. */}
+                  <td className="px-3 py-2 font-mono text-xs">
+                    {h.jamLembur > 0 ? (
+                      <span className="text-ink">{lemburTeks(h.jamLembur)}</span>
+                    ) : (
+                      <span className="text-muted">-</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-xs">
                     {akhirPekan ? (
@@ -729,11 +746,17 @@ export default async function RincianPresensiPegawaiPage({
             ditagih 0,01% per menit.
           </p>
           <p className="mt-2">
-            &quot;Jam toleransi pulang&quot; di sini batas atas kewajiban checkout, <em>bukan</em> jam mulai lembur -
-            angkanya kebetulan sama (jam pulang + 60 menit). Kolom{" "}
-            <strong>Menit kerja</strong> juga memakai rumus berkas petugas (rentang masuk-pulang dikurangi istirahat,
-            tanpa batas atas), jadi angkanya bisa melebihi 450 dan tidak sama dengan kolom{" "}
+            Kolom <strong>Menit kerja</strong> memakai rumus berkas petugas (rentang masuk-pulang dikurangi
+            istirahat, tanpa batas atas), jadi angkanya bisa melebihi 450 dan tidak sama dengan kolom{" "}
             <span className="font-mono">menit_kerja</span> milik e-Presensi yang dibatasi 7,5 jam.
+          </p>
+          <p className="mt-2 rounded-lg bg-gold-tint px-3 py-2">
+            <strong>Kolom &quot;Lembur&quot; adalah jam TERHITUNG, bukan hak bayar.</strong> Angkanya diturunkan
+            dari selisih <em>jam pulang</em> dengan <em>jam harus pulang</em> (di hari libur: dari jam masuk),
+            lalu dipotong ke jam penuh - sisa menit yang tidak genap satu jam tidak dibayar.{" "}
+            <strong>Tidak ada batas jam</strong> di sini: SBM 2026 tidak menetapkannya. Yang membatasi{" "}
+            <strong>surat perintah lembur</strong>, dokumen resmi di luar sistem ini yang diverifikasi petugas
+            sebelum dibayarkan.
           </p>
         </div>
       ) : null}

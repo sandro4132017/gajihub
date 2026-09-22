@@ -53,6 +53,35 @@ export type GolonganRomawi = "I" | "II" | "III" | "IV";
 export const PENGALI_LEMBUR_HARI_LIBUR = 2;
 
 /**
+ * Pengali uang lembur HARI KERJA - jam pertama lebih rendah dari jam
+ * berikutnya (keputusan user 2026-09-18).
+ *
+ * BENTUKNYA dari PP 35/2021 (ketenagakerjaan): jam lembur pertama 1,5 kali,
+ * jam berikutnya 2 kali. BASISNYA di sini BERBEDA dari aturan asalnya, dan ini
+ * keputusan sadar user: di PP 35/2021 yang dikalikan "upah sejam" (1/173 x
+ * upah sebulan), di sini yang dikalikan TARIF UANG LEMBUR SBM per jam - angka
+ * yang menurut SBM sendiri sudah berupa "kompensasi", bukan upah.
+ * Konsekuensinya lembur hari kerja dibayar 1,5-2 kali standar SBM.
+ *
+ * SBM 2026 TIDAK MELARANGNYA, dan itu sudah diperiksa ke PDF-nya langsung:
+ * seluruh teks item 23.1 cuma menetapkan tarif per jam + syarat surat
+ * perintah. Kata "libur" nol kemunculan di seluruh PMK 32/2025; "150%" muncul
+ * 3 kali (sewa kendaraan, makanan siap saji) dan "200%" sekali (pakaian dinas
+ * upacara) - tidak satu pun soal lembur. Jadi pengali memang wilayah tata cara
+ * pembayaran, bukan wilayah SBM.
+ *
+ * "JAM PERTAMA" ITU PER HARI, BUKAN PER BULAN. Total sebulan dihitung
+ * tarif x (2J - 0,5D): J total jam, D jumlah HARI lembur. Tanpa D, "jam
+ * pertama" akan jatuh sekali sebulan - satu potongan 0,5 tarif untuk 22 hari
+ * lembur, bukan 22 potongan. Lihat hitungUangLembur().
+ *
+ * TODO(confirm): dasar hukumnya sama dengan PENGALI_LEMBUR_HARI_LIBUR di atas -
+ * peraturan tata cara pembayaran uang lembur yang belum ada salinannya.
+ */
+export const PENGALI_LEMBUR_JAM_PERTAMA = 1.5;
+export const PENGALI_LEMBUR_JAM_BERIKUTNYA = 2;
+
+/**
  * Pengali UANG MAKAN LEMBUR pada hari libur.
  *
  * Sengaja dibedakan dari PENGALI_LEMBUR_HARI_LIBUR dan default-nya 1 (TIDAK

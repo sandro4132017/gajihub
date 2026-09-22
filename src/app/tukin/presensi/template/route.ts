@@ -45,6 +45,10 @@ const KOLOM = [
   // Tunjangan Kinerja-nya dibayar 80% (Permenaker 15/2024).
   "Hari Tugas Belajar",
   "Jam Lembur",
+  // Jumlah HARI lembur, bukan jamnya - dipakai pengali jam pertama (1,5x)
+  // yang berlaku per hari. Kalau dikosongkan, lemburnya dibayar 1x tarif dan
+  // barisnya ditandai anomali; tidak ditebak dari total jamnya.
+  "Hari Lembur Hari Kerja",
   "Hari Makan Lembur",
   "Jam Lembur Hari Libur",
   "Hari Makan Lembur Hari Libur",
