@@ -273,7 +273,7 @@ per jenis entitas, dan sudah dibuktikan ke data:
 
 ```
 tukin_calculation        "kalkulasi-massal-Biro Keuangan dan Baran..."
-koreksi_presensi_harian  "198111302025211042-2026-07-15"
+koreksi_presensi_harian  "199912312024121001-2026-07-15"
 app_user                 "<uuid>"
 ```
 

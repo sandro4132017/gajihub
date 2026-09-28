@@ -32,6 +32,12 @@ export interface BarisTabelRincianJamKerja {
    * bahwa seseorang bisa kurang jam kerja DAN tercatat lembur di hari itu juga.
    */
   jamLembur: number;
+  /**
+   * Angka mesin SEBELUM koreksi. `jamLembur` di atas sudah efektif (koreksi
+   * menang); yang ini dipakai form koreksi sebagai pembanding, supaya angka
+   * yang diketik petugas selalu bisa diadu ke asalnya.
+   */
+  jamLemburMesin: number;
   keteranganLibur: string | null;
   dikoreksiManual: boolean;
   /**

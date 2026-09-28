@@ -503,7 +503,19 @@ export function rekapDariLaporanPdf(
    * Nilai null pada salah satu kolom berarti "tidak dikoreksi": jam dari
    * e-Presensi dipakai apa adanya untuk kolom itu.
    */
-  koreksiJam: ReadonlyMap<string, { jamMasukMenit: number | null; jamKeluarMenit: number | null }> = new Map(),
+  koreksiJam: ReadonlyMap<
+    string,
+    {
+      jamMasukMenit: number | null;
+      jamKeluarMenit: number | null;
+      /**
+       * Jam lembur hari itu menurut petugas, menggantikan hitungan mesin.
+       * `null`/tidak ada = pakai hitungan mesin. `0` SAH dan berbeda dari
+       * null: nol berarti "sudah diperiksa, memang bukan lembur".
+       */
+      jamLembur?: number | null;
+    }
+  > = new Map(),
   /**
    * Tanggal merah & cuti bersama (ISO "YYYY-MM-DD" -> keterangannya).
    *
@@ -1231,6 +1243,75 @@ export function rekapDariLaporanPdf(
             berhakMakanLembur: adaBlokDuaJam,
           });
         }
+      }
+    }
+  }
+
+  // --- 4b. KOREKSI JAM LEMBUR PER TANGGAL ------------------------------------
+  //
+  // Diterapkan di SATU TEMPAT, sesudah seluruh hari selesai dihitung, bukan
+  // disisipkan ke dua cabang lembur di atas. Sebabnya bukan kerapian: rincian
+  // harian mengalir ke `PresensiHarian.jamLembur` (dan dari sana ke berkas
+  // ADK, yang formatnya per tanggal), sementara total bulanan mengalir ke
+  // `UangLembur` yang jadi dasar rupiahnya. Kalau koreksinya diterapkan di dua
+  // cabang terpisah, kedua angka itu bisa berbeda - dan bedanya baru ketahuan
+  // sesudah berkas terkirim ke Web Gaji.
+  //
+  // Jadi: rincian hariannya dikoreksi dulu, lalu SELURUH total bulanan
+  // disusun ulang dari rincian yang sama. Satu sumber, dua keluaran.
+  //
+  // Yang mengesahkan lembur adalah surat perintah lembur, dan petugas yang
+  // mengadu hitungan mesin kepadanya - lihat `alasan` yang wajib diisi di
+  // model KoreksiPresensiHarian.
+  const tanggalDikoreksiLembur = new Set<string>();
+  for (const [iso, k] of koreksiJam) {
+    if (k.jamLembur === undefined || k.jamLembur === null) continue;
+    const jamKoreksi = Math.max(0, Math.floor(k.jamLembur));
+    const rincian = hari.find((h) => h.tanggalIso === iso);
+    // Tanggal yang tidak punya baris presensi sama sekali TIDAK dibuatkan
+    // baris baru: koreksi jam lembur memperbaiki hari yang ada, bukan
+    // menciptakan kehadiran. Kalau harinya memang tidak tercatat, yang perlu
+    // diperbaiki presensinya dulu.
+    if (!rincian) {
+      catatan.push(
+        `${iso}: ada koreksi jam lembur (${jamKoreksi} jam) tapi tanggal itu tidak punya baris presensi - koreksinya DILEWATI. Perbaiki presensinya dulu.`
+      );
+      continue;
+    }
+    if (rincian.jamLembur !== jamKoreksi) {
+      catatan.push(
+        `${iso}: jam lembur dikoreksi petugas dari ${rincian.jamLembur} jam jadi ${jamKoreksi} jam.`
+      );
+    }
+    rincian.jamLembur = jamKoreksi;
+    // Syarat SBM 2026 item 23.2 (minimal 2 jam) diturunkan ulang dari angka
+    // yang dikoreksi - angka lama menjawab pertanyaan tentang jam yang sudah
+    // tidak berlaku.
+    rincian.berhakMakanLembur = jamKoreksi >= 2;
+    tanggalDikoreksiLembur.add(iso);
+  }
+
+  if (tanggalDikoreksiLembur.size > 0) {
+    // Disusun ulang dari NOL atas seluruh rincian - bukan ditambal selisihnya.
+    // Menambal berarti mempercayai bahwa akumulasi di atas dan koreksi di sini
+    // memakai aturan yang sama persis, dan itu hubungan yang gampang lepas
+    // tanpa ada yang menyadarinya.
+    jamLemburKerja = 0;
+    jamLemburLibur = 0;
+    hariLemburKerja = 0;
+    hariMakanLemburKerja = 0;
+    hariMakanLemburLibur = 0;
+    hitung.hariLembur = 0;
+    for (const h of hari) {
+      if (h.jamLembur <= 0) continue;
+      hitung.hariLembur++;
+      if (h.hariLibur) {
+        jamLemburLibur += h.jamLembur;
+        if (h.berhakMakanLembur) hariMakanLemburLibur++;
+      } else {
+        jamLemburKerja += h.jamLembur;
+        hariLemburKerja++;
+        if (h.berhakMakanLembur) hariMakanLemburKerja++;
       }
     }
   }

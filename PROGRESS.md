@@ -9,7 +9,46 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-08-12** - **kendala e-Presensi**. Ketahuan waktu
+Terakhir diperbarui: **2026-09-28** - **daftar perubahan data pegawai, gerbang
+verifikasi, dan tombol sinkronisasi**. Tiga hal yang saling menyambung:
+
+1. **Sinkronisasi pegawai tidak lagi cuma lewat terminal.** `/admin/sistem`
+   dapat tombol dua langkah (periksa -> terapkan); tombol "Terapkan" belum ada
+   sampai pratinjaunya tampil. Logikanya dipindah ke `src/jobs/sinkronPegawaiSiap.ts`
+   supaya dipakai bareng CLI - sebelumnya `importPegawaiSiap.ts` memanggil
+   `main()` di baris teratas, jadi meng-IMPOR-nya saja menjalankan sinkronisasi
+   5.078 pegawai.
+2. **Perubahan kelas jabatan ternyata TIDAK PERNAH terdeteksi.** Sinkronisasi
+   cuma membandingkan satuan kerja dan status. Padahal seluruh tarif Tukin
+   pokok diturunkan dari kelas jabatan - kelas bergeser dari 9 ke 10 (selisih
+   Rp 900.000/bulan) tanpa satu pun kolom lain berubah, dan tidak ada yang
+   tahu. Sekarang ikut dideteksi, bersama jabatan.
+3. **Daftar Perubahan Data Pegawai** (tabel `perubahan_data_pegawai`) -
+   perubahan tidak lagi menguap sesudah diterapkan. Ia jadi tabel keempat yang
+   WAJIB dicentang sebelum rekap dikirim ke PPABP, dan `perluHitungUlang()`
+   sekarang ikut menandai "data kepegawaian berubah". Polanya dari sharing
+   session BOT Gaji & Tukin Kemenkeu (23 Sep 2026): di sana perubahan
+   kepegawaian jadi **dokumen tersendiri yang diuji** bersama daftar gaji,
+   bukan sekadar disinkronkan diam-diam.
+
+**Pemicunya nyata**: 24 Sep 2026 sinkronisasi memindahkan **21 pegawai antar
+unit**, satu di antaranya masuk Biro Keuangan - unit yang Juli & Agustusnya
+sudah dikirim & dikunci. Karena scoping satker dibaca hidup, seluruh riwayat
+pembayaran orang itu ikut pindah.
+
+Selain itu: kartu "Periksa & kirim" dilebur jadi satu (dua kolom), ikon
+diseragamkan ke `react-icons`, font pindah ke `next/font` (di-host sendiri -
+sebelumnya `@import` ke Google Fonts, yang jatuh diam-diam ke Segoe UI di
+jaringan VPN), dan skill baru **`gajihub-laws-of-ux`**. Test 438 -> **945**.
+
+> **`.claude/` ada di `.gitignore` (baris 41).** Sepuluh skill lama selamat
+> karena sudah terlacak duluan; `gajihub-laws-of-ux` BELUM - perlu
+> `git add -f .claude/skills/gajihub-laws-of-ux/SKILL.md`, kalau tidak baris
+> routing di `CLAUDE.md` menunjuk skill yang tidak ada bagi yang clone repo.
+> Cek ulang: `git ls-files .claude/skills | wc -l` harus sama dengan
+> `ls .claude/skills | wc -l`.
+
+Sebelumnya, **2026-08-12** - **kendala e-Presensi**. Ketahuan waktu
 menelusuri kenapa satu pegawai punya "lupa absen" di Gajihub tapi tidak di
 rincian manual PPABP: **15 & 16 Juli 2026 web e-Presensi bermasalah**, dan
 karena absensi Kemnaker murni online (tidak ada mesin tap) **960 pegawai
@@ -56,13 +95,34 @@ kinerja per orang (tambah/ubah/hapus).
 
 ## 1. Posisi sekarang
 
-| | |
-|---|---|
-| Commit terakhir di `main` | `cae0212` |
-| Test | 438 lolos (`npm test`) |
-| Migrasi | 20; tujuh terakhir (`20260807000000_cabut_kekurangan_jam_kerja`, `20260810000000_tambah_jam_lembur_harian`, `20260810120000_penurunan_kelas_jabatan_hukdis`, `20260810140000_sk_hukdis_belum_terbit`, `20260812090000_identitas_web_gaji`, `20260812140000_kendala_epresensi`, `20260812160000_koreksi_presensi_harian`) BELUM di-deploy ke VPS |
-| Deploy | VPS kantor `192.168.221.44:3002` via pm2 (`gajihub`, restart ke-17), nginx -> `gajihub.rokeubmn.id` (HTTP) |
-| Repo | https://github.com/sandro4132017/gajihub |
+Angka di bawah diukur **2026-09-28**. Tiap baris menyebut perintah yang
+memeriksanya ulang - jangan dikutip tanpa menjalankan perintahnya dulu.
+
+| | | Cek ulang |
+|---|---|---|
+| Commit terakhir di `main` | `ad7dc4c` (2026-09-22) | `git log -1 --format='%h %ad' --date=short` |
+| Test | **945** lolos | `npm test` |
+| Migrasi | **37** total | `ls prisma/migrations \| grep -c '^2'` |
+| Belum di-commit | banyak - termasuk 2 migrasi baru | `git status --porcelain` |
+| Deploy | VPS kantor `192.168.221.44:3002` via pm2 (`gajihub`), nginx -> `gajihub.rokeubmn.id` (HTTP) | `pm2 list` di VPS |
+| Repo | https://github.com/sandro4132017/gajihub | - |
+
+**Dua migrasi terakhir sudah diterapkan ke database LOKAL, belum ke VPS**:
+`20260922120000_verifikasi_tabel_dan_koreksi_jam_lembur` dan
+`20260924100000_daftar_perubahan_data_pegawai`.
+
+> **`npm ci` WAJIB sebelum build di VPS.** Dua dependensi baru masuk
+> 2026-09-28 (`react-icons`, dan `next/font` yang mengunduh Manrope saat
+> build). Tanpa `npm ci`, build gagal dengan "Module not found: react-icons".
+> Build juga butuh internet sekali untuk mengunduh fontnya.
+
+**Ada perubahan yang belum di-commit dari sesi SEBELUMNYA** dan bukan bagian
+dari batch 2026-09-28: `src/middleware.ts` (-43 baris),
+`src/__tests__/middlewareMatcher.test.ts` (-25 baris),
+`SinkronisasiPresensi.tsx` (ditulis ulang), dan `.gitignore` kehilangan blok
+komentar yang menjelaskan kenapa `adk-lembur.xlsx` dikecualikan (aturannya
+sendiri masih ada, cuma alasannya yang hilang). **Periksa dulu sebelum
+commit** - saya tidak menyentuh keempatnya.
 
 **Kebiasaan kerja yang berlaku**: tiap selesai edit, langsung commit + push ke
 `main` lalu deploy ke VPS (`git pull && npx prisma migrate deploy && npm run
@@ -165,7 +225,7 @@ benar-benar diajukan 35 orang / 111 hari.
 Jadi periode yang dihitung SETELAH seseorang mutasi ikut pindah ke unit baru,
 walau orangnya bekerja sebulan penuh di unit lama.
 
-Sudah terjadi: **ERIYANI** (NIP 198405142014032002) punya rekap presensi Juli
+Sudah terjadi: **ERIYANI**  punya rekap presensi Juli
 DAN predikat Juli (diupload sebagai "Subbagian Tata Usaha"), tapi tidak punya
 kalkulasi Tukin Juli - SK `1/1779/KP.11.00/VII/2026` TMT **1 Agustus 2026**
 memindahkannya dari Biro Keuangan dan BMN ke Pusat Pasar Kerja, dan import
@@ -367,7 +427,7 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
 
 ### Data uji yang masih menempel
 
-14. **Honorarium Rp 11.400.000 pada Irwan Syafril** (periode 7/2026) adalah
+14. **Honorarium Rp 11.400.000 pada Hanindita Widagdo** (periode 7/2026) adalah
    ANGKA UJI, disalin dari slip contoh milik orang lain. Cuma ada di database
    LOKAL, tidak ikut ke VPS. Kosongkan lewat `/ppabp/gaji-induk` kalau tidak
    mau ikut tampil waktu demo.
@@ -376,7 +436,7 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
 
 19. **NIP duplikat dalam SATU file rekap predikat - ditolak atau dibiarkan?**
    File "Rekap Penilaian (47).xlsx" punya 49 baris tapi cuma **47 orang**
-   (KHARINA OLIVIA & WANTI LENA SARI masing-masing muncul 2x). Isinya
+   (JAGADITYA SARASWATI & WIRAPATI ANGGARA masing-masing muncul 2x). Isinya
    kebetulan identik jadi tidak ada yang rusak - TAPI kalau NIP yang sama
    muncul dua kali dengan predikat BERBEDA, upsert membuat **yang terakhir
    menang tanpa peringatan**, dan itu langsung mengubah bobot 70% Tukin orang
@@ -468,11 +528,11 @@ npx tsx src/auth/seedAkunPegawai.ts  # akun PEGAWAI massal buat SISA pegawai
 Login: NIP sebagai username SEKALIGUS password. Akun demo lengkap ada di tabel
 di `CLAUDE.md` bagian "Seed data simulasi". Yang paling sering dipakai:
 
-- `198703232015031002` Alpha Sandro - ADMIN + semua role (buat keliling sudut pandang)
-- `197303072005011001` Irwan Syafril - PPABP
-- `199006212015032005` Ayu Puspita Sari - KASUBAG_TU Pusdatik
-- `197410061999032002` Dian Kreshnadjati - OSDMA
-- `196906241990031004` Cris Kuntadi - PIMPINAN
+- Alpha Sandro - ADMIN + semua role (buat keliling sudut pandang)
+- Hanindita Widagdo - PPABP
+- Maheswari Yudhanto - KASUBAG_TU Pusdatik
+- Nirmala Hartanto - OSDMA
+- Wisnu Purnomo - PIMPINAN
 
 ---
 

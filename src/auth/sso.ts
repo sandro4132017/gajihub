@@ -226,7 +226,7 @@ function isObjek(v: unknown): v is Record<string, unknown> {
  *    jadi begitu Naco mengirimnya sebagai angka, digit terakhirnya sudah
  *    berubah jadi nol SEBELUM kode ini melihatnya:
  *
- *        JSON.parse('{"nip": 197303072005011001}').nip  ->  197303072005011000
+ *        JSON.parse('{"nip": 199912312024121001}').nip  ->  199912312024121000
  *
  *    Nilainya tidak bisa dipulihkan dari mana pun, dan menerimanya berarti
  *    menerbitkan sesi atas NIP yang bukan milik siapa pun - atau, lebih buruk,

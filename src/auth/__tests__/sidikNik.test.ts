@@ -15,7 +15,7 @@ describe("normalkanNik", () => {
   // Panjangnya yang membedakan NIK dari NIP - dan keduanya hidup berdampingan
   // di sistem ini, jadi tertukar berarti mencari orang di ruang yang salah.
   it("menolak NIP 18 digit - itu bukan NIK", () => {
-    expect(normalkanNik("197303072005011001")).toBeNull();
+    expect(normalkanNik("199000100000000008")).toBeNull();
   });
 
   it("menolak tipe angka - 16 digit sudah melewati batas aman bilangan JSON", () => {
@@ -46,7 +46,7 @@ describe("sidikNik", () => {
   });
 
   it("mengembalikan null untuk yang bukan NIK, bukan melempar", () => {
-    expect(sidikNik("197303072005011001", KUNCI)).toBeNull();
+    expect(sidikNik("199000100000000008", KUNCI)).toBeNull();
     expect(sidikNik(null, KUNCI)).toBeNull();
     expect(sidikNik("", KUNCI)).toBeNull();
   });

@@ -1,7 +1,7 @@
 /**
  * Nama untuk sapaan - maksimal dua kata.
  *
- * Nama dari SIAP sering panjang dan bergelar ("IRVAN GANEVA, M.M. , S.Ds"),
+ * Nama dari SIAP sering panjang dan bergelar ("GEMILANG ANGGARA, M.M. , S.Ds"),
  * dan sapaan yang memuat seluruhnya justru terbaca kaku. Dua kata pertama
  * menangani mayoritas nama Indonesia dengan wajar.
  *

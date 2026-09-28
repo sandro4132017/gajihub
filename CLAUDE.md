@@ -28,6 +28,7 @@ sudah 5.189 baris - **verbatim, nol baris hilang**, diverifikasi dengan diff).
 | Predikat kinerja, upload e-Kinerja BKN, entri manual | `gajihub-predikat-kinerja` |
 | Approval berjenjang, `ApprovalLog`, setujui semua, hitung ulang | `gajihub-approval-siklus` |
 | Tabel, filter, dropdown, warna, sidebar, paginasi, periode default | `gajihub-ui-konvensi` |
+| Menambah/mengubah apa pun yang DILIHAT orang: halaman, tabel, menu, peringatan, gerbang, konfirmasi | `gajihub-laws-of-ux` |
 | Deploy, VPS, pm2, nginx, migrasi, SSO Naco, cara akses dari luar | `gajihub-akses-sso-deploy` |
 
 Skill lintas-proyek (`~/.claude/skills/`, isinya di `.claude/global-skills/`):

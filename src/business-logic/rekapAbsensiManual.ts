@@ -227,7 +227,7 @@ export function parseRekapAbsensiManual(
     //
     // Di berkas ini tap pulang yang hilang tidak meninggalkan sel kosong -
     // kolomnya terisi ketukan PAGI. Dibaca apa adanya, itu jadi "pulang cepat"
-    // ratusan menit: Nurul Apriyanah 594 menit (masuk 06:03, keluar 06:06),
+    // ratusan menit: Olivia Wibisana 594 menit (masuk 06:03, keluar 06:06),
     // Yusfrida 640 menit (05:11 / 05:22). Petugasnya sendiri TIDAK pernah
     // menagihkan itu - di rincian tunkin resmi Nurul cuma tercatat 8 menit.
     //

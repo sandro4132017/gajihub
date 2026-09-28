@@ -69,8 +69,8 @@ function laporan(
   ringkasan: Partial<RingkasanSumberPdf> = {}
 ): LaporanPresensiPdf {
   return {
-    nip: "199612052018122001",
-    nama: "GADIS SUKMA DEWA",
+    nip: "199000100000000021",
+    nama: "CEMPAKA PRAKASA",
     jabatan: "Analis Pengelolaan Keuangan APBN Ahli Pertama",
     periodeBulan: isi[0]?.bulan ?? 6,
     periodeTahun: isi[0]?.tahun ?? 2026,
@@ -654,7 +654,7 @@ describe("lupa absen dari menit_kerja (Pasal 13 ayat 2)", () => {
   });
 
   it("menit_kerja kurang dari 7,5 jam TAPI bukan nol BUKAN lupa absen", () => {
-    // Kasus nyata (Rizki Akbar, 8 Juli 2026): masuk 14:20, pulang 17:37,
+    // Kasus nyata (Suryaningrat Prakasa, 8 Juli 2026): masuk 14:20, pulang 17:37,
     // menit_kerja 240. Kurang dari 450, tapi bukan nol - tapnya lengkap.
     // Yang dilanggar keterlambatan (Pasal 13 ayat 3, per menit), BUKAN
     // "tidak melakukan presensi" (ayat 2, per kejadian). Memakai ambang
@@ -920,7 +920,7 @@ describe("rekapDariLaporanPdf - hari libur nasional", () => {
 });
 
 describe("ketukan yang mustahil sebagai jam masuk (Pasal 13 ayat (2), bukan ayat (3))", () => {
-  // Kasus NYATA: David Casidi, 17 Juli 2026 (Jumat), diambil apa adanya dari
+  // Kasus NYATA: Arunika Saraswati, 17 Juli 2026 (Jumat), diambil apa adanya dari
   // database e-Presensi. Sebelum aturan ini, satu baris ini sendirian
   // menghasilkan 896 menit = 8,96% - tiga kali lipat tarif alpha 3%/hari, dan
   // 70% dari seluruh keterlambatannya sebulan.
@@ -1126,7 +1126,7 @@ describe("batasLemburMenit - kewajiban 7,5 jam yang utuh", () => {
   });
 
   it("terlambat menggeser titik mulai SEPENUHNYA - tidak dikunci di 17:00", () => {
-    // Kasus nyata IRMA PUSPITA, 9 Juli 2026: tap 09:10, jadi 7,5 jamnya baru
+    // Kasus nyata FAJARINA YUDHANTO, 9 Juli 2026: tap 09:10, jadi 7,5 jamnya baru
     // genap 17:40. Dengan batas atas yang lama angkanya 17:00.
     expect(batasLemburMenit(jam("09:10"), pulangWajibSenin, 60)).toBe(jam("17:40"));
     expect(batasLemburMenit(jam("14:00"), pulangWajibSenin, 60)).toBe(jam("22:30"));
@@ -1167,7 +1167,7 @@ describe("batasLemburMenit - kewajiban 7,5 jam yang utuh", () => {
 });
 
 describe("lembur hari kerja dihitung dari batas lembur, bukan batas potongan", () => {
-  it("kasus IRMA PUSPITA 9 Juli 2026: 09:10 -> 18:26 = NOL jam lembur", () => {
+  it("kasus FAJARINA YUDHANTO 9 Juli 2026: 09:10 -> 18:26 = NOL jam lembur", () => {
     // 18:26 - 17:40 = 46 menit, belum genap satu jam. Dengan batas atas 17:00
     // yang lama, hari ini berbunyi 1 jam - lembur yang sebenarnya masih
     // penutup jam kerjanya sendiri.
@@ -1203,5 +1203,127 @@ describe("lembur hari kerja dihitung dari batas lembur, bukan batas potongan", (
       laporan([baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO")])
     );
     expect(hasil.rekap.totalJamLembur).toBe(4);
+  });
+});
+
+// ============================================================================
+// KOREKSI JAM LEMBUR PER TANGGAL (keputusan user 2026-09-22).
+//
+// Yang dijaga di sini bukan cuma angkanya berubah, tapi bahwa RINCIAN HARIAN
+// dan TOTAL BULANAN tetap sepakat sesudah dikoreksi. Keduanya mengalir ke
+// tempat yang berbeda - rincian ke berkas ADK per tanggal, total ke rupiah di
+// UangLembur - dan kalau bisa berbeda, selisihnya baru ketahuan sesudah
+// berkasnya terkirim ke Web Gaji.
+// ============================================================================
+describe("koreksi jam lembur per tanggal", () => {
+  const KOREKSI = (iso: string, jamLembur: number | null) =>
+    new Map([[iso, { jamMasukMenit: null, jamKeluarMenit: null, jamLembur }]]);
+
+  it("koreksi menggantikan hitungan mesin, dan totalnya ikut", () => {
+    // Kamis 10-07-2025, masuk 09:10 -> batas lembur 17:40, pulang 19:40 = 2 jam.
+    const tanpa = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "09:10", "19:40", "WFO")])
+    );
+    expect(tanpa.rekap.totalJamLembur).toBe(2);
+
+    const dengan = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "09:10", "19:40", "WFO")]),
+      JADWAL_KERJA_DEFAULT,
+      new Set(),
+      KOREKSI("2025-07-10", 5)
+    );
+    expect(dengan.rekap.totalJamLembur).toBe(5);
+    expect(dengan.hari.find((h) => h.tanggalIso === "2025-07-10")!.jamLembur).toBe(5);
+  });
+
+  it("koreksi NOL membatalkan lembur yang terbaca mesin - nol bukan 'tidak dikoreksi'", () => {
+    // Pulang malam yang ternyata bukan lembur. Ini justru kasus yang paling
+    // sering: ketukan pulang malam tidak selalu berarti ada surat perintah.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO")]),
+      JADWAL_KERJA_DEFAULT,
+      new Set(),
+      KOREKSI("2025-07-10", 0)
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+    expect(hasil.hari.find((h) => h.tanggalIso === "2025-07-10")!.jamLembur).toBe(0);
+  });
+
+  it("rincian harian dan total bulanan TETAP SEPAKAT sesudah dikoreksi", () => {
+    // Penjagaan paling penting di blok ini.
+    const hasil = rekapDariLaporanPdf(
+      laporan([
+        baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO"), // mesin: 4 jam
+        baris("11-07-2025", "Jumat", "07:30", "19:00", "WFO"),
+      ]),
+      JADWAL_KERJA_DEFAULT,
+      new Set(),
+      new Map([
+        ["2025-07-10", { jamMasukMenit: null, jamKeluarMenit: null, jamLembur: 1 }],
+        ["2025-07-11", { jamMasukMenit: null, jamKeluarMenit: null, jamLembur: 3 }],
+      ])
+    );
+    const dariRincian = hasil.hari.reduce((n, h) => n + (h.hariLibur ? 0 : h.jamLembur), 0);
+    expect(hasil.rekap.totalJamLembur).toBe(4);
+    expect(dariRincian).toBe(hasil.rekap.totalJamLembur);
+  });
+
+  it("syarat 2 jam uang makan lembur diturunkan ULANG dari angka yang dikoreksi", () => {
+    // Mesin 4 jam (berhak) -> dikoreksi jadi 1 jam (tidak berhak lagi).
+    const turun = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO")]),
+      JADWAL_KERJA_DEFAULT,
+      new Set(),
+      KOREKSI("2025-07-10", 1)
+    );
+    expect(turun.rekap.jumlahHariMakanLembur).toBe(0);
+
+    const naik = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "07:30", "17:30", "WFO")]),
+      JADWAL_KERJA_DEFAULT,
+      new Set(),
+      KOREKSI("2025-07-10", 3)
+    );
+    expect(naik.rekap.jumlahHariMakanLembur).toBe(1);
+  });
+
+  it("jumlah HARI lembur hari kerja ikut disusun ulang - pengali 1,5x bergantung padanya", () => {
+    const hasil = rekapDariLaporanPdf(
+      laporan([
+        baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO"),
+        baris("11-07-2025", "Jumat", "07:30", "19:00", "WFO"),
+      ]),
+      JADWAL_KERJA_DEFAULT,
+      new Set(),
+      KOREKSI("2025-07-10", 0) // satu hari dibatalkan
+    );
+    expect(hasil.rekap.jumlahHariLemburHariKerja).toBe(1);
+  });
+
+  it("koreksi pada tanggal tanpa baris presensi DILEWATI, dan sebabnya disebut", () => {
+    // Koreksi jam lembur memperbaiki hari yang ada, bukan menciptakan
+    // kehadiran yang tidak pernah tercatat.
+    const hasil = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "07:30", "16:00", "WFO")]),
+      JADWAL_KERJA_DEFAULT,
+      new Set(),
+      KOREKSI("2025-07-25", 4)
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+    expect(hasil.catatan.join(" ")).toContain("tidak punya baris presensi");
+  });
+
+  it("tanpa koreksi, perilakunya tidak berubah sama sekali", () => {
+    const polos = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO")])
+    );
+    const petaKosong = rekapDariLaporanPdf(
+      laporan([baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO")]),
+      JADWAL_KERJA_DEFAULT,
+      new Set(),
+      new Map([["2025-07-10", { jamMasukMenit: null, jamKeluarMenit: null, jamLembur: null }]])
+    );
+    expect(petaKosong.rekap.totalJamLembur).toBe(polos.rekap.totalJamLembur);
+    expect(polos.rekap.totalJamLembur).toBe(4);
   });
 });

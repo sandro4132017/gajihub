@@ -52,7 +52,7 @@ model Pegawai {
   /// diulang akan memuat nomor SK yang BERBEDA dari yang pernah dikirim.
   /// Kalau Rokeu menuntut nomor SK per periode, ini perlu jadi tabel
   /// riwayat bertanggal, bukan satu kolom.
-  nomorSk       String?   @map("nomor_sk")
+  nomorSk String? @map("nomor_sk")
 
   /// Tiga keterangan pelengkap SK di atas, diisi petugas lewat halaman Data
   /// Pegawai (permintaan user 2026-09-02).
@@ -81,19 +81,19 @@ model Pegawai {
   /// nomornya berawalan teks "NOMOR ", jadi perlu dinormalkan dulu.
 
   /// Uraian isi SK, mis. "Penetapan Kelas Jabatan Pelaksana".
-  uraianSk      String?   @map("uraian_sk")
+  uraianSk String? @map("uraian_sk")
 
   /// Tanggal SK diterbitkan - BEDA dari `tmtSkTerakhir`, yang tanggal mulai
   /// berlakunya. SK bertanggal 3 Juli bisa berlaku surut sejak 1 Juni, dan
   /// kalau keduanya disatukan salah satunya pasti hilang.
-  tanggalSk     DateTime? @map("tanggal_sk")
+  tanggalSk DateTime? @map("tanggal_sk")
 
   /// Instansi/unit yang menerbitkan SK, mis. "SEKRETARIAT JENDERAL".
   /// Teks bebas, bukan relasi ke satuan kerja: penerbit SK sering unit yang
   /// BUKAN tempat pegawainya bekerja, dan memaksanya memilih dari daftar
   /// satuan kerja akan membuat sebagian orang memilih yang salah supaya
   /// formnya bisa disimpan.
-  skDari        String?   @map("sk_dari")
+  skDari String? @map("sk_dari")
 
   /// Sidik NIK - HMAC-SHA256 dari NIK, BUKAN NIK-nya.
   ///
@@ -124,7 +124,7 @@ model Pegawai {
   /// diberikan kepada siapa pun yang memegang Akun Kemnaker ber-NIK itu -
   /// jadi ketelitian verifikasi NIK di sisi Naco ikut menentukan keamanan
   /// sistem ini. Belum ada pernyataan resmi bahwa NIK di Naco terverifikasi.
-  sidikNik      String?   @unique @map("sidik_nik")
+  sidikNik String? @unique @map("sidik_nik")
 
   /// Status kawin apa adanya dari SIAP (PEGAWAI.STATUSKAWIN): K, B, C, J, D.
   ///
@@ -136,7 +136,7 @@ model Pegawai {
   ///
   /// 93 pegawai di SIAP tidak punya nilai yang sah (91 kosong, 2 rusak).
   /// Untuk mereka PTKP-nya "tidak diketahui", BUKAN ditebak.
-  statusKawin   String?   @map("status_kawin")
+  statusKawin String? @map("status_kawin")
 
   /// L atau P dari SIAP.
   ///
@@ -148,7 +148,7 @@ model Pegawai {
   /// Proyek ini menolak mengimpor data pribadi yang tidak menentukan
   /// pembayaran (alamat, NIK, NPWP, telepon). Kolom ini lolos justru karena
   /// ia menentukan pembayaran - dan tidak dipakai untuk hal lain.
-  jenisKelamin  String?   @map("jenis_kelamin")
+  jenisKelamin String? @map("jenis_kelamin")
 
   /// Jumlah anak di SIAP yang kolom PEKERJAAN-nya kosong.
   ///
@@ -413,11 +413,11 @@ model ApprovalLog {
 // AUDIT TRAIL - jejak audit lengkap untuk semua perubahan data penting
 // ---------------------------------------------------------------------------
 model AuditTrail {
-  id          String   @id @default(uuid())
-  entitas     String // nama tabel/entitas yang berubah
-  entitasId   String   @map("entitas_id")
-  aksi        String // CREATE, UPDATE, DELETE, SYNC, APPROVE
-  aktor       String // NIP atau "SYSTEM" untuk proses otomatis
+  id        String @id @default(uuid())
+  entitas   String // nama tabel/entitas yang berubah
+  entitasId String @map("entitas_id")
+  aksi      String // CREATE, UPDATE, DELETE, SYNC, APPROVE
+  aktor     String // NIP atau "SYSTEM" untuk proses otomatis
 
   /// Satuan kerja yang DIKENAI aksi ini - bukan satuan kerja aktornya.
   ///
@@ -604,28 +604,30 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  bandingDiajukan          Banding[]
-  buktiDiunggah            BuktiDukung[]
-  skKgbDiajukan            SkKgb[]                 @relation("SkKgbDiajukanOleh")
-  skHukdisDiajukan         SkHukumanDisiplin[]     @relation("SkHukdisDiajukanOleh")
-  anggaranDiunggah         AnggaranRealisasi[]
-  buktiPotongPajakDiunggah BuktiPotongPajak[]
-  gajiIndukDiunggah        GajiInduk[]
-  rekapPresensiDiunggah    RekapPresensiPeriode[]
-  rekeningDiunggah         RekeningPegawai[]
-  identitasWebGajiDiunggah IdentitasWebGaji[]
-  kendalaEpresensiDitandai KendalaEpresensi[]
-  koreksiPresensiDibuat    KoreksiPresensiHarian[]
-  hariLiburDitetapkan      HariLiburNasional[]
-  usulanRoleDiajukan       UsulanPerubahanRole[]   @relation("UsulanRoleDiajukanOleh")
-  usulanRoleDiputuskan     UsulanPerubahanRole[]   @relation("UsulanRoleDiputuskanOleh")
-  UsulanPerubahanRole      UsulanPerubahanRole[]
-  pengirimanDikirim        PengirimanUnit[]        @relation("PengirimanDikirimOleh")
-  pengirimanDikembalikan   PengirimanUnit[]        @relation("PengirimanDikembalikanOleh")
-  aksesSatkerDiterima      AksesSatkerTambahan[]   @relation("AksesSatkerUntuk")
-  aksesSatkerDiberikan     AksesSatkerTambahan[]   @relation("AksesSatkerDiberikanOleh")
-  skGradeDicatat           SkGrade[]               @relation("SkGradeDicatatOleh")
-  pengecualianDitandai     PengecualianPegawai[]   @relation("PengecualianDitandaiOleh")
+  bandingDiajukan            Banding[]
+  buktiDiunggah              BuktiDukung[]
+  skKgbDiajukan              SkKgb[]                 @relation("SkKgbDiajukanOleh")
+  skHukdisDiajukan           SkHukumanDisiplin[]     @relation("SkHukdisDiajukanOleh")
+  anggaranDiunggah           AnggaranRealisasi[]
+  buktiPotongPajakDiunggah   BuktiPotongPajak[]
+  gajiIndukDiunggah          GajiInduk[]
+  rekapPresensiDiunggah      RekapPresensiPeriode[]
+  rekeningDiunggah           RekeningPegawai[]
+  identitasWebGajiDiunggah   IdentitasWebGaji[]
+  kendalaEpresensiDitandai   KendalaEpresensi[]
+  koreksiPresensiDibuat      KoreksiPresensiHarian[]
+  hariLiburDitetapkan        HariLiburNasional[]
+  usulanRoleDiajukan         UsulanPerubahanRole[]   @relation("UsulanRoleDiajukanOleh")
+  usulanRoleDiputuskan       UsulanPerubahanRole[]   @relation("UsulanRoleDiputuskanOleh")
+  UsulanPerubahanRole        UsulanPerubahanRole[]
+  pengirimanDikirim          PengirimanUnit[]        @relation("PengirimanDikirimOleh")
+  pengirimanDikembalikan     PengirimanUnit[]        @relation("PengirimanDikembalikanOleh")
+  verifikasiTabel            VerifikasiTabelUnit[]   @relation("VerifikasiTabelOleh")
+  perubahanPegawaiTerdeteksi PerubahanDataPegawai[]  @relation("PerubahanPegawaiTerdeteksiOleh")
+  aksesSatkerDiterima        AksesSatkerTambahan[]   @relation("AksesSatkerUntuk")
+  aksesSatkerDiberikan       AksesSatkerTambahan[]   @relation("AksesSatkerDiberikanOleh")
+  skGradeDicatat             SkGrade[]               @relation("SkGradeDicatatOleh")
+  pengecualianDitandai       PengecualianPegawai[]   @relation("PengecualianDitandaiOleh")
 
   @@index([role])
   @@index([satuanKerja])
@@ -1272,6 +1274,26 @@ model KoreksiPresensiHarian {
   jamMasuk  DateTime? @map("jam_masuk")
   jamKeluar DateTime? @map("jam_keluar")
 
+  /// Jam lembur hari itu, menggantikan hitungan mesin. null = pakai hitungan
+  /// mesin (jam pulang dikurangi batas kewajiban 7,5 jam untuk hari kerja,
+  /// atau jam masuk sampai jam pulang untuk hari libur).
+  ///
+  /// KENAPA MENUMPANG DI SINI, bukan kolom di PresensiHarian: tabel itu
+  /// DIHAPUS SEBULAN PENUH lalu ditulis ulang tiap `sync:presensi`
+  /// (deleteMany + createMany di src/jobs/simpanRekapPresensi.ts), jadi
+  /// koreksi manual di sana pasti hilang tanpa jejak. Jebakan yang sama
+  /// persis dengan `Pegawai.nama` dan `kelasJabatanSelamaHukuman`.
+  ///
+  /// Menumpang di baris koreksi yang sudah ada juga berarti `alasan`,
+  /// `dikoreksiOleh`, dan `dikoreksiPada` langsung berlaku untuknya - koreksi
+  /// jam lembur menuntut dasar yang sama kerasnya dengan koreksi jam masuk,
+  /// karena yang mengesahkannya surat perintah lembur.
+  ///
+  /// 0 SAH dan BEDA DARI null: nol berarti "diperiksa, memang tidak ada
+  /// lembur hari itu" - dipakai membatalkan lembur yang terbaca mesin dari
+  /// ketukan pulang malam yang ternyata bukan lembur.
+  jamLembur Float? @map("jam_lembur")
+
   /// WAJIB. Berisi dasar koreksinya - siapa yang melapor, lewat apa, bukti
   /// apa yang dipegang. Foto & geotag-nya sendiri TIDAK disimpan di sini
   /// (kebijakan penyimpanan dokumen masih terbuka, lihat TODO(confirm)
@@ -1285,6 +1307,93 @@ model KoreksiPresensiHarian {
   @@unique([pegawaiId, tanggal])
   @@index([tanggal])
   @@map("koreksi_presensi_harian")
+}
+
+/// Penanda bahwa Kasubag TU SUDAH MEMERIKSA satu tabel kalkulasi pada satu
+/// periode, sebelum rekapnya boleh dikirim ke PPABP.
+///
+/// KENAPA TABEL SENDIRI, bukan kolom di PengirimanUnit: baris PengirimanUnit
+/// baru ada SESUDAH dikirim, sementara pemeriksaan ini terjadi SEBELUMNYA -
+/// justru itu gunanya. Menumpang di sana berarti penanda pemeriksaan baru bisa
+/// disimpan setelah syaratnya sendiri terpenuhi.
+///
+/// SATU BARIS PER TABEL, bukan satu baris bercentang tiga: tiap tabel
+/// diperiksa pada waktu yang berbeda, dan bisa saja oleh orang yang berbeda
+/// (akun Kasubag TU bisa berganti di tengah bulan). Yang perlu bisa dijawab
+/// kalau Itjen bertanya adalah "siapa memeriksa tabel MANA, kapan" - bentuk
+/// itu tidak muat di satu baris.
+///
+/// MENCABUT CENTANG = MENGHAPUS BARISNYA, bukan menyimpan `false`. "Belum
+/// pernah diperiksa" dan "diperiksa lalu dicabut" tidak perlu dibedakan:
+/// dua-duanya berarti belum boleh dikirim, dan riwayat pencabutannya sudah
+/// tercatat di AuditTrail.
+model VerifikasiTabelUnit {
+  id String @id @default(uuid())
+
+  satuanKerja  String @map("satuan_kerja")
+  periodeBulan Int    @map("periode_bulan")
+  periodeTahun Int    @map("periode_tahun")
+
+  /// TUKIN | UANG_MAKAN | UANG_LEMBUR
+  jenisTabel String @map("jenis_tabel")
+
+  diverifikasiOlehId String   @map("diverifikasi_oleh_id")
+  diverifikasiOleh   User     @relation("VerifikasiTabelOleh", fields: [diverifikasiOlehId], references: [id])
+  diverifikasiPada   DateTime @default(now()) @map("diverifikasi_pada")
+
+  @@unique([satuanKerja, periodeBulan, periodeTahun, jenisTabel])
+  @@index([periodeBulan, periodeTahun])
+  @@map("verifikasi_tabel_unit")
+}
+
+/// Daftar Perubahan Data Kepegawaian - satu baris per perubahan yang
+/// terdeteksi saat sinkronisasi SIAP.
+///
+/// KENAPA DISIMPAN, padahal AuditTrail sudah mencatat sinkronisasinya: jejak
+/// audit menjawab "siapa menjalankan apa, kapan". Yang dibutuhkan Kasubag TU
+/// sebelum mengirim rekap adalah pertanyaan lain - "siapa di UNIT SAYA yang
+/// datanya berubah sejak saya menghitung". Itu tidak terjawab oleh satu baris
+/// audit yang memuat seluruh kementerian.
+///
+/// Polanya mengikuti Daftar Perubahan Pegawai di Kemenkeu (sharing session BOT
+/// Gaji & Tukin, 23 September 2026): perubahan data kepegawaian bukan sekadar
+/// disinkronkan diam-diam, melainkan jadi daftar tersendiri yang DIUJI
+/// berbarengan dengan daftar pembayarannya.
+model PerubahanDataPegawai {
+  id String @id @default(uuid())
+
+  /// NIP, BUKAN foreign key ke Pegawai - ini dokumen riwayat. Baris
+  /// PEGAWAI_BARU lahir pada saat baris Pegawai-nya baru dibuat, dan daftar
+  /// perubahan periode lampau harus tetap terbaca utuh apa pun yang terjadi
+  /// pada data pegawainya kemudian.
+  nip  String
+  nama String
+
+  /// PEGAWAI_BARU | PINDAH_UNIT | GANTI_STATUS | KELAS_JABATAN | JABATAN
+  jenis String
+
+  /// Nilai sebelum & sesudah apa adanya. PEGAWAI_BARU tidak punya `dari`.
+  dari String?
+  ke   String?
+
+  /// Unit yang berkepentingan atas perubahan ini.
+  ///
+  /// PINDAH_UNIT mengisi KEDUANYA dengan nilai berbeda, dan itu disengaja:
+  /// unit lama perlu tahu ada orang keluar dari rekapnya, unit baru perlu tahu
+  /// ada orang masuk. Satu kolom saja pasti menyembunyikan salah satunya.
+  satuanKerjaDari String? @map("satuan_kerja_dari")
+  satuanKerjaKe   String? @map("satuan_kerja_ke")
+
+  terdeteksiPada DateTime @default(now()) @map("terdeteksi_pada")
+
+  /// null = dijalankan lewat CLI (`npm run sync:pegawai`), bukan lewat tombol.
+  terdeteksiOlehId String? @map("terdeteksi_oleh_id")
+  terdeteksiOleh   User?   @relation("PerubahanPegawaiTerdeteksiOleh", fields: [terdeteksiOlehId], references: [id])
+
+  @@index([satuanKerjaDari, terdeteksiPada])
+  @@index([satuanKerjaKe, terdeteksiPada])
+  @@index([nip, terdeteksiPada])
+  @@map("perubahan_data_pegawai")
 }
 
 // ---------------------------------------------------------------------------

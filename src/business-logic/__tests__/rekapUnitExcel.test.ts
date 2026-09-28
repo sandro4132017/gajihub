@@ -10,8 +10,8 @@ import {
 } from "../rekapUnitExcel";
 
 const presensiKosong: BarisRekapPresensi = {
-  nip: "197303072005011001",
-  nama: "Budi Santoso",
+  nip: "199000100000000008",
+  nama: "Tirta Anggara",
   jabatan: "Analis Keuangan",
   golongan: "III/c",
   jumlahHariKerja: 0,
@@ -56,7 +56,7 @@ describe("susunRekapPresensiExcel", () => {
   // digit melewati presisi float dan tiga digit terakhirnya berubah nol.
   it("mempertahankan NIP sebagai teks, bukan angka", () => {
     const hasil = susunRekapPresensiExcel([presensiKosong]);
-    expect(hasil.baris[0][1]).toBe("197303072005011001");
+    expect(hasil.baris[0][1]).toBe("199000100000000008");
     expect(typeof hasil.baris[0][1]).toBe("string");
   });
 
@@ -116,8 +116,8 @@ describe("labelJenisCuti", () => {
 });
 
 const tukinKosong: BarisRekapTukin = {
-  nip: "197303072005011001",
-  nama: "Budi Santoso",
+  nip: "199000100000000008",
+  nama: "Tirta Anggara",
   jabatan: "Analis Keuangan",
   kelasJabatan: 9,
   tukinPokok: 5_079_200,
@@ -163,7 +163,7 @@ describe("susunRekapTukinExcel", () => {
   });
 
   it("mempertahankan NIP sebagai teks", () => {
-    expect(susunRekapTukinExcel([tukinKosong]).baris[0][1]).toBe("197303072005011001");
+    expect(susunRekapTukinExcel([tukinKosong]).baris[0][1]).toBe("199000100000000008");
   });
 
   it("lebar header, baris, dan total seragam", () => {

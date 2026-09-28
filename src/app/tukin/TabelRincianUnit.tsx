@@ -1,3 +1,5 @@
+import { RiErrorWarningLine } from "react-icons/ri";
+
 /**
  * Tabel rincian Tukin satu satuan kerja - nilai intinya saja.
  *
@@ -20,7 +22,8 @@ export interface BarisRincianTukin {
    * SENGAJA BUKAN NIP. Satu pegawai punya satu baris PER PERIODE, dan waktu
    * Dashboard Tukin dibuka tanpa memilih bulan, seluruh periode ikut tampil -
    * NIP yang sama muncul lebih dari sekali dan React menolaknya sebagai key
-   * ganda. Ketemu betulan pada 199906072025051003 (periode 5/2026 & 7/2026).
+   * ganda. Ketemu betulan pada satu pegawai yang punya baris di periode 5/2026
+   * DAN 7/2026 sekaligus.
    */
   id: string;
   nip: string;
@@ -131,8 +134,11 @@ export function TabelRincianUnit({
                         ke berapanya tidak diketahui. Isinya di `title` supaya
                         satu baris tidak melebar gara-gara kalimat panjang. */}
                     {b.catatanAnomali && (
-                      <span className="ml-1 text-gold-deep" title={b.catatanAnomali}>
-                        &#9888;
+                      <span
+                        className="ml-1 inline-flex align-middle text-gold-deep"
+                        title={b.catatanAnomali}
+                      >
+                        <RiErrorWarningLine aria-hidden />
                       </span>
                     )}
                   </td>

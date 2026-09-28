@@ -122,18 +122,18 @@ punya dua parser yang bisa beda perilaku. Perhatikan file adapter itu pakai
 Server Action pakai named import - lihat gotcha di bagian gaji induk.
 
 **Diverifikasi manual end-to-end** (production build):
-- **KASUBAG_TU Ayu Puspita Sari (Pusdatik)** upload file berisi 28 pegawai
+- **KASUBAG_TU Maheswari Yudhanto (Pusdatik)** upload file berisi 28 pegawai
   Biro Keuangan -> **SEMUA 28 baris ditolak** dengan alasan "di luar
   kewenangan kamu (pegawai Biro Keuangan dan Barang Milik Negara)", tidak
   ada satu baris pun tertulis. Dicek ulang lewat query: 3 baris predikat
   Pusdatik masih bertanggal sync seed lama (25 Juli), dan TIDAK ada
   `AuditTrail` dari percobaan itu.
-- **PPABP Irwan Syafril** upload file yang sama -> 28 tersimpan, periode
+- **PPABP Hanindita Widagdo** upload file yang sama -> 28 tersimpan, periode
   6/2026 terbaca dari file, dikelompokkan ke "Biro Keuangan dan Barang Milik
   Negara" (satuan kerja ASLI pegawai, bukan "Subbagian Tata Usaha" dari
   header file), sebaran Baik 25 / Sangat Baik 3, peringatan 2 pegawai perlu
   hitung ulang Tukin muncul benar, `AuditTrail` tercatat.
-- Riwayat predikat muncul di `/pegawai` (Wanti Lena Sari: Juni 2026, Sangat
+- Riwayat predikat muncul di `/pegawai` (Wirapati Anggara: Juni 2026, Sangat
   Baik, 100%, "e-Kinerja BKN (upload manual)").
 - Adapter diuji langsung terhadap file asli: 28 baris, semua periode 6/2026,
   semua nilai 100%.
@@ -213,7 +213,7 @@ nol baris bertanda input manual, 3 baris AuditTrail uji dihapus.
 **Temuan sampingan**: ringkasan upload menghitung BARIS, bukan ORANG. File
 "Rekap Penilaian (47).xlsx" melaporkan "Biro Keuangan: 29 pegawai" padahal
 di database cuma **27 orang** - 2 baris di file itu duplikat persis
-(KHARINA OLIVIA & WANTI LENA SARI, isinya identik) yang meng-upsert ke
+(JAGADITYA SARASWATI & WIRAPATI ANGGARA, isinya identik) yang meng-upsert ke
 kunci unik yang sama. Tidak ada data hilang, TAPI kalau suatu saat NIP yang
 sama muncul dua kali dengan predikat BERBEDA, yang terakhir menang tanpa
 peringatan. TODO(confirm): perlu diputuskan apakah duplikat dalam satu file

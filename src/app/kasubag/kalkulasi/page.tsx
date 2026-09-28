@@ -31,8 +31,14 @@ import {
 import {
   cekBolehKirim,
   statusUnit,
+  tabelBelumDiverifikasi,
+  TABEL_WAJIB_DIVERIFIKASI,
+  type JenisTabelKalkulasi,
 } from "../../../business-logic/pengirimanUnit";
 import { KirimRekapForm } from "../kirim/KirimRekapForm";
+import { VerifikasiTabelPanel } from "../kirim/VerifikasiTabelPanel";
+import { TabelPemeriksaanLembur } from "./TabelPemeriksaanLembur";
+import { TabelPerubahanPegawai } from "./TabelPerubahanPegawai";
 import { HALAMAN } from "../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
@@ -222,6 +228,16 @@ export default async function KalkulasiUnitPage({
   });
   const kirimStatus = statusUnit(barisPengiriman);
 
+  // Centang "sudah saya periksa" per tabel. Dibaca dari database - sumber yang
+  // SAMA dengan yang ditagih server saat Kirim ditekan, supaya tombol yang
+  // menyala di layar tidak pernah berbeda dari keputusan server.
+  const verifikasiTabel = await prisma.verifikasiTabelUnit.findMany({
+    where: { satuanKerja: satkerEfektif, periodeBulan, periodeTahun },
+    include: { diverifikasiOleh: { select: { nama: true } } },
+  });
+  const tabelDiverifikasi = verifikasiTabel.map((v) => v.jenisTabel as JenisTabelKalkulasi);
+
+
   // HANYA PEGAWAI AKTIF - pensiun/berhenti/nonaktif tidak muncul di halaman
   // ini sama sekali (keputusan user 2026-09-02).
   //
@@ -260,6 +276,31 @@ export default async function KalkulasiUnitPage({
   // Mereka TETAP tampil di tabel (dengan tanda), supaya tidak ada orang yang
   // lenyap dari layar tanpa jejak.
   const pegawaiAktif = pegawaiList.filter((p) => !setDikecualikan.has(p.id));
+
+  // Jumlah jam lembur HARIAN per pegawai - bahan pemeriksaan silang di tabel
+  // Jam Lembur di bawah.
+  //
+  // KENAPA DIADU. Rincian harian yang mengalir ke berkas ADK (formatnya per
+  // tanggal) dan total bulanan yang jadi dasar rupiah adalah DUA angka
+  // tersimpan yang berbeda. Seharusnya selalu sama - pembulatan lembur terjadi
+  // per hari di hulu - dan kalau berbeda berarti rekapnya dihitung sebelum
+  // presensinya berubah. Yang dibayar Web Gaji adalah jam di berkas, bukan
+  // angka yang tersimpan, jadi selisihnya wajib terlihat SEBELUM dikirim.
+  const lemburHarianPerPegawai = await prisma.presensiHarian.groupBy({
+    by: ["pegawaiId"],
+    where: {
+      pegawaiId: { in: pegawaiList.map((p) => p.id) },
+      tanggal: {
+        gte: new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1)),
+        lt: new Date(Date.UTC(periodeTahun, periodeBulan, 1)),
+      },
+      jamLembur: { gt: 0 },
+    },
+    _sum: { jamLembur: true },
+  });
+  const petaLemburHarian = new Map(
+    lemburHarianPerPegawai.map((g) => [g.pegawaiId, { jam: g._sum.jamLembur ?? 0 }])
+  );
   // Berapa hari presensi tiap orang pernah dikoreksi manual pada periode ini.
   //
   // Bukan cacat data - justru sebaliknya. Ditampilkan karena yang memeriksa
@@ -277,6 +318,44 @@ export default async function KalkulasiUnitPage({
     _count: { _all: true },
   });
   const petaKoreksi = new Map(koreksiPeriode.map((k) => [k.pegawaiId, k._count._all]));
+
+  // DAFTAR PERUBAHAN DATA KEPEGAWAIAN unit ini.
+  //
+  // Jendelanya mulai dari AWAL BULAN PERIODE, bukan dari tanggal kalkulasi:
+  // perubahan yang terjadi di tengah bulan - sebelum angkanya dihitung - tetap
+  // perlu dilihat orang yang memeriksa, karena itulah yang menjelaskan kenapa
+  // angka bulan ini berbeda dari bulan lalu. Yang datang SESUDAH kalkulasi
+  // ditandai tersendiri di tabelnya.
+  //
+  // Batas atasnya sengaja TIDAK dipasang. Perubahan yang terdeteksi bulan
+  // depan pun masih bisa membatalkan angka periode ini selama rekapnya belum
+  // dikirim, dan memotongnya di akhir bulan justru menyembunyikan persis
+  // kasus yang paling perlu terlihat.
+  const perubahanPegawai = await prisma.perubahanDataPegawai.findMany({
+    where: {
+      terdeteksiPada: { gte: new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1)) },
+      // OR, bukan satu kolom: orang yang PINDAH KELUAR tercatat dengan unit
+      // ini di `satuanKerjaDari` dan unit lain di `satuanKerjaKe`. Kalau cuma
+      // salah satu yang diperiksa, salah satu unit tidak pernah tahu.
+      OR: [{ satuanKerjaDari: satkerEfektif }, { satuanKerjaKe: satkerEfektif }],
+    },
+    orderBy: { terdeteksiPada: "desc" },
+  });
+  // Perubahan TERBARU per NIP - dipakai menandai kalkulasi yang sudah basi.
+  // Cukup yang terbaru: satu perubahan saja sudah membuat angkanya harus
+  // dihitung ulang, dan menyimpan semuanya tidak menambah jawaban apa pun.
+  const petaPerubahanTerbaru = new Map<string, Date>();
+  for (const c of perubahanPegawai) {
+    const ada = petaPerubahanTerbaru.get(c.nip);
+    if (!ada || c.terdeteksiPada > ada) petaPerubahanTerbaru.set(c.nip, c.terdeteksiPada);
+  }
+  // Kapan kalkulasi tiap pegawai dibekukan - pembanding untuk menandai
+  // perubahan yang datang terlambat. Pegawai yang belum punya kalkulasi tidak
+  // masuk peta, dan barisnya memang tidak perlu ditandai: tidak ada angka
+  // basi kalau belum ada angka sama sekali.
+  const petaKalkulasiPerNip = new Map<string, Date>(
+    pegawaiAktif.flatMap((p) => (p.tukinCalc[0] ? [[p.nip, p.tukinCalc[0].calculatedAt] as const] : []))
+  );
 
   const sumberData = await ambilSumberData({
     satuanKerja: satkerEfektif,
@@ -351,6 +430,20 @@ export default async function KalkulasiUnitPage({
       p.predikatKinerja[0].sourceSyncedAt > t.calculatedAt
     )
       sebab.push("predikat kinerja berubah");
+
+    // DATA KEPEGAWAIAN - ditambahkan 2026-09-24, dan sebelumnya memang tidak
+    // ada. Kelas jabatan menentukan SELURUH tarif tukin pokok, jadi kelas
+    // yang bergeser setelah kalkulasi membuat angka tersimpan salah tanpa
+    // satu pun kolom lain ikut berubah.
+    //
+    // Sumbernya daftar perubahan, BUKAN `Pegawai.sourceSyncedAt`: kolom itu
+    // distempel ulang pada setiap baris di tiap sinkronisasi, berubah atau
+    // tidak. Begitu sync dijadwalkan harian, membandingkannya dengan
+    // calculatedAt akan menyalakan peringatan untuk seluruh roster setiap
+    // hari - dan peringatan yang selalu menyala berhenti dibaca.
+    const perubahanData = petaPerubahanTerbaru.get(p.nip);
+    if (perubahanData && perubahanData > t.calculatedAt) sebab.push("data kepegawaian berubah");
+
     return sebab.length > 0 ? sebab.join(" & ") : null;
   };
   const jumlahPerluHitungUlang = pegawaiAktif.filter((p) => perluHitungUlang(p) !== null).length;
@@ -640,7 +733,10 @@ export default async function KalkulasiUnitPage({
       {/* ------------------------------------------------------------------ */}
       {/* RINCIAN TUKIN - ringkas (default) atau lengkap (?rincian=1)         */}
       {/* ------------------------------------------------------------------ */}
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+      <div
+        id="rincian-tukin"
+        className="mt-8 flex scroll-mt-4 flex-wrap items-center justify-between gap-3"
+      >
         {/* Ikon bantuan DI SAMPING heading, bukan di dalamnya - lihat catatan
             flow content di BantuanRincianTukin.tsx. */}
         <div className="flex items-center gap-1.5">
@@ -677,16 +773,13 @@ export default async function KalkulasiUnitPage({
                 {TAMPILKAN_NOMINAL_LEMBUR && (
                   <th className="px-4 py-2.5">Uang Lembur</th>
                 )}
-                <th className="px-4 py-2.5">
-                  Jam Lembur
-                  {/* Selama nominalnya belum disetujui, sub-judulnya tidak
-                      boleh berbunyi "dibayar" - itu menjanjikan sesuatu yang
-                      justru sedang ditahan. Jamnya sendiri memang sudah
-                      dibulatkan & dibatasi, jadi "tercatat" tetap akurat. */}
-                  <span className="block text-[10px] font-normal normal-case">
-                    {TAMPILKAN_NOMINAL_LEMBUR ? "dibayar" : "tercatat"}
-                  </span>
-                </th>
+                {/* KOLOM "Jam Lembur" DICABUT 2026-09-22 (permintaan user):
+                    "kan udah ada tabel khusus lembur". Satu angka total sebulan
+                    di sini tidak bisa diperiksa - yang menentukan bayar adalah
+                    pemisahan hari kerja vs hari libur (tarifnya beda) dan
+                    rincian hariannya, dan keduanya ada di Tabel Jam Lembur.
+                    Dua tempat yang menampilkan jam lembur dengan kedalaman
+                    berbeda cuma mengundang orang memeriksa yang dangkal. */}
                 <th className="px-4 py-2.5">Tukin bersih</th>
               </tr>
             </thead>
@@ -760,15 +853,6 @@ export default async function KalkulasiUnitPage({
                         {lembur ? formatRupiah(lembur.totalUangLembur) : "-"}
                       </td>
                     )}
-                    <td className="px-4 py-2.5 font-mono text-ink-2">
-                      {/* Jam yang SUDAH dipangkas ke jam penuh dan sudah kena
-                          batas maksimal - bukan jam mentah dari rekap presensi. */}
-                      {/* Bulat ke bawah. Kolom ini bisa berisi angka pecahan:
-                          koreksi manual di bawah menerima step 0,5 dan
-                          menyimpannya apa adanya, beda dari kalkulasi massal
-                          yang menyimpan jam yang sudah dipangkas. */}
-                      {lembur ? lemburTeks(lembur.totalJamLembur) : "-"}
-                    </td>
                     <td className="px-4 py-2.5 font-mono font-semibold text-ink">
                       {tukin ? formatRupiah(tukin.tukinBersih) : <BelumAda judul="Tukin periode ini belum dihitung" />}
                       {kurangKinerja > 1 && (
@@ -1004,7 +1088,7 @@ export default async function KalkulasiUnitPage({
           {/* Uang makan & lembur - di tampilan RINCI saja. Di tampilan ringkas */}
           {/* ketiganya sudah jadi kolom biasa di tabel utama.                  */}
           {/* ---------------------------------------------------------------- */}
-          <h2 className="mt-8 text-base font-bold text-ink">
+          <h2 id="uang-makan" className="mt-8 scroll-mt-4 text-base font-bold text-ink">
             Uang Makan &amp;{" "}
             {TAMPILKAN_NOMINAL_LEMBUR ? "Uang Lembur" : "Jam Lembur"}
           </h2>
@@ -1095,49 +1179,174 @@ export default async function KalkulasiUnitPage({
           dilepas di situ membawa serta popup "berhasil dikirim"-nya sebelum
           sempat terbaca. Keadaannya dikirim sebagai prop; komponennya sendiri
           yang menyembunyikan formnya. */}
-      <KirimRekapForm
-        terkunci={kirimStatus.terkunci}
-        // Catatan PPABP ditampilkan DI SINI, bukan di puncak halaman: ini hal
-        // terakhir yang dibaca sebelum tombol Kirim Ulang ditekan, jadi bisa
-        // diadu dengan perbaikan yang barusan dikerjakan.
-        alasanKembali={kirimStatus.keadaan === "DIKEMBALIKAN" ? kirimStatus.alasanKembali : null}
+      {/* TABEL YANG DITAGIH CENTANGNYA. Ditaruh tepat di atas daftar periksa,
+          bukan di bagian lain halaman: centang "sudah saya periksa" yang
+          jauh dari barang yang diperiksa adalah centang yang diisi tanpa
+          dibaca.
+
+          SELURUH pegawai unit, bukan sehalaman paginasi - yang dicentang
+          pernyataan atas satu periode utuh, dan tabel yang cuma memperlihatkan
+          10 baris pertama membuat pernyataan itu tidak benar. */}
+      <TabelPerubahanPegawai
         periodeBulan={periodeBulan}
         periodeTahun={periodeTahun}
-        satuanKerja={satkerEfektif}
-        // PEMBAGINYA `pegawaiAktif`, BUKAN `pegawaiList`.
-        //
-        // Tabel di atas sengaja menampilkan SEMUA pegawai unit termasuk yang
-        // sudah pensiun/berhenti - bulan terakhir mereka tetap perlu terlihat
-        // dan tetap perlu dihitung. Tapi mereka TIDAK BOLEH ikut jadi syarat
-        // kelengkapan: orang yang sudah pensiun tidak akan pernah punya
-        // predikat kinerja baru, jadi unitnya tidak akan pernah bisa
-        // mengirim - macet permanen tanpa jalan keluar.
-        //
-        // Angka ini WAJIB sama dengan yang dihitung kirimRekapUnitAction di
-        // server (yang memakai `statusPegawai: "AKTIF"`). Kalau berbeda,
-        // tombolnya menyala tapi server menolak - atau lebih buruk,
-        // sebaliknya.
-        jumlahPegawai={pegawaiAktif.length}
-        jumlahKalkulasi={
-          pegawaiAktif.filter((p) => p.tukinCalc.length > 0).length
-        }
-        alasanTertahan={
-          cekBolehKirim(
-            {
-              totalPegawai: pegawaiAktif.length,
-              jumlahKalkulasi: pegawaiAktif.filter(
-                (p) => p.tukinCalc.length > 0,
-              ).length,
-              // Punya baris Tukin TIDAK SAMA DENGAN siap kirim. Baris yang
-              // sumbernya sudah berubah atau dihapus tetap berdiri dengan
-              // angka lama, dan tanpa hitungan ini ia ikut terkirim &
-              // terkunci tanpa ada yang menyadarinya.
-              jumlahBasi: jumlahPerluHitungUlang,
-            },
-            kirimStatus,
-          ).alasan
-        }
+        namaBulan={NAMA_BULAN[periodeBulan - 1] ?? String(periodeBulan)}
+        baris={perubahanPegawai.map((c) => {
+          const t = petaKalkulasiPerNip.get(c.nip);
+          return {
+            id: c.id,
+            nip: c.nip,
+            nama: c.nama,
+            jenis: c.jenis,
+            dari: c.dari,
+            ke: c.ke,
+            terdeteksiPada: c.terdeteksiPada,
+            keluarDariUnit: c.jenis === "PINDAH_UNIT" && c.satuanKerjaDari === satkerEfektif,
+            sesudahHitung: t !== undefined && c.terdeteksiPada > t,
+          };
+        })}
       />
+
+      <TabelPemeriksaanLembur
+        periodeBulan={periodeBulan}
+        periodeTahun={periodeTahun}
+        baris={pegawaiList.map((p) => {
+          const lembur = p.uangLembur[0];
+          const harian = petaLemburHarian.get(p.id);
+          return {
+            pegawaiId: p.id,
+            nip: p.nip,
+            nama: p.nama,
+            jamHariKerja: lembur?.jamLemburHariKerja ?? null,
+            jamHariLibur: lembur?.jamLemburHariLibur ?? null,
+            totalTersimpan: lembur?.totalJamLembur ?? null,
+            jamHarian: harian?.jam ?? 0,
+          };
+        })}
+      />
+
+      {/* SATU KARTU, DUA KOLOM - permintaan user 2026-09-28, dan alasannya
+          memang alur: periksa data -> semua terverifikasi -> kirim rekap.
+          Sebagai dua kartu terpisah, syarat dan akibatnya terbaca sebagai dua
+          urusan berbeda, padahal kolom kanan justru TIDAK BISA dipakai sampai
+          kolom kiri selesai.
+
+          Daftar periksa tetap di luar dialog Kirim: memeriksa tabel adalah
+          pekerjaan yang dikerjakan sambil membacanya, sementara dialog Kirim
+          baru terbuka ketika orangnya sudah memutuskan. */}
+      {/* Border kiri 2px, bukan 4px seperti kartu lain di aplikasi ini.
+          Kartu ini satu-satunya yang SEKALIGUS punya header bergaris, pemisah
+          tengah, dan border luar - pada 4px ketiganya saling berebut. Kartu
+          lain tetap 4px; kalau nanti diseragamkan, di sinilah tempatnya. */}
+      <section id="kirim" className="card mt-6 border-l-2 border-l-navy">
+        <div className="border-b border-line-2 px-4 py-3 sm:px-5">
+          <h2 className="text-sm font-bold text-ink">Periksa &amp; kirim rekap</h2>
+          {/* Akibatnya saja, BUKAN instruksinya - urutan kerjanya sudah
+              dikatakan nomor 1 & 2 dan subjudul tiap kolom. Kalimat yang
+              mengulang tiga kali berhenti dibaca di ketiganya. */}
+          <p className="mt-0.5 text-xs text-muted">Pengiriman mengunci periode ini.</p>
+        </div>
+
+        {/* Pemisah vertikal HANYA dari lg ke atas. Di bawah itu keduanya
+            bertumpuk dan garis tegak jadi menyesatkan - yang benar di layar
+            sempit adalah garis datar antar langkah, dan itu yang dipakai. */}
+        <div className="grid divide-y divide-line-2 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+          <div className="p-4 sm:p-5">
+            <VerifikasiTabelPanel
+              periodeBulan={periodeBulan}
+              periodeTahun={periodeTahun}
+              terkunci={kirimStatus.terkunci}
+              // Anchor ditentukan DI SINI karena hanya halaman ini yang tahu
+              // tabel mana yang sedang benar-benar dirender.
+              //
+              // UANG_MAKAN yang jadi sebabnya: tabel tersendirinya cuma ada di
+              // tampilan RINCI. Di tampilan ringkas, Uang Makan adalah satu
+              // kolom di tabel Rincian Tukin - jadi ke situlah tautannya
+              // diarahkan, bukan ke id yang belum lahir.
+              tautan={{
+                PERUBAHAN_PEGAWAI: "#perubahan-pegawai",
+                TUKIN: "#rincian-tukin",
+                UANG_MAKAN: tampilRinci ? "#uang-makan" : "#rincian-tukin",
+                UANG_LEMBUR: "#tabel-lembur",
+              }}
+              verifikasi={verifikasiTabel.map((v) => ({
+                jenisTabel: v.jenisTabel as JenisTabelKalkulasi,
+                olehNama: v.diverifikasiOleh.nama,
+                pada: v.diverifikasiPada,
+              }))}
+            />
+          </div>
+
+          <div className="p-4 sm:p-5">
+            {/* Terkunci: KirimRekapForm sengaja cuma mengembalikan popup
+                hasilnya (tanpa isi yang terlihat), jadi kolom ini akan kosong
+                melompong tanpa penggantinya. Komponennya TETAP dirender -
+                popup "berhasil dikirim" lahir dari situ, dan halaman ini
+                dirender ulang dalam keadaan terkunci tepat setelah kirim
+                berhasil. */}
+            {kirimStatus.terkunci && (
+              <div className="rounded-lg border border-green bg-green/10 px-3.5 py-3">
+                <p className="text-sm font-bold text-green">Sudah dikirim &amp; terkunci</p>
+                <p className="mt-1 text-xs text-ink-2">
+                  Periode ini tidak bisa dihitung ulang atau disunting. Hanya PPABP yang bisa
+                  mengembalikannya ke unit.
+                </p>
+              </div>
+            )}
+            <KirimRekapForm
+              terkunci={kirimStatus.terkunci}
+              // Catatan PPABP ditampilkan DI SINI, bukan di puncak halaman: ini hal
+              // terakhir yang dibaca sebelum tombol Kirim Ulang ditekan, jadi bisa
+              // diadu dengan perbaikan yang barusan dikerjakan.
+              alasanKembali={kirimStatus.keadaan === "DIKEMBALIKAN" ? kirimStatus.alasanKembali : null}
+              periodeBulan={periodeBulan}
+              periodeTahun={periodeTahun}
+              satuanKerja={satkerEfektif}
+              // PEMBAGINYA `pegawaiAktif`, BUKAN `pegawaiList`.
+              //
+              // Tabel di atas sengaja menampilkan SEMUA pegawai unit termasuk yang
+              // sudah pensiun/berhenti - bulan terakhir mereka tetap perlu terlihat
+              // dan tetap perlu dihitung. Tapi mereka TIDAK BOLEH ikut jadi syarat
+              // kelengkapan: orang yang sudah pensiun tidak akan pernah punya
+              // predikat kinerja baru, jadi unitnya tidak akan pernah bisa
+              // mengirim - macet permanen tanpa jalan keluar.
+              //
+              // Angka ini WAJIB sama dengan yang dihitung kirimRekapUnitAction di
+              // server (yang memakai `statusPegawai: "AKTIF"`). Kalau berbeda,
+              // tombolnya menyala tapi server menolak - atau lebih buruk,
+              // sebaliknya.
+              jumlahPegawai={pegawaiAktif.length}
+              jumlahKalkulasi={
+                pegawaiAktif.filter((p) => p.tukinCalc.length > 0).length
+              }
+              // Ketiga syarat yang diperiksa cekBolehKirim(), dioper APA ADANYA
+              // supaya daftarnya di layar dan gerbang di server memakai angka
+              // yang sama. Menghitungnya ulang di dalam komponen berarti dua
+              // sumber untuk satu pertanyaan.
+              jumlahBasi={jumlahPerluHitungUlang}
+              tabelKurang={tabelBelumDiverifikasi(tabelDiverifikasi).length}
+              tabelWajib={TABEL_WAJIB_DIVERIFIKASI.length}
+              alasanTertahan={
+                cekBolehKirim(
+                  {
+                    totalPegawai: pegawaiAktif.length,
+                    jumlahKalkulasi: pegawaiAktif.filter(
+                      (p) => p.tukinCalc.length > 0,
+                    ).length,
+                    tabelDiverifikasi,
+                    // Punya baris Tukin TIDAK SAMA DENGAN siap kirim. Baris yang
+                    // sumbernya sudah berubah atau dihapus tetap berdiri dengan
+                    // angka lama, dan tanpa hitungan ini ia ikut terkirim &
+                    // terkunci tanpa ada yang menyadarinya.
+                    jumlahBasi: jumlahPerluHitungUlang,
+                  },
+                  kirimStatus,
+                ).alasan
+              }
+            />
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

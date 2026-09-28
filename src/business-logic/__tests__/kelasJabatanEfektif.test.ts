@@ -6,7 +6,7 @@ import {
   type SkPenurunanKelas,
 } from "../kelasJabatanEfektif";
 
-/** Kasus nyata: Galih Febian Azhar, turun kelas 7 -> 6 selama 1 tahun. */
+/** Kasus nyata: Dirgantara Mahendra, turun kelas 7 -> 6 selama 1 tahun. */
 const GALIH: SkPenurunanKelas = {
   status: "DISETUJUI",
   periodeMulaiBulan: 7,

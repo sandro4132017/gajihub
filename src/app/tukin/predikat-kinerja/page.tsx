@@ -20,6 +20,7 @@ import { LABEL_PREDIKAT, adalahInputManual, kelasChipPredikat, labelSumber } fro
 import { PencarianDebounce } from "../../PencarianDebounce";
 import { SumberAcuan } from "../../SumberAcuan";
 import { HALAMAN } from "../../layoutHalaman";
+import { RiErrorWarningLine } from "react-icons/ri";
 
 export const dynamic = "force-dynamic";
 
@@ -513,8 +514,9 @@ export default async function PredikatKinerjaPage({
               </Link>
               .
             </p>
-            <p className="mt-2 text-sm font-semibold text-gold-deep">
-              &#9888; Hitung ulang akan mengembalikan approval ke DRAFT.
+            <p className="mt-2 flex items-center gap-1 text-sm font-semibold text-gold-deep">
+              <RiErrorWarningLine aria-hidden className="shrink-0" /> Hitung ulang akan mengembalikan approval ke
+              DRAFT.
             </p>
             <p className="mt-2 text-xs text-muted">
               Konversi: Sangat Baik/Baik 100% &middot; Perlu Perbaikan 85% &middot; Kurang/Sangat Kurang 60%

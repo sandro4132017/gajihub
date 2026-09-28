@@ -191,8 +191,8 @@ bisa diperbaiki tanpa bertanya ke siapa pun:
    bisa menyambung dua angka tak berhubungan jadi 18 digit palsu.
 2. **NIP bertipe ANGKA sekarang DITOLAK**, walau digitnya 18. Ini pengetatan,
    bukan pelonggaran, dan sebabnya terbukti sendiri di test lama mereka:
-   `JSON.parse('{"nip": 197303072005011001}')` menghasilkan
-   **`197303072005011000`** - tiga digit terakhir sudah jadi nol sebelum kode
+   `JSON.parse('{"nip": 199912312024121001}')` menghasilkan
+   **`199912312024121000`** - tiga digit terakhir sudah jadi nol sebelum kode
    mana pun melihatnya (float64 aman cuma sampai 16 digit). Test lama justru
    mengunci nilai rusak itu sebagai sah. Jebakan yang SAMA dengan 46 baris
    ber-NIP `...000` di `basis data gaji_Kemnaker.xlsx`.

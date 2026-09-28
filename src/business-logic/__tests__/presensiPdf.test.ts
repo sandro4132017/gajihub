@@ -63,10 +63,10 @@ const KEPALA_JUNI: ItemTeksPdf[] = [
   it_("Informasi Pegawai", 36, 635, 70),
   it_("NIP", 36, 619, 13),
   it_(":", 133, 619, 2),
-  it_("199612052018122001", 157, 619, 80),
+  it_("199000100000000021", 157, 619, 80),
   it_("Nama Pegawai", 36, 603.5, 54),
   it_(":", 133, 603.5, 2),
-  it_("GADIS SUKMA DEWA", 157, 603.5, 82),
+  it_("CEMPAKA PRAKASA", 157, 603.5, 82),
   // Jabatan: NILAINYA turun dua baris - label & nilai tidak sejajar y.
   it_("Analis Pengelolaan Keuangan APBN", 157, 587.5, 131),
   it_("Jabatan", 36, 582.5, 28),
@@ -168,8 +168,8 @@ describe("parsePdfPresensi - kepala laporan", () => {
     expect(hasil.laporan).toHaveLength(1);
 
     const l = hasil.laporan[0];
-    expect(l.nip).toBe("199612052018122001");
-    expect(l.nama).toBe("GADIS SUKMA DEWA");
+    expect(l.nip).toBe("199000100000000021");
+    expect(l.nama).toBe("CEMPAKA PRAKASA");
     // Label & nilai TIDAK sejajar y di file asli - nilainya dua baris.
     expect(l.jabatan).toBe("Analis Pengelolaan Keuangan APBN Ahli Pertama");
     expect(l.periodeBulan).toBe(6);
@@ -293,7 +293,7 @@ describe("parsePdfPresensi - tabel detail", () => {
 describe("parsePdfPresensi - banyak pegawai dalam satu file", () => {
   it("memulai laporan baru tiap ketemu blok Informasi Pegawai", () => {
     const kepalaKedua = KEPALA_JUNI.map((i) =>
-      i.teks === "199612052018122001" ? it_("197303072005011001", i.x, i.y, i.lebar) : i
+      i.teks === "199000100000000021" ? it_("199000100000000008", i.x, i.y, i.lebar) : i
     );
     const hasil = parsePdfPresensi([
       HALAMAN_PERTAMA,
@@ -302,10 +302,10 @@ describe("parsePdfPresensi - banyak pegawai dalam satu file", () => {
     ]);
     expect(hasil.error).toBeUndefined();
     expect(hasil.laporan).toHaveLength(2);
-    expect(hasil.laporan[0].nip).toBe("199612052018122001");
+    expect(hasil.laporan[0].nip).toBe("199000100000000021");
     // Halaman 2 adalah lanjutan pegawai pertama, bukan pegawai baru.
     expect(hasil.laporan[0].baris).toHaveLength(3);
-    expect(hasil.laporan[1].nip).toBe("197303072005011001");
+    expect(hasil.laporan[1].nip).toBe("199000100000000008");
     expect(hasil.laporan[1].baris).toHaveLength(1);
   });
 

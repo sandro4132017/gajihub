@@ -16,9 +16,9 @@ const MATRIKS_ASLI: unknown[][] = [
   ["Periode Bulanan 6 Tahun 2026", null, null, null, null, null, null],
   [null, null, null, null, null, null, null],
   ["No", "NIP", "Nama", "Jabatan", "Rating Hasil Kinerja", "Rating Perilaku Kerja", "Predikat Kinerja Periodik"],
-  [1, "200210202025052001", "YUSFRIDA RIZKI PUTRI", "Arsiparis Terampil", "Sesuai Ekspektasi", "Sesuai Ekspektasi", "Baik"],
-  [2, "198810012011012009", "KHARINA OLIVIA", "Arsiparis Ahli Muda", "Sesuai Ekspektasi", "Sesuai Ekspektasi", "Baik"],
-  [3, "198406162015032004", "WANTI LENA SARI", "Arsiparis Ahli Pertama", "Diatas Ekspektasi", "Diatas Ekspektasi", "Sangat Baik"],
+  [1, "199000100000000022", "BAYUAJI LEGOWO", "Arsiparis Terampil", "Sesuai Ekspektasi", "Sesuai Ekspektasi", "Baik"],
+  [2, "199000100000000019", "JAGADITYA SARASWATI", "Arsiparis Ahli Muda", "Sesuai Ekspektasi", "Sesuai Ekspektasi", "Baik"],
+  [3, "199000100000000016", "WIRAPATI ANGGARA", "Arsiparis Ahli Pertama", "Diatas Ekspektasi", "Diatas Ekspektasi", "Sangat Baik"],
 ];
 
 describe("parseRekapPredikatKinerja - file asli e-Kinerja BKN", () => {
@@ -37,8 +37,8 @@ describe("parseRekapPredikatKinerja - file asli e-Kinerja BKN", () => {
     expect(hasil.dilewati).toEqual([]);
 
     expect(hasil.baris[0]).toMatchObject({
-      nip: "200210202025052001",
-      nama: "YUSFRIDA RIZKI PUTRI",
+      nip: "199000100000000022",
+      nama: "BAYUAJI LEGOWO",
       jabatan: "Arsiparis Terampil",
       ratingHasilKinerja: "Sesuai Ekspektasi",
       predikatLabel: "Baik",
@@ -46,7 +46,7 @@ describe("parseRekapPredikatKinerja - file asli e-Kinerja BKN", () => {
       nilaiAngka: 100,
     });
     expect(hasil.baris[2]).toMatchObject({
-      nip: "198406162015032004",
+      nip: "199000100000000016",
       predikatLabel: "Sangat Baik",
       predikat: "SANGAT_BAIK",
       nilaiAngka: 100,
@@ -90,7 +90,7 @@ describe("parseRekapPredikatKinerja - baris & file yang ditolak", () => {
     const matriks = [
       ...MATRIKS_ASLI,
       [4, null, "TANPA NIP", "Analis", null, null, "Baik"],
-      [5, "197611232006041015", "TANPA PREDIKAT", "Analis", null, null, null],
+      [5, "199000100000000011", "TANPA PREDIKAT", "Analis", null, null, null],
     ];
     const hasil = parseRekapPredikatKinerja(matriks);
     expect(hasil.baris).toHaveLength(3);

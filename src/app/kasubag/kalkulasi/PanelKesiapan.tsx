@@ -1,4 +1,6 @@
 import { TEMUAN, type RingkasanKesiapan } from "../../../business-logic/kesiapanKalkulasi";
+import { IoMdCheckmark } from "react-icons/io";
+import { RiErrorWarningLine } from "react-icons/ri";
 
 /** Satu sumber yang harus lengkap sebelum kalkulasi berarti. */
 export interface SumberKesiapan {
@@ -100,19 +102,61 @@ export function PanelKesiapan({
         </ul>
       )}
 
-      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
+      {/* SEBARAN DIGAMBARKAN, bukan cuma didaftar sebagai angka.
+          ===================================================================
+          KETIGA POTONGANNYA HARUS SALING LEPAS, dan di sini itu tidak
+          kebetulan: `jumlahPerluDiperiksa` mencacah SIAPA PUN yang punya
+          temuan (`temuan.length > 0`), sementara `jumlahTerhalang` adalah
+          BAGIAN DARI kelompok itu - yang temuannya bertingkat HALANG.
+          Menumpuk keduanya apa adanya menghasilkan batang melebihi 100% dan
+          angka yang tidak pernah bisa dijumlahkan orang.
+
+          Yang benar, dan inilah yang dipakai:
+            lengkap  +  terhalang  +  (perluDiperiksa - terhalang)  =  diperiksa
+          ------------------------------------------------------------------- */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1">
         <span className="text-sm font-extrabold text-ink">
           {r.jumlahDiperiksa.toLocaleString("id-ID")} pegawai diperiksa
         </span>
-        <span className="inline-flex items-baseline gap-1.5 text-sm text-green">
-          <span aria-hidden>&#10003;</span>
+        <span className="font-mono text-xs font-bold text-muted">
+          {persen(r.jumlahLengkap, r.jumlahDiperiksa)}% siap dihitung
+        </span>
+      </div>
+
+      <div className="mt-2 flex h-2.5 w-full gap-[2px] overflow-hidden rounded-full bg-line">
+        {/* Celah 2px antar potongan memakai warna latar, bukan garis tepi -
+            garis tepi ikut menambah lebar dan membuat jumlahnya meleset. */}
+        <Potongan nilai={r.jumlahLengkap} dari={r.jumlahDiperiksa} kelas="bg-green" />
+        <Potongan nilai={r.jumlahTerhalang} dari={r.jumlahDiperiksa} kelas="bg-red" />
+        <Potongan
+          nilai={r.jumlahPerluDiperiksa - r.jumlahTerhalang}
+          dari={r.jumlahDiperiksa}
+          kelas="bg-gold"
+        />
+      </div>
+
+      {/* Keterangan SELALU tampil untuk potongan yang ada isinya - warna saja
+          tidak pernah cukup menyebut identitas, dan angka mutlaknya yang
+          dipakai orang menindaklanjuti, bukan lebar batangnya. */}
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
+        <span className="inline-flex items-center gap-1.5 text-sm text-green">
+          <IoMdCheckmark aria-hidden className="shrink-0" />
           <span className="font-mono font-bold">{r.jumlahLengkap.toLocaleString("id-ID")}</span>
           <span>data lengkap</span>
         </span>
-        {r.jumlahPerluDiperiksa > 0 && (
-          <span className="inline-flex items-baseline gap-1.5 text-sm text-gold-deep">
-            <span aria-hidden>&#9888;</span>
-            <span className="font-mono font-bold">{r.jumlahPerluDiperiksa.toLocaleString("id-ID")}</span>
+        {r.jumlahTerhalang > 0 && (
+          <span className="inline-flex items-center gap-1.5 text-sm text-red">
+            <RiErrorWarningLine aria-hidden className="shrink-0" />
+            <span className="font-mono font-bold">{r.jumlahTerhalang.toLocaleString("id-ID")}</span>
+            <span>terhalang</span>
+          </span>
+        )}
+        {r.jumlahPerluDiperiksa - r.jumlahTerhalang > 0 && (
+          <span className="inline-flex items-center gap-1.5 text-sm text-gold-deep">
+            <RiErrorWarningLine aria-hidden className="shrink-0" />
+            <span className="font-mono font-bold">
+              {(r.jumlahPerluDiperiksa - r.jumlahTerhalang).toLocaleString("id-ID")}
+            </span>
             <span>perlu diperiksa</span>
           </span>
         )}
@@ -120,7 +164,7 @@ export function PanelKesiapan({
             menambah "perlu diperiksa". Ditampilkan karena yang memeriksa
             berhak tahu baris mana yang tidak lagi apa adanya dari e-Presensi. */}
         {r.jumlahAdaKoreksi > 0 && (
-          <span className="inline-flex items-baseline gap-1.5 text-sm text-muted">
+          <span className="inline-flex items-center gap-1.5 text-sm text-muted">
             <span className="font-mono font-bold text-ink-2">{r.jumlahAdaKoreksi.toLocaleString("id-ID")}</span>
             <span>presensinya pernah dikoreksi</span>
           </span>
@@ -182,4 +226,20 @@ export function PanelKesiapan({
       )}
     </div>
   );
+}
+
+/** Persen bulat, dan 0 kalau pembaginya nol - bukan NaN yang ikut ke layar. */
+function persen(nilai: number, dari: number): number {
+  return dari > 0 ? Math.round((nilai / dari) * 100) : 0;
+}
+
+/**
+ * Satu potongan batang bertumpuk.
+ *
+ * Yang nilainya NOL tidak dirender sama sekali - potongan selebar 0% tetap
+ * menyisakan celah 2px, dan celah tanpa isi terbaca seperti warna yang hilang.
+ */
+function Potongan({ nilai, dari, kelas }: { nilai: number; dari: number; kelas: string }) {
+  if (nilai <= 0 || dari <= 0) return null;
+  return <div className={kelas} style={{ width: `${(nilai / dari) * 100}%` }} />;
 }

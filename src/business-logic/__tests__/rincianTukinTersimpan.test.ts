@@ -3,7 +3,7 @@ import { rincianTukinTersimpan } from "../rincianTukinTersimpan";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../tarifTukinPokok";
 
 // Kelas jabatan 10 dipakai di seluruh test ini karena angkanya yang muncul di
-// verifikasi manual end-to-end (lihat CLAUDE.md, kasus Ayu Puspita Sari), jadi
+// verifikasi manual end-to-end (lihat CLAUDE.md, kasus Maheswari Yudhanto), jadi
 // hasil di sini bisa diadu langsung dengan angka yang sudah pernah dicek.
 const TARIF_KELAS_10 = TUKIN_POKOK_PER_KELAS_JABATAN[10]; // 5.979.200
 const BOBOT_HADIR = TARIF_KELAS_10 * 0.3; // 1.793.760

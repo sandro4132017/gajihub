@@ -3,6 +3,7 @@ import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canMonitorKesehatanSistem, canKonfigurasiAdapter, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../AksesDitolak";
 import { HALAMAN } from "../../layoutHalaman";
+import { SinkronPegawaiForm } from "./SinkronPegawaiForm";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,12 @@ export default async function SistemPage() {
       <p className="mt-1 text-sm text-muted">
         Ringkasan isi database dan cara Gajihub mengambil data dari sistem lain.
       </p>
+
+      {/* DI ATAS ringkasan angka, bukan di bawah daftar adapter: ini
+          satu-satunya bagian halaman ini yang bisa DIKERJAKAN, sisanya bacaan.
+          Aturan urutan yang sama dengan /ppabp/adk - yang menuntut tindakan
+          naik, yang cuma perlu dibaca turun. */}
+      <SinkronPegawaiForm />
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-line bg-surface-2 p-3">

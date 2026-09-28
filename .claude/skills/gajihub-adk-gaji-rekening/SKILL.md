@@ -28,8 +28,8 @@ file asli satker 450938 periode 06/2026 dibandingkan per NIP:
 
 | | Bank | Kode Bank SPAN | Contoh rekening |
 |---|---|---|---|
-| Gaji (file GPP) | BNI | 520009000990 | 0447729376 |
-| Tukin (file ADK) | BRI | 520002000990 | 223301002832507 |
+| Gaji (file GPP) | BNI | 520009000990 | 7777777023 |
+| Tukin (file ADK) | BRI | 520002000990 | 777777777777029 |
 
 Dari **96 NIP yang ada di KEDUA file, TIDAK SATUPUN nomor rekeningnya sama**
 (0 sama / 96 beda). Jadi rekening tukin **TIDAK BISA** diturunkan dari file
@@ -84,7 +84,7 @@ jaringan yang lebih luas. Peringatan ini juga ditampilkan di halaman
 rekening), file **filter BRI 3 baris dengan rekening TERISI SEMUA**, total
 bruto - potongan = bersih konsisten, dan TXT-nya 22 kolom konsisten di semua
 baris. Nama Rekening ikut terbaca terpisah dari nama pegawai (mis. pegawai
-"IRVAN GANEVA, M.M. , S.Ds" -> rekening "IRVAN GANEVA, S.DS").
+"GEMILANG ANGGARA, M.M. , S.Ds" -> rekening "GEMILANG ANGGARA, S.DS").
 
 ### Basis Data Gaji: nama pegawai untuk ADK datang dari Web Gaji, bukan SIAP
 
@@ -93,8 +93,8 @@ Dipicu berkas user `basis data gaji_Kemnaker.xlsx` (2 sheet: `data_PNS`,
 pihak luar - singkatan & gelar.
 
 **Terukur, bukan kesan**: dari 4.701 NIP yang cocok ke tabel `Pegawai`,
-**3.628 (77%) namanya berbeda** - `"ADE ALEXANDER"` (SIAP) vs
-`"Ade Alexander, SH"` (Web Gaji).
+**3.628 (77%) namanya berbeda** - `"HASTU NUGRAHA"` (SIAP) vs
+`"Hastu Nugraha, SH"` (Web Gaji).
 
 **Model `IdentitasWebGaji`** (migrasi `20260812090000_identitas_web_gaji`, satu
 `CREATE TABLE`): nama, jenis pegawai, kode satker, nama satuan kerja.
@@ -135,7 +135,7 @@ dibedakan lagi dari yang benar.
   `520002000990` (BRI) tapi namanya ditulis "BANK NEGARA INDONESIA".
   Pemisahan ADK memakai KODE, jadi semuanya masuk berkas BRI. Hanya manusia
   yang bisa memutuskan mana yang benar. Ada juga 4 baris yang kolom kode
-  banknya berisi nomor rekening (`1600005287947`) - tetap disimpan, ditandai.
+  banknya berisi nomor rekening (`7777777777026`) - tetap disimpan, ditandai.
 
 **UI `/ppabp/basis-data-gaji`** (izin `canKelolaGajiInduk` - PPABP + ADMIN):
 unggah, tabel perbandingan SIAP vs Web Gaji berdampingan, tombol "Hanya yang
@@ -153,8 +153,8 @@ dari basis data gaji (tidak terikat periode).
 terbaca (286 tertukar diperbaiki), 47 dilewati, **4.973 tersimpan**, dan
 `RekeningPegawai` yang tadinya **KOSONG (0 baris)** terisi **9.944** (4.972
 TUKIN + 4.972 GAJI). Export ADK Tukin diuji lewat production build: nama
-keluar sebagai `"M. Satrio Pratomo, S.T"` / `"Wardah Sabrina Rambe, S.H."`
-(bukan `"M.SATRIO PRATOMO"` / `"WARDAH SABRINA RAMBE"`), Kode Satker `450938`
+keluar sebagai `"M. Satrio Pratomo, S.T"` / `"Yudhistira Widagdo, S.H."`
+(bukan `"LOKANANTA WIJAYA"` / `"YUDHISTIRA WIDAGDO"`), Kode Satker `450938`
 terisi, kolom bank & rekening terisi, dan **Nama Rekening tetap kolom
 tersendiri** (`"M SATRIO PRATOMO"`) - beda dari Nama Pegawai, sesuai maksudnya.
 Aritmatika baris total tetap konsisten (13.811.100 − 137.142 = 13.673.958).
@@ -218,7 +218,7 @@ jam per bulan, bukan rincian per tanggal; sekarang jam hari kerja & hari libur
 ditampilkan terpisah supaya angkanya bisa ditelusuri. TODO(confirm): minta
 contoh ADK uang makan/lembur asli kalau formatnya sudah baku di Web Gaji.
 
-**Diverifikasi** (production build, PPABP Irwan Syafril): keenam tombol
+**Diverifikasi** (production build, PPABP Hanindita Widagdo): keenam tombol
 mengarah ke URL yang benar; unduhan TXT bertipe `text/plain` dengan 22 kolom
 dan baris total ` 126.621.498 `; unduhan XLSX bertipe MIME Excel yang benar,
 26 KB, magic bytes `PK` (zip sah). Isi kedua format dibandingkan baris-per-
@@ -328,7 +328,7 @@ PPABP.
   angka), dan daftar periode slip ikut memperhitungkan periode yang cuma
   punya gaji induk.
 
-**Diverifikasi manual end-to-end** (production build, PPABP Irwan Syafril):
+**Diverifikasi manual end-to-end** (production build, PPABP Hanindita Widagdo):
 upload file ADK asli -> 350 baris tersimpan, 1 baris dilewati (baris kosong
 di akhir file), total gaji bersih Rp 1.498.538.900 - dicek ulang lewat
 script terhadap file ASLI: jumlah baris, total penghasilan, total potongan,
@@ -343,7 +343,7 @@ muncul di sidebar.
 **Data hasil verifikasi SENGAJA TIDAK di-revert** (beda dari verifikasi
 OSDMA/PPABP/Admin sebelumnya): 350 baris gaji induk periode 7/2026 justru
 data yang dibutuhkan supaya slip gaji bisa didemokan. Yang perlu diingat:
-honorarium Rp 11.400.000 pada Irwan Syafril adalah ANGKA UJI (disalin dari
+honorarium Rp 11.400.000 pada Hanindita Widagdo adalah ANGKA UJI (disalin dari
 slip contoh milik orang lain), kosongkan lewat `/ppabp/gaji-induk` kalau
 tidak mau ikut tampil waktu demo.
 
@@ -469,7 +469,7 @@ user: 3 contoh/template ADK asli (`templatelemburPPPK202606.xlsx`,
   TIDAK ada adapter/import job yang dibangun dari file ini sekarang.
   Catatan buat nanti: file ini key oleh **nama_pegawai (nama), BUKAN
   NIP** - ada inkonsistensi penulisan nama yang sama persis di baris
-  berbeda (mis. "Ayla Raffany, S.I.Kom" vs "Ayla Raffany S.I.Kom", beda
+  berbeda (mis. "Gandara Sasmita, S.I.Kom" vs "Gandara Sasmita S.I.Kom", beda
   koma) - matching by name ke NIP asli PASTI butuh proses
   rekonsiliasi/fuzzy-match manual dulu, TIDAK BISA langsung dipetakan
   1:1 begitu integrasi ini dikerjakan. Kolom yang ada: nama_pegawai,

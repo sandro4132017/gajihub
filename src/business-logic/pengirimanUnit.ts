@@ -53,6 +53,64 @@ export function statusUnit(baris: BarisPengiriman | null): StatusUnit {
   return { keadaan: "DIKEMBALIKAN", terkunci: false, alasanKembali: baris.alasanKembali };
 }
 
+// ---------------------------------------------------------------------------
+// VERIFIKASI TABEL - Kasubag TU memeriksa tiap tabel sebelum rekapnya dikirim.
+//
+// Keputusan user 2026-09-22: "kasubag TU perlu cek 3 tabel ... jika 3 itu udah
+// di cek baru bisa di kirim ke PPABP".
+// ---------------------------------------------------------------------------
+
+export type JenisTabelKalkulasi =
+  | "PERUBAHAN_PEGAWAI"
+  | "TUKIN"
+  | "UANG_MAKAN"
+  | "UANG_LEMBUR";
+
+/**
+ * Urutan tampil di panel - mengikuti urutan orang memeriksanya.
+ *
+ * PERUBAHAN_PEGAWAI ditaruh PALING ATAS, bukan ditambahkan di ekor daftar:
+ * kelas jabatan, satuan kerja, dan status kepegawaian adalah BAHAN ketiga
+ * tabel di bawahnya. Memeriksa angka tukin sebelum memastikan kelas
+ * jabatannya masih yang benar berarti memeriksa hasil dari bahan yang belum
+ * diperiksa.
+ */
+export const TABEL_KALKULASI: readonly JenisTabelKalkulasi[] = [
+  "PERUBAHAN_PEGAWAI",
+  "TUKIN",
+  "UANG_MAKAN",
+  "UANG_LEMBUR",
+];
+
+/**
+ * Tabel yang WAJIB tercentang sebelum Kirim terbuka.
+ *
+ * UANG_MAKAN sengaja di luar daftar ini ("untuk uang makan kita belum dulu",
+ * user 2026-09-22) - tetap tampil di panel supaya ketiganya kelihatan sebagai
+ * satu rangkaian, tapi belum menahan pengiriman. Memindahkannya jadi wajib
+ * cukup menambahkannya di sini; tidak ada tempat lain yang perlu diubah.
+ */
+export const TABEL_WAJIB_DIVERIFIKASI: readonly JenisTabelKalkulasi[] = [
+  "PERUBAHAN_PEGAWAI",
+  "TUKIN",
+  "UANG_LEMBUR",
+];
+
+export const LABEL_TABEL_KALKULASI: Record<JenisTabelKalkulasi, string> = {
+  PERUBAHAN_PEGAWAI: "Daftar Perubahan Data Pegawai",
+  TUKIN: "Tabel Tukin",
+  UANG_MAKAN: "Tabel Uang Makan",
+  UANG_LEMBUR: "Tabel Jam Lembur",
+};
+
+/** PURE. Daftar tabel wajib yang BELUM dicentang - kosong berarti sudah lengkap. */
+export function tabelBelumDiverifikasi(
+  sudah: readonly JenisTabelKalkulasi[]
+): JenisTabelKalkulasi[] {
+  const punya = new Set(sudah);
+  return TABEL_WAJIB_DIVERIFIKASI.filter((t) => !punya.has(t));
+}
+
 export interface KesiapanKirim {
   totalPegawai: number;
   jumlahKalkulasi: number;
@@ -62,6 +120,14 @@ export interface KesiapanKirim {
    * tidak diisi berarti "tidak ada yang basi".
    */
   jumlahBasi?: number;
+  /**
+   * Tabel yang sudah dicentang "saya sudah periksa" oleh Kasubag TU.
+   *
+   * Opsional dengan alasan yang sama seperti `jumlahBasi`: pemanggil lama
+   * (dan test lama) tidak berubah perilakunya. Tidak diisi = syarat
+   * verifikasi tidak ditagih.
+   */
+  tabelDiverifikasi?: readonly JenisTabelKalkulasi[];
 }
 
 export interface HasilCekKirim {
@@ -108,6 +174,23 @@ export function cekBolehKirim(k: KesiapanKirim, status: StatusUnit): HasilCekKir
       boleh: false,
       alasan: `${k.jumlahBasi} pegawai angkanya sudah basi - sumbernya berubah atau dihapus setelah Tukin dihitung. Tekan Hitung sekarang dulu; kiriman yang terkunci tidak bisa diperbaiki sendiri.`,
     };
+  }
+  // VERIFIKASI DITAGIH PALING AKHIR, sesudah seluruh syarat data terpenuhi.
+  //
+  // Urutannya disengaja: mencentang "sudah saya periksa" mendahului kalkulasi
+  // yang lengkap berarti memeriksa tabel yang masih akan berubah. Dengan
+  // ditagih terakhir, yang muncul lebih dulu selalu pesan tentang datanya -
+  // dan centangnya baru diminta ketika memang sudah ada yang bisa diperiksa.
+  if (k.tabelDiverifikasi !== undefined) {
+    const kurang = tabelBelumDiverifikasi(k.tabelDiverifikasi);
+    if (kurang.length > 0) {
+      return {
+        boleh: false,
+        alasan: `Belum diperiksa: ${kurang
+          .map((t) => LABEL_TABEL_KALKULASI[t])
+          .join(" dan ")}. Centang setelah memeriksanya - itu yang membuka tombol kirim.`,
+      };
+    }
   }
   return { boleh: true, alasan: null };
 }

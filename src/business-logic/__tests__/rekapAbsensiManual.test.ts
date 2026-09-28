@@ -153,7 +153,7 @@ describe("parseRekapAbsensiManual", () => {
   });
 
   it("jam keluar LEBIH PAGI dari jam masuk wajib bukan ketukan pulang", () => {
-    // Kasus nyata: Nurul Apriyanah 1 Juli 2026 WFO, masuk 06:03 keluar 06:06.
+    // Kasus nyata: Olivia Wibisana 1 Juli 2026 WFO, masuk 06:03 keluar 06:06.
     // Dibaca mentah jadi "pulang cepat 594 menit" - padahal rincian tunkin
     // resmi cuma menagihnya 8 menit sebulan. Orang tidak bisa pulang sebelum
     // jam kerjanya dimulai.

@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { IoMdCheckmark, IoMdRemove } from "react-icons/io";
+import { RiErrorWarningLine } from "react-icons/ri";
 import { kirimRekapUnitAction, type KirimFormState } from "./actions";
 import { Modal } from "../../Modal";
 
@@ -12,6 +14,9 @@ export function KirimRekapForm({
   satuanKerja,
   jumlahPegawai,
   jumlahKalkulasi,
+  jumlahBasi,
+  tabelKurang,
+  tabelWajib,
   alasanTertahan,
   alasanKembali,
   terkunci,
@@ -21,6 +26,11 @@ export function KirimRekapForm({
   satuanKerja: string;
   jumlahPegawai: number;
   jumlahKalkulasi: number;
+  /** Kalkulasi yang sumbernya berubah/dihapus setelah angkanya dibekukan. */
+  jumlahBasi: number;
+  /** Tabel WAJIB yang belum dicentang, dan berapa jumlah wajibnya. */
+  tabelKurang: number;
+  tabelWajib: number;
   alasanTertahan: string | null;
   alasanKembali: string | null;
   terkunci: boolean;
@@ -93,60 +103,147 @@ export function KirimRekapForm({
   if (terkunci) return popupHasil;
 
   return (
-    <section id="kirim" className="card mt-6 border-l-4 border-l-navy p-5">
+    // FLEX TEGAK supaya blok aksi bisa didorong ke DASAR kolom lewat `mt-auto`.
+    //
+    // Tanpa itu, kolom kanan berhenti di tengah dan menyisakan ruang kosong
+    // besar - kolom kiri selalu lebih tinggi karena memuat empat baris tabel.
+    // Yang hilang bukan cuma kerapian: tombol akhir ikut berpindah-pindah
+    // tinggi mengikuti ada-tidaknya catatan pengembalian.
+    <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-bold text-ink">Kirim rekap ke PPABP</h2>
-        <span className="text-xs text-muted">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-ink">
+          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-navy text-[11px] font-extrabold text-white">
+            2
+          </span>
+          Kirim rekap ke PPABP
+        </h3>
+        <span className="shrink-0 text-xs text-muted">
           {jumlahKalkulasi} dari {jumlahPegawai} pegawai sudah terhitung
         </span>
       </div>
+      <p className="mt-1 text-xs text-muted">Kirim rekap setelah seluruh pemeriksaan selesai.</p>
 
       {/* Catatan PPABP di ATAS blok perhatian & tombol - dan tetap tampil
           walaupun pengirimannya sedang tertahan, karena justru itu yang
           menjelaskan kenapa unit ini harus mengerjakan sesuatu lagi. */}
       {alasanKembali && (
-        <div className="mt-3 rounded-lg border border-red bg-red-tint px-3.5 py-3">
+        // INFORMASI, bukan alarm. Dulu kotak merah penuh - dan berdampingan
+        // dengan peringatan pengiriman, keduanya berebut jadi yang paling
+        // mendesak. Ini sebenarnya keterangan: inilah yang harus diperbaiki.
+        // Aksennya tetap merah supaya asalnya jelas, tapi bobotnya sejajar
+        // dengan strip peringatan di bawahnya.
+        <div className="mt-3 rounded-r-lg border-l-2 border-l-red bg-surface-2 px-3 py-2.5">
           <p className="text-xs font-bold text-red">Catatan pengembalian dari PPABP</p>
-          <p className="mt-1.5 text-sm italic text-ink">&ldquo;{alasanKembali}&rdquo;</p>
-          <p className="mt-1.5 text-xs text-ink-2">
-            Pastikan catatan ini sudah ditindaklanjuti sebelum mengirim ulang.
+          <p className="mt-1 text-sm italic text-ink">&ldquo;{alasanKembali}&rdquo;</p>
+          <p className="mt-1 text-xs text-muted">
+            Pastikan sudah ditindaklanjuti sebelum mengirim ulang.
           </p>
         </div>
       )}
 
       {alasanTertahan ? (
-        <p className="mt-3 rounded-lg bg-gold-tint px-3 py-2 text-xs font-semibold text-gold-deep">
-          {alasanTertahan}
-        </p>
+        <>
+          {/* TIGA SYARAT SEKALIGUS, dan ini bukan sekadar mengisi ruang.
+              cekBolehKirim() `return` pada syarat PERTAMA yang gagal, jadi yang
+              sampai ke layar cuma satu alasan - orang membereskannya, lalu
+              menemukan alasan kedua yang sejak awal sudah ada. Didaftar utuh,
+              seluruh jarak ke tombol Kirim terlihat sekali baca.
+
+              Ini juga yang mengisi kolom kanan waktu belum ada yang dicentang:
+              sebelumnya `mt-auto` cuma memindahkan ruang kosongnya dari bawah
+              ke tengah. */}
+          <div className="mt-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted">
+              Syarat pengiriman
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              <Syarat
+                label="Kalkulasi lengkap"
+                nilai={`${jumlahKalkulasi} dari ${jumlahPegawai}`}
+                lolos={jumlahKalkulasi >= jumlahPegawai && jumlahPegawai > 0}
+              />
+              <Syarat
+                label="Tidak ada angka basi"
+                nilai={jumlahBasi === 0 ? "tidak ada" : `${jumlahBasi} basi`}
+                lolos={jumlahBasi === 0}
+              />
+              <Syarat
+                label="Tabel wajib diperiksa"
+                nilai={`${tabelWajib - tabelKurang} dari ${tabelWajib}`}
+                lolos={tabelKurang === 0}
+              />
+            </ul>
+          </div>
+
+          {/* TERTAHAN - tombolnya TETAP DIRENDER, hanya dimatikan. Sebelumnya
+              tombolnya tidak ada sama sekali, jadi tidak ada tanda di mana aksi
+              akhirnya berada; yang membaca cuma menemukan peringatan lalu ruang
+              kosong. Tombol mati menjawab dua hal sekaligus: di sini tempatnya,
+              dan belum boleh sekarang.
+
+              `alasanTertahan` DIPERTAHANKAN di samping daftar di atas, dan
+              bukan pengulangan: daftar menyebut KEADAAN tiap syarat, kalimat
+              ini menyebut APA YANG HARUS DIKERJAKAN sekarang ("Tekan Hitung
+              sekarang dulu", "Centang setelah memeriksanya"). */}
+          <div className="mt-auto pt-4">
+            <p className="text-sm font-bold text-gold-deep">Belum siap dikirim</p>
+            <p className="mt-1 text-xs text-ink-2">{alasanTertahan}</p>
+            <button type="button" disabled className="btn btn-primary mt-3 w-full">
+              Kirim rekap
+            </button>
+          </div>
+        </>
       ) : (
         <>
-          {/* --- DISCLAIMER: akibat yang konkret, bukan "harap diperiksa" --- */}
-          <div className="mt-3 rounded-lg border border-gold bg-gold-tint px-3.5 py-3">
-            <p className="text-xs font-bold text-gold-deep">
-              Perhatian - pengiriman tidak dapat dibatalkan secara mandiri
+          {/* PERINGATAN = STRIP, bukan kartu. Empat kotak bergaris di satu
+              kolom membuat hierarkinya datar: catatan PPABP (informasi),
+              peringatan (akibat), status (hasil), dan pernyataan (aksi)
+              sama-sama menuntut perhatian, jadi tidak ada yang mendapatkannya.
+              Yang membedakan sekarang BOBOTNYA - strip bergaris kiri, bukan
+              kotak penuh.
+
+              Butir "data pegawai yang belum terhitung tidak dapat disusulkan"
+              DIBUANG, dan bukan karena panjang: cekBolehKirim() menahan
+              pengiriman selama `jumlahKalkulasi < totalPegawai`, jadi di cabang
+              ini jumlahnya SELALU sama. Butir itu tidak pernah bisa terbaca
+              dalam keadaan yang membuatnya berlaku. */}
+          <div className="mt-3 border-l-2 border-l-gold pl-3">
+            <p className="flex items-center gap-1 text-xs font-bold text-gold-deep">
+              <RiErrorWarningLine aria-hidden className="shrink-0" /> Pengiriman mengunci periode ini
             </p>
-            <ul className="mt-2 space-y-1.5 text-xs text-ink-2">
-              <li>
-                <strong>Data final &amp; terkunci.</strong> Seluruh kalkulasi periode {periodeBulan}/
-                {periodeTahun} akan langsung menjadi berkas ADK untuk Web Gaji. Tidak ada pemeriksaan lanjutan
-                setelah ini.
-              </li>
-              <li>
-                <strong>Dikirim sekaligus.</strong> {jumlahKalkulasi} pegawai terkirim utuh. Data pegawai yang
-                belum terhitung tidak dapat disusulkan kemudian.
-              </li>
-              <li>
-                <strong>Pembatalan terbatas.</strong> Jika terjadi kesalahan, hanya PPABP yang bisa membuka
-                kembali kunci data, dan proses ini membutuhkan waktu.
-              </li>
-            </ul>
+            <p className="mt-1 text-xs text-ink-2">
+              Kalkulasi periode {periodeBulan}/{periodeTahun} difinalisasi dan langsung menjadi berkas ADK
+              untuk Web Gaji - tidak ada pemeriksaan lanjutan setelah ini.
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              Pembatalan hanya lewat koreksi terbatas oleh PPABP, dan butuh waktu.
+            </p>
+          </div>
+
+          {/* STATUS - sengaja setenang mungkin. Badge di kolom kiri sudah
+              mengatakan hal yang sama; mengulangnya dengan bobot besar cuma
+              menambah satu lagi yang berebut perhatian. */}
+          <div className="mt-auto pt-4">
+            <p className="flex items-center gap-1 text-xs font-bold text-green">
+              <IoMdCheckmark aria-hidden className="shrink-0" /> Semua pemeriksaan selesai
+            </p>
+            <p className="mt-0.5 text-xs text-muted">Rekap siap dikirim ke PPABP.</p>
           </div>
 
           <form action={formAction} className="mt-3">
             <input type="hidden" name="bulan" value={periodeBulan} />
             <input type="hidden" name="tahun" value={periodeTahun} />
 
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line-2 bg-surface-2 px-3 py-2.5">
+            {/* PERNYATAAN - satu-satunya blok berkotak yang tersisa di kolom
+                ini, dan itu disengaja: inilah yang menahan pengiriman. Saat
+                dicentang kotaknya berubah hijau, jadi keadaan "sudah
+                menyatakan" terbaca dari bloknya - bukan cuma dari kotak
+                centang kecil yang gampang terlewat. */}
+            <label
+              className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors ${
+                setuju ? "border-green bg-green/10" : "border-line-2 bg-surface-2"
+              }`}
+            >
               <input
                 type="checkbox"
                 name="pernyataan"
@@ -180,11 +277,10 @@ export function KirimRekapForm({
               type="button"
               disabled={pending || !setuju}
               onClick={() => setKonfirmasiTerbuka(true)}
-              className="btn btn-primary mt-3"
+              className="btn btn-primary mt-3 w-full"
             >
               {pending ? "Mengirim..." : "Kirim & kunci"}
             </button>
-            {!setuju && <span className="ml-2 text-xs text-muted">Centang pernyataan di atas dulu.</span>}
 
             <Modal
               terbuka={konfirmasiTerbuka}
@@ -228,6 +324,34 @@ export function KirimRekapForm({
       )}
 
       {popupHasil}
-    </section>
+    </div>
+  );
+}
+
+/**
+ * Satu baris syarat pengiriman.
+ *
+ * Penandanya BUKAN cuma warna - lolos memakai centang, belum memakai strip.
+ * Yang tidak bisa membedakan hijau dari abu tetap bisa membaca barisnya, dan
+ * itu syarat yang menentukan apakah rekap satu unit boleh dibayar.
+ */
+function Syarat({ label, nilai, lolos }: { label: string; nilai: string; lolos: boolean }) {
+  return (
+    <li className="flex items-center justify-between gap-2 text-xs">
+      <span className={`flex min-w-0 items-center gap-1.5 ${lolos ? "text-ink-2" : "text-ink"}`}>
+        {/* Keduanya IKON, bukan salah satu ikon dan satunya tanda hubung -
+            campuran SVG dan glif teks dalam satu daftar tidak pernah sejajar
+            karena keduanya dirata dengan acuan berbeda. */}
+        {lolos ? (
+          <IoMdCheckmark aria-hidden className="shrink-0 text-green" />
+        ) : (
+          <IoMdRemove aria-hidden className="shrink-0 text-muted" />
+        )}
+        {label}
+      </span>
+      <span className={`shrink-0 font-mono ${lolos ? "text-muted" : "font-bold text-gold-deep"}`}>
+        {nilai}
+      </span>
+    </li>
   );
 }

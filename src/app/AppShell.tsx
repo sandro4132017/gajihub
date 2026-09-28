@@ -9,44 +9,31 @@ import { GajihubLogo } from "./GajihubLogo";
 import { labelRole } from "../auth/roleLabel";
 import { TAMPILKAN_MENU_LEMBUR } from "./tampilUangLembur";
 import type { Role } from "@prisma/client";
+import type { IconType } from "react-icons";
+import {
+  RiAwardLine,
+  RiCalculatorLine,
+  RiCalendarCheckLine,
+  RiDatabase2Line,
+  RiExchangeLine,
+  RiFileDownloadLine,
+  RiFileWarningLine,
+  RiFolder2Line,
+  RiMoneyDollarCircleLine,
+  RiScalesLine,
+  RiSettingsLine,
+  RiUserSettingsLine,
+} from "react-icons/ri";
+import { FiUser } from "react-icons/fi";
+import { GrDocument, GrDocumentUser, GrGroup, GrUserAdmin } from "react-icons/gr";
+import { IoMdCheckboxOutline } from "react-icons/io";
+import { FaClock, FaUtensils } from "react-icons/fa6";
+import { MdSpaceDashboard } from "react-icons/md";
 
-/**
- * Entri menu Uang Lembur, dipisah karena dipakai TIGA daftar menu berbeda
- * (approver, Kasubag TU, PPABP). Selama TAMPILKAN_MENU_LEMBUR false, array
- * ini kosong dan `...MENU_UANG_LEMBUR` tidak menambah apa pun - jadi tidak
- * ada daftar yang bisa ketinggalan waktu saklarnya dinyalakan lagi.
- */
-/**
- * Entri menu Predikat Kinerja - bahan bobot 70% Tunjangan Kinerja.
- *
- * SEBELUM INI TIDAK ADA DI SIDEBAR MANA PUN, padahal ADMIN, PPABP, dan
- * KASUBAG_TU ketiganya berwenang membukanya (canBukaHalamanPredikatKinerja).
- * Satu-satunya jalan ke sana adalah tautan dari halaman lain - dan semua
- * tautan itu cuma muncul KALAU ADA MASALAH ("sekian pegawai belum punya
- * predikat"). Akibatnya pekerjaan yang harus dilakukan tiap bulan cuma bisa
- * ditemukan lewat peringatan, tidak pernah lewat menu, dan yang mau
- * mengunggah lebih dulu tidak tahu harus ke mana.
- *
- * DITARUH TEPAT DI BAWAH PRESENSI, dan urutan itu yang jadi alasannya: dua
- * baris itu adalah dua bahan Tukin - kehadiran (30%) dan kinerja (70%) -
- * sebelum Kalkulasi menggabungkannya. Sidebar yang melompat dari Presensi
- * langsung ke Kalkulasi membuat bahan yang 70% tidak terbaca sebagai langkah
- * sama sekali.
- *
- * LABELNYA "Predikat Kinerja", bukan "e-Kinerja": yang disimpan Gajihub
- * predikatnya, sementara e-Kinerja BKN nama aplikasi SUMBERNYA - dan Gajihub
- * belum punya sambungan ke sana. Judul halamannya tetap menyebut e-Kinerja
- * supaya yang mencari kata itu tetap menemukannya.
- */
 const MENU_PREDIKAT_KINERJA = {
   href: "/tukin/predikat-kinerja",
   label: "Predikat Kinerja",
-  icon: (
-    <>
-      <circle cx="12" cy="8" r="5" />
-      <path d="M8.5 12.5 7 22l5-2.6 5 2.6-1.5-9.5" />
-    </>
-  ),
+  Ikon: RiAwardLine,
 };
 
 const MENU_UANG_LEMBUR = TAMPILKAN_MENU_LEMBUR
@@ -54,11 +41,7 @@ const MENU_UANG_LEMBUR = TAMPILKAN_MENU_LEMBUR
       {
         href: "/uang-lembur",
         label: "Uang Lembur",
-        icon: (
-          <>
-            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
-          </>
-        ),
+        Ikon: FaClock,
       },
     ]
   : [];
@@ -67,30 +50,21 @@ const MENU_APPROVER = [
   {
     href: "/tukin",
     label: "Tukin",
-    icon: <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></>,
+    Ikon: RiMoneyDollarCircleLine,
   },
   {
     href: "/uang-makan",
     label: "Uang Makan",
-    icon: <><path d="M5 2v6a2 2 0 0 0 4 0V2" /><path d="M7 8v14" /><path d="M17 2c1.7 1.8 2 4 2 6s-.3 3.5-2 3.5V22" /></>,
+    Ikon: FaUtensils,
   },
   ...MENU_UANG_LEMBUR,
 ];
 
-// KASUBAG_TU: privilege Pegawai (link "Data Saya" tetap ditampilkan, sesuai
-// canViewDataSendiri yang sekarang berlaku semua role) + menu khusus scope
-// unit kerjanya. Approval jenjang 1 Tukin/Uang Makan/Uang Lembur TETAP lewat
-// 3 dashboard approver yang sama (MENU_APPROVER), bukan halaman terpisah.
-// KASUBAG_TU: urutannya juga mengikuti alur kerja bulanan (pola sama dengan
-// MENU_PPABP). Dua kelompok dilipat: "Pegawai" (roster & perbaikan data, cuma
-// dibuka kalau ada yang salah) dan "Dokumen SK" (SK KGB & hukuman disiplin,
-// beberapa kali setahun). Yang dilipat SELALU yang jarang - langkah bulanan
-// tetap datar supaya tidak menambah klik ke pekerjaan rutin.
 const MENU_KASUBAG = [
   {
     href: "/kasubag",
     label: "Dashboard Unit",
-    icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
+    Ikon: MdSpaceDashboard,
   },
 
   // --- siklus bulanan, berurutan ---
@@ -98,44 +72,32 @@ const MENU_KASUBAG = [
     href: "/tukin/presensi",
     label: "Presensi",
     pisah: true,
-    icon: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
+    Ikon: RiCalendarCheckLine,
   },
   MENU_PREDIKAT_KINERJA,
   {
     href: "/kasubag/kalkulasi",
     label: "Kalkulasi",
-    icon: <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />,
+    Ikon: RiCalculatorLine,
   },
-  { href: "/tukin", label: "Tukin", icon: <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></> },
-  { href: "/uang-makan", label: "Uang Makan", icon: <><path d="M5 2v6a2 2 0 0 0 4 0V2" /><path d="M7 8v14" /><path d="M17 2c1.7 1.8 2 4 2 6s-.3 3.5-2 3.5V22" /></> },
+  { href: "/tukin", label: "Tukin", Ikon: RiMoneyDollarCircleLine },
+  { href: "/uang-makan", label: "Uang Makan", Ikon: FaUtensils },
   ...MENU_UANG_LEMBUR,
   {
     href: "/kasubag/banding",
     label: "Verifikasi Banding",
-    icon: <><path d="M12 3v18" /><path d="M5 7h14" /><path d="M7 7 4 14h6L7 7Z" /><path d="M17 7l-3 7h6l-3-7Z" /></>,
+    Ikon: RiScalesLine,
   },
 
-  // --- dilipat: jarang dibuka ---
-  //
-  // SATU PINTU, bukan dua. Dulu di sini ada grup "Pegawai" berisi "Pegawai
-  // Unit" (/kasubag/pegawai) dan "Data Pegawai" (/pegawai). Untuk Kasubag TU
-  // keduanya membuka hal yang sama - daftar pegawai unitnya sendiri - dan
-  // yang membedakan cuma satu bisa disunting. Bedanya tidak terbaca dari
-  // namanya, jadi yang terjadi menebak-nebak tiap kali.
-  //
-  // Sekarang daftarnya cuma di /kasubag/pegawai, dan tombol Edit di tiap
-  // baris membawa ke /pegawai. Halaman /pegawai TIDAK dihapus: dia tetap
-  // satu-satunya tempat data pegawai bisa diubah, dan tetap ada di menu
-  // PPABP & Admin yang memang memakainya lintas unit.
   {
     href: "/kasubag/pegawai",
     label: "Pegawai Unit",
     pisah: true,
-    icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
+    Ikon: GrGroup,
   },
   {
     label: "Dokumen SK",
-    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 15h6" /></>,
+    Ikon: RiFolder2Line,
     anak: [
       { href: "/kasubag/sk-kgb", label: "SK KGB" },
       { href: "/kasubag/sk-hukuman-disiplin", label: "SK Hukuman Disiplin" },
@@ -146,74 +108,48 @@ const MENU_KASUBAG = [
     href: "/saya",
     label: "Data Saya",
     pisah: true,
-    icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
+    Ikon: FiUser,
   },
 ];
 
-
-// OSDMA: privilege Pegawai (link "Data Saya" tetap ditampilkan) + approval
-// final lintas satuan kerja (Banding jenjang 2, SK KGB, SK Hukuman
-// Disiplin) + update SK struktural/fungsional langsung. TIDAK ikut 3
-// dashboard approver Tukin/UM/Lembur - itu domain Kasubag TU (jenjang 1) +
-// PPABP (jenjang final), bukan OSDMA.
 const MENU_OSDMA = [
   {
     href: "/osdma",
     label: "Dashboard OSDMA",
-    icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
+    Ikon: MdSpaceDashboard,
   },
   {
     href: "/osdma/banding",
     label: "Approval Final Banding",
-    icon: <><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>,
+    Ikon: IoMdCheckboxOutline,
   },
   {
     href: "/osdma/sk-kgb",
     label: "SK KGB",
-    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></>,
+    Ikon: GrDocument,
   },
   {
     href: "/osdma/sk-hukuman-disiplin",
     label: "SK Hukuman Disiplin",
-    icon: <><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><path d="M12 9v4M12 17h.01" /></>,
+    Ikon: RiFileWarningLine,
   },
   {
     href: "/osdma/update-sk",
     label: "Update SK Pegawai",
-    icon: <><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></>,
+    Ikon: GrDocumentUser,
   },
   {
     href: "/saya",
     label: "Data Saya",
-    icon: (
-      <>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      </>
-    ),
+    Ikon: FiUser,
   },
 ];
 
-// PPABP: privilege Pegawai (link "Data Saya" tetap ditampilkan) + dashboard
-// lintas unit + telaah/approve jenjang final (via 3 dashboard approver yang
-// sudah ada, lintas satker buat PPABP) + rekonsiliasi + export ADK +
-// anggaran realisasi + usulan perubahan role.
-// PPABP: URUTANNYA MENGIKUTI ALUR KERJA BULANAN, bukan abjad atau urutan
-// dibangunnya fitur. Dari atas ke bawah persis langkah yang dikerjakan tiap
-// periode - Presensi -> Kalkulasi -> tiga Approval -> Rekonsiliasi -> Export
-// ADK. Orang tidak perlu menghafal langkah berikutnya, tinggal turun satu
-// baris. Di bawahnya data pokok (dibuka kalau ada yang salah, bukan rutin),
-// lalu sisanya.
-//
-// `pisah: true` = garis pemisah DI ATAS item itu. Sengaja tanpa judul
-// kelompok, mengikuti acuan desain yang dipilih user - grup tetap kebaca dari
-// jeda, dan sidebar tidak bertambah tinggi oleh label.
 const MENU_PPABP = [
   {
     href: "/ppabp",
     label: "Dashboard Lintas Unit",
-    icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
+    Ikon: MdSpaceDashboard,
   },
 
   // --- siklus bulanan, berurutan ---
@@ -221,42 +157,27 @@ const MENU_PPABP = [
     href: "/tukin/presensi",
     label: "Presensi",
     pisah: true,
-    icon: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></>,
+    Ikon: RiCalendarCheckLine,
   },
   MENU_PREDIKAT_KINERJA,
-  // TIDAK ADA menu "Kalkulasi" di sini - PPABP tidak menghitung, ia menerima
-  // hasil yang sudah dikirim dan dikunci unitnya (keputusan user 2026-09-06,
-  // lihat canAjukanKalkulasiTukinMassalUnit). Menu ini pernah ada waktu PPABP
-  // masih boleh menjalankan kalkulasi; dilepas bersamaan dengan izinnya
-  // supaya tidak jadi tautan yang selalu berakhir "Akses ditolak".
-  // Ketiganya disandingkan karena memang sekelompok. Labelnya cukup nama
-  // domainnya - kata "Approval"/"Dashboard" tidak menambah keterangan apa pun
-  // (semua halaman di sini dashboard, dan approval cuma salah satu yang bisa
-  // dilakukan di situ). Ikonnya dibedakan per domain: dulu ketiganya ikon JAM
-  // yang sama persis, jadi ikon tidak membedakan apa pun - dan jam keliru
-  // untuk uang makan & tukin, sekaligus rancu dengan halaman Presensi.
-  { href: "/tukin", label: "Tukin", icon: <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></> },
-  { href: "/uang-makan", label: "Uang Makan", icon: <><path d="M5 2v6a2 2 0 0 0 4 0V2" /><path d="M7 8v14" /><path d="M17 2c1.7 1.8 2 4 2 6s-.3 3.5-2 3.5V22" /></> },
+  { href: "/tukin", label: "Tukin", Ikon: RiMoneyDollarCircleLine },
+  { href: "/uang-makan", label: "Uang Makan", Ikon: FaUtensils },
   ...MENU_UANG_LEMBUR,
   {
     href: "/ppabp/rekonsiliasi",
     label: "Rekonsiliasi",
-    icon: <><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></>,
+    Ikon: RiExchangeLine,
   },
   {
     href: "/ppabp/adk",
     label: "Export ADK",
-    icon: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></>,
+    Ikon: RiFileDownloadLine,
   },
 
-  // --- data pokok: dilipat, karena dibuka saat ada yang perlu dibetulkan,
-  //     bukan tiap bulan. Yang HARIAN sengaja TIDAK dilipat - menyembunyikan
-  //     langkah yang dikerjakan tiap periode cuma menambah satu klik ke semua
-  //     pekerjaan rutin. ---
   {
     label: "Data Pokok",
     pisah: true,
-    icon: <><path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z" /><path d="M4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7" /><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></>,
+    Ikon: RiDatabase2Line,
     anak: [
       { href: "/pegawai", label: "Data Pegawai" },
       { href: "/ppabp/rekening", label: "Rekening Pegawai" },
@@ -271,119 +192,93 @@ const MENU_PPABP = [
     href: "/ppabp/usulan-role",
     label: "Usulan Perubahan Role",
     pisah: true,
-    icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
+    Ikon: GrUserAdmin,
   },
   {
     href: "/saya",
     label: "Data Saya",
-    icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
+    Ikon: FiUser,
   },
 ];
 
-
-// ADMIN: menu KHUSUS 3 fitur admin-only (kelola assignment role, eksekusi
-// usulan role, konfigurasi & kesehatan sistem) + Data Saya. TIDAK
-// mencantumkan link ke /kasubag, /osdma, /ppabp, /tukin dst secara
-// eksplisit di sidebar (privilege bypass-nya tetap jalan lewat akses URL
-// langsung, sudah ada link cepat di /admin sendiri) - biar sidebar ADMIN
-// tidak penuh sesak dengan menu 4 role sekaligus.
 const MENU_ADMIN = [
   {
     href: "/admin",
     label: "Dashboard Admin",
-    icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
+    Ikon: MdSpaceDashboard,
   },
   {
     href: "/admin/role-assignment",
     label: "Kelola Assignment Role",
-    icon: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>,
+    Ikon: GrUserAdmin,
   },
   {
     href: "/pegawai",
     label: "Data Pegawai",
-    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M12 20h9" /></>,
+    Ikon: GrGroup,
   },
-  MENU_PREDIKAT_KINERJA,
   {
     href: "/admin/usulan-role",
     label: "Eksekusi Usulan Role",
-    icon: <><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>,
+    Ikon: RiUserSettingsLine,
   },
   {
     href: "/admin/sistem",
     label: "Konfigurasi & Kesehatan Sistem",
-    icon: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></>,
+    Ikon: RiSettingsLine,
   },
   {
     href: "/saya",
     label: "Data Saya",
-    icon: (
-      <>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      </>
-    ),
+    Ikon: FiUser,
   },
 ];
 
-// PIMPINAN: privilege Pegawai (Data Saya) + dashboard lintas unit read-only
-// SAMA seperti PPABP (role matrix eksplisit) - TIDAK ada menu approval/aksi
-// apapun (PIMPINAN tidak punya fungsi canApprove/canUbah apapun di
-// permissions.ts, SENGAJA - lihat komentar di situ).
 const MENU_PIMPINAN = [
   {
     href: "/pimpinan",
     label: "Dashboard Lintas Unit",
-    icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
+    Ikon: MdSpaceDashboard,
   },
   {
     href: "/saya",
     label: "Data Saya",
-    icon: (
-      <>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      </>
-    ),
+    Ikon: FiUser,
   },
 ];
 
-// PEGAWAI cuma punya dashboard self-service sendiri - jangan tampilkan link
-// ke dashboard approver (halamannya sudah diblokir juga di server, lihat
-// canViewApproverDashboard, ini cuma biar UI-nya konsisten).
 const MENU_PEGAWAI = [
   {
     href: "/saya",
     label: "Data Saya",
-    icon: (
-      <>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      </>
-    ),
+    Ikon: FiUser,
   },
 ];
 
-/**
- * Satu baris sidebar. `anak` = grup yang bisa dilipat; kalau ada, `href`
- * TIDAK dipakai (grupnya sendiri bukan halaman).
- *
- * Dilipat pakai <details> BAWAAN HTML, bukan state React: buka-tutupnya
- * ditangani browser, jadi tetap jalan tanpa JavaScript - konsisten dengan
- * janji yang dipegang filter GET, form approval, dan BadgePejabatEselon.
- * Grup yang memuat halaman yang sedang dibuka dirender `open` dari server,
- * jadi tidak pernah ada keadaan "halaman aktif tersembunyi".
- */
 type ItemMenu = {
   href?: string;
   label: string;
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
+  Ikon?: IconType;
   pisah?: boolean;
   anak?: { href: string; label: string }[];
 };
+
+function IkonMenu({ item, kelas = "" }: { item: ItemMenu; kelas?: string }) {
+  if (item.Ikon) return <item.Ikon aria-hidden className={`size-[19px] ${kelas}`} />;
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`size-[19px] ${kelas}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    >
+      {item.icon}
+    </svg>
+  );
+}
 
 function initials(nama: string) {
   return nama
@@ -398,42 +293,14 @@ export function AppShell({
   account,
   children,
 }: {
-  // rolesTersedia = role utama + role tambahan akun ini (lihat
-  // src/auth/roleAktif.ts). Panjang 1 = akun single-role seperti sebelumnya,
-  // menu "Ganti role" tidak ditampilkan.
   account: { nama: string; jabatan: string; role: Role; rolesTersedia: Role[]; satuanKerja: string | null } | null;
   children: ReactNode;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-
-  /**
-   * Sidebar diciutkan - KHUSUS layar lebar.
-   *
-   * Terpisah dari `open` (drawer HP) dengan sengaja: di HP sidebar memang
-   * sudah tersembunyi dan `open` yang membukanya, jadi satu state untuk
-   * keduanya akan membuat "ciutkan" di desktop ikut menutup drawer HP dan
-   * sebaliknya.
-   *
-   * Tidak disimpan ke localStorage. Server merender keadaan terbuka lebih
-   * dulu, jadi memulihkan "ciut" dari penyimpanan baru bisa dilakukan setelah
-   * hidrasi - hasilnya sidebar berkedip muncul lalu hilang tiap kali halaman
-   * dimuat. Karena AppShell hidup di layout, keadaannya sudah bertahan selama
-   * berpindah halaman, dan itu yang sebenarnya dibutuhkan.
-   */
   const [ciut, setCiut] = useState(false);
 
   if (!account) {
-    // Belum login. Satu-satunya halaman yang bisa sampai ke sini adalah
-    // /login - middleware mengalihkan yang lain (lihat src/middleware.ts),
-    // jadi cabang ini memang khusus halaman itu.
-    //
-    // TIDAK ADA pembungkus apa pun di sini, dan itu disengaja: halaman login
-    // memakai tata letak dua panel setinggi layar penuh. Bar wordmark tipis
-    // yang dulu ada di sini akan memotong panel navy-nya di bagian atas, dan
-    // wordmark itu juga jadi mengulang logo yang sudah berdiri besar di tengah
-    // halaman. Shell sidebar tetap tidak dirender - grid 2 kolom tanpa
-    // sidebar cuma menyisakan kolom 264px kosong.
     return <>{children}</>;
   }
 
@@ -455,9 +322,6 @@ export function AppShell({
   return (
     <div
       className={`min-h-screen print:block md:grid ${
-        // Kelasnya ditulis UTUH di kedua cabang, bukan dirakit dari potongan -
-        // Tailwind memindai berkas sumber sebagai teks, jadi kelas hasil
-        // gabungan string tidak pernah ikut ter-generate ke CSS.
         ciut ? "md:grid-cols-[68px_1fr]" : "md:grid-cols-[264px_1fr]"
       }`}
     >
@@ -603,16 +467,7 @@ export function AppShell({
                             : "text-nav-text hover:bg-nav-hover hover:text-white"
                         }`}
                       >
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="size-[19px]"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                        >
-                          {item.icon}
-                        </svg>
+                        <IkonMenu item={item} />
                       </button>
                     </div>
                   );
@@ -627,16 +482,7 @@ export function AppShell({
                           adaYangAktif ? "text-white" : "text-nav-text hover:bg-nav-hover hover:text-white"
                         }`}
                       >
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="size-[19px] flex-none"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                        >
-                          {item.icon}
-                        </svg>
+                        <IkonMenu item={item} kelas="flex-none" />
                         <span className="flex-1">{item.label}</span>
                         <svg
                           viewBox="0 0 24 24"
@@ -705,16 +551,7 @@ export function AppShell({
                         : "text-nav-text hover:bg-nav-hover hover:text-white"
                     }`}
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="size-[19px] flex-none"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    >
-                      {item.icon}
-                    </svg>
+                    <IkonMenu item={item} kelas="flex-none" />
                     {!ciut && item.label}
                   </Link>
                 </div>

@@ -45,10 +45,10 @@ describe("urlOtorisasi", () => {
 
 describe("berbentukNip", () => {
   it("menerima NIP 18 digit sebagai teks", () => {
-    expect(berbentukNip("197303072005011001")).toBe(true);
+    expect(berbentukNip("199000100000000008")).toBe(true);
   });
 
-  // Test ini DIBALIK (dulu mengunci `berbentukNip(197303072005011001) === true`),
+  // Test ini DIBALIK (dulu mengunci `berbentukNip(199000100000000008) === true`),
   // bukan dihapus - supaya kalau ada yang "melonggarkan" lagi supaya angka
   // ikut diterima, test inilah yang jatuh duluan dan menjelaskan sebabnya.
   //
@@ -56,28 +56,28 @@ describe("berbentukNip", () => {
   // presisi float64, jadi angka yang ditulis `...001` sudah menjadi `...000`
   // sebelum satu baris kode pun berjalan.
   it("MENOLAK NIP bertipe angka - nilainya sudah rusak sebelum sampai ke sini", () => {
-    expect(String(197303072005011001)).toBe("197303072005011000");
-    expect(berbentukNip(197303072005011001)).toBe(false);
-    expect(nipRusakKarenaAngka(197303072005011001)).toBe(true);
+    expect(String(199000100000000008)).toBe("199000100000000000");
+    expect(berbentukNip(199000100000000008)).toBe(false);
+    expect(nipRusakKarenaAngka(199000100000000008)).toBe(true);
     // Dan lewat jalur yang sebenarnya - JSON.parse dari balasan Naco.
-    const dariNaco = JSON.parse('{"nip": 197303072005011001}');
+    const dariNaco = JSON.parse('{"nip": 199000100000000008}');
     expect(cariNipDariInfo(dariNaco, null)).toBeNull();
   });
 
   it("menerima NIP berpemisah spasi/titik/strip - bentuk tulisan manusia", () => {
-    expect(berbentukNip("19730307 200501 1 001")).toBe(true);
-    expect(normalkanNip("19730307 200501 1 001")).toBe("197303072005011001");
-    expect(normalkanNip("19730307.200501.1.001")).toBe("197303072005011001");
-    expect(normalkanNip("19730307-200501-1-001")).toBe("197303072005011001");
-    expect(normalkanNip("  197303072005011001  ")).toBe("197303072005011001");
+    expect(berbentukNip("19900010 000000 0 008")).toBe(true);
+    expect(normalkanNip("19900010 000000 0 008")).toBe("199000100000000008");
+    expect(normalkanNip("19900010.000000.0.008")).toBe("199000100000000008");
+    expect(normalkanNip("19900010-000000-0-008")).toBe("199000100000000008");
+    expect(normalkanNip("  199000100000000008  ")).toBe("199000100000000008");
   });
 
   // Yang menahan pembersihan pemisah supaya tidak berubah jadi tebakan:
   // membuang SEMUA non-digit bisa menyambung dua angka tak berhubungan.
   it("TIDAK membuang sembarang non-digit - hanya spasi, titik, strip", () => {
     expect(normalkanNip("08123456789 / 2024001")).toBeNull();
-    expect(normalkanNip("197303072005011001@kemnaker.go.id")).toBeNull();
-    expect(normalkanNip("197303072005011001, 3175012345678901")).toBeNull();
+    expect(normalkanNip("199000100000000008@kemnaker.go.id")).toBeNull();
+    expect(normalkanNip("199000100000000008, 3175012345678901")).toBeNull();
   });
 
   it("menolak NIK 16 digit - panjangnya yang membedakan", () => {
@@ -95,20 +95,20 @@ describe("berbentukNip", () => {
 
 describe("cariNipDariInfo", () => {
   it("menemukan NIP walau bersarang dalam", () => {
-    const info = { data: { user: { name: "Irwan", nip: "197303072005011001" } } };
-    expect(cariNipDariInfo(info, null)).toBe("197303072005011001");
+    const info = { data: { user: { name: "Irwan", nip: "199000100000000008" } } };
+    expect(cariNipDariInfo(info, null)).toBe("199000100000000008");
   });
 
   it("menemukan NIP apa pun nama fieldnya", () => {
     // Bentuk balasan /users/me BELUM terdokumentasi, jadi penelusurannya
     // sengaja tidak bergantung nama field.
-    const info = { data: { employee_number: "197303072005011001" } };
-    expect(cariNipDariInfo(info, null)).toBe("197303072005011001");
+    const info = { data: { employee_number: "199000100000000008" } };
+    expect(cariNipDariInfo(info, null)).toBe("199000100000000008");
   });
 
   it("tidak tertukar dengan NIK 16 digit yang ada di balasan yang sama", () => {
-    const info = { data: { nik: "3175012345678901", nomor_induk: "197303072005011001" } };
-    expect(cariNipDariInfo(info, null)).toBe("197303072005011001");
+    const info = { data: { nik: "3175012345678901", nomor_induk: "199000100000000008" } };
+    expect(cariNipDariInfo(info, null)).toBe("199000100000000008");
   });
 
   it("mengembalikan null kalau tidak ada yang berbentuk NIP - JANGAN menebak", () => {
@@ -120,14 +120,14 @@ describe("cariNipDariInfo", () => {
   });
 
   it("field eksplisit menang atas penelusuran", () => {
-    const info = { data: { salah: "111111111111111111", benar: "197303072005011001" } };
-    expect(cariNipDariInfo(info, "data.benar")).toBe("197303072005011001");
+    const info = { data: { salah: "111111111111111111", benar: "199000100000000008" } };
+    expect(cariNipDariInfo(info, "data.benar")).toBe("199000100000000008");
   });
 
   it("field eksplisit yang isinya bukan NIP menghasilkan null, bukan jatuh ke penelusuran", () => {
     // Kalau jatuh balik ke penelusuran, salah konfigurasi tidak akan pernah
     // ketahuan - dia "jalan" dengan nilai dari field lain.
-    const info = { data: { email: "a@b.c", nip: "197303072005011001" } };
+    const info = { data: { email: "a@b.c", nip: "199000100000000008" } };
     expect(cariNipDariInfo(info, "data.email")).toBeNull();
   });
 
@@ -140,12 +140,12 @@ describe("cariNipDariInfo", () => {
 
 describe("ringkasFieldInfo", () => {
   it("mendaftar jalur field, termasuk yang bersarang", () => {
-    const r = ringkasFieldInfo({ data: { user: { name: "A", nip: "197303072005011001" } } });
+    const r = ringkasFieldInfo({ data: { user: { name: "A", nip: "199000100000000008" } } });
     expect(r.map((x) => x.jalur)).toEqual(["data.user.name", "data.user.nip"]);
   });
 
   it("menandai field mana yang berbentuk NIP", () => {
-    const r = ringkasFieldInfo({ email: "a@b.c", nip: "197303072005011001" });
+    const r = ringkasFieldInfo({ email: "a@b.c", nip: "199000100000000008" });
     expect(r.find((x) => x.jalur === "nip")?.berbentukNip).toBe(true);
     expect(r.find((x) => x.jalur === "email")?.berbentukNip).toBe(false);
   });
@@ -225,7 +225,7 @@ describe("ringkasFieldInfo - bentuk field", () => {
     // Yang sekarang jadi kasus diagnosis utama: NIP dikirim sebagai ANGKA.
     // Ringkasannya harus tetap menunjukkan "digit 18" supaya sebabnya bisa
     // dibedakan dari "NIP memang tidak dikirim sama sekali".
-    const r = ringkasFieldInfo(JSON.parse('{"data":{"nip": 197303072005011001}}'));
+    const r = ringkasFieldInfo(JSON.parse('{"data":{"nip": 199000100000000008}}'));
     const n = r.find((x) => x.jalur === "data.nip")!;
     expect(n.tipe).toBe("number");
     expect(n.jumlahDigit).toBe(18);

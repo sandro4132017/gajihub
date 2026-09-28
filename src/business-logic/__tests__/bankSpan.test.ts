@@ -53,27 +53,27 @@ describe("kunciNama", () => {
 
 describe("rapikanRekening - nama bank dibakukan", () => {
   it("variasi penulisan bank yang sama diseragamkan", () => {
-    const r = rapikanRekening({ kodeBankSpan: BRI, namaBank: "PT.BANK RAKYAT", nomorRekening: "223301017622507" });
+    const r = rapikanRekening({ kodeBankSpan: BRI, namaBank: "PT.BANK RAKYAT", nomorRekening: "777777777777031" });
     expect(r.namaBank).toBe("BANK RAKYAT INDONESIA");
     expect(r.masalah).toHaveLength(0);
   });
 
   it("baris yang sudah benar tidak menghasilkan masalah apa pun", () => {
-    const r = rapikanRekening({ kodeBankSpan: BNI, namaBank: "BANK NEGARA INDONESIA", nomorRekening: "1930650385" });
-    expect(r).toMatchObject({ kodeBankSpan: BNI, namaBank: "BANK NEGARA INDONESIA", nomorRekening: "1930650385" });
+    const r = rapikanRekening({ kodeBankSpan: BNI, namaBank: "BANK NEGARA INDONESIA", nomorRekening: "7777777028" });
+    expect(r).toMatchObject({ kodeBankSpan: BNI, namaBank: "BANK NEGARA INDONESIA", nomorRekening: "7777777028" });
     expect(r.masalah).toHaveLength(0);
   });
 });
 
 describe("rapikanRekening - kode dan nama menunjuk bank berbeda", () => {
   it("KODE dibetulkan mengikuti nomor - ini kasus 341 pegawai satker 451026", () => {
-    // 1921483416 itu 10 digit: panjang baku BNI, dan BNI juga yang tertulis
+    // 7777777027 itu 10 digit: panjang baku BNI, dan BNI juga yang tertulis
     // di kolom nama. Dua kolom sepakat melawan kode BRI-nya, jadi kodenya
     // yang dibetulkan. Nomornya sendiri tidak disentuh sama sekali.
-    const r = rapikanRekening({ kodeBankSpan: BRI, namaBank: "BANK NEGARA INDONESIA", nomorRekening: "1921483416" });
+    const r = rapikanRekening({ kodeBankSpan: BRI, namaBank: "BANK NEGARA INDONESIA", nomorRekening: "7777777027" });
     expect(r.kodeBankSpan).toBe(BNI);
     expect(r.namaBank).toBe("BANK NEGARA INDONESIA");
-    expect(r.nomorRekening).toBe("1921483416");
+    expect(r.nomorRekening).toBe("7777777027");
     expect(r.masalah).toContainEqual({
       jenis: "KODE_IKUT_NOMOR",
       dari: BRI,
@@ -87,7 +87,7 @@ describe("rapikanRekening - kode dan nama menunjuk bank berbeda", () => {
     const r = rapikanRekening({
       kodeBankSpan: BRI,
       namaBank: "BANK NEGARA INDONESIA",
-      nomorRekening: "223301002832507", // 15 digit - panjang baku BRI
+      nomorRekening: "777777777777029", // 15 digit - panjang baku BRI
     });
     expect(r.kodeBankSpan).toBe(BRI);
     expect(r.namaBank).toBe("BANK RAKYAT INDONESIA");

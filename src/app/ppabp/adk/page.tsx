@@ -7,7 +7,6 @@ import { AksesDitolak } from "../../AksesDitolak";
 import { NAMA_BULAN } from "../../bulan";
 import { periodePunyaTukin, resolvePeriode } from "../../periodeDefault";
 import { kelompokkanPerBank } from "../../../business-logic/rekeningPegawai";
-import { STATUS_BERHAK_UANG_MAKAN } from "./statusUangMakan";
 import { dataUangMakanHarian } from "./dataUangMakanHarian";
 import { dataUangLemburHarian } from "./dataUangLemburHarian";
 import { PratinjauAdkUangMakan } from "./PratinjauAdkUangMakan";
@@ -23,6 +22,7 @@ import {
   wherePegawaiTanpaJenis,
 } from "./jenisPegawaiAdk";
 import { HALAMAN } from "../../layoutHalaman";
+import { SumberAcuan } from "../../SumberAcuan";
 
 export const dynamic = "force-dynamic";
 
@@ -132,8 +132,6 @@ export default async function ExportAdkPage({
   // atau nyaris kosong ketahuan di halaman ini, bukan setelah dibuka di Excel.
   const bln = Number(periodeBulan);
   const thn = Number(periodeTahun);
-  const awalPeriode = new Date(Date.UTC(thn, bln - 1, 1));
-  const akhirPeriode = new Date(Date.UTC(thn, bln, 1));
   // Pratinjau isi ADK Uang Makan - dari fungsi yang SAMA dengan yang menyusun
   // berkasnya, jadi yang terlihat di layar persis yang terunduh.
   const pratinjauUm = await dataUangMakanHarian(bln, thn, satkerTerpilih || null, jenisPegawai);
@@ -142,23 +140,13 @@ export default async function ExportAdkPage({
   // yang tidak sama dengan isi berkasnya.
   const pratinjauLembur = await dataUangLemburHarian(bln, thn, satkerTerpilih || null, jenisPegawai);
 
-  // CATATAN PERBAIKAN: dua angka di bawah dulu memakai POPULASI YANG BERBEDA
-  // dan disandingkan dalam satu kalimat - jumlah pegawai disaring, jumlah hari
-  // tidak. Hasilnya kalimat seperti "7 pegawai, 97.008 hari hadir", yang
-  // membuat orang mengira berkasnya memuat 97 ribu baris. Sekarang keduanya
-  // disaring dengan cara yang sama.
-  const [umIkut, hariUm] = await Promise.all([
-    prisma.uangMakan.count({ where: whereIkutAdk(bln, thn, satkerDipakai, jenisPegawai) }),
-    prisma.presensiHarian.count({
-      where: {
-        tanggal: { gte: awalPeriode, lt: akhirPeriode },
-        statusKehadiran: { in: [...STATUS_BERHAK_UANG_MAKAN] },
-        pegawai: { satuanKerja: { in: satkerDipakai } },
-      },
-    }),
-  ]);
-  const ringkasUm = `${umIkut} pegawai dari unit yang sudah mengirim, ${hariUm.toLocaleString("id-ID")} hari hadir mereka di periode ini.`;
-  const ringkasLembur = `${pratinjauLembur.pegawai.length} pegawai dari unit yang sudah mengirim, ${pratinjauLembur.totalBaris} hari lembur, ${pratinjauLembur.totalJam} jam.`;
+  // Cacah pegawai Uang Makan yang ikut ke berkas. Dulu berpasangan dengan
+  // hitungan "hari hadir" untuk sebuah kalimat ringkasan di kartu berkas -
+  // kalimat itu DICABUT 2026-09-24 karena mengulang angka yang sudah ada di
+  // baris hasil, dan query harinya ikut dicabut bersamanya.
+  const umIkut = await prisma.uangMakan.count({
+    where: whereIkutAdk(bln, thn, satkerDipakai, jenisPegawai),
+  });
 
   // Berapa yang SUDAH dihitung tapi unitnya BELUM mengirim. Tanpa angka ini,
   // periode yang tinggal menunggu unit menekan Kirim tidak bisa dibedakan dari
@@ -220,14 +208,38 @@ export default async function ExportAdkPage({
       : adkDipilih === "uang-makan"
         ? umIkut
         : pratinjauLembur.pegawai.length;
+  // KETERANGAN = FORMATNYA SAJA. Cacah pegawai & periode DICABUT dari sini
+  // (permintaan user 2026-09-24) - dulu keduanya disebut dua kali di kartu
+  // yang sama: sekali di kalimat format, sekali lagi di baris di bawahnya.
+  // Kartu hasil yang mengulang angkanya sendiri jadi panjang tanpa menambah
+  // apa pun, dan yang paling penting - berapa pegawai yang masuk berkas -
+  // justru tenggelam sebagai anak kalimat.
   const keteranganBerkas =
     adkDipilih === "tukin"
       ? bankTerpilih
-        ? `Format daftar bayar 21 kolom - kode bank SPAN ${bankTerpilih.kodeBankSpan}. Inilah yang dipakai untuk SPP di SAKTI.`
-        : "Format daftar bayar 21 kolom, semua bank sekaligus - untuk pengecekan internal, BUKAN untuk diproses di SAKTI."
+        ? `Format 21 kolom, kode bank SPAN ${bankTerpilih.kodeBankSpan}. Inilah yang dipakai untuk SPP di SAKTI.`
+        : "Format 21 kolom untuk pengecekan internal. Bukan untuk diproses di SAKTI."
       : adkDipilih === "uang-makan"
-        ? `Satu baris per pegawai per hari: NIP + tanggal. ${ringkasUm}`
-        : `Satu baris per pegawai per hari: NIP + tanggal + jumlah jam. ${ringkasLembur}`;
+        ? "Satu baris per pegawai per hari: NIP + tanggal."
+        : "Satu baris per pegawai per hari: NIP + tanggal + jumlah jam.";
+
+  // BARIS HASIL - dipisah titik tengah supaya bisa DIPINDAI, bukan dibaca.
+  // Inilah jawaban atas penyaring di atas, jadi ia yang paling menonjol di
+  // kartu. Jumlah BARIS ikut disebut hanya untuk ADK harian: di situ satu
+  // pegawai menyumbang banyak baris, jadi dua angka itu memang berbeda - di
+  // ADK Tukin satu pegawai satu baris, dan menyebut keduanya cuma mengulang.
+  const barisBerkas =
+    adkDipilih === "uang-makan"
+      ? pratinjauUm.totalBaris
+      : adkDipilih === "uang-lembur"
+        ? pratinjauLembur.totalBaris
+        : null;
+  const ringkasBerkas = [
+    `${jumlahBerkas} pegawai`,
+    ...(barisBerkas !== null ? [`${barisBerkas.toLocaleString("id-ID")} baris`] : []),
+    `${NAMA_BULAN[bln - 1]} ${thn}`,
+    satkerTerpilih ? satkerTerpilih : "Seluruh unit yang sudah mengirim",
+  ].join(" · ");
 
   // Tautan unduh disusun dari penyaring yang sedang aktif. Parameter yang
   // tidak dipakai TIDAK ikut ditulis - URL yang memuat `jenis=` kosong akan
@@ -261,36 +273,38 @@ export default async function ExportAdkPage({
 
   return (
     <main className={HALAMAN}>
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Export ADK</h1>
-      {/* "Belum ada koneksi API resmi ke Web Gaji" sengaja TIDAK ditulis di
-          layar. Itu alasan teknis kenapa unggahannya manual, dan yang membuka
-          halaman ini cuma perlu tahu instruksi akhirnya - alasannya tercatat
-          di CLAUDE.md, tempatnya memang di sana. */}
-      <p className="mt-1 text-sm text-muted">
-        Menampilkan rekap unit yang telah <strong>dikirim &amp; dikunci</strong> oleh Kasubag TU untuk diunggah
-        manual ke Web Gaji. Berkas tersedia dalam format <strong>Excel</strong> (.xlsx) dan <strong>TXT</strong>{" "}
-        yang datanya sama, menyesuaikan template masing-masing jenis ADK. Versi <strong>TXT</strong> adalah
-        muatan yang disetorkan - tanpa baris nama kolom; versi <strong>Excel</strong> memakai nama kolom karena
-        ia dibuka untuk diperiksa.
+      <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
+        Export ADK
+        {/* Pola yang sama dengan /tukin/presensi & /tukin/predikat-kinerja:
+            keterangan cara membaca dan dasar formatnya pindah ke ikon.
+            Paragraf panjang yang dulu ada di sini dibaca sekali lalu
+            dilewati selamanya, padahal isinya justru penting saat DIPERIKSA -
+            dan di halaman ini yang diperiksa berkas perintah bayar. */}
+        <SumberAcuan
+          judulKeterangan="Tentang berkas ADK"
+          keterangan={[
+            "Hanya memuat rekap unit yang sudah dikirim & dikunci Kasubag TU.",
+            "Excel (.xlsx) dan TXT isinya sama - TXT muatan yang disetor, Excel untuk diperiksa.",
+            "ADK Tukin memuat rupiah dan dipisah per bank; ADK Uang Makan & Uang Lembur hanya fakta harian.",
+            "Nominal uang makan & lembur dihitung Web Gaji sendiri dari grade pegawai.",
+          ]}
+          acuan={[
+            { aturan: "Template daftar bayar PPABP", tentang: "ADK Tukin 21 kolom - NIP, nama, nilai bruto/potongan/bersih, kode bank SPAN & rekening" },
+            { aturan: "Template ADK-UM & ADK-Lembur", tentang: "Satu baris per pegawai per hari: NIP, tanggal, dan jam untuk lembur" },
+            { aturan: "SBM 2026 item 22.1 & 23.1 (PMK 32/2025)", tentang: "Tarif uang makan & uang lembur per golongan - dihitung di sisi Web Gaji" },
+            { aturan: "Pemisahan per bank", tentang: "SAKTI hanya bisa memproses SPP per bank, jadi ADK Tukin dipecah per kode bank SPAN" },
+          ]}
+          catatan="Berkas ini PERINTAH BAYAR. Setiap pengunduhan tercatat di jejak audit beserta penariknya. Unggahnya masih manual ke Web Gaji."
+        />
+      </h1>
+      <p className="mt-0.5 text-sm font-bold text-ink">Berkas setoran ke Web Gaji &middot; unggah manual</p>
+      <p className="mt-2 text-sm text-biru">
+        Ambil berkas ADK untuk unit yang rekapnya sudah dikirim &amp; dikunci.
       </p>
 
       <form method="get" className="card mt-4 p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-muted">Filter ADK</p>
-        {/* LEBARNYA DIHITUNG, bukan dikira-kira. Enam penyaring + tombol
-            harus muat di satu baris pada kartu selebar max-w-6xl dikurangi
-            sidebar dan padding - sekitar 1080px ruang isi:
-              satker 208 + bulan 112 + tahun 80 + jenis ADK 160
-              + jenis pegawai 144 + bank 160 + tombol ~106 + 6 jarak 60
-              = 1030.
-            Tetap `flex-wrap`: di layar yang lebih sempit barisnya membungkus
-            sendiri, dan itu memang yang diinginkan - dipaksa satu baris di
-            sana yang terjadi bukan rapi, tapi kolom yang saling gencet. */}
         <div className="mt-3 flex flex-wrap items-end gap-2.5">
-          {/* PILIHANNYA CUMA UNIT YANG SUDAH MENGIRIM, bukan seluruh satuan
-              kerja. Unit yang belum mengirim tidak punya satu baris pun di
-              berkas periode ini, jadi memilihnya cuma menghasilkan berkas
-              kosong tanpa keterangan. Pertanyaan "unit mana yang belum
-              mengirim" sudah dijawab papan progres di bawah. */}
           <div>
             <label className="field-label" htmlFor="filter-satker">
               Satuan kerja
@@ -351,10 +365,6 @@ export default async function ExportAdkPage({
               ))}
             </select>
           </div>
-          {/* Penyaring bank cuma muncul untuk berkas yang memang bisa dipisah
-              per bank. Menampilkannya dalam keadaan mati untuk Uang Makan
-              justru mengundang pertanyaan "kenapa tidak bisa?" tiap kali,
-              sementara jawabannya sudah tertulis di bawah. */}
           {berkas.perBank && (
             <div>
               <label className="field-label" htmlFor="filter-bank">
@@ -367,10 +377,6 @@ export default async function ExportAdkPage({
                 className="field-input w-40 py-1.5"
               >
                 <option value="">Semua bank</option>
-                {/* Cukup nama banknya. Jumlah pegawainya sudah disebut di
-                    kartu berkas setelah pilihan diterapkan - menyebutnya dua
-                    kali membuat daftar pilihan panjang tanpa menambah
-                    keputusan yang bisa diambil dari situ. */}
                 {bankTukin.map((b) => (
                   <option key={b.kodeBankSpan} value={b.kodeBankSpan}>
                     {b.namaBank}
@@ -439,10 +445,68 @@ export default async function ExportAdkPage({
         </div>
       )}
 
-      {/* Panel rekening cuma relevan kalau memang ADA unit yang sudah
-          mengirim. Kalau tidak, "belum ada rekening" menyuruh orang mengurus
-          rekening padahal yang kurang kiriman unit - salah alamat, dan
-          waktunya habis di tempat yang bukan penyebabnya. */}
+      <p className="mt-6 text-xs font-bold uppercase tracking-wide text-muted">Berkas siap diunduh</p>
+      <div className="card mt-2 border-l-4 border-l-navy p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-ink">
+              ADK {berkas.label}
+              {jenisPegawai && <> - {labelJenisPegawai(jenisPegawai)}</>}
+              {bankTerpilih && <> - {bankTerpilih.namaBank}</>}
+            </p>
+            <p className="mt-1 text-base font-extrabold tracking-tight text-navy">{ringkasBerkas}</p>
+            <p className="mt-1 text-xs text-muted">{keteranganBerkas}</p>
+          </div>
+          <div className="flex flex-none items-center gap-2">
+            <a href={hrefBerkas("xlsx")} className="btn btn-primary">
+              Unduh Excel (.xlsx)
+            </a>
+            <a href={hrefBerkas("txt")} className="btn btn-ghost">
+              TXT
+            </a>
+          </div>
+        </div>
+
+        {tanpaJenisBerkas.length > 0 && (
+          <div className="mt-3 rounded-lg border border-gold bg-gold-tint px-3 py-2.5 text-xs text-ink-2">
+            <p className="text-sm font-bold text-gold-deep">
+              {tanpaJenisBerkas.length} pegawai tidak ikut ke berkas ini
+            </p>
+            <ul className="mt-1.5 space-y-0.5">
+              {tanpaJenisBerkas.slice(0, 8).map((p) => (
+                <li key={p.nip}>
+                  <span className="font-semibold text-ink">{p.nama}</span>{" "}
+                  <span className="font-mono text-[11px] text-muted">({p.nip})</span>
+                </li>
+              ))}
+              {tanpaJenisBerkas.length > 8 && (
+                <li className="text-muted">...dan {tanpaJenisBerkas.length - 8} lainnya.</li>
+              )}
+            </ul>
+            <p className="mt-2">
+              Jenis kepegawaiannya belum diketahui - pegawai di atas belum tercakup berkas basis data gaji.
+              Gajihub tidak menetapkan jenisnya dari golongan, karena cara itu terbukti keliru pada sebagian
+              pegawai dan akan menempatkan mereka di berkas yang salah.
+            </p>
+            <p className="mt-1.5">
+              <strong>Tindakan:</strong> lengkapi datanya di menu{" "}
+              <Link href="/ppabp/basis-data-gaji" className="font-semibold text-teal-deep underline">
+                Basis Data Gaji
+              </Link>
+              , atau pilih &quot;Semua pegawai&quot; pada filter agar mereka tetap disertakan.
+            </p>
+          </div>
+        )}
+
+        {jumlahBerkas === 0 && (
+          <p className="mt-3 rounded-lg bg-gold-tint px-3 py-2 text-xs font-medium text-gold-deep">
+            Berkas ini akan <strong>kosong</strong> dengan pilihan sekarang.
+          </p>
+        )}
+      </div>
+
+      <p className="mt-6 text-xs font-bold uppercase tracking-wide text-muted">Pemantauan periode</p>
+
       {tukinPeriode.length === 0 ? null : bankTukin.length === 0 ? (
         <div className="card mt-4 border-l-4 border-l-gold p-4">
           <p className="text-sm font-bold text-ink">Belum ada rekening tukin untuk periode ini</p>
@@ -544,76 +608,6 @@ export default async function ExportAdkPage({
         // PRIORITAS di PapanProgres.
       />
 
-      {/* SATU kartu untuk SATU berkas - hasil dari penyaring di atas.
-          Menggantikan daftar tombol yang dulu memuat semua kemungkinan
-          sekaligus; lihat catatan TIGA PENYARING di atas. */}
-      <div className="card mt-4 border-l-4 border-l-navy p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-bold text-ink">
-              ADK {berkas.label}
-              {satkerTerpilih && <> - {satkerTerpilih}</>}
-              {jenisPegawai && <> - {labelJenisPegawai(jenisPegawai)}</>}
-              {bankTerpilih && <> - {bankTerpilih.namaBank}</>}
-            </p>
-            <p className="mt-0.5 text-xs text-muted">{keteranganBerkas}</p>
-            <p className="mt-1.5 text-sm text-ink-2">
-              <strong className="text-ink">{jumlahBerkas} pegawai</strong> masuk ke berkas ini, periode{" "}
-              {NAMA_BULAN[bln - 1]} {thn}
-              {satkerTerpilih ? "" : ", dari seluruh unit yang sudah mengirim"}.
-            </p>
-          </div>
-          <div className="flex flex-none items-center gap-2">
-            <a href={hrefBerkas("xlsx")} className="btn btn-primary btn-sm">
-              Excel (.xlsx)
-            </a>
-            <a href={hrefBerkas("txt")} className="btn btn-ghost btn-sm">
-              TXT
-            </a>
-          </div>
-        </div>
-
-        {/* Yang tersingkir oleh penyaring jenis. Ditaruh di kartu berkasnya,
-            bukan di dekat penyaringnya: yang perlu tahu adalah orang yang
-            sedang menatap tombol unduh. */}
-        {tanpaJenisBerkas.length > 0 && (
-          <div className="mt-3 rounded-lg border border-gold bg-gold-tint px-3 py-2.5 text-xs text-ink-2">
-            <p className="text-sm font-bold text-gold-deep">
-              {tanpaJenisBerkas.length} pegawai tidak ikut ke berkas ini
-            </p>
-            <ul className="mt-1.5 space-y-0.5">
-              {tanpaJenisBerkas.slice(0, 8).map((p) => (
-                <li key={p.nip}>
-                  <span className="font-semibold text-ink">{p.nama}</span>{" "}
-                  <span className="font-mono text-[11px] text-muted">({p.nip})</span>
-                </li>
-              ))}
-              {tanpaJenisBerkas.length > 8 && (
-                <li className="text-muted">...dan {tanpaJenisBerkas.length - 8} lainnya.</li>
-              )}
-            </ul>
-            <p className="mt-2">
-              Jenis kepegawaiannya belum diketahui - pegawai di atas belum tercakup berkas basis data gaji.
-              Gajihub tidak menetapkan jenisnya dari golongan, karena cara itu terbukti keliru pada sebagian
-              pegawai dan akan menempatkan mereka di berkas yang salah.
-            </p>
-            <p className="mt-1.5">
-              <strong>Tindakan:</strong> lengkapi datanya di menu{" "}
-              <Link href="/ppabp/basis-data-gaji" className="font-semibold text-teal-deep underline">
-                Basis Data Gaji
-              </Link>
-              , atau pilih &quot;Semua pegawai&quot; pada filter agar mereka tetap disertakan.
-            </p>
-          </div>
-        )}
-
-        {jumlahBerkas === 0 && (
-          <p className="mt-3 rounded-lg bg-gold-tint px-3 py-2 text-xs font-medium text-gold-deep">
-            Berkas ini akan <strong>kosong</strong> dengan pilihan sekarang.
-          </p>
-        )}
-      </div>
-
       {/* Pratinjau isi berkas SEBELUM diunduh - bentuk panjangnya (2.000+
           baris NIP+tanggal) tidak bisa diperiksa manusia.
 
@@ -630,10 +624,19 @@ export default async function ExportAdkPage({
         <PratinjauAdkUangMakan data={pratinjauUm} periodeBulan={bln} periodeTahun={thn} />
       )}
 
-      <div className="card mt-4 border-l-4 border-l-teal-deep p-4">
-        <p className="text-sm font-bold text-ink">
-          Format ADK Uang Makan &amp; Uang Lembur BEDA dari ADK Tukin
-        </p>
+      {/* DITUTUP secara bawaan (permintaan user 2026-09-24). Isinya tetap
+          berguna, tapi yang datang ke halaman ini untuk "saring lalu unduh"
+          tidak perlu melewati dokumentasi tiga butir tiap kali. Yang
+          mencarinya - biasanya sekali, waktu bertanya "kenapa tidak ada
+          rupiahnya?" - tetap menemukannya satu klik.
+
+          <details>, bukan state klien: halaman ini Server Component, jadi
+          membukanya tidak perlu JavaScript sama sekali. Pola yang sama dengan
+          pratinjau di atasnya. */}
+      <details className="card mt-4 p-4">
+        <summary className="cursor-pointer text-sm font-bold text-ink">
+          Tentang format ADK Uang Makan &amp; Uang Lembur
+        </summary>
         {/* Butir, bukan paragraf: yang membuka halaman ini sedang mencari satu
             jawaban ("kenapa tidak ada rupiahnya?"), bukan membaca penjelasan
             dari awal. Aturannya ditebalkan di depan, alasannya menyusul
@@ -656,7 +659,7 @@ export default async function ExportAdkPage({
             <span className="font-mono text-xs">depan</span> = grid per tanggal untuk pengecekan visual.
           </li>
         </ul>
-      </div>
+      </details>
 
       {/* PERINGATAN ISI ADK UANG LEMBUR.
           Panel lama di sini bercerita bahwa Gajihub cuma membaca baris

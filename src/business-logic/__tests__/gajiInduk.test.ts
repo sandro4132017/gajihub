@@ -24,16 +24,16 @@ const HEADER_GPP = [
  */
 const BARIS_ARIF: Record<string, unknown> = {
   kdsatker: "450938", bulan: "07", tahun: "2026", nogaji: "000964", kdjns: "1",
-  nip: "196706241998031001", gjpokok: 5746800, tjistri: 0, tjanak: 0, tjupns: 0, tjstruk: 3250000,
+  nip: "199000100000000006", gjpokok: 5746800, tjistri: 0, tjanak: 0, tjupns: 0, tjstruk: 3250000,
   tjfungs: 0, tjdaerah: 0, tjpencil: 0, tjlain: 0, tjkompen: 0, pembul: 24, tjberas: 72420,
   tjpph: 158712, potpfkbul: 0, potpfk2: 0, potpfk10: 459744, potpph: 158712, potswrum: 0,
   potkelbtj: 0, potlain: 0, pottabrum: 0, bersih: 8489500, bpjs: 120000, bpjs2: 0,
 };
 
-/** Baris ASLI kedua - punya tunjangan istri & anak (CRIS KUNTADI). */
+/** Baris ASLI kedua - punya tunjangan istri & anak (WISNU PURNOMO). */
 const BARIS_CRIS: Record<string, unknown> = {
   kdsatker: "450938", bulan: "07", tahun: "2026", nogaji: "000964", kdjns: "1",
-  nip: "196906241990031004", gjpokok: 6373200, tjistri: 637320, tjanak: 127464, tjupns: 0,
+  nip: "199000100000000007", gjpokok: 6373200, tjistri: 637320, tjanak: 127464, tjupns: 0,
   tjstruk: 5500000, tjfungs: 0, tjdaerah: 0, tjpencil: 0, tjlain: 0, tjkompen: 0, pembul: 94,
   tjberas: 217260, tjpph: 385660, potpfkbul: 0, potpfk2: 0, potpfk10: 571038, potpph: 385660,
   potswrum: 0, potkelbtj: 0, potlain: 0, pottabrum: 0, bersih: 12164300, bpjs: 120000, bpjs2: 0,
@@ -45,7 +45,7 @@ describe("petakanBarisGpp - baris asli file GPP", () => {
     expect(hasil.ok).toBe(true);
     if (!hasil.ok) return;
 
-    expect(hasil.data.nip).toBe("196706241998031001");
+    expect(hasil.data.nip).toBe("199000100000000006");
     expect(hasil.data.periodeBulan).toBe(7);
     expect(hasil.data.periodeTahun).toBe(2026);
     expect(hasil.data.kodeSatker).toBe("450938");
@@ -144,7 +144,7 @@ describe("parseFileGajiInduk", () => {
 
 // ---------------------------------------------------------------------------
 // Verifikasi terhadap slip gaji ASLI cetakan PPABP Setjen
-// ("PERINCIAN PEMBAYARAN GAJI" a.n. MUH. I'MAL AROFAT, ST - Februari 2025).
+// ("PERINCIAN PEMBAYARAN GAJI" a.n. MANGGALA HARTANTO, ST - Februari 2025).
 // Angka di bawah disalin dari slip itu, jadi test ini yang menjaga supaya
 // tampilan slip Gajihub tetap menghasilkan angka yang sama dengan yang selama
 // ini dicetak manual.

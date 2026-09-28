@@ -11,7 +11,7 @@
 //   1. Kolom itu MIRROR dari SIAP dan ditimpa ulang tiap sinkronisasi pegawai -
 //      koreksi manual di sana hilang pada tarikan berikutnya.
 //   2. SIAP tidak mencatat penurunan ini sama sekali. Dikonfirmasi lewat kasus
-//      nyata: Galih Febian Azhar turun kelas 7 -> 6 selama satu tahun, SIAP
+//      nyata: Dirgantara Mahendra turun kelas 7 -> 6 selama satu tahun, SIAP
 //      tetap menulis 7, dan selisih itu baru ketahuan waktu ADK Gajihub diadu
 //      ke rincian manual Rokeu (bruto cocok 44 dari 46 - dua yang meleset
 //      salah satunya justru kasus ini).

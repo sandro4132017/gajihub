@@ -77,28 +77,67 @@ export async function koreksiJamPresensiAction(
   }
 
   // Pengaman 1 - tanggalnya harus sudah dinyatakan bermasalah.
+  //
+  // BERLAKU UNTUK JAM MASUK/PULANG SAJA, dan pembatasannya dipersempit
+  // 2026-09-22. Dulu gerbang ini menutup SELURUH form, termasuk jam lembur -
+  // dan itu keliru sejak koreksi jam lembur ada, karena keduanya menjawab
+  // pertanyaan yang berbeda:
+  //
+  //   jam masuk/pulang : memperbaiki FAKTA yang salah tercatat e-Presensi.
+  //                      Menyentuh potongan Pasal 13 untuk pegawai itu, jadi
+  //                      memang harus ada penanda kendala lebih dulu -
+  //                      penanda yang sama juga membatalkan potongan bagi
+  //                      seluruh pegawai terdampak, termasuk yang tidak
+  //                      melapor.
+  //   jam lembur       : menetapkan HAK, dan yang mengesahkannya SURAT
+  //                      PERINTAH LEMBUR - bukan kerusakan mesin absensi.
+  //                      Mewajibkan penanda kendala di sini berarti memaksa
+  //                      petugas menandai kerusakan yang tidak pernah terjadi
+  //                      hanya untuk mencatat lembur yang sah.
   const kendala = await prisma.kendalaEpresensi.findFirst({
     where: {
       tanggal,
       OR: [{ satuanKerja: null }, { satuanKerja: pegawai.satuanKerja ?? undefined }],
     },
   });
-  if (!kendala) {
-    return {
-      error:
-        `Tanggal ${String(formData.get("tanggal"))} belum ditandai sebagai kendala e-Presensi, jadi jamnya tidak boleh ` +
-        "diubah. Tandai dulu tanggal itu di halaman Kendala e-Presensi - penanda itu yang membatalkan potongan " +
-        "\"tidak melakukan presensi\" bagi semua pegawai terdampak, termasuk yang tidak mengirim bukti foto.",
-    };
-  }
 
   const jamMasuk = waktuDariJam(tanggal, String(formData.get("jamMasuk") ?? ""));
   const jamKeluar = waktuDariJam(tanggal, String(formData.get("jamKeluar") ?? ""));
   if (jamMasuk === undefined || jamKeluar === undefined) {
     return { error: "Format jam harus HH:MM, contoh 07:15 atau 16:00." };
   }
-  if (jamMasuk === null && jamKeluar === null) {
-    return { error: "Isi minimal satu jam - kalau keduanya kosong tidak ada yang dikoreksi." };
+  // JAM LEMBUR. Kosong = tidak dikoreksi; "0" SAH dan berbeda artinya -
+  // "sudah diperiksa, memang bukan lembur". Karena itu dibaca lewat
+  // pemeriksaan string kosong, bukan lewat `Number(...) || null` yang akan
+  // menelan nol jadi null tanpa ada yang menyadarinya.
+  const jamLemburTeks = String(formData.get("jamLembur") ?? "").trim();
+  let jamLembur: number | null = null;
+  if (jamLemburTeks !== "") {
+    const angka = Number(jamLemburTeks);
+    if (!Number.isFinite(angka) || angka < 0 || angka > 24) {
+      return { error: "Jam lembur harus angka 0-24, atau dikosongkan kalau tidak dikoreksi." };
+    }
+    if (!Number.isInteger(angka)) {
+      return { error: "Jam lembur diisi jam penuh - sisa menit memang tidak dibayar." };
+    }
+    jamLembur = angka;
+  }
+
+  if (jamMasuk === null && jamKeluar === null && jamLembur === null) {
+    return { error: "Isi minimal satu kolom - kalau semuanya kosong tidak ada yang dikoreksi." };
+  }
+
+  // Gerbang kendala ditagih DI SINI, sesudah diketahui kolom mana yang
+  // benar-benar diisi - bukan di awal. Koreksi yang cuma menyentuh jam lembur
+  // lolos; begitu jam masuk atau pulang ikut diubah, penandanya wajib ada.
+  if (!kendala && (jamMasuk !== null || jamKeluar !== null)) {
+    return {
+      error:
+        `Tanggal ${String(formData.get("tanggal"))} belum ditandai sebagai kendala e-Presensi, jadi JAM MASUK dan JAM ` +
+        "PULANG tidak boleh diubah. Tandai dulu tanggal itu di halaman Kendala e-Presensi - penanda itu yang " +
+        "membatalkan potongan \"tidak melakukan presensi\" bagi semua pegawai terdampak, termasuk yang tidak " +
+        "mengirim bukti foto. Jam lembur tetap bisa dikoreksi tanpa penanda itu.",
+    };
   }
   if (jamMasuk && jamKeluar && jamKeluar <= jamMasuk) {
     return { error: "Jam pulang harus lebih lambat dari jam masuk." };
@@ -126,8 +165,8 @@ export async function koreksiJamPresensiAction(
   await prisma.$transaction([
     prisma.koreksiPresensiHarian.upsert({
       where: { pegawaiId_tanggal: { pegawaiId: pegawai.id, tanggal } },
-      create: { pegawaiId: pegawai.id, tanggal, jamMasuk, jamKeluar, alasan, dikoreksiOlehId: user.id },
-      update: { jamMasuk, jamKeluar, alasan, dikoreksiOlehId: user.id, dikoreksiPada: new Date() },
+      create: { pegawaiId: pegawai.id, tanggal, jamMasuk, jamKeluar, jamLembur, alasan, dikoreksiOlehId: user.id },
+      update: { jamMasuk, jamKeluar, jamLembur, alasan, dikoreksiOlehId: user.id, dikoreksiPada: new Date() },
     }),
     prisma.auditTrail.create({
       data: {
@@ -142,13 +181,28 @@ export async function koreksiJamPresensiAction(
           jamMasukEpresensi: jm(sebelum?.jamMasuk),
           jamKeluarEpresensi: jm(sebelum?.jamKeluar),
           status: sebelum?.statusKehadiran ?? null,
-          ...(lama ? { koreksiSebelumnya: { jamMasuk: jm(lama.jamMasuk), jamKeluar: jm(lama.jamKeluar), alasan: lama.alasan } } : {}),
+          ...(lama
+            ? {
+                koreksiSebelumnya: {
+                  jamMasuk: jm(lama.jamMasuk),
+                  jamKeluar: jm(lama.jamKeluar),
+                  jamLembur: lama.jamLembur,
+                  alasan: lama.alasan,
+                },
+              }
+            : {}),
         },
         dataSesudah: {
           jamMasuk: jm(jamMasuk),
           jamKeluar: jm(jamKeluar),
+          jamLembur,
           alasan,
-          dasarKendala: { tanggal: tanggal.toISOString().slice(0, 10), alasan: kendala.alasan },
+          // null kalau koreksinya cuma menyentuh jam lembur - tanggal itu
+          // memang tidak perlu ditandai kendala. Dicatat apa adanya supaya
+          // jejak audit bisa membedakan dua jenis koreksi ini.
+          dasarKendala: kendala
+            ? { tanggal: tanggal.toISOString().slice(0, 10), alasan: kendala.alasan }
+            : null,
           sumber: "Koreksi jam presensi (Pasal 10 ayat (2))",
         },
       },

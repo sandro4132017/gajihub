@@ -35,23 +35,23 @@ describe("akhirPekan", () => {
 describe("susunBarisAdkHarian - uang makan", () => {
   it("satu baris per hari, tanpa kolom ketiga", () => {
     const hasil = susunBarisAdkHarian(
-      [P("197410061999032002", "DIAN", [{ tanggalIso: "2026-06-03" }, { tanggalIso: "2026-06-02" }])],
+      [P("199000100000000009", "DIAN", [{ tanggalIso: "2026-06-03" }, { tanggalIso: "2026-06-02" }])],
       { denganJam: false }
     );
     expect(hasil).toEqual([
-      { nip: "197410061999032002", tanggalIso: "2026-06-02" },
-      { nip: "197410061999032002", tanggalIso: "2026-06-03" },
+      { nip: "199000100000000009", tanggalIso: "2026-06-02" },
+      { nip: "199000100000000009", tanggalIso: "2026-06-03" },
     ]);
   });
 
   it("NIP dirapikan dari spasi", () => {
     // File asli dari operator memuat 15 baris ber-NIP berspasi di belakang
-    // ("198203292009012003 "). Spasi itu bisa membuat pencocokan di sisi
+    // ("199000100000000015 "). Spasi itu bisa membuat pencocokan di sisi
     // penerima gagal tanpa pesan apa pun.
-    const hasil = susunBarisAdkHarian([P(" 198203292009012003 ", "X", [{ tanggalIso: "2026-06-02" }])], {
+    const hasil = susunBarisAdkHarian([P(" 199000100000000015 ", "X", [{ tanggalIso: "2026-06-02" }])], {
       denganJam: false,
     });
-    expect(hasil[0].nip).toBe("198203292009012003");
+    expect(hasil[0].nip).toBe("199000100000000015");
   });
 });
 
@@ -60,7 +60,7 @@ describe("susunBarisAdkHarian - uang lembur", () => {
     // Mesin Gajihub menghasilkan pecahan (mis. 7,75 jam dari selisih jam
     // presensi), sementara SELURUH 111 baris file asli bilangan bulat.
     const hasil = susunBarisAdkHarian(
-      [P("198703232015031002", "ALPHA", [
+      [P("199000100000000018", "ALPHA", [
         { tanggalIso: "2026-06-02", jam: 3 },
         { tanggalIso: "2026-06-03", jam: 2.4 },
         { tanggalIso: "2026-06-04", jam: 0 },
@@ -70,9 +70,9 @@ describe("susunBarisAdkHarian - uang lembur", () => {
       { denganJam: true }
     );
     expect(hasil).toEqual([
-      { nip: "198703232015031002", tanggalIso: "2026-06-02", jam: 3 },
-      { nip: "198703232015031002", tanggalIso: "2026-06-03", jam: 2 },
-      { nip: "198703232015031002", tanggalIso: "2026-06-08", jam: 8 },
+      { nip: "199000100000000018", tanggalIso: "2026-06-02", jam: 3 },
+      { nip: "199000100000000018", tanggalIso: "2026-06-03", jam: 2 },
+      { nip: "199000100000000018", tanggalIso: "2026-06-08", jam: 8 },
     ]);
   });
 
@@ -95,15 +95,15 @@ describe("rakitTeksAdkHarian", () => {
     // Ketiganya dibuktikan dari file asli: baris pertama langsung data, tidak
     // ada baris penjumlahan di akhir, dan byte akhir barisnya \r\n.
     const teks = rakitTeksAdkHarian([
-      { nip: "197804012009122001", tanggalIso: "2026-06-09", jam: 1 },
-      { nip: "197804012009122001", tanggalIso: "2026-06-22", jam: 1 },
+      { nip: "199000100000000012", tanggalIso: "2026-06-09", jam: 1 },
+      { nip: "199000100000000012", tanggalIso: "2026-06-22", jam: 1 },
     ]);
-    expect(teks).toBe("197804012009122001\t2026-06-09\t1\r\n197804012009122001\t2026-06-22\t1\r\n");
+    expect(teks).toBe("199000100000000012\t2026-06-09\t1\r\n199000100000000012\t2026-06-22\t1\r\n");
   });
 
   it("uang makan cuma dua kolom", () => {
-    const teks = rakitTeksAdkHarian([{ nip: "197410061999032002", tanggalIso: "2026-06-02" }]);
-    expect(teks).toBe("197410061999032002\t2026-06-02\r\n");
+    const teks = rakitTeksAdkHarian([{ nip: "199000100000000009", tanggalIso: "2026-06-02" }]);
+    expect(teks).toBe("199000100000000009\t2026-06-02\r\n");
     expect(teks.split("\r\n")[0].split("\t")).toHaveLength(2);
   });
 

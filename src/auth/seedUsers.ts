@@ -17,6 +17,7 @@
 // ============================================================================
 
 import { PrismaClient, type Role } from "@prisma/client";
+import { namaDemo, nipDemo } from "../db/akunDemo";
 
 const AKUN_CONTOH: Array<{
   nip: string;
@@ -27,8 +28,8 @@ const AKUN_CONTOH: Array<{
   rolesTambahan?: Role[];
 }> = [
   {
-    nip: "198703232015031002",
-    nama: "Alpha Sandro Adithyaswara",
+    nip: nipDemo("alphaSandroAdithyaswara"),
+    nama: namaDemo("alphaSandroAdithyaswara"),
     role: "ADMIN",
     // satuanKerja diisi (padahal ADMIN lintas satker) KHUSUS karena akun ini
     // punya role tambahan KASUBAG_TU: satu akun cuma punya SATU satuanKerja,
@@ -41,74 +42,74 @@ const AKUN_CONTOH: Array<{
     rolesTambahan: ["KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "PEGAWAI"],
   },
   {
-    nip: "197303072005011001",
-    nama: "Irwan Syafril",
+    nip: nipDemo("irwanSyafril"),
+    nama: namaDemo("irwanSyafril"),
     role: "PPABP",
     satuanKerja: null, // NULL = berwenang lintas satker (asumsi pilot: tim PPABP pusat)
   },
   {
-    nip: "198312302009121004",
-    nama: "John Pieter",
+    nip: nipDemo("johnPieter"),
+    nama: namaDemo("johnPieter"),
     role: "PEGAWAI",
     satuanKerja: null,
   },
   {
-    nip: "199611272018121001",
-    nama: "Prasetyo Muhammad Sidqi",
+    nip: nipDemo("prasetyoMuhammadSidqi"),
+    nama: namaDemo("prasetyoMuhammadSidqi"),
     role: "PEGAWAI",
     satuanKerja: null,
   },
   {
-    nip: "198810012011012009",
-    nama: "Kharina Olivia",
+    nip: nipDemo("kharinaOlivia"),
+    nama: namaDemo("kharinaOlivia"),
     role: "PEGAWAI",
     satuanKerja: null,
   },
   {
-    nip: "199006212015032005",
-    nama: "Ayu Puspita Sari",
+    nip: nipDemo("ayuPuspitaSari"),
+    nama: namaDemo("ayuPuspitaSari"),
     role: "KASUBAG_TU",
     satuanKerja: "Pusat Data dan Teknologi Informasi Ketenagakerjaan",
   },
   {
-    nip: "198308052009121004",
-    nama: "Firmansyah",
+    nip: nipDemo("firmansyah"),
+    nama: namaDemo("firmansyah"),
     role: "PEGAWAI",
     satuanKerja: null,
   },
   {
-    nip: "197611232006041015",
-    nama: "Farid Arif",
+    nip: nipDemo("faridArif"),
+    nama: namaDemo("faridArif"),
     role: "PEGAWAI",
     satuanKerja: null,
   },
   {
-    nip: "197904302011011012",
-    nama: "Luthfi Firdaus",
+    nip: nipDemo("luthfiFirdaus"),
+    nama: namaDemo("luthfiFirdaus"),
     role: "KASUBAG_TU",
     satuanKerja: "Biro Umum",
   },
   {
-    nip: "198604302011011011",
-    nama: "Irvan Ganeva",
+    nip: nipDemo("irvanGaneva"),
+    nama: namaDemo("irvanGaneva"),
     role: "PEGAWAI",
     satuanKerja: null,
   },
   {
-    nip: "197508061999031001",
-    nama: "Herry Susanto",
+    nip: nipDemo("herrySusanto"),
+    nama: namaDemo("herrySusanto"),
     role: "PEGAWAI",
     satuanKerja: null,
   },
   {
-    nip: "197410061999032002",
-    nama: "Dian Kreshnadjati",
+    nip: nipDemo("dianKreshnadjati"),
+    nama: namaDemo("dianKreshnadjati"),
     role: "OSDMA",
     satuanKerja: null,
   },
   {
-    nip: "196906241990031004",
-    nama: "Cris Kuntadi",
+    nip: nipDemo("crisKuntadi"),
+    nama: namaDemo("crisKuntadi"),
     role: "PIMPINAN",
     satuanKerja: null,
   },

@@ -6,6 +6,7 @@ import {
   rangkumProgres,
   riwayatPengirimanPeriode,
   statusUnit,
+  tabelBelumDiverifikasi,
   type BarisPengiriman,
 } from "../pengirimanUnit";
 
@@ -232,5 +233,74 @@ describe("cacahPeriode", () => {
       BELUM_DIHITUNG: 1,
       DIKEMBALIKAN: 0,
     });
+  });
+});
+
+describe("verifikasi tabel sebelum kirim", () => {
+  const SIAP = { totalPegawai: 3, jumlahKalkulasi: 3, jumlahBasi: 0 };
+  const belumKirim = statusUnit(null);
+
+  it("uang makan BELUM diwajibkan - tiga tabel lain sudah cukup", () => {
+    // Keputusan user 2026-09-22: "untuk uang makan kita belum dulu".
+    const hasil = cekBolehKirim(
+      { ...SIAP, tabelDiverifikasi: ["PERUBAHAN_PEGAWAI", "TUKIN", "UANG_LEMBUR"] },
+      belumKirim
+    );
+    expect(hasil.boleh).toBe(true);
+  });
+
+  it("daftar perubahan pegawai WAJIB dicentang", () => {
+    // Ditambahkan 2026-09-24. Kelas jabatan & satuan kerja adalah BAHAN
+    // ketiga tabel lainnya, jadi memeriksa hasilnya sementara bahannya belum
+    // diperiksa bukan pemeriksaan.
+    const hasil = cekBolehKirim({ ...SIAP, tabelDiverifikasi: ["TUKIN", "UANG_LEMBUR"] }, belumKirim);
+    expect(hasil.boleh).toBe(false);
+    expect(hasil.alasan).toContain("Daftar Perubahan Data Pegawai");
+  });
+
+  it("kurang satu centang wajib = tertahan, dan yang kurang disebut namanya", () => {
+    const hasil = cekBolehKirim(
+      { ...SIAP, tabelDiverifikasi: ["PERUBAHAN_PEGAWAI", "TUKIN"] },
+      belumKirim
+    );
+    expect(hasil.boleh).toBe(false);
+    expect(hasil.alasan).toContain("Tabel Jam Lembur");
+    expect(hasil.alasan).not.toContain("Tabel Tukin");
+  });
+
+  it("mencentang uang makan saja tidak membuka apa pun", () => {
+    const hasil = cekBolehKirim({ ...SIAP, tabelDiverifikasi: ["UANG_MAKAN"] }, belumKirim);
+    expect(hasil.boleh).toBe(false);
+    expect(hasil.alasan).toContain("Tabel Tukin");
+    expect(hasil.alasan).toContain("Tabel Jam Lembur");
+  });
+
+  it("syarat DATA didahulukan - centang tidak bisa menutupi kalkulasi yang kurang", () => {
+    // Mencentang "sudah saya periksa" atas tabel yang belum lengkap berarti
+    // memeriksa angka yang masih akan berubah.
+    const hasil = cekBolehKirim(
+      {
+        totalPegawai: 3,
+        jumlahKalkulasi: 1,
+        tabelDiverifikasi: ["PERUBAHAN_PEGAWAI", "TUKIN", "UANG_LEMBUR"],
+      },
+      belumKirim
+    );
+    expect(hasil.boleh).toBe(false);
+    expect(hasil.alasan).toContain("belum punya hasil kalkulasi");
+  });
+
+  it("tanpa field verifikasi, perilaku lama tidak berubah", () => {
+    // Penjagaan supaya pemanggil yang belum tahu soal verifikasi tidak
+    // tiba-tiba tertahan.
+    expect(cekBolehKirim(SIAP, belumKirim).boleh).toBe(true);
+  });
+
+  it("tabelBelumDiverifikasi menyebut yang kurang, bukan yang sudah", () => {
+    expect(tabelBelumDiverifikasi([])).toEqual(["PERUBAHAN_PEGAWAI", "TUKIN", "UANG_LEMBUR"]);
+    expect(tabelBelumDiverifikasi(["TUKIN"])).toEqual(["PERUBAHAN_PEGAWAI", "UANG_LEMBUR"]);
+    expect(
+      tabelBelumDiverifikasi(["PERUBAHAN_PEGAWAI", "TUKIN", "UANG_MAKAN", "UANG_LEMBUR"])
+    ).toEqual([]);
   });
 });

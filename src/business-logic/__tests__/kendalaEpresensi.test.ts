@@ -53,7 +53,7 @@ function baris(
 
 function laporan(isi: BarisPresensiPdf[]): LaporanPresensiPdf {
   return {
-    nip: "198111302025211042",
+    nip: "199000100000000014",
     nama: "ACEP SJAIFULLOH R",
     jabatan: null,
     periodeBulan: isi[0]?.bulan ?? 7,

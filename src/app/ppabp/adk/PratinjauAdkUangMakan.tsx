@@ -61,8 +61,11 @@ export function PratinjauAdkUangMakan({
   return (
     <details className="card mt-4 p-4" open={terbuka}>
       <summary className="cursor-pointer text-sm font-bold text-ink">
-        Pratinjau isi ADK Uang Makan - {data.totalBaris.toLocaleString("id-ID")} baris, {data.pegawai.length}{" "}
-        pegawai
+        {/* Titik tengah, bukan koma & tanda hubung - bentuk yang sama dengan
+            baris hasil di kartu berkas, supaya keduanya terbaca sebagai
+            keluarga yang sama dan bisa dipindai, bukan dibaca. */}
+        Pratinjau ADK Uang Makan &middot; {data.totalBaris.toLocaleString("id-ID")} baris &middot;{" "}
+        {data.pegawai.length} pegawai
       </summary>
       <p className="mt-1 text-xs text-muted">
         Ini isi berkas yang akan diunduh, disusun oleh fungsi yang sama - bukan hitungan terpisah. Angka{" "}

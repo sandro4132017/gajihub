@@ -19,8 +19,8 @@ const rekapBaik: RekapUntukPeriksa = {
 };
 
 const pegawaiBaik: FaktaPegawai = {
-  nip: "199311012020121014",
-  nama: "ABDUL RAHMAN WAHID",
+  nip: "199000100000000020",
+  nama: "BENING HARTANTO",
   kelasJabatan: 7,
   rekap: rekapBaik,
   adaPredikat: true,

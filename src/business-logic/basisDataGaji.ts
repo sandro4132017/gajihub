@@ -7,7 +7,7 @@ import { PANJANG_KODE_BANK_SPAN, rapikanRekening, type MasalahRekening } from ".
 // KENAPA ADA SUMBER NAMA KEDUA: `Pegawai.nama` cermin SIAP dan ditimpa ulang
 // tiap `sync:pegawai`, sementara Web Gaji menuliskan nama BERBEDA (umumnya
 // karena gelar) - terukur 3.628 dari 4.701 NIP (77%) berbeda, mis. SIAP
-// "ADE ALEXANDER" lawan Web Gaji "Ade Alexander, SH". Untuk berkas pembayaran
+// "HASTU NUGRAHA" lawan Web Gaji "Hastu Nugraha, SH". Untuk berkas pembayaran
 // yang berlaku penulisan yang dikenali Web Gaji. Memperbaiki `Pegawai.nama`
 // BUKAN pilihan: kolom itu ditimpa tiap sinkronisasi, dan SIAP sah untuk
 // kepegawaian - bukan untuk pembayaran.

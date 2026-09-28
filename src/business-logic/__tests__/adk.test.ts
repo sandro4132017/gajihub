@@ -28,29 +28,29 @@ const DIBUAT = new Date("2026-09-13T20:00:00Z");
 
 const SUMBER: SumberBarisAdkTukin[] = [
   {
-    nip: "197509082006042003",
-    nama: "TUTI HARYANTI, ST.",
+    nip: "199000100000000010",
+    nama: "VIDYANATA YUDHANTO, ST.",
     kelasJabatan: 15,
     tarifPenuhKelasJabatan: 19_280_000,
     tukinBersih: 16_388_000,
     kodeSatker: "450938",
     kodeBankSpan: "520002000990",
     namaBank: "Bank Rakyat Indonesia",
-    nomorRekening: "076301015957537",
-    namaRekening: "TUTI HARYANTI",
+    nomorRekening: "777777777777025",
+    namaRekening: "VIDYANATA YUDHANTO",
     nomorSk: "1234/SJ/KP.03.00/VII/2026",
   },
   {
-    nip: "197904302011011012",
-    nama: "LUTHFI FIRDAUS, S.E.",
+    nip: "199000100000000013",
+    nama: "KALINGGA LEGOWO, S.E.",
     kelasJabatan: 12,
     tarifPenuhKelasJabatan: 9_896_000,
     tukinBersih: 9_866_312,
     kodeSatker: "450938",
     kodeBankSpan: "520002000990",
     namaBank: "Bank Rakyat Indonesia",
-    nomorRekening: "223301002832507",
-    namaRekening: "LUTHFI FIRDAUS",
+    nomorRekening: "777777777777029",
+    namaRekening: "KALINGGA LEGOWO",
     nomorSk: null,
   },
 ];
@@ -83,9 +83,9 @@ describe("susunBarisAdkTukin", () => {
     // 2. Kolom Bulan/Tahun (indeks 1-2) sekarang saat PENGERJAAN, bukan
     //    periode berkas - DIBUAT jatuh di September 2026.
     expect(baris[0]).toEqual([
-      "450938", "09", "2026", "197509082006042003", "TUTI HARYANTI, ST.",
+      "450938", "09", "2026", "199000100000000010", "VIDYANATA YUDHANTO, ST.",
       "1234/SJ/KP.03.00/VII/2026", "15", 19_280_000, 2_892_000, 16_388_000,
-      "520002000990", "Bank Rakyat Indonesia", "076301015957537", "TUTI HARYANTI",
+      "520002000990", "Bank Rakyat Indonesia", "777777777777025", "VIDYANATA YUDHANTO",
       "06", "2026", "06", "2026", 1, "", "",
     ]);
   });
@@ -116,8 +116,8 @@ describe("susunBarisAdkTukin", () => {
     const b = baris[0];
     expect(b[10]).toBe("520002000990"); // Kode Bank SPAN
     expect(b[11]).toBe("Bank Rakyat Indonesia");
-    expect(b[12]).toBe("076301015957537");
-    expect(b[13]).toBe("TUTI HARYANTI");
+    expect(b[12]).toBe("777777777777025");
+    expect(b[13]).toBe("VIDYANATA YUDHANTO");
   });
 
   it("rekening pegawai yang belum terdaftar TETAP kosong - jangan ditebak", () => {
@@ -131,7 +131,7 @@ describe("susunBarisAdkTukin", () => {
     expect(b[11]).toBe("");
     expect(b[12]).toBe("");
     // Nama Rekening jatuh ke nama pegawai - itu yang paling mungkin benar.
-    expect(b[13]).toBe("TUTI HARYANTI, ST.");
+    expect(b[13]).toBe("VIDYANATA YUDHANTO, ST.");
   });
 
   it("nomor SK diambil dari data pegawai, bukan dikosongkan", () => {
@@ -215,7 +215,7 @@ describe("format teks tab-separated", () => {
     expect(garis).toHaveLength(SUMBER.length);
     // Baris PERTAMA langsung data, bukan nama kolom. Kalau suatu saat
     // header kembali diam-diam, dua harapan di bawah ini yang menangkapnya.
-    expect(garis[0].split("\t")[4]).toBe("TUTI HARYANTI, ST.");
+    expect(garis[0].split("\t")[4]).toBe("VIDYANATA YUDHANTO, ST.");
     expect(garis[0].split("\t")).not.toEqual([...KOLOM_ADK_TUKIN]);
     // Tiap baris punya jumlah kolom yang sama - kalau tidak, file ditolak
     // aplikasi tujuan.
@@ -265,7 +265,7 @@ describe("pembulatan nilai uang", () => {
 
 describe("nilaiUangAdkTukin - Nilai Bruto adalah tarif PENUH, bukan hasil setelah potongan", () => {
   it("bruto = tarif kelas jabatan, potongan = selisih ke bersih", () => {
-    // Angka dari sheet "Masuk ADK" rincian manual Rokeu: Arini Sarkowi,
+    // Angka dari sheet "Masuk ADK" rincian manual Rokeu: Anindya Mahendra,
     // kelas 12 (tarif 9.896.000), potongan 44.235,12, bersih 9.851.764,88.
     const u = nilaiUangAdkTukin({ tarifPenuhKelasJabatan: 9_896_000, tukinBersih: 9_851_764.88 });
     expect(u.bruto).toBe(9_896_000);

@@ -23,7 +23,7 @@
  * dan itu KELIRU: panjang yang disebutkan user adalah keterangan tentang data,
  * bukan izin mengubahnya. Akibatnya nyata - 20 rekening Mandiri satker Rokeu
  * yang tadinya sudah benar (`700013408492`, deret 7000134 yang memang 12
- * digit) berubah jadi `0700013408492` dan tidak lagi cocok dengan berkas ADK
+ * digit) berubah jadi `7777777777024` dan tidak lagi cocok dengan berkas ADK
  * yang benar-benar dipakai membayar. Dicabut 2026-09-08.
  *
  * Panjang yang tidak cocok sekarang cuma dilaporkan. Nomor yang jelas

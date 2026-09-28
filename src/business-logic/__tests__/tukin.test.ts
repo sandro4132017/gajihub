@@ -560,7 +560,7 @@ describe("cuti yang TIDAK memotong tidak boleh menghapus potongan Pasal 13", () 
   });
 
   it("angkanya cocok dengan rincian tukin manual Rokeu", () => {
-    // AHMAD HENDA FIRMANSYAH, kelas 8, Juli 2026: potongan Pasal 13 sebesar
+    // WICAKSANA SETIABUDI, kelas 8, Juli 2026: potongan Pasal 13 sebesar
     // 2,22% dari bobot kehadiran, lalu cuti tahunan 1 hari. Rincian manual
     // menulis "Dibayarkan" Rp 4.564.546 - artinya potongannya TETAP berlaku.
     const hasil = hitungTukin(
@@ -641,7 +641,7 @@ describe("cuti beberapa hari yang memotong SEBULAN PENUH (Pasal 14)", () => {
 
 describe("cuti panjang tanpa keterangan bulan - Pasal 14", () => {
   it("cuti sakit menutup hampir seluruh bulan TANPA bulan -> ditandai", () => {
-    // Kasus nyata NAELI ISTIANAH 7/2026: 21 dari 23 hari kerja, dan
+    // Kasus nyata NARENDRA NUGRAHA 7/2026: 21 dari 23 hari kerja, dan
     // sinkronisasi e-Presensi tidak pernah mengisi bulan ke berapa. Tanpa
     // catatan ini, ia dibayar penuh tanpa ada yang tahu bulannya diasumsikan.
     const hasil = hitungPersenDibayarCuti({ jenis: "CUTI_SAKIT", jumlahHariCuti: 21 }, 23);

@@ -26,7 +26,7 @@ async function buka(pegawai: PegawaiAdkHarian[], bulan: number, tahun: number) {
 }
 
 const CONTOH = [
-  P("197804012009122001", "Nurul Apriyanah, SE.", [
+  P("199000100000000012", "Olivia Wibisana, SE.", [
     { tanggalIso: "2026-07-01", jam: 3 }, // Rabu - hari kerja
     { tanggalIso: "2026-07-04", jam: 5 }, // Sabtu - hari libur
   ]),
@@ -93,13 +93,13 @@ describe("berkasAdkLemburXlsx", () => {
     expect(ws.getCell("D6").value).toBe(3); // tanggal 1
     expect(ws.getCell("G6").value).toBe(5); // tanggal 4
     expect(ws.getCell("E6").value).toBeNull(); // tanggal 2 kosong
-    expect(ws.getCell("B6").value).toBe("197804012009122001");
+    expect(ws.getCell("B6").value).toBe("199000100000000012");
     expect(ws.getCell("B6").numFmt).toBe("@");
   });
 
   it("sheet hasil = muatan yang disetor, satu baris per hari", async () => {
     const wh = (await buka(CONTOH, 7, 2026)).getWorksheet("hasil")!;
-    expect(wh.getCell("A1").value).toBe("197804012009122001");
+    expect(wh.getCell("A1").value).toBe("199000100000000012");
     expect(wh.getCell("B1").value).toBe("2026-07-01");
     expect(wh.getCell("C1").value).toBe(3);
     expect(wh.getCell("B2").value).toBe("2026-07-04");

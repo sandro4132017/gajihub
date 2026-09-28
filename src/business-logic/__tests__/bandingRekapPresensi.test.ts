@@ -84,7 +84,7 @@ describe("bandingkanSatuPegawai - beda harian", () => {
 
   it("WFO lawan DINAS_LUAR ditandai BERDAMPAK", () => {
     // Gajihub membebaskan Dinas Luar dari keterlambatan; berkas petugas tidak.
-    // Ini kasus Dian Nurlita 14 Juli 2026 (99 menit lawan 2 menit).
+    // Ini kasus Satria Nugraha 14 Juli 2026 (99 menit lawan 2 menit).
     const r = banding({
       petugas: { rekap: rekap({}), hari: [hari("2026-07-14", "WFO", 607)] },
       gajihub: { rekap: rekap({}), hari: [hari("2026-07-14", "DINAS_LUAR", 607)] },

@@ -59,7 +59,7 @@ Sisa yang masih relevan dari langkah awal:
     alur Kasubag TU jenjang 1 -> PPABP jenjang final tidak terbalik -
     Kasubag TU memverifikasi data unitnya sendiri, PPABP memeriksanya
     sebagai sisi keuangan.
-  - Terlihat di data: akun PPABP Irwan Syafril punya `User.satuanKerja`
+  - Terlihat di data: akun PPABP Hanindita Widagdo punya `User.satuanKerja`
     **NULL** (lintas satker) sementara `Pegawai.satuanKerja`-nya **Biro
     Keuangan dan Barang Milik Negara** - dua kolom itu memang menjawab
     pertanyaan berbeda, dan di sinilah bedanya paling kelihatan.
@@ -114,10 +114,10 @@ di CLAUDE.md buat gap yang masih terbuka.
 - **TIDAK ADA** perubahan skema/model baru di langkah ini - murni UI di
   atas data yang sudah diseed. Upload bukti dukung banding TETAP belum ada
   (masih TODO(confirm) storage, sama seperti sebelumnya).
-- Diverifikasi manual: PEGAWAI (John Pieter, skenario banding) dan PPABP
-  (Irwan Syafril, buka `/saya` miliknya sendiri lewat privilege universal)
+- Diverifikasi manual: PEGAWAI (Indraswari Purnomo, skenario banding) dan PPABP
+  (Hanindita Widagdo, buka `/saya` miliknya sendiri lewat privilege universal)
   - profil, ringkasan pendapatan, slip gaji per periode, bukti potong
-  pajak (Irwan Syafril), dan stepper banding semua tampil benar.
+  pajak (Hanindita Widagdo), dan stepper banding semua tampil benar.
 
 **Detail UI Kasubag TU (langkah 4b)** - semua di `src/app/kasubag/`, guard
 per halaman pakai fungsi scope-unit dari `permissions.ts`
@@ -193,7 +193,7 @@ butuh filter bulan/tahun):
   (`verifikasiBandingJenjang1Action`, fetch ulang `User` dari database,
   pola sama dengan approval Tukin/UM/Lembur). SETUJU → status
   "MENUNGGU_APPROVAL_FINAL" (lanjut ke OSDMA), TOLAK → "DITOLAK" (selesai).
-  Sudah diverifikasi manual end-to-end (banding John Pieter, lewat ADMIN +
+  Sudah diverifikasi manual end-to-end (banding Indraswari Purnomo, lewat ADMIN +
   `SatkerPicker` karena Biro Keuangan dan BMN belum punya akun KASUBAG_TU
   di seed data - status berubah dari "Menunggu verifikasi" ke "Diteruskan
   ke OSDMA" dengan benar).
@@ -217,7 +217,7 @@ butuh filter bulan/tahun):
   Role lain (OSDMA/PPABP/PIMPINAN/ADMIN) MASIH pakai `MENU_APPROVER` lama
   (belum ada menu khusus mereka) - akan diganti pas langkah 4c-4f masing-
   masing role dikerjakan.
-- Diverifikasi manual (KASUBAG_TU Ayu Puspita Sari, unit Pusdatik):
+- Diverifikasi manual (KASUBAG_TU Maheswari Yudhanto, unit Pusdatik):
   Dashboard Unit, Pegawai Unit, Kalkulasi (massal + koreksi lembur), SK
   KGB, SK Hukuman Disiplin (termasuk banner TODO(confirm)) semua tampil &
   berfungsi benar dengan scope unit yang dipaksa ke Pusdatik. Verifikasi
@@ -277,11 +277,11 @@ halaman-halaman ini:
   Final Banding, SK KGB, SK Hukuman Disiplin, Update SK Pegawai, Data
   Saya). TIDAK ikut 3 dashboard approver Tukin/UM/Lembur (`MENU_APPROVER`)
   - itu domain Kasubag TU (jenjang 1) + PPABP (jenjang final), bukan OSDMA.
-- Diverifikasi manual (OSDMA Dian Kreshnadjati): Dashboard OSDMA (3 stat
+- Diverifikasi manual (OSDMA Nirmala Hartanto): Dashboard OSDMA (3 stat
   tile benar), approval SK KGB (Setuju -> golongan Firmansyah berubah
   IV/a→IV/b + AuditTrail tercatat, diverifikasi lewat query DB langsung),
-  approval final Banding (Setuju -> banding Irvan Ganeva jadi DISETUJUI),
-  approval SK Hukuman Disiplin (Tolak -> banding Herry Susanto jadi
+  approval final Banding (Setuju -> banding Gemilang Anggara jadi DISETUJUI),
+  approval SK Hukuman Disiplin (Tolak -> banding Elang Sasmita jadi
   DITOLAK, banner TODO(confirm) tampil benar), Update SK (cari "Kharina" ->
   pilih -> update jabatan/golongan -> redirect dengan banner sukses,
   diverifikasi lewat DB jabatan/golongan Kharina berubah + AuditTrail
@@ -289,8 +289,8 @@ halaman-halaman ini:
   mengubah data seed simulasi (approval yang tereksekusi = perubahan
   state permanen, bukan cuma preview) - SUDAH DI-REVERT SETELAHNYA supaya
   seed data kembali ke skenario "pending" semula (Firmansyah SK KGB
-  DIAJUKAN, Irvan Ganeva banding MENUNGGU_APPROVAL_FINAL, Herry Susanto SK
-  Hukdis DIAJUKAN, Kharina Olivia jabatan/golongan semula) - supaya demo
+  DIAJUKAN, Gemilang Anggara banding MENUNGGU_APPROVAL_FINAL, Elang Sasmita SK
+  Hukdis DIAJUKAN, Jagaditya Saraswati jabatan/golongan semula) - supaya demo
   ke stakeholder masih punya item pending buat ditunjukkan di UI OSDMA
   ini. Kalau mau re-verifikasi lagi, ingat aksinya PERMANEN kecuali
   di-revert manual lagi (belum ada mekanisme "undo" otomatis).
@@ -366,23 +366,23 @@ KASUBAG_TU) buat halaman yang punya filter satker opsional:
   ini KONSISTEN dengan keputusan yang sama di langkah 4b, BUKAN celah baru
   yang kelewatan khusus di PPABP.
 - **Seed data baru buat demo**: ditambahkan 1 `ReconciliationStatus` baru
-  berstatus SELISIH (Kharina Olivia, periode 7/2026, `detailSelisih` contoh
+  berstatus SELISIH (Jagaditya Saraswati, periode 7/2026, `detailSelisih` contoh
   selisih 1 hari jumlahHariHadir Gajihub-vs-eAbsensi) di
   `src/db/seedSimulasi.ts` (upsert, aman di-run ulang) - SEBELUM ini cuma
   ada 2 baris `ReconciliationStatus`, keduanya status SANGGAH dari Banding,
   jadi tidak ada contoh kasus SELISIH murni buat mendemokan fitur
   "handle selisih" PPABP. Diterapkan juga ke database yang sedang berjalan
   (bukan cuma di file seed) supaya langsung kepakai tanpa perlu re-seed.
-- Diverifikasi manual (PPABP Irwan Syafril): Dashboard Lintas Unit (5.069
+- Diverifikasi manual (PPABP Hanindita Widagdo): Dashboard Lintas Unit (5.069
   total pegawai lintas satker, tally 3 domain benar, tile rekonsiliasi
   benar - termasuk 1 baris SANGGAH lawas dari mock demo "Contoh Pegawai
   Satu" yang masih ada di database sejak fitur user & role versi awal),
   Rekonsiliasi (putuskan "Koreksi siklus berikutnya" untuk kasus SELISIH
-  Kharina Olivia - pindah ke histori dengan benar), Export ADK (download
+  Jagaditya Saraswati - pindah ke histori dengan benar), Export ADK (download
   CSV Tukin lewat `fetch()` langsung ke Route Handler, isi & header
   Content-Disposition benar), Anggaran & Realisasi (tambah baris baru,
   muncul di tabel dengan persentase benar), Usulan Perubahan Role (usulkan
-  Farid Arif → Kasubag TU, muncul status MENUNGGU). **PENTING**: sama
+  Bramantya Adiwangsa → Kasubag TU, muncul status MENUNGGU). **PENTING**: sama
   seperti verifikasi OSDMA - keputusan rekonsiliasi, baris Anggaran test,
   dan usulan role test SEMPAT benar-benar tersimpan (bukan preview) -
   SUDAH DI-REVERT (baris Anggaran & usulan role test dihapus, rekonsiliasi
@@ -449,13 +449,13 @@ bypass otorisasi (`cekRoleAtauAdmin` dkk) yang sudah ada sejak langkah 3:
   `/ppabp`/dashboard approver di sidebar (biar tidak jadi gabungan 5 menu
   role sekaligus) - akses ke situ lewat panel "Akses lintas role lainnya"
   di `/admin` sendiri, bukan sidebar permanen.
-- Diverifikasi manual (ADMIN Alpha Sandro Adithyaswara): Dashboard Admin
+- Diverifikasi manual (ADMIN Purnama Kusuma): Dashboard Admin
   (banner + 3 card + panel akses lintas role tampil benar), Konfigurasi &
   Kesehatan Sistem (stat tile benar - 5.069 pegawai/13 akun/33 audit
   trail/periode 7/2026, tabel adapter & aktivitas terbaru tampil benar),
-  Kelola Assignment Role (ubah role Prasetyo Muhammad Sidqi ke PIMPINAN,
+  Kelola Assignment Role (ubah role Quraisy Kusuma ke PIMPINAN,
   tersimpan & terverifikasi lewat query DB), Eksekusi Usulan Role
-  (eksekusi usulan Kharina Olivia → KASUBAG_TU, `User.role` berubah
+  (eksekusi usulan Jagaditya Saraswati → KASUBAG_TU, `User.role` berubah
   terverifikasi lewat DB - inilah yang mengungkap gap `satuanKerja` di
   atas). **PENTING**: sama seperti OSDMA/PPABP - kedua perubahan role
   verifikasi ini SEMPAT benar-benar tersimpan, SUDAH DI-REVERT (Prasetyo
@@ -504,7 +504,7 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
 - `src/app/AppShell.tsx` - `MENU_PIMPINAN` baru, CUMA 2 item (Dashboard
   Lintas Unit, Data Saya) - paling ringkas dari semua role, sesuai
   cakupan fitur Pimpinan yang memang paling sempit.
-- Diverifikasi manual (PIMPINAN Cris Kuntadi): Dashboard Lintas Unit
+- Diverifikasi manual (PIMPINAN Wisnu Purnomo): Dashboard Lintas Unit
   tampil data SAMA dengan yang PPABP lihat (5.069 pegawai, tally 3
   domain, tile rekonsiliasi 4) TAPI tile rekonsiliasi bukan link dan tidak
   ada link "Kelola Anggaran & Realisasi" (dicek: nol `<a>` tag di konten
@@ -651,31 +651,36 @@ diimpor (`prisma.pegawai`, ±5.069 baris via `src/jobs/importPegawaiXlsx.ts`)
 konsisten dengan basis data yang sudah ada. Login pakai NIP sebagai
 username SEKALIGUS password (sama seperti pola login lain di project ini).
 
-13 akun lintas 6 role & 3 satuan kerja (+ 2 pimpinan lintas unit):
+13 akun lintas 6 role & 3 satuan kerja (+ 2 pimpinan lintas unit).
 
-| NIP | Nama | Satuan kerja | Role | Skenario periode berjalan (7/2026) |
-|---|---|---|---|---|
-| 198703232015031002 | Alpha Sandro Adithyaswara | Biro Keuangan dan BMN (`User.satuanKerja` = Pusdatik, lihat catatan multi-role) | `ADMIN` + SEMUA role lain sebagai role tambahan | lancar |
-| 197303072005011001 | Irwan Syafril | Biro Keuangan dan BMN | `PPABP` | lancar |
-| 198312302009121004 | John Pieter | Biro Keuangan dan BMN | `PEGAWAI` | banding (baru DIAJUKAN) |
-| 199611272018121001 | Prasetyo Muhammad Sidqi | Biro Keuangan dan BMN | `PEGAWAI` | uang lembur tidak biasa (52 jam, kena cap 40 jam + anomali) |
-| 198810012011012009 | Kharina Olivia | Biro Keuangan dan BMN | `PEGAWAI` | lancar |
-| 199006212015032005 | Ayu Puspita Sari | Pusdatik | `KASUBAG_TU` | lancar |
-| 198308052009121004 | Firmansyah | Pusdatik | `PEGAWAI` | Tukin DITOLAK jenjang 1 |
-| 197611232006041015 | Farid Arif | Pusdatik | `PEGAWAI` | belum diajukan approval sama sekali |
-| 197904302011011012 | Luthfi Firdaus | Biro Umum | `KASUBAG_TU` | lancar |
-| 198604302011011011 | Irvan Ganeva | Biro Umum | `PEGAWAI` | banding (jenjang 1 SETUJU, menunggu final OSDMA) |
-| 197508061999031001 | Herry Susanto | Biro Umum | `PEGAWAI` | lancar |
-| 197410061999032002 | Dian Kreshnadjati | Biro OSDMA | `OSDMA` | lancar |
-| 196906241990031004 | Cris Kuntadi | Sekretariat Jenderal | `PIMPINAN` | lancar |
+**NIP-nya TIDAK dicantumkan di sini.** Akun demo memakai NIP pegawai ASLI, dan
+selama password masih sama dengan NIP, mencantumkannya di repo publik berarti
+menerbitkan kredensial. Daftarnya ada di `seed-akun-demo.json` (di-gitignore);
+kodenya membacanya lewat `nipDemo("kunci")` di `src/db/akunDemo.ts`.
+
+| Nama | Satuan kerja | Role | Skenario periode berjalan (7/2026) |
+|---|---|---|---|
+| Purnama Kusuma | Biro Keuangan dan BMN (`User.satuanKerja` = Pusdatik, lihat catatan multi-role) | `ADMIN` + SEMUA role lain sebagai role tambahan | lancar |
+| Hanindita Widagdo | Biro Keuangan dan BMN | `PPABP` | lancar |
+| Indraswari Purnomo | Biro Keuangan dan BMN | `PEGAWAI` | banding (baru DIAJUKAN) |
+| Quraisy Kusuma | Biro Keuangan dan BMN | `PEGAWAI` | uang lembur tidak biasa (52 jam, kena cap 40 jam + anomali) |
+| Jagaditya Saraswati | Biro Keuangan dan BMN | `PEGAWAI` | lancar |
+| Maheswari Yudhanto | Pusdatik | `KASUBAG_TU` | lancar |
+| Firmansyah | Pusdatik | `PEGAWAI` | Tukin DITOLAK jenjang 1 |
+| Bramantya Adiwangsa | Pusdatik | `PEGAWAI` | belum diajukan approval sama sekali |
+| Kalingga Legowo | Biro Umum | `KASUBAG_TU` | lancar |
+| Gemilang Anggara | Biro Umum | `PEGAWAI` | banding (jenjang 1 SETUJU, menunggu final OSDMA) |
+| Elang Sasmita | Biro Umum | `PEGAWAI` | lancar |
+| Nirmala Hartanto | Biro OSDMA | `OSDMA` | lancar |
+| Wisnu Purnomo | Sekretariat Jenderal | `PIMPINAN` | lancar |
 
 Periode 6/2026 (periode lalu) SEMUA 13 karakter berstatus lancar/APPROVED
 penuh (histori pembayaran). Detail tambahan yang ikut diseed:
 SK KGB (Firmansyah, diajukan Ayu, `DIAJUKAN`), SK Hukuman Disiplin (Herry
 Susanto, diajukan Luthfi, `DIAJUKAN`), Anggaran Realisasi (3 satuan kerja,
 periode 7/2026), Bukti Potong Pajak 2025 (Alpha & Irwan), Usulan Perubahan
-Role (Irwan mengusulkan Kharina Olivia jadi `KASUBAG_TU`, status
-`MENUNGGU`), ReconciliationStatus SELISIH (Kharina Olivia, periode
+Role (Irwan mengusulkan Jagaditya Saraswati jadi `KASUBAG_TU`, status
+`MENUNGGU`), ReconciliationStatus SELISIH (Jagaditya Saraswati, periode
 7/2026, ditambahkan belakangan di langkah 4d khusus buat demo "handle
 selisih" PPABP - lihat detail di situ).
 
@@ -785,7 +790,7 @@ ganti balik (sudah diverifikasi manual - lihat di bawah).
   KASUBAG_TU dipilih tapi satuan kerjanya kosong, supaya tidak bikin akun
   "buta unit". Tabel "akun dengan kewenangan khusus" sekarang juga
   memunculkan akun ber-role PEGAWAI yang punya role tambahan.
-- **Seed**: akun demo ADMIN (Alpha Sandro, NIP 198703232015031002) dikasih
+- **Seed**: akun demo ADMIN (Alpha Sandro) dikasih
   SEMUA role lain sebagai role tambahan + `satuanKerja` diisi Pusdatik
   (WAJIB, karena KASUBAG_TU ada di daftarnya). Jadi satu login itu cukup
   buat keliling semua sudut pandang. Akun demo lain tetap single-role.
@@ -807,7 +812,7 @@ dengan scope Pusdatik (81 pegawai), dan `/admin` jadi "Akses ditolak"
 tambahan dihapus lewat SQL saat sesi masih jalan -> halaman berikutnya
 otomatis balik ke ADMIN (bukti cookie basi tidak dipercaya); assign role
 tambahan lewat UI Admin tersimpan benar di database + tercatat di
-`AuditTrail`; login akun single-role (Ayu Puspita Sari) -> menu akun cuma
+`AuditTrail`; login akun single-role (Maheswari Yudhanto) -> menu akun cuma
 berisi Logout, tanpa bagian "Ganti role"; logout dari menu baru berfungsi.
 Semua mutasi verifikasi (role tambahan Ayu + baris AuditTrail-nya) SUDAH
 DI-REVERT.
@@ -929,6 +934,6 @@ Keuangan** (bukan Pusdatik) -> 28 tersimpan, filter satuan kerja tetap
 muncul; buka `/pegawai` untuk pegawai **Biro Umum** -> form edit tampil
 (bukan "di luar kewenangan kamu"), field satuan kerja aktif; submit form ->
 diterima, `AuditTrail` mencatat `"sumber":"Edit data pegawai (PPABP)"`.
-Submit dilakukan TANPA mengubah nilai apa pun (data Herry Susanto sebelum &
+Submit dilakukan TANPA mengubah nilai apa pun (data Elang Sasmita sebelum &
 sesudah identik) dan baris AuditTrail uji itu sudah dihapus.
 

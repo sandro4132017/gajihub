@@ -77,7 +77,7 @@ describe("rincianJamKerjaHari - batas checkout bergeser tapi dibatasi toleransi 
   });
 
   it("kolom Jam harus pulang memajang batas LEMBUR, bukan batas potongan", () => {
-    // Masuk 09:10 (kasus IRMA PUSPITA 9 Juli 2026). Dua angka berbeda hidup
+    // Masuk 09:10 (kasus FAJARINA YUDHANTO 9 Juli 2026). Dua angka berbeda hidup
     // berdampingan di baris yang sama, dan itu disengaja:
     //   17:40 - kewajiban 7,5 jam yang utuh, dipajang & titik mulai lembur;
     //   17:00 - ber-batas atas, dipakai mesin POTONGAN supaya 40 menit
@@ -296,7 +296,7 @@ describe("jamDariMenit", () => {
 
 // ============================================================================
 // TAP TIDAK WAJAR - tabel tidak boleh memajang angka yang tidak dibayar.
-// Dipasang 2026-09-10 setelah satu baris nyata (David Casidi, 17 Juli 2026,
+// Dipasang 2026-09-10 setelah satu baris nyata (Arunika Saraswati, 17 Juli 2026,
 // WFH, masuk 23:26 keluar 23:59) memunculkan "terlambat 896 menit" dan
 // "menit kerja -57" di tabel, sementara yang benar-benar ditagih 0 menit
 // plus 1 kejadian Pasal 13 ayat (2).

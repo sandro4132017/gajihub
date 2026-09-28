@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
 /* ============================================================================
@@ -16,8 +15,10 @@
    baru, artinya tetap.
    ========================================================================= */
 @theme {
-  --font-sans: "Plus Jakarta Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Dimuat `next/font` di layout.tsx (di-host sendiri) - alasannya di sana.
+     Cadangan sistem dipertahankan untuk sekejap sebelum fontnya siap. */
+  --font-sans: var(--font-manrope), -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 
   --color-navy: #13416b;
   --color-navy-deep: #0e3255;

@@ -36,6 +36,8 @@ export interface KoreksiTersimpan {
   id: string;
   jamMasuk: string | null;
   jamKeluar: string | null;
+  /** null = pakai hitungan mesin. 0 SAH: "diperiksa, memang bukan lembur". */
+  jamLembur: number | null;
   alasan: string;
   olehNama: string;
 }
@@ -45,12 +47,22 @@ export function KoreksiJamForm({
   tanggalIso,
   jamMasukAsli,
   jamKeluarAsli,
+  jamLemburMesin,
+  bolehUbahJam,
   koreksi,
 }: {
   nip: string;
   tanggalIso: string;
   jamMasukAsli: string;
   jamKeluarAsli: string;
+  /** Jam lembur hasil hitungan mesin untuk hari ini - pembanding di form. */
+  jamLemburMesin: number;
+  /**
+   * Jam masuk & pulang boleh diubah - hanya kalau tanggalnya sudah ditandai
+   * kendala e-Presensi. Jam LEMBUR tidak terikat penanda itu; lihat catatan di
+   * actionsKoreksi.ts.
+   */
+  bolehUbahJam: boolean;
   koreksi: KoreksiTersimpan | null;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -80,7 +92,9 @@ export function KoreksiJamForm({
       {koreksi && (
         <span
           className="mb-1 block text-[11px] font-semibold text-teal-deep"
-          title={`Masuk ${koreksi.jamMasuk ?? "tetap"}, pulang ${koreksi.jamKeluar ?? "tetap"} - ${koreksi.alasan} (oleh ${koreksi.olehNama})`}
+          title={`Masuk ${koreksi.jamMasuk ?? "tetap"}, pulang ${koreksi.jamKeluar ?? "tetap"}, lembur ${
+            koreksi.jamLembur === null ? "tetap" : `${koreksi.jamLembur} jam`
+          } - ${koreksi.alasan} (oleh ${koreksi.olehNama})`}
         >
           Dikoreksi manual
         </span>
@@ -164,8 +178,9 @@ export function KoreksiJamForm({
                 <input
                   type="time"
                   name="jamMasuk"
+                  disabled={!bolehUbahJam}
                   defaultValue={koreksi?.jamMasuk ?? ""}
-                  className="field-input w-full text-sm"
+                  className="field-input w-full text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </label>
               <label className="flex-1">
@@ -173,11 +188,52 @@ export function KoreksiJamForm({
                 <input
                   type="time"
                   name="jamKeluar"
+                  disabled={!bolehUbahJam}
                   defaultValue={koreksi?.jamKeluar ?? ""}
-                  className="field-input w-full text-sm"
+                  className="field-input w-full text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </label>
             </div>
+            {!bolehUbahJam && (
+              // Sebabnya disebut DI SEBELAH kolom yang mati, bukan sebagai
+              // pesan galat sesudah ditekan: yang membacanya sedang memutuskan
+              // apa yang bisa dia kerjakan sekarang.
+              <p className="mt-1 text-[11px] text-muted">
+                Jam masuk &amp; pulang terkunci - tanggal ini belum ditandai kendala e-Presensi. Jam lembur di
+                bawah tetap bisa dikoreksi.
+              </p>
+            )}
+            {/* JAM LEMBUR - dipisah barisnya sendiri, bukan digabung ke deretan
+                jam di atas. Dua kolom di atas memperbaiki FAKTA (jam berapa
+                orangnya tap); yang ini menetapkan HAK (berapa jam yang
+                diperintahkan lembur). Menaruhnya sebaris membuat keduanya
+                terbaca sebagai hal yang sama.
+
+                Angka mesin disebut di sebelahnya supaya koreksinya selalu bisa
+                diadu ke asalnya - itu yang membedakan "diperbaiki" dari
+                "dikarang". */}
+            <label className="mt-2 block">
+              <span className="field-label">
+                Jam lembur{" "}
+                <span className="font-normal text-muted">
+                  - hitungan mesin: {jamLemburMesin} jam
+                </span>
+              </span>
+              <input
+                type="number"
+                name="jamLembur"
+                min="0"
+                max="24"
+                step="1"
+                defaultValue={koreksi?.jamLembur ?? ""}
+                placeholder="kosongkan = pakai hitungan mesin"
+                className="field-input w-full text-sm"
+              />
+              <span className="mt-1 block text-[11px] text-muted">
+                Isi <strong>0</strong> kalau ketukan pulang malamnya ternyata bukan lembur. Dasarnya surat
+                perintah lembur.
+              </span>
+            </label>
             <label className="mt-2 block">
               <span className="field-label">Dasar koreksi (wajib)</span>
               <input

@@ -35,14 +35,14 @@ describe("dikecualikanPotonganKehadiran", () => {
 });
 
 /**
- * Kasus nyata: IRMA PUSPITA, Kepala Biro Keuangan dan BMN (kelas 15),
+ * Kasus nyata: FAJARINA YUDHANTO, Kepala Biro Keuangan dan BMN (kelas 15),
  * periode 7/2026. Rekap presensi Gajihub mencatat terlambat 40 menit dan
  * pulang cepat 20 menit, TAPI rincian tukin manual Rokeu membayarnya penuh
  * Rp 19.280.000 dengan kolom potongan NOL.
  */
 describe("hitungTukin - pengecualian Pejabat Pimpinan Tinggi", () => {
   const rekap: RekapKehadiranPeriode = {
-    pegawaiId: "198501202008012002",
+    pegawaiId: "199000100000000017",
     periodeBulan: 7,
     periodeTahun: 2026,
     jumlahHariKerja: 23,
@@ -57,13 +57,13 @@ describe("hitungTukin - pengecualian Pejabat Pimpinan Tinggi", () => {
   };
 
   const dasar: TukinInput = {
-    pegawaiId: "198501202008012002",
+    pegawaiId: "199000100000000017",
     periodeBulan: 7,
     periodeTahun: 2026,
     tukinPokokKelasJabatan: TUKIN_POKOK_PER_KELAS_JABATAN[15]!,
     rekapKehadiran: rekap,
     capaianKinerja: {
-      pegawaiId: "198501202008012002",
+      pegawaiId: "199000100000000017",
       periodeBulan: 7,
       periodeTahun: 2026,
       nilaiCapaianKinerjaPersen: 100,

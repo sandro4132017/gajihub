@@ -34,6 +34,7 @@ import { ajukanApprovalTukin } from "../approval/approvalTukinService";
 import { ajukanApprovalUangMakan } from "../approval/approvalUangMakanService";
 import { ajukanApprovalUangLembur } from "../approval/approvalUangLemburService";
 import type { RekapKehadiranPeriode, StatusKehadiran } from "../types/index";
+import { namaDemo, nipDemo } from "./akunDemo";
 
 const prisma = new PrismaClient();
 
@@ -48,12 +49,12 @@ const PERIODE_BERJALAN = { bulan: 7, tahun: 2026 };
 // Jenderal), dan buat jenjang final ketika PPABP-nya sendiri jadi subjek
 // kalkulasi (hindari self-approval) - pola sama dengan identitas placeholder
 // di src/jobs/runApprovalDemo.ts (approverNip tidak harus akun User asli).
-const PLT_KASUBAG = { nip: "000000000000000900", nama: "Plt. Kepala Bagian Umum", jabatan: "Pelaksana Tugas Kepala Bagian" };
-const PLT_PPABP = { nip: "000000000000000901", nama: "Plt. Ketua Tim PPABP", jabatan: "Pelaksana Tugas Ketua Tim PPABP" };
+const PLT_KASUBAG = { nip: nipDemo("pltKepalaBagian"), nama: namaDemo("pltKepalaBagian"), jabatan: "Pelaksana Tugas Kepala Bagian" };
+const PLT_PPABP = { nip: nipDemo("pltKetuaTim"), nama: namaDemo("pltKetuaTim"), jabatan: "Pelaksana Tugas Ketua Tim PPABP" };
 
-const KASUBAG_PUSDATIK = { nip: "199006212015032005", nama: "Ayu Puspita Sari", jabatan: "Kepala Subbagian Tata Usaha" };
-const KASUBAG_UMUM = { nip: "197904302011011012", nama: "Luthfi Firdaus", jabatan: "Kepala Bagian Rumah Tangga dan Perlengkapan" };
-const PPABP = { nip: "197303072005011001", nama: "Irwan Syafril", jabatan: "Analis Pengelolaan Keuangan APBN Ahli Madya (Tim PPABP Rokeu)" };
+const KASUBAG_PUSDATIK = { nip: nipDemo("ayuPuspitaSari"), nama: namaDemo("ayuPuspitaSari"), jabatan: "Kepala Subbagian Tata Usaha" };
+const KASUBAG_UMUM = { nip: nipDemo("luthfiFirdaus"), nama: namaDemo("luthfiFirdaus"), jabatan: "Kepala Bagian Rumah Tangga dan Perlengkapan" };
+const PPABP = { nip: nipDemo("irwanSyafril"), nama: namaDemo("irwanSyafril"), jabatan: "Analis Pengelolaan Keuangan APBN Ahli Madya (Tim PPABP Rokeu)" };
 
 type Skenario =
   | "LANCAR"
@@ -85,7 +86,7 @@ interface Karakter {
 
 const KARAKTER: Karakter[] = [
   {
-    nip: "198703232015031002", // Alpha Sandro Adithyaswara - ADMIN
+    nip: nipDemo("alphaSandroAdithyaswara"), // alphaSandroAdithyaswara - ADMIN
     predikat: "SANGAT_BAIK",
     skenario: "LANCAR",
     hariAlpha: 0,
@@ -98,7 +99,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "197303072005011001", // Irwan Syafril - PPABP (self, hindari self-approve jenjang 2)
+    nip: nipDemo("irwanSyafril"), // irwanSyafril - PPABP (self, hindari self-approve jenjang 2)
     predikat: "SANGAT_BAIK",
     skenario: "LANCAR",
     hariAlpha: 0,
@@ -111,7 +112,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PLT_PPABP,
   },
   {
-    nip: "198312302009121004", // John Pieter - PEGAWAI, banding baru diajukan
+    nip: nipDemo("johnPieter"), // johnPieter - PEGAWAI, banding baru diajukan
     predikat: "BAIK",
     skenario: "BANDING_DIAJUKAN",
     hariAlpha: 0,
@@ -124,7 +125,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "199611272018121001", // Prasetyo Muhammad Sidqi - PEGAWAI, lembur tidak biasa
+    nip: nipDemo("prasetyoMuhammadSidqi"), // prasetyoMuhammadSidqi - PEGAWAI, lembur tidak biasa
     predikat: "BAIK",
     skenario: "LEMBUR_TIDAK_BIASA",
     hariAlpha: 0,
@@ -137,7 +138,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "198810012011012009", // Kharina Olivia - PEGAWAI, lancar
+    nip: nipDemo("kharinaOlivia"), // kharinaOlivia - PEGAWAI, lancar
     predikat: "BAIK",
     skenario: "LANCAR",
     hariAlpha: 0,
@@ -150,7 +151,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "199006212015032005", // Ayu Puspita Sari - KASUBAG_TU Pusdatik (self, hindari self-approve jenjang 1)
+    nip: nipDemo("ayuPuspitaSari"), // ayuPuspitaSari - KASUBAG_TU Pusdatik (self, hindari self-approve jenjang 1)
     predikat: "SANGAT_BAIK",
     skenario: "LANCAR",
     hariAlpha: 0,
@@ -163,7 +164,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "198308052009121004", // Firmansyah - PEGAWAI, Tukin ditolak jenjang 1
+    nip: nipDemo("firmansyah"), // firmansyah - PEGAWAI, Tukin ditolak jenjang 1
     predikat: "BAIK",
     skenario: "DITOLAK",
     hariAlpha: 0,
@@ -176,7 +177,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "197611232006041015", // Farid Arif - PEGAWAI, belum diajukan approval
+    nip: nipDemo("faridArif"), // faridArif - PEGAWAI, belum diajukan approval
     predikat: "BAIK",
     skenario: "BELUM_DIAJUKAN",
     hariAlpha: 0,
@@ -189,7 +190,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "197904302011011012", // Luthfi Firdaus - KASUBAG_TU Biro Umum (self)
+    nip: nipDemo("luthfiFirdaus"), // luthfiFirdaus - KASUBAG_TU Biro Umum (self)
     predikat: "SANGAT_BAIK",
     skenario: "LANCAR",
     hariAlpha: 0,
@@ -202,7 +203,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "198604302011011011", // Irvan Ganeva - PEGAWAI, banding tahap 1 selesai
+    nip: nipDemo("irvanGaneva"), // irvanGaneva - PEGAWAI, banding tahap 1 selesai
     predikat: "BAIK",
     skenario: "BANDING_TAHAP1_SELESAI",
     hariAlpha: 2,
@@ -218,7 +219,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "197508061999031001", // Herry Susanto - PEGAWAI, lancar
+    nip: nipDemo("herrySusanto"), // herrySusanto - PEGAWAI, lancar
     predikat: "BAIK",
     skenario: "LANCAR",
     hariAlpha: 0,
@@ -231,7 +232,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "197410061999032002", // Dian Kreshnadjati - OSDMA
+    nip: nipDemo("dianKreshnadjati"), // dianKreshnadjati - OSDMA
     predikat: "SANGAT_BAIK",
     skenario: "LANCAR",
     hariAlpha: 0,
@@ -244,7 +245,7 @@ const KARAKTER: Karakter[] = [
     jenjang2: PPABP,
   },
   {
-    nip: "196906241990031004", // Cris Kuntadi - PIMPINAN
+    nip: nipDemo("crisKuntadi"), // crisKuntadi - PIMPINAN
     predikat: "SANGAT_BAIK",
     skenario: "LANCAR",
     hariAlpha: 0,
@@ -701,11 +702,11 @@ async function main() {
   }
 
   // --------------------------------------------------------------------
-  // BANDING - John Pieter (baru diajukan) & Irvan Ganeva (tahap 1 selesai)
+  // BANDING - Indraswari Purnomo (baru diajukan) & Gemilang Anggara (tahap 1 selesai)
   // --------------------------------------------------------------------
   console.log("\n=== Banding ===");
-  const johnPieter = userByNip.get("198312302009121004")!;
-  const johnPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: "198312302009121004" } });
+  const johnPieter = userByNip.get(nipDemo("johnPieter"))!;
+  const johnPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: nipDemo("johnPieter") } });
   const johnTukin = await prisma.tukinCalculation.findUniqueOrThrow({
     where: {
       pegawaiId_periodeBulan_periodeTahun: {
@@ -747,10 +748,10 @@ async function main() {
       update: { status: "SANGGAH" },
     }),
   ]);
-  console.log(`  -> Banding John Pieter (${johnPegawai.nama}): status DIAJUKAN.`);
+  console.log(`  -> Banding Indraswari Purnomo (${johnPegawai.nama}): status DIAJUKAN.`);
 
-  const irvan = userByNip.get("198604302011011011")!;
-  const irvanPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: "198604302011011011" } });
+  const irvan = userByNip.get(nipDemo("irvanGaneva"))!;
+  const irvanPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: nipDemo("irvanGaneva") } });
   const irvanTukin = await prisma.tukinCalculation.findUniqueOrThrow({
     where: {
       pegawaiId_periodeBulan_periodeTahun: {
@@ -815,10 +816,10 @@ async function main() {
       diunggahOlehId: irvan.id,
     },
   });
-  console.log(`  -> Banding Irvan Ganeva (${irvanPegawai.nama}): jenjang 1 SETUJU, menunggu approval final OSDMA.`);
+  console.log(`  -> Banding Gemilang Anggara (${irvanPegawai.nama}): jenjang 1 SETUJU, menunggu approval final OSDMA.`);
 
   // --------------------------------------------------------------------
-  // RECONCILIATION STATUS - SELISIH untuk Kharina Olivia (skenario BARU,
+  // RECONCILIATION STATUS - SELISIH untuk Jagaditya Saraswati (skenario BARU,
   // buat kebutuhan demo UI PPABP "handle selisih" - sebelumnya cuma ada
   // 2 baris ReconciliationStatus, keduanya status SANGGAH dari Banding di
   // atas, jadi tidak ada contoh kasus SELISIH murni buat didemokan. Upsert
@@ -826,7 +827,7 @@ async function main() {
   // kalkulasi/presensi/kinerja di atas.
   // --------------------------------------------------------------------
   console.log("\n=== Reconciliation Status (SELISIH) ===");
-  const kharinaPegawaiRecon = await prisma.pegawai.findUniqueOrThrow({ where: { nip: "198810012011012009" } });
+  const kharinaPegawaiRecon = await prisma.pegawai.findUniqueOrThrow({ where: { nip: nipDemo("kharinaOlivia") } });
   await prisma.reconciliationStatus.upsert({
     where: {
       pegawaiId_periodeBulan_periodeTahun: {
@@ -863,8 +864,8 @@ async function main() {
   // SK KGB - diajukan Kasubag TU Pusdatik untuk Firmansyah
   // --------------------------------------------------------------------
   console.log("\n=== SK KGB ===");
-  const ayu = userByNip.get("199006212015032005")!;
-  const firmansyahPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: "198308052009121004" } });
+  const ayu = userByNip.get(nipDemo("ayuPuspitaSari"))!;
+  const firmansyahPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: nipDemo("firmansyah") } });
   await prisma.skKgb.create({
     data: {
       pegawaiId: firmansyahPegawai.id,
@@ -881,14 +882,14 @@ async function main() {
   console.log(`  -> SK KGB untuk ${firmansyahPegawai.nama}: diajukan ${KASUBAG_PUSDATIK.nama}, menunggu approval OSDMA.`);
 
   // --------------------------------------------------------------------
-  // SK HUKUMAN DISIPLIN - diajukan Kasubag TU Biro Umum untuk Herry Susanto
+  // SK HUKUMAN DISIPLIN - diajukan Kasubag TU Biro Umum untuk Elang Sasmita
   // TODO(confirm): lihat catatan panjang di model SkHukumanDisiplin
   // (schema.prisma) - alur approval OSDMA di sini ASUMSI, belum konfirmasi
   // resmi ke OSDMA/Biro Hukum.
   // --------------------------------------------------------------------
   console.log("\n=== SK Hukuman Disiplin ===");
-  const luthfi = userByNip.get("197904302011011012")!;
-  const herryPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: "197508061999031001" } });
+  const luthfi = userByNip.get(nipDemo("luthfiFirdaus"))!;
+  const herryPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: nipDemo("herrySusanto") } });
   await prisma.skHukumanDisiplin.create({
     data: {
       pegawaiId: herryPegawai.id,
@@ -911,7 +912,7 @@ async function main() {
   // ANGGARAN REALISASI - upload PPABP, 3 unit, periode berjalan
   // --------------------------------------------------------------------
   console.log("\n=== Anggaran Realisasi ===");
-  const irwan = userByNip.get("197303072005011001")!;
+  const irwan = userByNip.get(nipDemo("irwanSyafril"))!;
   const anggaranData = [
     { satuanKerja: "Biro Keuangan dan Barang Milik Negara", pagu: 3_200_000_000, realisasi: 1_850_000_000 },
     { satuanKerja: "Pusat Data dan Teknologi Informasi Ketenagakerjaan", pagu: 5_100_000_000, realisasi: 2_900_000_000 },
@@ -947,8 +948,8 @@ async function main() {
   // BUKTI POTONG PAJAK - hasil upload manual (bukan API), tahun pajak lalu
   // --------------------------------------------------------------------
   console.log("\n=== Bukti Potong Pajak ===");
-  const alphaPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: "198703232015031002" } });
-  const irwanPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: "197303072005011001" } });
+  const alphaPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: nipDemo("alphaSandroAdithyaswara") } });
+  const irwanPegawai = await prisma.pegawai.findUniqueOrThrow({ where: { nip: nipDemo("irwanSyafril") } });
   for (const p of [alphaPegawai, irwanPegawai]) {
     await prisma.buktiPotongPajak.upsert({
       where: { pegawaiId_tahunPajak: { pegawaiId: p.id, tahunPajak: 2025 } },
@@ -968,7 +969,7 @@ async function main() {
   // USULAN PERUBAHAN ROLE - PPABP mengusulkan, ADMIN belum memutuskan
   // --------------------------------------------------------------------
   console.log("\n=== Usulan Perubahan Role ===");
-  const kharina = userByNip.get("198810012011012009")!;
+  const kharina = userByNip.get(nipDemo("kharinaOlivia"))!;
   await prisma.usulanPerubahanRole.create({
     data: {
       userId: kharina.id,

@@ -96,7 +96,7 @@ hari kerja:
 | Baris "Lembur" di e-Presensi, Juni 2026, SE-KEMENTERIAN | **21** (12 di antaranya tanggal merah) | 405 |
 | File ADK asli, Juni 2026, **satu unit saja** | **109** | 2 |
 
-Sebabnya terlihat jelas di data: John Pieter diklaim lembur 3, 9, 16, 22, 29
+Sebabnya terlihat jelas di data: Indraswari Purnomo diklaim lembur 3, 9, 16, 22, 29
 Juni; di e-Presensi tanggal 16 (libur nasional) statusnya **Lembur**, tapi
 tanggal 3, 9, 22, 29 statusnya **WFO** dengan jam keluar 18:54, 20:31, 19:12,
 19:37. Lembur hari kerja dikerjakan sebagai WFO yang pulang malam.
@@ -114,12 +114,12 @@ wajar.
 
 Perbandingan ke file asli Juni 2026 menyisakan 13 tanggal berbeda dari 2.097
 baris, dan penyebabnya bukan bug:
-- **4 hari Dinas Luar DIBAYAR di file asli** (Adipa Rizky Putra 17-19 Juni,
-  Yudi Apriyanto 17 Juni), sementara aturan yang user tetapkan sendiri
+- **4 hari Dinas Luar DIBAYAR di file asli** (Larasati Wibisana 17-19 Juni,
+  Abhirama Saraswati 17 Juni), sementara aturan yang user tetapkan sendiri
   mengecualikan Dinas Keluar (konsumsi ditanggung perjalanan dinas). Belum
   diubah - 4 dari 2.097 bisa saja kekeliruan operator, tapi kalau ternyata
   memang praktiknya, `STATUS_BERHAK_UANG_MAKAN` yang perlu diubah.
-- **4 hari Cuti dibayar** (Defri Ariandi, Saka Prayitno Putro) - kemungkinan
+- **4 hari Cuti dibayar** (Damar Legowo, Tanaya Mahendra) - kemungkinan
   cutinya masuk e-Presensi setelah ADK dibuat.
 - 2 hari WFH Jumat yang Gajihub hitung tapi file asli tidak.
 
@@ -262,13 +262,13 @@ tunkin resmi Juli 2026 (48 pegawai yang sama):
 | Model potongan | tabel berjenjang 0,5 / 1 / 1,5 / **2% maksimal per hari** | **0,01% per menit** |
 | Cocok ke rincian resmi | **0/48** | **47/48** |
 
-Sisa 1 baris (Naeli Istianah, %Pot 50) ternyata **cuti sakit bulan II 15 hari**
+Sisa 1 baris (Narendra Nugraha, %Pot 50) ternyata **cuti sakit bulan II 15 hari**
 = Pasal 14 huruf d, bukan potongan kehadiran - jadi **48/48 terjelaskan** dan
 model per-menit Gajihub benar.
 
 **PENYARINGAN STATUS ITU LANGKAH MANUAL PETUGAS - dan Gajihub sudah
 mengotomatiskannya dengan benar.** Kolom `Terlambat` di berkas dihitung pada
-SEMUA status, termasuk Dinas Luar & Diklat (Irma Puspita **1.200 menit** di
+SEMUA status, termasuk Dinas Luar & Diklat (Fajarina Yudhanto **1.200 menit** di
 situ lawan **0** di rincian resmi). Yang sampai ke rincian ternyata versi yang
 sudah disaring:
 
@@ -279,8 +279,8 @@ sudah disaring:
 
 Jadi berkas ini memang SUMBER angkanya, dan penyaringan status yang selama ini
 dikerjakan petugas dengan tangan sudah persis sama dengan yang dilakukan
-Gajihub otomatis. Dua sisa: Irma Puspita (pengecualian JPT, sudah
-diimplementasi) dan Dian Pratiwi (6 menit, belum terjelaskan).
+Gajihub otomatis. Dua sisa: Fajarina Yudhanto (pengecualian JPT, sudah
+diimplementasi) dan Kirana Wibisana (6 menit, belum terjelaskan).
 
 #### Adu tiga arah: berkas petugas vs database Gajihub (Juli 2026, 1.133 baris)
 
@@ -296,8 +296,8 @@ terdaftar habis:
 | Pola | Jumlah | Akibat |
 |---|---|---|
 | WFO → WFH | 9 | **tidak ada** - keduanya `KATEGORI_WAJIB_JAM_KERJA` & sama-sama berhak uang makan |
-| WFO → DINAS_LUAR | 4 | **ADA** - Gajihub membebaskan Dinas Luar dari keterlambatan. Ini yang membuat Dian Nurlita 2 menit di Gajihub lawan 99 di rincian (14 Juli: berkas "WFO" masuk 10:07, e-Presensi "Dinas Luar") |
-| CUTI → ALPHA | 2 | **ADA & MAHAL** - alpha 3%/hari lawan cuti tahunan 0%. Keduanya pada Naeli Istianah |
+| WFO → DINAS_LUAR | 4 | **ADA** - Gajihub membebaskan Dinas Luar dari keterlambatan. Ini yang membuat Satria Nugraha 2 menit di Gajihub lawan 99 di rincian (14 Juli: berkas "WFO" masuk 10:07, e-Presensi "Dinas Luar") |
+| CUTI → ALPHA | 2 | **ADA & MAHAL** - alpha 3%/hari lawan cuti tahunan 0%. Keduanya pada Narendra Nugraha |
 | WFO → LEMBUR | 1 | kecil |
 
 **15 JULI 2026 AKHIRNYA TERBUKTI GANGGUAN.** Ini menutup TODO(confirm) lama
@@ -363,7 +363,7 @@ resmi Juli 2026 sudah memakai **1%** dan **per menit** - petugas menghitung ulan
 sendiri. Yang benar-benar diwarisi dari e-Presensi cuma **klasifikasinya**
 (ambang `< 450`), dan itu yang jadi pertanyaan B-lupa-absen ke OSDMA.
 
-**Diverifikasi terhadap data nyata** (David Casidi, Juli 2026, production build):
+**Diverifikasi terhadap data nyata** (Arunika Saraswati, Juli 2026, production build):
 web e-Presensi **12,5%** lawan Gajihub **4,77%**, selisih **Rp 90.811**, 17
 tanggal berbeda. 17 Juli terklasifikasi `TARIF_LUPA_ABSEN` (2% lawan 1%), 16
 sisanya `TARIF_TERLAMBAT` - dan angkanya saling cocok: keterangan e-Presensi
@@ -590,7 +590,7 @@ golongan semuanya sudah tersimpan; yang belum ada cuma penjelasannya.
 Diverifikasi lewat production build terhadap data nyata (periode 7/2026, 47
 baris): rincian terender 94 kali (47 × 2, salinan kedua dari RSC flight
 payload), dan lima baris pertama diadu ke hitungan ulang independen — **COCOK
-semua** (mis. PANUT RAHAYU gol IV/a, 15 hari × Rp 41.000 = Rp 615.000 dengan 8
+semua** (mis. PADMANABA SETIABUDI gol IV/a, 15 hari × Rp 41.000 = Rp 615.000 dengan 8
 hari hadir yang tidak dibayar).
 
 ## Teks peraturan: `docs/pmk-32-2025-sbm-2026-uang-makan-lembur.md`

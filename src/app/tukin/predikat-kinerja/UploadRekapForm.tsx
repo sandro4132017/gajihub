@@ -5,6 +5,8 @@ import { useActionState, useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { uploadRekapPredikatAction, type UploadRekapPredikatFormState } from "./actions";
 import { NAMA_BULAN } from "../../bulan";
+import { RiErrorWarningLine } from "react-icons/ri";
+import { IoMdCheckmark } from "react-icons/io";
 
 const INITIAL_STATE: UploadRekapPredikatFormState = {};
 
@@ -181,8 +183,9 @@ export function UploadRekapForm() {
 
           {k.belumPunya > 0 ? (
             <>
-              <p className="mt-2.5 font-semibold text-gold-deep">
-                <span aria-hidden>&#9888;</span> {k.belumPunya} pegawai belum memiliki predikat kinerja
+              <p className="mt-2.5 flex items-center gap-1 font-semibold text-gold-deep">
+                <RiErrorWarningLine aria-hidden className="shrink-0" /> {k.belumPunya} pegawai belum memiliki
+                predikat kinerja
               </p>
               <p className="mt-0.5 text-xs text-ink-2">
                 Periksa kembali data SKP sebelum melanjutkan perhitungan. Kalau unit ini dinilai lebih dari satu
@@ -206,9 +209,9 @@ export function UploadRekapForm() {
               </ul>
             </>
           ) : (
-            <p className="mt-2 font-semibold text-green">
-              <span aria-hidden>&#10003;</span> Lengkap - semua pegawai yang ikut dihitung periode ini sudah punya
-              predikat.
+            <p className="mt-2 flex items-start gap-1 font-semibold text-green">
+              <IoMdCheckmark aria-hidden className="mt-1 shrink-0" />
+              <span>Lengkap - semua pegawai yang ikut dihitung periode ini sudah punya predikat.</span>
             </p>
           )}
 

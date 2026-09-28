@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * SLIP GAJI - mengikuti format "PERINCIAN PEMBAYARAN GAJI" yang selama ini
- * dicetak manual oleh PPABP Setjen (contoh: slip a.n. MUH. I'MAL AROFAT,
+ * dicetak manual oleh PPABP Setjen (contoh: slip a.n. MANGGALA HARTANTO,
  * Februari 2025). Urutan baris, penamaan komponen, dan blok tanda tangan
  * sengaja dibuat sama supaya hasil cetak Gajihub bisa langsung menggantikan
  * proses manualnya.

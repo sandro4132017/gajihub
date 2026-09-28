@@ -1,0 +1,67 @@
+{
+  "_catatan": [
+    "CONTOH - salin jadi seed-akun-demo.json lalu ganti dengan data yang benar.",
+    "NIP berawalan 9999 SENGAJA tidak sah supaya tidak pernah cocok dengan",
+    "pegawai nyata; seed akan berhenti dengan pesan jelas kalau begitu."
+  ],
+  "alphaSandroAdithyaswara": {
+    "nip": "999900000000000001",
+    "nama": "Nama Demo alphaSandroAdithyaswara"
+  },
+  "ayuPuspitaSari": {
+    "nip": "999900000000000002",
+    "nama": "Nama Demo ayuPuspitaSari"
+  },
+  "crisKuntadi": {
+    "nip": "999900000000000003",
+    "nama": "Nama Demo crisKuntadi"
+  },
+  "dianKreshnadjati": {
+    "nip": "999900000000000004",
+    "nama": "Nama Demo dianKreshnadjati"
+  },
+  "faridArif": {
+    "nip": "999900000000000005",
+    "nama": "Nama Demo faridArif"
+  },
+  "firmansyah": {
+    "nip": "999900000000000006",
+    "nama": "Nama Demo firmansyah"
+  },
+  "herrySusanto": {
+    "nip": "999900000000000007",
+    "nama": "Nama Demo herrySusanto"
+  },
+  "irvanGaneva": {
+    "nip": "999900000000000008",
+    "nama": "Nama Demo irvanGaneva"
+  },
+  "irwanSyafril": {
+    "nip": "999900000000000009",
+    "nama": "Nama Demo irwanSyafril"
+  },
+  "johnPieter": {
+    "nip": "999900000000000010",
+    "nama": "Nama Demo johnPieter"
+  },
+  "kharinaOlivia": {
+    "nip": "999900000000000011",
+    "nama": "Nama Demo kharinaOlivia"
+  },
+  "luthfiFirdaus": {
+    "nip": "999900000000000012",
+    "nama": "Nama Demo luthfiFirdaus"
+  },
+  "pltKepalaBagian": {
+    "nip": "999900000000000013",
+    "nama": "Nama Demo pltKepalaBagian"
+  },
+  "pltKetuaTim": {
+    "nip": "999900000000000014",
+    "nama": "Nama Demo pltKetuaTim"
+  },
+  "prasetyoMuhammadSidqi": {
+    "nip": "999900000000000015",
+    "nama": "Nama Demo prasetyoMuhammadSidqi"
+  }
+}

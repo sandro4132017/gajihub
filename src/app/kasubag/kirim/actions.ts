@@ -15,7 +15,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canKirimRekapUnit, canKembalikanRekapUnit } from "../../../auth/permissions";
-import { cekBolehKirim, statusUnit } from "../../../business-logic/pengirimanUnit";
+import {
+  cekBolehKirim,
+  statusUnit,
+  TABEL_KALKULASI,
+  type JenisTabelKalkulasi,
+} from "../../../business-logic/pengirimanUnit";
 
 export interface KirimFormState {
   error?: string;
@@ -99,8 +104,21 @@ export async function kirimRekapUnitAction(
   ]);
 
   const status = statusUnit(barisLama);
+  // Centang "sudah saya periksa" per TABEL, dibaca dari database - bukan dari
+  // form. Yang dikirim browser bisa dikarang; yang menahan pengiriman harus
+  // keadaan yang benar-benar tersimpan.
+  const verifikasi = await prisma.verifikasiTabelUnit.findMany({
+    where: kunciPeriode,
+    select: { jenisTabel: true },
+  });
+
   const cek = cekBolehKirim(
-    { totalPegawai, jumlahKalkulasi, jumlahBasi: jumlahTanpaPredikat },
+    {
+      totalPegawai,
+      jumlahKalkulasi,
+      jumlahBasi: jumlahTanpaPredikat,
+      tabelDiverifikasi: verifikasi.map((v) => v.jenisTabel as JenisTabelKalkulasi),
+    },
     status
   );
   if (!cek.boleh) return { error: cek.alasan ?? "Belum bisa dikirim." };
@@ -246,4 +264,100 @@ export async function kembalikanRekapUnitAction(
   revalidatePath("/kasubag/kalkulasi");
   revalidatePath("/ppabp/adk");
   return { success: `Rekap ${satuanKerja} periode ${periode.bulan}/${periode.tahun} dikembalikan ke unit.` };
+}
+
+// ---------------------------------------------------------------------------
+// VERIFIKASI TABEL - "tabel ini sudah saya periksa".
+//
+// Dipisah dari kirimRekapUnitAction karena memang dua keputusan yang berbeda
+// dan berjarak waktu: memeriksa tabel terjadi berkali-kali sambil bekerja,
+// mengirim terjadi sekali di akhir. Menyatukannya jadi satu tombol
+// mengembalikan keadaan yang mau dihindari - pernyataan sesaat yang tidak
+// meninggalkan jejak siapa memeriksa apa.
+// ---------------------------------------------------------------------------
+
+export async function setVerifikasiTabelAction(
+  _prev: KirimFormState,
+  formData: FormData
+): Promise<KirimFormState> {
+  const user = await ambilUserSesi();
+  if (!user) return { error: "Sesi tidak ditemukan. Silakan login ulang." };
+
+  const periode = bacaPeriode(formData);
+  if (!periode) return { error: "Periode tidak sah." };
+
+  // Satuan kerja dari SESI, bukan form - alasan yang sama dengan
+  // kirimRekapUnitAction di atas.
+  const satuanKerja = user.satuanKerja;
+  if (!satuanKerja) {
+    return { error: "Akun ini tidak terikat ke satuan kerja mana pun." };
+  }
+  if (!canKirimRekapUnit(user, satuanKerja)) {
+    return { error: "Role kamu tidak berwenang memverifikasi tabel unit." };
+  }
+
+  const jenisTabel = String(formData.get("jenisTabel") ?? "") as JenisTabelKalkulasi;
+  if (!TABEL_KALKULASI.includes(jenisTabel)) {
+    return { error: "Jenis tabel tidak dikenali." };
+  }
+  const centang = String(formData.get("centang") ?? "") === "ya";
+
+  const kunciPeriode = {
+    satuanKerja,
+    periodeBulan: periode.bulan,
+    periodeTahun: periode.tahun,
+  };
+
+  // SUDAH TERKIRIM = TERKUNCI, verifikasinya ikut beku. Mencabut centang atas
+  // periode yang sudah dikirim tidak menarik kembali kirimannya - yang terjadi
+  // cuma catatan pemeriksaan jadi bertentangan dengan apa yang sudah disetor.
+  const baris = await prisma.pengirimanUnit.findUnique({
+    where: { satuanKerja_periodeBulan_periodeTahun: kunciPeriode },
+    select: { status: true, dikirimPada: true, alasanKembali: true },
+  });
+  if (statusUnit(baris).terkunci) {
+    return { error: "Periode ini sudah dikirim dan terkunci - centang pemeriksaan tidak bisa diubah lagi." };
+  }
+
+  const sebelum = await prisma.verifikasiTabelUnit.findUnique({
+    where: {
+      satuanKerja_periodeBulan_periodeTahun_jenisTabel: { ...kunciPeriode, jenisTabel },
+    },
+    select: { diverifikasiPada: true },
+  });
+
+  await prisma.$transaction([
+    centang
+      ? prisma.verifikasiTabelUnit.upsert({
+          where: {
+            satuanKerja_periodeBulan_periodeTahun_jenisTabel: { ...kunciPeriode, jenisTabel },
+          },
+          create: { ...kunciPeriode, jenisTabel, diverifikasiOlehId: user.id },
+          update: { diverifikasiOlehId: user.id, diverifikasiPada: new Date() },
+        })
+      : prisma.verifikasiTabelUnit.deleteMany({
+          where: { ...kunciPeriode, jenisTabel },
+        }),
+    prisma.auditTrail.create({
+      data: {
+        entitas: "verifikasi_tabel_unit",
+        entitasId: `${satuanKerja}-${periode.bulan}-${periode.tahun}-${jenisTabel}`,
+        aksi: centang ? "CREATE" : "DELETE",
+        aktor: user.nip,
+        satuanKerja,
+        dataSebelum: sebelum ? { diverifikasiPada: sebelum.diverifikasiPada.toISOString() } : undefined,
+        dataSesudah: {
+          jenisTabel,
+          periode: `${periode.bulan}/${periode.tahun}`,
+          // MENCABUT centang ikut dicatat, bukan cuma memasangnya. Kalau suatu
+          // saat ditanya "kenapa periode ini sempat tertahan", jawabannya ada
+          // di sini.
+          tindakan: centang ? "dicentang sudah diperiksa" : "centang dicabut",
+        },
+      },
+    }),
+  ]);
+
+  revalidatePath("/kasubag/kalkulasi");
+  return { success: centang ? "Ditandai sudah diperiksa." : "Centang dicabut." };
 }

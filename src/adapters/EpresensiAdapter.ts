@@ -354,7 +354,20 @@ export async function tarikPresensiPeriode(
    */
   koreksiJamUntuk: (
     nip: string
-  ) => ReadonlyMap<string, { jamMasukMenit: number | null; jamKeluarMenit: number | null }> = () => new Map(),
+  ) => ReadonlyMap<
+    string,
+    {
+      jamMasukMenit: number | null;
+      jamKeluarMenit: number | null;
+      /**
+       * Jam lembur hari itu menurut petugas. DISEBUT DI TIPE INI walau adapter
+       * cuma meneruskannya: tanpa itu nilainya tetap sampai ke mesin lewat
+       * runtime, tapi tidak terlihat di tanda tangan - dan orang berikutnya
+       * akan menyangka koreksi lembur tidak ikut sinkronisasi.
+       */
+      jamLembur?: number | null;
+    }
+  > = () => new Map(),
   /**
    * Tanggal merah & cuti bersama (ISO -> keterangan), dari tabel
    * `HariLiburNasional`. Berlaku sama untuk semua pegawai - jadi cukup satu

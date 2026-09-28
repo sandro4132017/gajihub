@@ -26,6 +26,8 @@ import { BadgePejabatEselon } from "../../BadgePejabatEselon";
 import { uraiJenisCuti, LABEL_JENIS_CUTI } from "../../../business-logic/jenisCuti";
 import { SumberAcuan } from "../../SumberAcuan";
 import { HALAMAN } from "../../layoutHalaman";
+import { RiBuildingLine } from "react-icons/ri";
+import { GrGroup } from "react-icons/gr";
 
 export const dynamic = "force-dynamic";
 
@@ -354,10 +356,7 @@ export default async function PresensiTukinPage({
         <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="inline-flex items-center gap-2 text-sm">
             <span className="grid size-7 flex-none place-items-center rounded-lg bg-teal-tint text-teal-deep">
-              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M15 21V9h4a2 2 0 0 1 2 2v10" />
-                <path d="M9 7h2M9 11h2M9 15h2" />
-              </svg>
+              <RiBuildingLine aria-hidden className="size-4" />
             </span>
             <span className="min-w-0">
               <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">Satuan Kerja</span>
@@ -368,11 +367,7 @@ export default async function PresensiTukinPage({
           </span>
           <span className="inline-flex items-center gap-2 text-sm">
             <span className="grid size-7 flex-none place-items-center rounded-lg bg-teal-tint text-teal-deep">
-              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
+              <GrGroup aria-hidden className="size-4" />
             </span>
             <span>
               <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">Jumlah Pegawai</span>

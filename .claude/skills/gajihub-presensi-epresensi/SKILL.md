@@ -69,8 +69,8 @@ di e-Presensi lalu tarik ulang.
 **Diverifikasi terhadap berkas & database ASLI** (Biro Keuangan, Juli 2026):
 48 pegawai / 1.133 hari terbaca, 0 baris dilewati. **18 pegawai cocok
 sepenuhnya**; 14 beda berdampak + 42 tidak berdampak; taruhan rupiah
-Rp 414.990. Tiga yang teratas semuanya sudah punya penjelasan: Naeli Istianah
-(2 hari CUTI di berkas lawan ALPHA di Gajihub), Hario & John Pieter (ambang
+Rp 414.990. Tiga yang teratas semuanya sudah punya penjelasan: Narendra Nugraha
+(2 hari CUTI di berkas lawan ALPHA di Gajihub), Hario & Indraswari Purnomo (ambang
 lupa absen `< 450` lawan `= 0` - lihat bagian di atas).
 
 ### Tabel "Rincian jam kerja" di `/tukin/presensi/[nip]`
@@ -114,7 +114,7 @@ berkas mereka, bukan di rumusnya:
    keluar angka seperti "Menit Kerja −60" dan "Kekurangan 960". Gajihub
    memakai `null` - sel kosong bukan tengah malam.
 2. **5 baris memakai jadwal hari yang salah** (Jumat diberi jam pulang 16:00,
-   Senin diberi 16:30) - semuanya pada Galih Febian Azhar.
+   Senin diberi 16:30) - semuanya pada Dirgantara Mahendra.
 3. **34 baris "Jam Harus Checkout"-nya merujuk sel yang salah**, terpusat di
    **4 pegawai** (Galih 16, Muh Kholiq 9, Fericky 6, Abie 3). Enam di antaranya
    persis nilai baris tetangganya - formula yang tergeser saat baris
@@ -133,7 +133,7 @@ komponen** dan menyalakan panel kuning yang menyebut komponen mana yang beda -
 bukan cuma totalnya, karena dua selisih berlawanan arah bisa saling menutup.
 Ketelitiannya terukur ke seluruh periode 7/2026 (117.906 baris, 5.089 pegawai):
 **cocok 5.062 (99,5%)**, total 2.809 lawan 2.819 kejadian. Panel diuji menyala
-benar pada David Casidi (masuk 23:26 & keluar 23:59 di hari yang sama - mesinnya
+benar pada Arunika Saraswati (masuk 23:26 & keluar 23:59 di hari yang sama - mesinnya
 membacanya kedatangan sangat terlambat, aturan rekonstruksi membacanya tap
 pulang hilang).
 
@@ -455,11 +455,11 @@ Database e-Presensi **TIDAK menyimpan NIP sama sekali** (sudah dicek ke
 seluruh `information_schema`). Yang ada `id_pegawai`, ID internal.
 
 **PENCOCOKAN HARUS PERSIS - JANGAN menambah/membuang nol di depan.** Waktu
-verifikasi, normalisasi nol sempat mencocokkan `00009600` (Deva Dwi Septian di
+verifikasi, normalisasi nol sempat mencocokkan `00009600` (Prabaswara Wijaya di
 e-Presensi) ke PEGAWAIID `000009600` milik **orang lain** (Afriansyah Noor).
 Dengan pencocokan persis, uji ketat: **150/150 cocok** untuk ID 8 digit, 9
 digit, dan 12 digit (nama diverifikasi silang; yang "beda" cuma penulisan
-gelar, mis. `"Ir ANNA YULIANA M.Si."` vs `"Anna Yuliana"`). Pegawai ber-UUID
+gelar, mis. `"Ir BASKARA PRAKASA M.Si."` vs `"Baskara Prakasa"`). Pegawai ber-UUID
 (36 karakter, ~101 orang) TIDAK ada di SIAP dan DILEWATI dengan alasan
 eksplisit - TIDAK dicocokkan lewat nama, karena penulisan nama di e-Presensi
 tidak konsisten.
@@ -788,7 +788,7 @@ dibanjiri warning.
 - File yang sama sebagai **PPABP** -> 44 pegawai tersimpan, 1.042 baris harian.
   Kecepatan: 243 halaman diekstrak 347 ms.
 - Data uji Juli 2025 (44 pegawai) **SUDAH DI-REVERT**. Yang SENGAJA DITINGGAL:
-  presensi GADIS SUKMA DEWA periode 5/2026 & 6/2026 - itu data nyata dari file
+  presensi CEMPAKA PRAKASA periode 5/2026 & 6/2026 - itu data nyata dari file
   yang user kirim dan berguna buat demo. Upsert-nya idempoten, aman diupload
   ulang.
 
@@ -931,10 +931,10 @@ ini disengaja: alternatifnya menyimpan kejadian per hari di `PresensiHarian`
 (kolom baru + migrasi) supaya bisa dikurangkan saat kalkulasi, dan itu
 menciptakan dua tempat yang menghitung hal yang sama.
 
-**Diverifikasi** (production build, akun PPABP Irwan Syafril, data nyata):
+**Diverifikasi** (production build, akun PPABP Hanindita Widagdo, data nyata):
 halaman menampilkan 15 Juli **13,6% (7,7x hari biasa)** dan 16 Juli **14,2%
 (8,0x)** ber-chip "Janggal - perlu dicek", sementara Jumat 3 Juli (4,8%)
-tidak tertandai; KASUBAG_TU Ayu Puspita Sari mendapat "Akses ditolak" dan
+tidak tertandai; KASUBAG_TU Maheswari Yudhanto mendapat "Akses ditolak" dan
 panel kendala tidak muncul di `/tukin/presensi` miliknya. Jembatan database
 diuji terpisah dengan penanda sungguhan: penanda se-kementerian menjangkau
 pegawai Biro Keuangan MAUPUN Pusdatik, penanda ber-scope Pusdatik hanya
@@ -961,9 +961,9 @@ Yang benar-benar butuh koreksi jam ada di sisa **59 baris**, dan yang paling
 jelas ada di ujungnya:
 
 ```
-2026-07-15  ANDI PRASETYO             masuk=19:32  telat=662 menit
-2026-07-15  YISWI NILAM PRASTIKASARI  masuk=17:54  telat=564 menit
-2026-07-16  RESTU PUJIANTI            masuk=15:52  telat=442 menit
+2026-07-15  SEKAR ADIWANGSA             masuk=19:32  telat=662 menit
+2026-07-15  ZAHRANIKA PURNOMO  masuk=17:54  telat=564 menit
+2026-07-16  RENJANA ADIWANGSA            masuk=15:52  telat=442 menit
 ```
 
 Orang tidak datang kerja pukul 19:32 - itu pola lupa yang sama, tapi di sisi

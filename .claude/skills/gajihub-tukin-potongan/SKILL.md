@@ -87,7 +87,7 @@ tidak menandai apa pun.
   dikeluarkan dari heading. Di dalam `<td>` aman.
 
 **Diverifikasi terhadap data & production build** (server sementara di port
-3099, akun PPABP): halaman Irma Puspita memuat badge-nya, dan tabel rincian
+3099, akun PPABP): halaman Fajarina Yudhanto memuat badge-nya, dan tabel rincian
 menampilkan "Terlambat hadir 40 menit -> 0,4% -> Rp 23.136" serta "Pulang
 lebih awal 20 menit -> 0,2% -> Rp 11.568" **dicoret**, dengan baris "Total
 potongan (dikecualikan) 0% / Rp 0" dan "Komponen kehadiran yang dibayar
@@ -105,7 +105,7 @@ kehadiran unitnya - bukan pihak yang dikecualikan. Aturan ini membayar penuh
 `docs/permintaan-data-dan-konfirmasi-osdma.md`). Selama belum ada, tiap
 pemakaiannya menghasilkan catatan anomali ber-`TODO(confirm)`.
 
-**Bukti praktik** (rincian manual Rokeu Juli 2026): Irma Puspita, Kepala Biro
+**Bukti praktik** (rincian manual Rokeu Juli 2026): Fajarina Yudhanto, Kepala Biro
 Keuangan dan BMN (kelas 15), dibayar Rp 19.280.000 dengan kolom potongan NOL
 padahal rekap e-Presensi mencatat terlambat 40 menit (9 Juli) + pulang cepat
 20 menit (10 Juli). Toleransi 60 menit Pasal 9 ayat (3) hanya menjelaskan
@@ -134,13 +134,13 @@ lebih rendah** selama jangka waktu tertentu. Karena tarif tukin pokok
 ditentukan kelas jabatan, itu langsung mengubah yang dibayarkan.
 
 **SIAP TIDAK MENCATATNYA SAMA SEKALI** - dikonfirmasi user lewat kasus nyata:
-Galih Febian Azhar turun kelas **7 → 6** selama satu tahun, SIAP tetap menulis
+Dirgantara Mahendra turun kelas **7 → 6** selama satu tahun, SIAP tetap menulis
 7. Jadi angkanya memang harus diketik manusia, dan itu bukan kekurangan
 sementara yang akan hilang begitu integrasinya membaik.
 
 Ketemunya lewat jalan memutar: waktu ADK Gajihub diadu ke rincian manual
 Rokeu, kelas jabatan cocok **46 dari 48** - dan dua yang meleset persis
-turun satu tingkat (Gadis Sukma Dewa 8→7, Galih Febian Azhar 7→6).
+turun satu tingkat (Cempaka Prakasa 8→7, Dirgantara Mahendra 7→6).
 
 **Kolom baru `SkHukumanDisiplin.kelasJabatanSelamaHukuman`** (migrasi
 `20260810120000_penurunan_kelas_jabatan_hukdis`, satu ADD COLUMN nullable).
@@ -217,7 +217,7 @@ di halaman Kasubag TU yang mendaftar kombinasi paling berbahaya: sudah
 DISETUJUI tapi nomornya belum ada - jadi bisa ditelusuri sekali lihat menjelang
 tutup periode.
 
-**TODO(confirm) - GADIS SUKMA DEWA**: selisih kelasnya (SIAP 8, manual 7) juga
+**TODO(confirm) - CEMPAKA PRAKASA**: selisih kelasnya (SIAP 8, manual 7) juga
 turun tepat satu tingkat, tapi belum ada keterangan sebabnya. Perlu dipastikan
 apakah itu hukuman disiplin juga (kalau iya, tinggal diinput SK-nya) atau
 memang kelas jabatannya yang salah di SIAP.
@@ -230,7 +230,7 @@ sheet itu cuma punya dua kolom uang:
 
 ```
 NIP                  nama            pot          tukin
-197601091999032001   ARINI SARKOWI   44.235,12    9.851.764,88
+199912312024121001   ANINDYA MAHENDRA   44.235,12    9.851.764,88
 ```
 
 `tukin` = tarif penuh kelas jabatannya (kelas 12 = 9.896.000) dikurangi `pot`.
@@ -267,7 +267,7 @@ dan dua yang meleset persis kasus penurunan kelas karena hukuman disiplin
 Kolom "Potongan" di rekap manual ternyata **hanya potongan KEHADIRAN**, bukan
 total pengurangan. Buat 47 dari 48 pegawai itu tidak berbeda, karena predikat
 mereka 100% sehingga tidak ada pengurangan dari sisi kinerja. Bedanya baru
-muncul pada Galih Febian Azhar (predikat "Butuh Perbaikan" = 85%):
+muncul pada Dirgantara Mahendra (predikat "Butuh Perbaikan" = 85%):
 
 ```
 tarif kelas 6      3.510.400
@@ -457,7 +457,7 @@ penuh begitu dia ambil cuti sehari.
 
 **Dorman selama cuti diisi manusia, langsung aktif begitu ditarik otomatis.**
 Periode 7/2026 Biro Keuangan: **16 dari 46 pegawai** kehilangan potongannya,
-total **Rp 634.959** dalam satu unit satu bulan. Terparah Erni Kusumastuty
+total **Rp 634.959** dalam satu unit satu bulan. Terparah Ayudia Kusuma
 (Rp 228.564 hilang karena cuti tahunan 1 hari).
 
 **Dibuktikan keliru ke rincian manual**: Ahmad Henda punya potongan
@@ -497,7 +497,7 @@ pulang hilang.
 mencocokkan 45/48 lawan 41/48. Hari yang jam kerjanya KURANG tapi bukan nol
 adalah **pulang cepat** - Pasal 13 ayat (3), bertarif PER MENIT, dan sudah
 dihitung dari jam keluarnya. Memakai `< 450` berarti menagih hari yang sama
-dua kali dengan dasar hukum berbeda. Contohnya nyata (Rizki Akbar 8 Juli:
+dua kali dengan dasar hukum berbeda. Contohnya nyata (Suryaningrat Prakasa 8 Juli:
 masuk 14:20, pulang 17:37, `menit_kerja` 240): yang dilanggar keterlambatan
 350 menit, bukan "tidak melakukan presensi".
 
@@ -619,8 +619,8 @@ dibandingkan teks statusnya dulu.
 **Diverifikasi ke data asli** (bukan mock): dry-run Juli 2026 menarik 122.641
 baris / 5.195 pegawai, 5.089 siap disimpan. Empat kasus diuji sampai ke rupiah:
 Inayati Ulin Na'mah (Cuti Besar II 13 hari + III 10 hari -> bulan ke-2,
-dibayar 25%, catatan "berpindah bulan" muncul), Try Mulya Lestary & Elda
-Yunita (Cuti Melahirkan -> 100%, tidak dipotong), Edy Pujimulyono (Cuti Sakit
+dibayar 25%, catatan "berpindah bulan" muncul), Upadana Sasmita & Elda
+Yunita (Cuti Melahirkan -> 100%, tidak dipotong), Jatmiko Setiabudi (Cuti Sakit
 bulan I -> 100%). Alpha 0 di keempatnya - sebelumnya hari cuti berisiko
 terbaca alpha. Dampak ke nominal: **10 pegawai** lintas satker punya cuti
 berpotongan di Juli 2026, semuanya cocok NIP-nya, dan **belum satupun punya

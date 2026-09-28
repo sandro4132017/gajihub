@@ -26,54 +26,11 @@ import { HALAMAN } from "../../../layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Rincian presensi HARIAN satu pegawai untuk satu periode.
- *
- * Gunanya menjawab "kenapa potongan saya segini" per tanggal - angka bulanan
- * di halaman sebelumnya tidak bisa ditelusuri sendiri. Baris di sini ditulis
- * oleh upload PDF e-Presensi (lihat actionsPdf.ts); periode yang rekapnya
- * diisi lewat template Excel tidak punya rincian harian sama sekali, dan itu
- * dikatakan apa adanya di halaman ini.
- */
-
-// NAMA_HARI, LABEL_STATUS, dan jamTeks() pindah ke src/app/presensiTampilan.ts
-// supaya halaman ini dan /saya/presensi/[bulan]/[tahun] tidak pernah menyebut
-// status yang sama dengan nama berbeda.
-/** Status yang berhak uang makan (SBM 2026 item 22.1). */
 const BERHAK_UANG_MAKAN = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
 
-/**
- * Status yang punya kewajiban jam kerja kantor - cerminan
- * KATEGORI_WAJIB_JAM_KERJA di presensiPdfKeRekap.ts, dalam kosakata yang
- * TERSIMPAN (WFH_WFA -> "WFH"). Nilai lama HADIR/TERLAMBAT/WFA ikut karena
- * masih ada di baris hasil impor terdahulu.
- *
- * "TIDAK_PRESENSI" ikut HANYA untuk Pasal 13 ayat (2) - hari itu memang tidak
- * punya jam untuk diukur terlambat/pulang cepatnya.
- */
 const WAJIB_JAM_KERJA = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
 const WAJIB_PRESENSI = [...WAJIB_JAM_KERJA, "TIDAK_PRESENSI"];
 
-/**
- * Satu sel jam di tabel Presensi - menampilkan jam yang DIPAKAI MENGHITUNG,
- * dengan jam asli e-Presensi tetap terbaca di bawahnya.
- *
- * KENAPA HARUS DUA NILAI. `PresensiHarian.jamMasuk` menyimpan FAKTA e-Presensi
- * apa adanya dan TIDAK PERNAH ditimpa koreksi - bahkan sesudah "Terapkan
- * Koreksi Presensi". Lihat `presensiPdfKeRekap.ts`: baris hariannya menulis
- * jam MENTAH (`b.jamMasukMenit`), sementara telat, pulang cepat, dan kejadian
- * Pasal 13 ayat (2) dihitung dari `jamMasukEfektif` yang sudah dikoreksi. Itu
- * disengaja - yang tersimpan di kolom ini dasar audit, dan koreksinya hidup di
- * tabel sendiri lengkap dengan alasan serta siapa yang mengetiknya.
- *
- * Tapi sel yang cuma memajang jam mentah terbaca seperti koreksinya gagal:
- * "masuk 09:15, telat 0 menit" tidak masuk akal bagi siapa pun yang
- * membacanya, dan itu betul-betul terjadi. Jadi keduanya ditampilkan - yang
- * dipakai menghitung di depan, yang asli dicoret di bawahnya.
- *
- * Warnanya emas, sama dengan penanda "dikoreksi" di tabel rincian jam kerja -
- * satu arti, satu warna, di dua tabel yang memajang hari yang sama.
- */
 function SelJam({
   asli,
   koreksi,
@@ -91,9 +48,6 @@ function SelJam({
   return (
     <td className="px-3 py-2 font-mono">
       <span
-        // Garis putus-putus = koreksinya tersimpan tapi BELUM ikut menghitung.
-        // Bedanya nyata: selama masih putus-putus, jam di sel ini dan menit
-        // telat di sebelahnya berasal dari dua versi data yang berbeda.
         className={`rounded px-1 font-semibold text-gold-deep ${
           belumDiterapkan ? "border border-dashed border-gold bg-gold-tint" : "bg-gold-tint"
         }`}
@@ -105,10 +59,6 @@ function SelJam({
       >
         {koreksi}
       </span>
-      {/* Jam asli disembunyikan kalau nilainya SAMA - form koreksi mengisi
-          kedua kolom dengan jam yang sekarang, jadi mengoreksi jam pulang saja
-          tetap menyimpan jam masuk apa adanya. Memajang "06:51" di atas
-          "06:51" yang dicoret mengaku ada yang berubah padahal tidak. */}
       {asli !== koreksi && (
         <span className="mt-0.5 block text-[11px] text-muted line-through">
           {asli === "-" ? "tanpa ketukan" : asli}
@@ -134,9 +84,6 @@ export default async function RincianPresensiPegawaiPage({
 }) {
   const { nip } = await params;
   const { bulan, tahun, dari, satker, rinci, banding } = await searchParams;
-  // Tampilan disimpan di URL, bukan state klien - konsisten dengan filter
-  // periode & toggle rincian di /kasubag/kalkulasi, jadi tetap jalan tanpa
-  // JavaScript dan tautannya bisa dibagikan.
   const modeJamKerja = rinci === "1" && banding !== "1";
   const modeBanding = banding === "1";
 
@@ -154,14 +101,10 @@ export default async function RincianPresensiPegawaiPage({
   if (!pegawai) {
     return <AksesDitolak pesan={`Pegawai dengan NIP ${nip} tidak ditemukan.`} />;
   }
-  // Cakupan yang sama dengan hak upload: Kasubag TU cuma unitnya sendiri.
   if (!canUploadRekapPresensi(authUser, pegawai.satuanKerja)) {
     return <AksesDitolak pesan={`Pegawai ini di luar kewenangan kamu (${pegawai.satuanKerja}).`} />;
   }
 
-  // Periode default diambil dari rincian harian PEGAWAI INI, bukan dari bulan
-  // berjalan - halaman ini justru dibuka buat menelusuri "kenapa potongan saya
-  // segini", dan mendarat di bulan kosong menjawab pertanyaan yang salah.
   const { bulan: periodeBulan, tahun: periodeTahun } = resolvePeriode(
     bulan,
     tahun,
@@ -180,9 +123,6 @@ export default async function RincianPresensiPegawaiPage({
     }),
   ]);
 
-  // Tanggal yang dinyatakan bermasalah (Pasal 10 ayat (2)) + koreksi jam yang
-  // sudah dibuat petugas absensi. Keduanya ditampilkan DI SAMPING jam asli,
-  // bukan menggantikannya - data mentah e-Presensi tetap kelihatan apa adanya.
   const [kendalaPeriode, koreksiPeriode, hariLiburPeriode] = await Promise.all([
     prisma.kendalaEpresensi.findMany({
       where: {
@@ -195,17 +135,9 @@ export default async function RincianPresensiPegawaiPage({
       where: { pegawaiId: pegawai.id, tanggal: { gte: awal, lt: akhir } },
       include: { dikoreksiOleh: { select: { nama: true } } },
     }),
-    // Tanggal merah dipakai tabel rincian jam kerja: di hari libur tidak ada
-    // kewajiban jam kerja, jadi seluruh kolom kewajibannya kosong - keputusan
-    // yang sama dengan yang dipegang mesin potongan.
     muatHariLiburPeriode(periodeBulan, periodeTahun),
   ]);
 
-  // Koreksi & penanda kendala baru berpengaruh SETELAH presensi ditarik ulang
-  // (rekapnya dihitung saat sinkronisasi, bukan saat halaman dibuka). Tanpa
-  // peringatan ini, orang mengoreksi jam lalu melihat angkanya tidak berubah
-  // dan menyimpulkan koreksinya gagal - kejadian nyata waktu fitur ini baru
-  // dipakai pertama kali.
   const disinkronPada = rekap?.diunggahPada ?? null;
   const perubahanBelumBerlaku = disinkronPada
     ? [
@@ -221,27 +153,11 @@ export default async function RincianPresensiPegawaiPage({
   const totalTelat = harian.reduce((a, h) => a + h.menitTerlambat, 0);
   const totalPulangCepat = harian.reduce((a, h) => a + h.menitPulangCepat, 0);
 
-  // --- Bahan tabel rincian jam kerja (bentuk rekap petugas) -------------------
-  // Menit-menitnya DIBACA dari kolom tersimpan, bukan dihitung ulang - kecuali
-  // cacah kejadian Pasal 13 ayat (2), yang memang tidak punya kolom sendiri di
-  // PresensiHarian dan karena itu direkonstruksi. Rekonstruksi bisa menyimpang,
-  // jadi jumlah sebulannya diadu ke RekapPresensiPeriode di bawah dan
-  // selisihnya dikatakan apa adanya.
   const menitDariWaktu = (w: Date | null) => (w === null ? null : w.getUTCHours() * 60 + w.getUTCMinutes());
 
   const barisJamKerja: BarisTabelRincianJamKerja[] = harian.map((h) => {
     const iso = h.tanggal.toISOString().slice(0, 10);
     const keteranganLibur = hariLiburPeriode.get(iso) ?? null;
-    // Penanda koreksi ikut dikirim supaya tabel memakai aturan kepercayaan
-    // yang SAMA dengan mesin yang membayar: jam hasil koreksi petugas selalu
-    // dipercaya, jadi baris yang sudah diperbaiki tidak ikut ditandai "tap
-    // tidak wajar" hanya karena jam aslinya dulu 23:59.
-    // JAM EFEKTIF, bukan jam mentah - persis yang dipakai mesin yang membayar
-    // (`jamMasukEfektif` di presensiPdfKeRekap.ts). Kalau tabel ini berhitung
-    // dari jam mentah sementara penanda kepercayaannya diambil dari koreksi,
-    // baris yang sudah diperbaiki akan dihitung dari 23:59 tapi diperlakukan
-    // sebagai tap yang sah - persis kebalikan dari yang dimaksud.
-    // Jam ASLI-nya tetap terlihat di tabel presensi (tampilan bawaan).
     const koreksiHari = petaKoreksi.get(iso);
     const rincian = rincianJamKerjaHari({
       tanggalIso: iso,
@@ -267,8 +183,6 @@ export default async function RincianPresensiPegawaiPage({
       statusLabel: LABEL_STATUS[h.statusKehadiran] ?? h.statusKehadiran,
       rincian,
       potonganPersen: potonganHarianPersen({
-        // "ALPHA" di akhir pekan / tanggal merah bukan alpha - tidak ada
-        // kewajiban hadir yang dilanggar (lihat hitung.akhirPekan di mesinnya).
         hariAlpha: h.statusKehadiran === "ALPHA" && !rincian.hariLibur,
         kejadianTidakPresensi,
         menitTerlambat: h.menitTerlambat,
@@ -278,11 +192,10 @@ export default async function RincianPresensiPegawaiPage({
       }),
       keteranganLibur,
       dikoreksiManual: petaKoreksi.has(iso),
-      // Per KOLOM, bukan cuma per baris: koreksi boleh menyentuh jam masuk
-      // saja, dan mewarnai dua-duanya akan mengaku mengubah yang tidak diubah.
       masukDikoreksi: koreksiHari?.jamMasuk != null,
       keluarDikoreksi: koreksiHari?.jamKeluar != null,
-      jamLembur: h.jamLembur,
+      jamLembur: koreksiHari?.jamLembur ?? h.jamLembur,
+      jamLemburMesin: h.jamLembur,
       kejadianTidakPresensi,
     };
   });
@@ -313,24 +226,14 @@ export default async function RincianPresensiPegawaiPage({
         ).filter(([, dariHarian, dariRekap]) => dariHarian !== dariRekap)
       : [];
 
-  // Bahan tabel "kenapa potongan saya segini": bobot kehadiran penuh (30% x
-  // tarif kelas jabatan) + komponen kehadiran yang benar-benar tersimpan, biar
-  // selisihnya kelihatan kalau presensinya berubah setelah Tukin dihitung.
   const tarifKelas =
     pegawai.kelasJabatan === null ? null : (TUKIN_POKOK_PER_KELAS_JABATAN[pegawai.kelasJabatan] ?? null);
-  // Pasal 5 ayat (2) huruf b - bobot kehadiran 30%.
   const bobotKehadiranPenuh = tarifKelas === null ? null : tarifKelas * 0.3;
   const tukinPeriode = await prisma.tukinCalculation.findUnique({
     where: { pegawaiId_periodeBulan_periodeTahun: { pegawaiId: pegawai.id, periodeBulan, periodeTahun } },
     select: { komponenKehadiran: true },
   });
 
-  // Halaman ini dimasuki dari dua tempat: tabel Presensi dan tabel Kalkulasi
-  // Unit. Asalnya dibawa lewat ?dari= supaya tombol kembali mengantar ke tempat
-  // orangnya datang, bukan selalu ke Presensi.
-  //
-  // SENGAJA daftar tetap, bukan URL bebas dari query string: menerima path apa
-  // pun dari luar berarti tautan ini bisa disetel mengarah ke mana saja.
   const asal =
     dari === "kalkulasi"
       ? {
@@ -344,7 +247,6 @@ export default async function RincianPresensiPegawaiPage({
           href: `/tukin/presensi?bulan=${periodeBulan}&tahun=${periodeTahun}`,
         };
 
-  /** Tautan ke halaman ini dengan tampilan tabel yang lain - parameter lain dibawa serta. */
   const hrefMode = (mode: "presensi" | "jamKerja" | "banding") => {
     const q = new URLSearchParams({ bulan: String(periodeBulan), tahun: String(periodeTahun) });
     if (dari) q.set("dari", dari);
@@ -354,15 +256,6 @@ export default async function RincianPresensiPegawaiPage({
     return `/tukin/presensi/${encodeURIComponent(pegawai.nip)}?${q.toString()}`;
   };
 
-  // --- Banding ke e-Presensi -------------------------------------------------
-  // DUA sistem luar dihubungi di sini (SIAP untuk memetakan NIP -> id_pegawai,
-  // lalu e-Presensi untuk membaca keputusan potongannya), jadi SENGAJA hanya
-  // dijalankan kalau tampilannya memang sedang dibuka - bukan di tiap kunjungan
-  // halaman ini. Keduanya READ-ONLY.
-  //
-  // Kegagalan koneksi TIDAK boleh merobohkan halaman: SIAP ada di segmen
-  // jaringan yang berbeda dan pernah tidak terjangkau. Yang muncul penjelasan,
-  // bukan galat mentah.
   let hasilBanding: HasilBandingPotongan | null = null;
   let galatBanding: string | null = null;
   if (modeBanding) {
@@ -375,12 +268,6 @@ export default async function RincianPresensiPegawaiPage({
         const potonganEpresensi = await ambilPotonganEpresensi(idEpresensi, periodeBulan, periodeTahun);
         hasilBanding = bandingkanPotongan({
           epresensi: potonganEpresensi,
-          // Menitnya dari KOLOM TERSIMPAN (yang dipakai membayar), bukan dari
-          // rumus tampilan tabel rincian jam kerja - supaya yang dibandingkan
-          // benar-benar angka Gajihub, bukan turunannya. Satu-satunya yang
-          // direkonstruksi adalah cacah kejadian ayat (2), yang memang tidak
-          // punya kolom sendiri; panel peringatan di atas sudah menyalakan
-          // tanda kalau rekonstruksi itu tidak menjumlah ke rekap bulanan.
           gajihub: harian.map((h, i) => {
             const libur = barisJamKerja[i].rincian.hariLibur;
             return {
@@ -409,9 +296,6 @@ export default async function RincianPresensiPegawaiPage({
       <Link href={asal.href} className="text-sm font-semibold text-teal-deep underline">
         &larr; {asal.label}
       </Link>
-      {/* Badge-nya DI LUAR <h1>: isinya <details> (flow content), sementara
-          <h1> cuma boleh memuat phrasing content - kalau dipaksa masuk,
-          browser memindahkannya keluar dan terjadi hydration mismatch. */}
       <div className="mt-2 flex flex-wrap items-baseline gap-1">
         <h1 className="text-xl font-extrabold tracking-tight text-ink">{pegawai.nama}</h1>
         <BadgePejabatEselon kelasJabatan={pegawai.kelasJabatan} />
@@ -428,8 +312,6 @@ export default async function RincianPresensiPegawaiPage({
       </p>
 
       <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
-        {/* Tampilan yang sedang dibuka ikut terbawa - mengganti periode tidak
-            boleh diam-diam melempar orang kembali ke tabel yang satunya. */}
         {modeJamKerja && <input type="hidden" name="rinci" value="1" />}
         {dari && <input type="hidden" name="dari" value={dari} />}
         {satker && <input type="hidden" name="satker" value={satker} />}
@@ -484,9 +366,6 @@ export default async function RincianPresensiPegawaiPage({
               <dd className="font-mono font-semibold text-ink">{rekap.totalMenitPulangCepat} menit</dd>
             </div>
             <div>
-              {/* Jam + menit, bukan "2,75 jam". Angka desimal benar tapi tidak
-                  bisa diadu dengan jam dinding oleh orang yang memeriksanya -
-                  dan memeriksanya justru gunanya halaman ini. */}
               <dt className="text-xs text-muted">Lembur hari kerja</dt>
               <dd className="font-mono font-semibold text-ink">{lemburTeks(rekap.totalJamLembur)}</dd>
             </div>
@@ -686,31 +565,37 @@ export default async function RincianPresensiPegawaiPage({
                   </td>
                   {bolehKoreksi && (
                     <td className="px-3 py-2">
-                      {kendala ? (
+                      {/* FORMNYA SELALU TAMPIL sekarang, bahkan tanpa penanda
+                          kendala - yang dikunci cuma jam masuk & pulang.
+                          Koreksi JAM LEMBUR tidak menuntut penanda itu:
+                          dasarnya surat perintah lembur, bukan kerusakan mesin
+                          absensi, dan memaksa petugas menandai kerusakan yang
+                          tidak pernah terjadi hanya untuk mencatat lembur yang
+                          sah jelas keliru. Server menagih aturan yang sama
+                          (lihat actionsKoreksi.ts). */}
+                      {akhirPekan && !h.jamLembur ? (
+                        <span className="text-xs text-muted">-</span>
+                      ) : (
                         <KoreksiJamForm
                           nip={pegawai.nip}
                           tanggalIso={iso}
                           jamMasukAsli={jamTeks(h.jamMasuk)}
                           jamKeluarAsli={jamTeks(h.jamKeluar)}
+                          jamLemburMesin={h.jamLembur}
+                          bolehUbahJam={!!kendala}
                           koreksi={
                             koreksi
                               ? {
                                   id: koreksi.id,
                                   jamMasuk: koreksi.jamMasuk ? jamTeks(koreksi.jamMasuk) : null,
                                   jamKeluar: koreksi.jamKeluar ? jamTeks(koreksi.jamKeluar) : null,
+                                  jamLembur: koreksi.jamLembur,
                                   alasan: koreksi.alasan,
                                   olehNama: koreksi.dikoreksiOleh.nama,
                                 }
                               : null
                           }
                         />
-                      ) : (
-                        // Tanpa penanda kendala, jam tidak boleh diubah sama
-                        // sekali - invariant "tidak ada edit presensi bebas"
-                        // tetap berlaku, dan alasannya dikatakan apa adanya.
-                        <span className="text-xs text-muted">
-                          {akhirPekan ? "-" : "tanggal belum ditandai kendala"}
-                        </span>
                       )}
                     </td>
                   )}
