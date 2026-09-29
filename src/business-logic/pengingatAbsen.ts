@@ -94,6 +94,7 @@ export function susunDaftarPengingat({
   perNip,
   indeksHari,
   sekarangMenit,
+  hariLibur,
 }: {
   roster: PegawaiUnit[];
   perNip: Map<string, KetukanPegawai>;
@@ -111,10 +112,32 @@ export function susunDaftarPengingat({
    * Dibiarkan undefined = tampilkan semua yang belum tap pulang.
    */
   sekarangMenit?: number;
+  /**
+   * true = tanggal merah / cuti bersama menurut `HariLiburNasional`.
+   *
+   * Sabtu & Minggu TIDAK perlu diisi di sini - jadwalnya sudah menyebut
+   * dirinya sendiri lewat `jamPulangWajibMenit` yang null. Yang tidak bisa
+   * diturunkan dari jadwal cuma tanggal merah, karena letaknya berpindah tiap
+   * tahun dan sumbernya tabel, bukan rumus.
+   */
+  hariLibur?: boolean;
 }): DaftarPengingat {
   const berket = new Set<string>(STATUS_BERKETERANGAN);
   const jamPulangWajib = JADWAL_KERJA_DEFAULT.jamPulangWajibMenit[indeksHari] ?? null;
   const istirahat = ISTIRAHAT_MENIT[indeksHari] ?? 0;
+
+  // TIDAK ADA KEWAJIBAN TAP HARI INI - dan ini yang menentukan apakah nama
+  // seseorang boleh disebut sama sekali.
+  //
+  // `jamPulangWajib === null` berarti Sabtu/Minggu menurut Pasal 9 ayat (2);
+  // `hariLibur` berarti tanggal merah atau cuti bersama. Di kedua hari itu
+  // pegawai yang tidak punya ketukan bukan sedang lalai - dia memang libur.
+  //
+  // KENAPA INI PENTING SAMPAI PERLU DITULIS PANJANG: e-Presensi baru membuat
+  // baris ketika seseorang tap, jadi pada hari Sabtu SELURUH unit tidak punya
+  // baris. Tanpa penjagaan ini pesan checkin hari Sabtu akan menyebut nama
+  // semua orang di grup unit sebagai "belum melakukan jam checkin".
+  const tidakAdaKewajiban = hariLibur === true || jamPulangWajib === null;
 
   const belumCheckin: string[] = [];
   const belumCheckout: BarisBelumCheckout[] = [];
@@ -130,15 +153,16 @@ export function susunDaftarPengingat({
     }
 
     if (!k || k.jamMasukMenit === null) {
+      if (tidakAdaKewajiban) continue;
       belumCheckin.push(p.nama);
       continue;
     }
 
     sudahCheckin++;
     if (k.jamKeluarMenit === null) {
-      // Jam pulang wajib null = hari libur menurut jadwal. Tidak ada kewajiban
-      // checkout yang bisa disebut, jadi orangnya tidak ditagih sama sekali.
-      if (jamPulangWajib === null) continue;
+      // Sama seperti checkin: tanpa kewajiban hari itu, tidak ada yang bisa
+      // ditagih. `jamPulangWajib` dipastikan bukan null oleh penjagaan ini.
+      if (tidakAdaKewajiban || jamPulangWajib === null) continue;
       // Rumus yang SAMA dipakai mesin yang membayar - diadu ke 1.099 dari
       // 1.133 baris berkas hitung petugas (Biro Keuangan, Juli 2026).
       const bolehPulangMenit = batasCheckoutMenit(k.jamMasukMenit, jamPulangWajib, istirahat);

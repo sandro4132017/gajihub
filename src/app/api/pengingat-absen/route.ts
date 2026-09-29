@@ -99,11 +99,24 @@ export async function GET(req: NextRequest) {
   // yang salah.
   const tampilkanSemua = req.nextUrl.searchParams.get("semua") === "1";
 
+  // TANGGAL MERAH DIAMBIL DARI TABEL, tidak bisa diturunkan dari jadwal.
+  // Sabtu & Minggu sudah tertangani sendiri oleh jamPulangWajib yang null,
+  // tapi Idul Fitri dan cuti bersama berpindah tiap tahun. Tanpa pemeriksaan
+  // ini, pesan checkin pada tanggal merah menyebut nama SELURUH unit - di
+  // e-Presensi hari itu memang tidak ada seorang pun yang tap.
+  //
+  // `tanggal` sudah tengah malam UTC, konvensi yang sama dengan kolomnya.
+  const libur = await prisma.hariLiburNasional.findUnique({
+    where: { tanggal },
+    select: { keterangan: true, cutiBersama: true },
+  });
+
   const daftar = susunDaftarPengingat({
     roster,
     perNip: absen.perNip,
     indeksHari,
     sekarangMenit: tampilkanSemua ? undefined : absen.jamServerMenit,
+    hariLibur: libur !== null,
   });
 
   return Response.json(
@@ -119,6 +132,10 @@ export async function GET(req: NextRequest) {
         belumCheckin: daftar.belumCheckin.length,
         belumCheckout: daftar.belumCheckout.length,
       },
+      // Diisi hanya kalau tanggalnya merah. Botnya tidak perlu memeriksanya -
+      // kedua pesan sudah null pada hari libur - tapi ini yang menjelaskan
+      // KENAPA null, dan itu yang dicari orang saat mengira botnya mati.
+      hariLibur: libur ? { keterangan: libur.keterangan, cutiBersama: libur.cutiBersama } : null,
       catatan: {
         // NIP tanpa padanan di SIAP tidak punya jembatan ke e-Presensi, jadi
         // ketukannya tidak akan pernah terbaca - orangnya akan selalu masuk

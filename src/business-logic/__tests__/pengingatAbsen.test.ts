@@ -88,6 +88,40 @@ describe("susunDaftarPengingat", () => {
     expect(d.sudahCheckin).toBe(1);
   });
 
+  it("hari libur: yang TIDAK tap sama sekali juga tidak ditagih checkin", () => {
+    // Ini kegagalan yang paling mungkin memalukan di grup: e-Presensi baru
+    // membuat baris saat orang tap, jadi Sabtu SELURUH unit tidak punya baris.
+    // Tanpa penjagaan hari libur, pesan checkin menyebut nama semua orang.
+    const d = susunDaftarPengingat({ roster: orang(5), perNip: new Map(), indeksHari: SABTU });
+    expect(d.belumCheckin).toEqual([]);
+    expect(d.belumCheckout).toEqual([]);
+  });
+
+  it("hariLibur=true menutup HARI KERJA biasa - tanggal merah & cuti bersama", () => {
+    // Rabu yang kebetulan tanggal merah. Jadwal tidak bisa tahu sendiri:
+    // letak tanggal merah berpindah tiap tahun, sumbernya tabel.
+    const d = susunDaftarPengingat({
+      roster: orang(3),
+      perNip: new Map([["nip0", ketukan({ jamMasukMenit: jm(7, 30) })]]),
+      indeksHari: RABU,
+      hariLibur: true,
+    });
+    expect(d.belumCheckin).toEqual([]);
+    expect(d.belumCheckout).toEqual([]);
+    // Yang tetap masuk kerja tetap terhitung hadir - dia cuma tidak ditagih.
+    expect(d.sudahCheckin).toBe(1);
+  });
+
+  it("hariLibur=false TIDAK mengubah perilaku hari kerja", () => {
+    const d = susunDaftarPengingat({
+      roster: orang(2),
+      perNip: new Map(),
+      indeksHari: RABU,
+      hariLibur: false,
+    });
+    expect(d.belumCheckin).toHaveLength(2);
+  });
+
   it("status di luar daftar berketerangan tetap ditagih - mis. Lembur di hari kerja", () => {
     const perNip = new Map([["nip0", ketukan({ status: "Lembur", jamMasukMenit: jm(7, 30) })]]);
     const d = susunDaftarPengingat({ roster: orang(1), perNip, indeksHari: RABU });
@@ -167,6 +201,11 @@ describe("pesanCheckin - bentuknya dikunci template user", () => {
     // Pesan berisi daftar kosong mengajari orang mengabaikan pengingat ini.
     const kosong = susunDaftarPengingat({ roster: [], perNip: new Map(), indeksHari: RABU });
     expect(pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:30", d: kosong })).toBeNull();
+  });
+
+  it("hari libur -> null, bot tidak mengirim apa pun", () => {
+    const sabtu = susunDaftarPengingat({ roster: orang(5), perNip: new Map(), indeksHari: SABTU });
+    expect(pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:30", d: sabtu })).toBeNull();
   });
 
   it(`lebih dari ${BATAS_NAMA_PER_PESAN} nama dipotong, sisanya DISEBUT jumlahnya`, () => {
