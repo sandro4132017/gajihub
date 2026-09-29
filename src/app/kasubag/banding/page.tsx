@@ -57,6 +57,10 @@ export default async function VerifikasiBandingUnitPage({
     <main className={HALAMAN}>
       <h1 className="text-xl font-extrabold tracking-tight text-ink">Verifikasi Banding</h1>
       <p className="mt-1 text-sm text-muted">{satkerEfektif} - jenjang 1 (verifikasi Kasubag TU)</p>
+      <p className="mt-1 text-xs leading-relaxed text-muted">
+        Disetujui = diteruskan ke OSDMA untuk keputusan final, sekaligus ditembuskan ke PPABP supaya pembayaran
+        periode yang dipersoalkan ikut diperiksa. Ditolak = selesai di sini.
+      </p>
 
       <div className="mt-6 space-y-4">
         {bandingList.length === 0 && <p className="card p-6 text-sm text-muted">Belum ada banding dari unit ini.</p>}

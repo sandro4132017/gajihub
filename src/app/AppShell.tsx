@@ -164,6 +164,11 @@ const MENU_PPABP = [
   { href: "/uang-makan", label: "Uang Makan", Ikon: FaUtensils },
   ...MENU_UANG_LEMBUR,
   {
+    href: "/ppabp/banding",
+    label: "Tembusan Banding",
+    Ikon: RiScalesLine,
+  },
+  {
     href: "/ppabp/rekonsiliasi",
     label: "Rekonsiliasi",
     Ikon: RiExchangeLine,

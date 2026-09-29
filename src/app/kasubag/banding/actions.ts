@@ -16,6 +16,14 @@ export interface VerifikasiBandingFormState {
  * "DITOLAK" (selesai, tidak lanjut). Sama seperti approval Tukin/Uang
  * Makan/Uang Lembur, fetch ULANG User dari database (bukan percaya cookie
  * sesi) sebelum mengizinkan aksi yang mengubah data.
+ *
+ * SETUJU juga MENEMBUSKAN banding ini ke PPABP - tanpa status baru dan tanpa
+ * kolom baru. Tembusannya sebuah TAMPILAN (/ppabp/banding) yang menyaring
+ * status "MENUNGGU_APPROVAL_FINAL", BUKAN tahap approval: PPABP tidak ikut
+ * memutuskan (keputusan user 2026-09-29) karena yang bisa memperbaiki
+ * presensi/predikat/kelas jabatan cuma OSDMA. Kalau suatu saat PPABP memang
+ * harus ikut memutuskan, ITULAH yang butuh status baru - jangan menambahkannya
+ * di sini tanpa keputusan itu.
  */
 export async function verifikasiBandingJenjang1Action(
   _state: VerifikasiBandingFormState,
@@ -80,7 +88,7 @@ export async function verifikasiBandingJenjang1Action(
     ]);
 
     revalidatePath("/kasubag/banding");
-    return { success: keputusan === "SETUJU" ? "Banding disetujui, diteruskan ke OSDMA." : "Banding ditolak." };
+    return { success: keputusan === "SETUJU" ? "Banding disetujui, diteruskan ke OSDMA untuk keputusan final - tembusan ke PPABP." : "Banding ditolak." };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
   }

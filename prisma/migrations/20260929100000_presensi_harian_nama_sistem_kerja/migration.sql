@@ -1,0 +1,24 @@
+-- Teks status e-Presensi APA ADANYA, untuk export rincian presensi harian.
+--
+-- KENAPA PERLU KOLOM SENDIRI, padahal `status_kehadiran` sudah ada.
+-- `status_kehadiran` sudah DINORMALKAN lewat `STATUS_HARIAN`, dan normalisasinya
+-- MENGGABUNGKAN dua label yang berbeda: WFH dan WFA dua-duanya menjadi "WFH"
+-- (skema tidak memisahkannya karena tarif uang makannya sama). Jadi teks asli
+-- e-Presensi TIDAK bisa dipulihkan dari kolom itu. Di Juli 2026 itu 679 dari
+-- 122.641 baris (0,55%) yang akan salah label kalau dipaksa memetakan balik.
+--
+-- NULLABLE TANPA DEFAULT, dan itu disengaja. Tabel ini memuat 854.662 baris;
+-- `ADD COLUMN` nullable tanpa default di PostgreSQL adalah perubahan metadata
+-- saja - tidak menulis ulang satu baris pun, jadi tidak ada tabel terkunci lama
+-- di server produksi.
+--
+-- Baris yang sudah ada TIDAK terisi oleh migrasi ini, dan itu tidak membuat
+-- export gagal: `labelSistemKerja()` memetakan balik dari `status_kehadiran`
+-- untuk baris NULL, benar pada 11 dari 12 label. Isinya baru persis setelah
+-- periode yang bersangkutan disinkronkan ulang dari e-Presensi.
+--
+-- TIDAK ADA kolom `menit_kerja` di sini. Menit kerja harian dihitung dari jam
+-- masuk, jam keluar, dan istirahat menurut nama harinya - ketiganya sudah bisa
+-- diturunkan dari baris yang ada, jadi menyimpannya berarti menambah kolom yang
+-- kosong untuk seluruh baris lama sampai semuanya di-sync ulang.
+ALTER TABLE "presensi_harian" ADD COLUMN "nama_sistem_kerja" TEXT;

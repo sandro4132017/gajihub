@@ -230,6 +230,38 @@ model PresensiHarian {
   // pun. Menyimpannya dua kali cuma menciptakan kemungkinan keduanya beda.
   jamLembur               Float     @default(0) @map("jam_lembur")
 
+  /// Teks status APA ADANYA dari e-Presensi (kolom `sistem_kerja.nama_sistem_kerja`),
+  /// mis. "WFO", "Dinas Keluar", "Tidak Hadir", "Upacara Bendera".
+  ///
+  /// DISIMPAN BERDAMPINGAN dengan `statusKehadiran`, bukan menggantikannya, dan
+  /// itu disengaja: `statusKehadiran` sudah DINORMALKAN lewat `STATUS_HARIAN`
+  /// dan normalisasinya MENGGABUNGKAN dua label yang berbeda - WFH dan WFA
+  /// dua-duanya jadi "WFH" (skema tidak memisahkannya karena tarif uang
+  /// makannya sama). Jadi teks aslinya TIDAK bisa dipulihkan dari
+  /// `statusKehadiran`, dan export yang harus menyebut label e-Presensi apa
+  /// adanya akan salah pada 0,5% baris kalau dipaksa memetakan balik.
+  ///
+  /// NULL pada baris yang ditulis SEBELUM kolom ini ada (2026-09-29) dan pada
+  /// baris hasil unggah PDF yang formatnya tidak memuat teks itu.
+  namaSistemKerja String? @map("nama_sistem_kerja")
+
+  /// TIDAK ADA kolom `menit_kerja` di sini, dan itu keputusan sadar.
+  ///
+  /// Menit kerja harian = jam keluar - jam masuk - istirahat, dan KETIGANYA
+  /// sudah ada di baris ini (istirahat diturunkan dari nama harinya). Jadi
+  /// angkanya dihitung waktu dibutuhkan - lihat `menitKerjaHarian()` di
+  /// `src/business-logic/exportPresensiHarian.ts`.
+  ///
+  /// Sempat ditambahkan sebagai kolom yang menyalin `presensi.menit_kerja` dari
+  /// e-Presensi, lalu dicabut lagi (2026-09-29): akibatnya kolomnya kosong
+  /// untuk seluruh 854.662 baris yang sudah ada sampai tiap periode
+  /// disinkronkan ulang - biaya besar untuk angka yang bisa diturunkan.
+  ///
+  /// Kalau suatu saat `menit_kerja` versi e-Presensi memang diperlukan sebagai
+  /// PEMBANDING (mereka membatasinya 7,5 jam, hitungan di sini tidak), itu
+  /// kolom baru dengan nama yang menyebut asalnya - jangan menumpangkannya ke
+  /// satu kolom bersama, karena dua definisi dalam satu kolom adalah cara
+  /// tercepat membuat dua angka berbeda terbaca sebagai satu.
   sourceSystem   String   @default("e-Presensi") @map("source_system")
   sourceSyncedAt DateTime @map("source_synced_at")
 

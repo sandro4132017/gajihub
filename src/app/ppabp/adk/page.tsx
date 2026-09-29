@@ -10,11 +10,18 @@ import { kelompokkanPerBank } from "../../../business-logic/rekeningPegawai";
 import { dataUangMakanHarian } from "./dataUangMakanHarian";
 import { dataUangLemburHarian } from "./dataUangLemburHarian";
 import { PratinjauAdkUangMakan } from "./PratinjauAdkUangMakan";
-import { TAMPILKAN_ADK_LEMBUR, TAMPILKAN_NOMINAL_LEMBUR } from "../../tampilUangLembur";
+import {
+  TAMPILKAN_ADK_LEMBUR,
+  TAMPILKAN_NOMINAL_LEMBUR,
+} from "../../tampilUangLembur";
 import { PapanProgres } from "../../kasubag/kirim/PapanProgres";
 import { rangkumProgres } from "../../../business-logic/pengirimanUnit";
 import { canKembalikanRekapUnit } from "../../../auth/permissions";
-import { satkerTerkirim, sempitkanKeSatker, whereIkutAdk } from "./satkerTerkirim";
+import {
+  satkerTerkirim,
+  sempitkanKeSatker,
+  whereIkutAdk,
+} from "./satkerTerkirim";
 import {
   JENIS_PEGAWAI_ADK,
   bacaJenisPegawai,
@@ -37,7 +44,11 @@ export const dynamic = "force-dynamic";
  */
 type JenisBerkasAdk = "tukin" | "uang-makan" | "uang-lembur";
 
-const BERKAS_ADK: readonly { kode: JenisBerkasAdk; label: string; perBank: boolean }[] = [
+const BERKAS_ADK: readonly {
+  kode: JenisBerkasAdk;
+  label: string;
+  perBank: boolean;
+}[] = [
   { kode: "tukin", label: "Tunjangan Kinerja", perBank: true },
   { kode: "uang-makan", label: "Uang Makan", perBank: false },
   { kode: "uang-lembur", label: "Uang Lembur", perBank: false },
@@ -57,7 +68,12 @@ export default async function ExportAdkPage({
 }) {
   const { satker, bulan, tahun, adk, jenis, bank } = await searchParams;
   const akun = await getSessionAccount();
-  const authUser: AuthUser | null = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
+  const authUser: AuthUser | null = akun && {
+    nip: akun.nip,
+    role: akun.role,
+    satuanKerja: akun.satuanKerja,
+    aktif: true,
+  };
   if (!authUser || !canGenerateAdk(authUser)) {
     return <AksesDitolak pesan="Role kamu tidak berwenang mengekspor ADK." />;
   }
@@ -83,7 +99,9 @@ export default async function ExportAdkPage({
   // JavaScript, sama seperti tombol unduhnya yang tetap `<a href>`.
   const jenisPegawai = bacaJenisPegawai(jenis ?? null);
   const adkDipilih: JenisBerkasAdk =
-    adk === "uang-makan" || (adk === "uang-lembur" && TAMPILKAN_ADK_LEMBUR) ? adk : "tukin";
+    adk === "uang-makan" || (adk === "uang-lembur" && TAMPILKAN_ADK_LEMBUR)
+      ? adk
+      : "tukin";
   // Bank hanya berlaku untuk Tukin. Uang Makan & Uang Lembur tidak memuat
   // perintah bayar sama sekali, jadi tidak ada yang bisa dipisah per bank -
   // lihat keterangan di bawah halaman. Nilai yang tertinggal di URL dari
@@ -100,20 +118,33 @@ export default async function ExportAdkPage({
   // status APPROVED per baris. Dipakai bersama oleh pemisahan bank di bawah
   // DAN oleh angka ringkasan, supaya keterangan di layar tidak bisa bercerita
   // beda dari isi berkas yang terunduh.
-  const satkerBoleh = await satkerTerkirim(prisma, Number(periodeBulan), Number(periodeTahun));
+  const satkerBoleh = await satkerTerkirim(
+    prisma,
+    Number(periodeBulan),
+    Number(periodeTahun),
+  );
 
   // PENYARING SATUAN KERJA. `satkerBoleh` tetap dipegang apa adanya untuk
   // angka "sudah dihitung tapi belum dikirim" di bawah - yang itu memang
   // bicara tentang SELURUH unit, bukan tentang unit yang sedang dilihat.
   // Yang menyempit cuma isi berkasnya.
-  const { dipakai: satkerDipakai, terpilih: satkerTerpilih } = sempitkanKeSatker(satkerBoleh, satker);
+  const { dipakai: satkerDipakai, terpilih: satkerTerpilih } =
+    sempitkanKeSatker(satkerBoleh, satker);
 
   const tukinPeriode = await prisma.tukinCalculation.findMany({
-    where: whereIkutAdk(Number(periodeBulan), Number(periodeTahun), satkerDipakai, jenisPegawai),
+    where: whereIkutAdk(
+      Number(periodeBulan),
+      Number(periodeTahun),
+      satkerDipakai,
+      jenisPegawai,
+    ),
     select: { pegawaiId: true, pegawai: { select: { nip: true, nama: true } } },
   });
   const rekeningTukin = await prisma.rekeningPegawai.findMany({
-    where: { jenisPembayaran: "TUKIN", pegawaiId: { in: tukinPeriode.map((t) => t.pegawaiId) } },
+    where: {
+      jenisPembayaran: "TUKIN",
+      pegawaiId: { in: tukinPeriode.map((t) => t.pegawaiId) },
+    },
     select: { pegawaiId: true, kodeBankSpan: true, namaBank: true },
   });
   const bankTukin = kelompokkanPerBank(rekeningTukin);
@@ -126,7 +157,9 @@ export default async function ExportAdkPage({
   // yang mana. Namanya ada di data yang sudah diambil - tidak menampilkannya
   // cuma memindahkan pekerjaan ke orangnya.
   const punyaRekening = new Set(rekeningTukin.map((r) => r.pegawaiId));
-  const tanpaRekening = tukinPeriode.filter((t) => !punyaRekening.has(t.pegawaiId)).map((t) => t.pegawai);
+  const tanpaRekening = tukinPeriode
+    .filter((t) => !punyaRekening.has(t.pegawaiId))
+    .map((t) => t.pegawai);
 
   // Ringkasan isi ADK harian - ditampilkan SEBELUM diunduh, supaya file kosong
   // atau nyaris kosong ketahuan di halaman ini, bukan setelah dibuka di Excel.
@@ -134,11 +167,21 @@ export default async function ExportAdkPage({
   const thn = Number(periodeTahun);
   // Pratinjau isi ADK Uang Makan - dari fungsi yang SAMA dengan yang menyusun
   // berkasnya, jadi yang terlihat di layar persis yang terunduh.
-  const pratinjauUm = await dataUangMakanHarian(bln, thn, satkerTerpilih || null, jenisPegawai);
+  const pratinjauUm = await dataUangMakanHarian(
+    bln,
+    thn,
+    satkerTerpilih || null,
+    jenisPegawai,
+  );
   // Idem untuk Uang Lembur. Angka di layar TIDAK dihitung ulang di halaman ini -
   // dulu begitu, dan akibatnya keterangan "sekian hari lembur" memakai populasi
   // yang tidak sama dengan isi berkasnya.
-  const pratinjauLembur = await dataUangLemburHarian(bln, thn, satkerTerpilih || null, jenisPegawai);
+  const pratinjauLembur = await dataUangLemburHarian(
+    bln,
+    thn,
+    satkerTerpilih || null,
+    jenisPegawai,
+  );
 
   // Cacah pegawai Uang Makan yang ikut ke berkas. Dulu berpasangan dengan
   // hitungan "hari hadir" untuk sebuah kalimat ringkasan di kartu berkas -
@@ -152,13 +195,18 @@ export default async function ExportAdkPage({
   // periode yang tinggal menunggu unit menekan Kirim tidak bisa dibedakan dari
   // periode yang memang belum pernah dihitung - dua keadaan dengan jalan
   // keluar yang sama sekali berbeda.
-  const belumKirim = { periodeBulan: bln, periodeTahun: thn, pegawai: { satuanKerja: { notIn: satkerBoleh } } };
+  const belumKirim = {
+    periodeBulan: bln,
+    periodeTahun: thn,
+    pegawai: { satuanKerja: { notIn: satkerBoleh } },
+  };
   const [tukinDraft, umDraft, lemburDraft] = await Promise.all([
     prisma.tukinCalculation.count({ where: belumKirim }),
     prisma.uangMakan.count({ where: belumKirim }),
     prisma.uangLembur.count({ where: belumKirim }),
   ]);
-  const totalApproved = tukinPeriode.length + umIkut + pratinjauLembur.pegawai.length;
+  const totalApproved =
+    tukinPeriode.length + umIkut + pratinjauLembur.pegawai.length;
   const totalBelumApproved = tukinDraft + umDraft + lemburDraft;
 
   // --- Berapa yang TERSINGKIR oleh penyaring jenis -------------------------
@@ -178,27 +226,44 @@ export default async function ExportAdkPage({
   const whereTanpaJenis = {
     periodeBulan: bln,
     periodeTahun: thn,
-    pegawai: { satuanKerja: { in: satkerDipakai }, ...wherePegawaiTanpaJenis() },
+    pegawai: {
+      satuanKerja: { in: satkerDipakai },
+      ...wherePegawaiTanpaJenis(),
+    },
   };
-  const pilihPegawai = { pegawai: { select: { nip: true, nama: true } } } as const;
+  const pilihPegawai = {
+    pegawai: { select: { nip: true, nama: true } },
+  } as const;
   const tanpaJenisBerkas = !jenisPegawai
     ? []
     : adkDipilih === "tukin"
-      ? (await prisma.tukinCalculation.findMany({ where: whereTanpaJenis, select: pilihPegawai })).map(
-          (r) => r.pegawai
-        )
+      ? (
+          await prisma.tukinCalculation.findMany({
+            where: whereTanpaJenis,
+            select: pilihPegawai,
+          })
+        ).map((r) => r.pegawai)
       : adkDipilih === "uang-makan"
-        ? (await prisma.uangMakan.findMany({ where: whereTanpaJenis, select: pilihPegawai })).map(
-            (r) => r.pegawai
-          )
-        : (await prisma.uangLembur.findMany({ where: whereTanpaJenis, select: pilihPegawai })).map(
-            (r) => r.pegawai
-          );
+        ? (
+            await prisma.uangMakan.findMany({
+              where: whereTanpaJenis,
+              select: pilihPegawai,
+            })
+          ).map((r) => r.pegawai)
+        : (
+            await prisma.uangLembur.findMany({
+              where: whereTanpaJenis,
+              select: pilihPegawai,
+            })
+          ).map((r) => r.pegawai);
 
   // --- Berkas yang sedang dipilih ------------------------------------------
-  const berkasTersedia = BERKAS_ADK.filter((b) => b.kode !== "uang-lembur" || TAMPILKAN_ADK_LEMBUR);
+  const berkasTersedia = BERKAS_ADK.filter(
+    (b) => b.kode !== "uang-lembur" || TAMPILKAN_ADK_LEMBUR,
+  );
   const berkas = BERKAS_ADK.find((b) => b.kode === adkDipilih)!;
-  const bankTerpilih = bankTukin.find((b) => b.kodeBankSpan === bankDipilih) ?? null;
+  const bankTerpilih =
+    bankTukin.find((b) => b.kodeBankSpan === bankDipilih) ?? null;
 
   const jumlahBerkas =
     adkDipilih === "tukin"
@@ -236,7 +301,9 @@ export default async function ExportAdkPage({
         : null;
   const ringkasBerkas = [
     `${jumlahBerkas} pegawai`,
-    ...(barisBerkas !== null ? [`${barisBerkas.toLocaleString("id-ID")} baris`] : []),
+    ...(barisBerkas !== null
+      ? [`${barisBerkas.toLocaleString("id-ID")} baris`]
+      : []),
     `${NAMA_BULAN[bln - 1]} ${thn}`,
     satkerTerpilih ? satkerTerpilih : "Seluruh unit yang sudah mengirim",
   ].join(" · ");
@@ -246,7 +313,11 @@ export default async function ExportAdkPage({
   // terbaca sebagai penyaring yang tidak menyaring apa-apa, dan itu bentuk
   // yang paling gampang salah dibaca kalau suatu saat ditempel ke tiket.
   const hrefBerkas = (format: "xlsx" | "txt") => {
-    const p = new URLSearchParams({ bulan: periodeBulan, tahun: periodeTahun, format });
+    const p = new URLSearchParams({
+      bulan: periodeBulan,
+      tahun: periodeTahun,
+      format,
+    });
     if (satkerTerpilih) p.set("satker", satkerTerpilih);
     if (jenisPegawai) p.set("jenis", jenisPegawai);
     if (bankDipilih) p.set("bank", bankDipilih);
@@ -268,7 +339,7 @@ export default async function ExportAdkPage({
   });
   const progres = rangkumProgres(
     unitAktif.map((u) => u.satuanKerja),
-    new Map(barisPengiriman.map((b) => [b.satuanKerja, b]))
+    new Map(barisPengiriman.map((b) => [b.satuanKerja, b])),
   );
 
   return (
@@ -289,21 +360,41 @@ export default async function ExportAdkPage({
             "Nominal uang makan & lembur dihitung Web Gaji sendiri dari grade pegawai.",
           ]}
           acuan={[
-            { aturan: "Template daftar bayar PPABP", tentang: "ADK Tukin 21 kolom - NIP, nama, nilai bruto/potongan/bersih, kode bank SPAN & rekening" },
-            { aturan: "Template ADK-UM & ADK-Lembur", tentang: "Satu baris per pegawai per hari: NIP, tanggal, dan jam untuk lembur" },
-            { aturan: "SBM 2026 item 22.1 & 23.1 (PMK 32/2025)", tentang: "Tarif uang makan & uang lembur per golongan - dihitung di sisi Web Gaji" },
-            { aturan: "Pemisahan per bank", tentang: "SAKTI hanya bisa memproses SPP per bank, jadi ADK Tukin dipecah per kode bank SPAN" },
+            {
+              aturan: "Template daftar bayar PPABP",
+              tentang:
+                "ADK Tukin 21 kolom - NIP, nama, nilai bruto/potongan/bersih, kode bank SPAN & rekening",
+            },
+            {
+              aturan: "Template ADK-UM & ADK-Lembur",
+              tentang:
+                "Satu baris per pegawai per hari: NIP, tanggal, dan jam untuk lembur",
+            },
+            {
+              aturan: "SBM 2026 item 22.1 & 23.1 (PMK 32/2025)",
+              tentang:
+                "Tarif uang makan & uang lembur per golongan - dihitung di sisi Web Gaji",
+            },
+            {
+              aturan: "Pemisahan per bank",
+              tentang:
+                "SAKTI hanya bisa memproses SPP per bank, jadi ADK Tukin dipecah per kode bank SPAN",
+            },
           ]}
           catatan="Berkas ini PERINTAH BAYAR. Setiap pengunduhan tercatat di jejak audit beserta penariknya. Unggahnya masih manual ke Web Gaji."
         />
       </h1>
-      <p className="mt-0.5 text-sm font-bold text-ink">Berkas setoran ke Web Gaji &middot; unggah manual</p>
+      <p className="mt-0.5 text-sm font-bold text-ink">
+        Berkas setoran ke Web Gaji &middot; unggah manual
+      </p>
       <p className="mt-2 text-sm text-biru">
         Ambil berkas ADK untuk unit yang rekapnya sudah dikirim &amp; dikunci.
       </p>
 
       <form method="get" className="card mt-4 p-4">
-        <p className="text-xs font-bold uppercase tracking-wide text-muted">Filter ADK</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-muted">
+          Filter ADK
+        </p>
         <div className="mt-3 flex flex-wrap items-end gap-2.5">
           <div>
             <label className="field-label" htmlFor="filter-satker">
@@ -327,19 +418,32 @@ export default async function ExportAdkPage({
             <SearchableSelect
               name="bulan"
               className="w-28"
-              options={NAMA_BULAN.map((nama, index) => ({ value: String(index + 1), label: nama }))}
+              options={NAMA_BULAN.map((nama, index) => ({
+                value: String(index + 1),
+                label: nama,
+              }))}
               defaultValue={String(periodeBulan)}
             />
           </div>
           <div>
             <label className="field-label">Tahun</label>
-            <input type="number" name="tahun" defaultValue={periodeTahun} className="field-input w-20 py-1.5" />
+            <input
+              type="number"
+              name="tahun"
+              defaultValue={periodeTahun}
+              className="field-input w-20 py-1.5"
+            />
           </div>
           <div>
             <label className="field-label" htmlFor="filter-adk">
               Jenis ADK
             </label>
-            <select id="filter-adk" name="adk" defaultValue={adkDipilih} className="field-input w-40 py-1.5">
+            <select
+              id="filter-adk"
+              name="adk"
+              defaultValue={adkDipilih}
+              className="field-input w-40 py-1.5"
+            >
               {berkasTersedia.map((b) => (
                 <option key={b.kode} value={b.kode}>
                   {b.label}
@@ -391,8 +495,8 @@ export default async function ExportAdkPage({
         </div>
         {!berkas.perBank && (
           <p className="mt-2 text-xs text-muted">
-            ADK {berkas.label} <strong>tidak dipisah per bank</strong> - berkasnya tidak memuat perintah bayar,
-            nominalnya dihitung Web Gaji.
+            ADK {berkas.label} <strong>tidak dipisah per bank</strong> -
+            berkasnya tidak memuat perintah bayar, nominalnya dihitung Web Gaji.
           </p>
         )}
       </form>
@@ -400,40 +504,59 @@ export default async function ExportAdkPage({
       {totalApproved === 0 && (
         <div className="card mt-4 border-l-4 border-l-gold p-4">
           <p className="text-sm font-bold text-ink">
-            Semua file untuk periode {NAMA_BULAN[Number(periodeBulan) - 1]} {periodeTahun} akan KOSONG
+            Semua file untuk periode {NAMA_BULAN[Number(periodeBulan) - 1]}{" "}
+            {periodeTahun} akan KOSONG
           </p>
           {totalBelumApproved === 0 ? (
             <p className="mt-1 text-sm text-muted">
-              Periode ini <strong>belum punya kalkulasi sama sekali</strong>. Jalankan dulu Kalkulasi Unit di{" "}
-              <Link href="/kasubag/kalkulasi" className="font-semibold text-teal-deep underline">
+              Periode ini <strong>belum punya kalkulasi sama sekali</strong>.
+              Jalankan dulu Kalkulasi Unit di{" "}
+              <Link
+                href="/kasubag/kalkulasi"
+                className="font-semibold text-teal-deep underline"
+              >
                 Kalkulasi
               </Link>
-              , lalu Kasubag TU menekan <strong>Kirim &amp; kunci</strong>, baru filenya ada isinya.
+              , lalu Kasubag TU menekan <strong>Kirim &amp; kunci</strong>, baru
+              filenya ada isinya.
             </p>
           ) : (
             <>
               <p className="mt-1 text-sm text-muted">
-                Kalkulasinya <strong>sudah ada</strong> ({tukinPeriode.length + tukinDraft} Tukin,{" "}
-                {umIkut + umDraft} Uang Makan) tapi <strong>belum ada unit yang mengirimnya</strong>. ADK sengaja
-                hanya memuat unit yang rekapnya sudah dikirim &amp; dikunci Kasubag TU - angka yang unitnya belum
-                memeriksa tidak boleh sampai ke Web Gaji, dan itu bukan sesuatu yang bisa dilewati dari halaman
-                ini.
+                Kalkulasinya <strong>sudah ada</strong> (
+                {tukinPeriode.length + tukinDraft} Tukin, {umIkut + umDraft}{" "}
+                Uang Makan) tapi{" "}
+                <strong>belum ada unit yang mengirimnya</strong>. ADK sengaja
+                hanya memuat unit yang rekapnya sudah dikirim &amp; dikunci
+                Kasubag TU - angka yang unitnya belum memeriksa tidak boleh
+                sampai ke Web Gaji, dan itu bukan sesuatu yang bisa dilewati
+                dari halaman ini.
               </p>
               <p className="mt-2 text-sm text-muted">
-                Kasubag TU tiap unit yang menekan <strong>Kirim &amp; kunci</strong> di halaman Kalkulasi
-                Unit - papan progres di bawah memperlihatkan unit mana yang belum. Angkanya bisa diperiksa
-                dulu di{" "}
-                <Link href={`/tukin?${query}`} className="font-semibold text-teal-deep underline">
+                Kasubag TU tiap unit yang menekan{" "}
+                <strong>Kirim &amp; kunci</strong> di halaman Kalkulasi Unit -
+                papan progres di bawah memperlihatkan unit mana yang belum.
+                Angkanya bisa diperiksa dulu di{" "}
+                <Link
+                  href={`/tukin?${query}`}
+                  className="font-semibold text-teal-deep underline"
+                >
                   Dashboard Tukin
                 </Link>
                 ,{" "}
-                <Link href={`/uang-makan?${query}`} className="font-semibold text-teal-deep underline">
+                <Link
+                  href={`/uang-makan?${query}`}
+                  className="font-semibold text-teal-deep underline"
+                >
                   Uang Makan
                 </Link>
                 {TAMPILKAN_NOMINAL_LEMBUR ? (
                   <>
                     , dan{" "}
-                    <Link href={`/uang-lembur?${query}`} className="font-semibold text-teal-deep underline">
+                    <Link
+                      href={`/uang-lembur?${query}`}
+                      className="font-semibold text-teal-deep underline"
+                    >
                       Uang Lembur
                     </Link>
                   </>
@@ -445,7 +568,9 @@ export default async function ExportAdkPage({
         </div>
       )}
 
-      <p className="mt-6 text-xs font-bold uppercase tracking-wide text-muted">Berkas siap diunduh</p>
+      <p className="mt-6 text-xs font-bold uppercase tracking-wide text-muted">
+        Berkas siap diunduh
+      </p>
       <div className="card mt-2 border-l-4 border-l-navy p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -454,7 +579,9 @@ export default async function ExportAdkPage({
               {jenisPegawai && <> - {labelJenisPegawai(jenisPegawai)}</>}
               {bankTerpilih && <> - {bankTerpilih.namaBank}</>}
             </p>
-            <p className="mt-1 text-base font-extrabold tracking-tight text-navy">{ringkasBerkas}</p>
+            <p className="mt-1 text-base font-extrabold tracking-tight text-navy">
+              {ringkasBerkas}
+            </p>
             <p className="mt-1 text-xs text-muted">{keteranganBerkas}</p>
           </div>
           <div className="flex flex-none items-center gap-2">
@@ -476,24 +603,33 @@ export default async function ExportAdkPage({
               {tanpaJenisBerkas.slice(0, 8).map((p) => (
                 <li key={p.nip}>
                   <span className="font-semibold text-ink">{p.nama}</span>{" "}
-                  <span className="font-mono text-[11px] text-muted">({p.nip})</span>
+                  <span className="font-mono text-[11px] text-muted">
+                    ({p.nip})
+                  </span>
                 </li>
-              ))}
+              ))}{" "}
               {tanpaJenisBerkas.length > 8 && (
-                <li className="text-muted">...dan {tanpaJenisBerkas.length - 8} lainnya.</li>
+                <li className="text-muted">
+                  ...dan {tanpaJenisBerkas.length - 8} lainnya.
+                </li>
               )}
             </ul>
             <p className="mt-2">
-              Jenis kepegawaiannya belum diketahui - pegawai di atas belum tercakup berkas basis data gaji.
-              Gajihub tidak menetapkan jenisnya dari golongan, karena cara itu terbukti keliru pada sebagian
+              Jenis kepegawaiannya belum diketahui - pegawai di atas belum
+              tercakup berkas basis data gaji. Gajihub tidak menetapkan jenisnya
+              dari golongan, karena cara itu terbukti keliru pada sebagian
               pegawai dan akan menempatkan mereka di berkas yang salah.
             </p>
             <p className="mt-1.5">
               <strong>Tindakan:</strong> lengkapi datanya di menu{" "}
-              <Link href="/ppabp/basis-data-gaji" className="font-semibold text-teal-deep underline">
+              <Link
+                href="/ppabp/basis-data-gaji"
+                className="font-semibold text-teal-deep underline"
+              >
                 Basis Data Gaji
               </Link>
-              , atau pilih &quot;Semua pegawai&quot; pada filter agar mereka tetap disertakan.
+              , atau pilih &quot;Semua pegawai&quot; pada filter agar mereka
+              tetap disertakan.
             </p>
           </div>
         )}
@@ -505,15 +641,23 @@ export default async function ExportAdkPage({
         )}
       </div>
 
-      <p className="mt-6 text-xs font-bold uppercase tracking-wide text-muted">Pemantauan periode</p>
+      <p className="mt-6 text-xs font-bold uppercase tracking-wide text-muted">
+        Pemantauan periode
+      </p>
 
       {tukinPeriode.length === 0 ? null : bankTukin.length === 0 ? (
         <div className="card mt-4 border-l-4 border-l-gold p-4">
-          <p className="text-sm font-bold text-ink">Belum ada rekening tukin untuk periode ini</p>
+          <p className="text-sm font-bold text-ink">
+            Belum ada rekening tukin untuk periode ini
+          </p>
           <p className="mt-1 text-sm text-muted">
-            Tanpa data rekening, kolom rekening di ADK akan kosong dan Web Gaji tidak bisa memproses pembayarannya -
-            dan file tidak bisa dipisah per bank, padahal SAKTI SPP hanya memproses per bank. Upload dulu di{" "}
-            <Link href="/ppabp/rekening" className="font-semibold text-teal-deep underline">
+            Tanpa data rekening, kolom rekening di ADK akan kosong dan Web Gaji
+            tidak bisa memproses pembayarannya - dan file tidak bisa dipisah per
+            bank, padahal SAKTI SPP hanya memproses per bank. Upload dulu di{" "}
+            <Link
+              href="/ppabp/rekening"
+              className="font-semibold text-teal-deep underline"
+            >
               Rekening Pegawai
             </Link>
             .
@@ -521,12 +665,20 @@ export default async function ExportAdkPage({
         </div>
       ) : (
         <div className="card mt-4 p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted">Bank penerima tukin periode ini</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted">
+            Bank penerima tukin periode ini
+          </p>
           <ul className="mt-2 space-y-1 text-sm text-ink-2">
             {bankTukin.map((b) => (
               <li key={b.kodeBankSpan}>
-                {b.namaBank} <span className="font-mono text-xs text-muted">({b.kodeBankSpan})</span>:{" "}
-                <span className="font-semibold text-ink">{b.jumlah} pegawai</span>
+                {b.namaBank}{" "}
+                <span className="font-mono text-xs text-muted">
+                  ({b.kodeBankSpan})
+                </span>
+                :{" "}
+                <span className="font-semibold text-ink">
+                  {b.jumlah} pegawai
+                </span>
               </li>
             ))}
           </ul>
@@ -570,25 +722,37 @@ export default async function ExportAdkPage({
                 {tanpaRekening.slice(0, 8).map((p) => (
                   <li key={p.nip}>
                     <span className="font-semibold text-ink">{p.nama}</span>{" "}
-                    <span className="font-mono text-xs text-muted">({p.nip})</span>
+                    <span className="font-mono text-xs text-muted">
+                      ({p.nip})
+                    </span>
                   </li>
                 ))}
                 {tanpaRekening.length > 8 && (
-                  <li className="text-muted">...dan {tanpaRekening.length - 8} lainnya.</li>
+                  <li className="text-muted">
+                    ...dan {tanpaRekening.length - 8} lainnya.
+                  </li>
                 )}
               </ul>
               <p className="mt-2">
                 Jika berkas diunduh saat ini,{" "}
-                <strong>pegawai di atas tidak akan menerima pembayaran pada periode ini</strong>. Datanya tidak
-                masuk ke berkas per bank yang diproses SAKTI, dan di berkas &quot;semua bank&quot; kolom
-                rekeningnya kosong sehingga Web Gaji tidak memiliki tujuan transfer.
+                <strong>
+                  pegawai di atas tidak akan menerima pembayaran pada periode
+                  ini
+                </strong>
+                . Datanya tidak masuk ke berkas per bank yang diproses SAKTI,
+                dan di berkas &quot;semua bank&quot; kolom rekeningnya kosong
+                sehingga Web Gaji tidak memiliki tujuan transfer.
               </p>
               <p className="mt-1.5">
                 <strong>Tindakan:</strong> lengkapi datanya di menu{" "}
-                <Link href="/ppabp/rekening" className="font-semibold text-teal-deep underline">
+                <Link
+                  href="/ppabp/rekening"
+                  className="font-semibold text-teal-deep underline"
+                >
                   Rekening Pegawai
                 </Link>
-                , lalu unduh ulang. Kalkulasi Tukin tidak perlu diulang - rekening dibaca saat berkas disusun.
+                , lalu unduh ulang. Kalkulasi Tukin tidak perlu diulang -
+                rekening dibaca saat berkas disusun.
               </p>
             </details>
           )}
@@ -621,7 +785,11 @@ export default async function ExportAdkPage({
           Di /uang-makan tidak ada spanduk itu, jadi di sana kekosongannya
           yang bicara. */}
       {pratinjauUm.pegawai.length > 0 && (
-        <PratinjauAdkUangMakan data={pratinjauUm} periodeBulan={bln} periodeTahun={thn} />
+        <PratinjauAdkUangMakan
+          data={pratinjauUm}
+          periodeBulan={bln}
+          periodeTahun={thn}
+        />
       )}
 
       {/* DITUTUP secara bawaan (permintaan user 2026-09-24). Isinya tetap
@@ -643,20 +811,27 @@ export default async function ExportAdkPage({
             sebagai kalimat pendukung. */}
         <ul className="mt-2 space-y-1.5 text-sm text-muted">
           <li>
-            <strong className="text-ink-2">Format mentah PPABP.</strong> File hanya berisi fakta kehadiran
-            harian - <strong>tanpa nominal rupiah, tarif, baris total, maupun header</strong>. Keduanya
-            mengikuti template asli PPABP (<span className="font-mono text-xs">Template-ADK-UM</span> dan{" "}
+            <strong className="text-ink-2">Format mentah PPABP.</strong> File
+            hanya berisi fakta kehadiran harian -{" "}
+            <strong>
+              tanpa nominal rupiah, tarif, baris total, maupun header
+            </strong>
+            . Keduanya mengikuti template asli PPABP (
+            <span className="font-mono text-xs">Template-ADK-UM</span> dan{" "}
             <span className="font-mono text-xs">Template-ADK-Lembur</span>).
           </li>
           <li>
-            <strong className="text-ink-2">Tidak dipisah per bank.</strong> File ini tidak memuat perintah
-            bayar, jadi tidak perlu dipecah seperti ADK Tukin. Nominalnya dihitung sendiri oleh Web Gaji dari
-            grade pegawai.
+            <strong className="text-ink-2">Tidak dipisah per bank.</strong> File
+            ini tidak memuat perintah bayar, jadi tidak perlu dipecah seperti
+            ADK Tukin. Nominalnya dihitung sendiri oleh Web Gaji dari grade
+            pegawai.
           </li>
           <li>
             <strong className="text-ink-2">Struktur Excel: 2 sheet.</strong>{" "}
-            <span className="font-mono text-xs">hasil</span> = isi yang disetor, persis sama dengan versi TXT.{" "}
-            <span className="font-mono text-xs">depan</span> = grid per tanggal untuk pengecekan visual.
+            <span className="font-mono text-xs">hasil</span> = isi yang disetor,
+            persis sama dengan versi TXT.{" "}
+            <span className="font-mono text-xs">depan</span> = grid per tanggal
+            untuk pengecekan visual.
           </li>
         </ul>
       </details>
@@ -669,34 +844,44 @@ export default async function ExportAdkPage({
           menggantikannya dua hal yang MEMANG masih bisa membuat berkas ini
           salah, dan dua-duanya diturunkan dari data periode ini, bukan dari
           kalimat umum. */}
-      {(pratinjauLembur.tanpaKalkulasi.length > 0 || pratinjauLembur.selisih.length > 0) && (
+      {(pratinjauLembur.tanpaKalkulasi.length > 0 ||
+        pratinjauLembur.selisih.length > 0) && (
         <div className="card mt-4 border-l-4 border-l-gold p-4">
-          <p className="text-sm font-bold text-ink">Periksa dulu sebelum ADK Uang Lembur dikirim</p>
+          <p className="text-sm font-bold text-ink">
+            Periksa dulu sebelum ADK Uang Lembur dikirim
+          </p>
           <ul className="mt-2 space-y-1.5 text-sm text-muted">
             {pratinjauLembur.tanpaKalkulasi.length > 0 && (
               <li>
                 <strong className="text-ink-2">
-                  {pratinjauLembur.tanpaKalkulasi.length} pegawai punya jam lembur tapi TIDAK masuk berkas.
+                  {pratinjauLembur.tanpaKalkulasi.length} pegawai punya jam
+                  lembur tapi TIDAK masuk berkas.
                 </strong>{" "}
-                Jam mereka tercatat di presensi, tapi rekap Uang Lembur-nya belum pernah dihitung - jadi
-                jamnya hilang dari berkas tanpa tanda apa pun. Jalankan Kalkulasi Unit lalu kirim ulang.
+                Jam mereka tercatat di presensi, tapi rekap Uang Lembur-nya
+                belum pernah dihitung - jadi jamnya hilang dari berkas tanpa
+                tanda apa pun. Jalankan Kalkulasi Unit lalu kirim ulang.
                 Terbanyak:{" "}
                 {pratinjauLembur.tanpaKalkulasi.slice(0, 3).map((p, i) => (
                   <span key={p.nip}>
                     {i > 0 && ", "}
-                    <span className="font-semibold text-ink">{p.nama}</span> ({p.jam} jam)
+                    <span className="font-semibold text-ink">{p.nama}</span> (
+                    {p.jam} jam)
                   </span>
                 ))}
-                {pratinjauLembur.tanpaKalkulasi.length > 3 && `, dan ${pratinjauLembur.tanpaKalkulasi.length - 3} lainnya`}.
+                {pratinjauLembur.tanpaKalkulasi.length > 3 &&
+                  `, dan ${pratinjauLembur.tanpaKalkulasi.length - 3} lainnya`}
+                .
               </li>
             )}
             {pratinjauLembur.selisih.length > 0 && (
               <li>
                 <strong className="text-ink-2">
-                  {pratinjauLembur.selisih.length} pegawai jamnya beda dari rekap bulanan.
+                  {pratinjauLembur.selisih.length} pegawai jamnya beda dari
+                  rekap bulanan.
                 </strong>{" "}
-                Yang dibayar Web Gaji adalah jam di berkas ini, bukan angka yang tersimpan. Biasanya karena
-                presensinya berubah setelah rekapnya dihitung - hitung ulang supaya keduanya sama.
+                Yang dibayar Web Gaji adalah jam di berkas ini, bukan angka yang
+                tersimpan. Biasanya karena presensinya berubah setelah rekapnya
+                dihitung - hitung ulang supaya keduanya sama.
               </li>
             )}
           </ul>
@@ -708,13 +893,17 @@ export default async function ExportAdkPage({
           memang begitu - mesin menghitung jamnya, petugas mengesahkannya. */}
       {TAMPILKAN_ADK_LEMBUR && (
         <div className="card mt-4 border-l-4 border-l-teal-deep p-4">
-          <p className="text-sm font-bold text-ink">ADK Uang Lembur = jam terhitung, bukan hak bayar</p>
+          <p className="text-sm font-bold text-ink">
+            ADK Uang Lembur = jam terhitung, bukan hak bayar
+          </p>
           <p className="mt-2 text-sm text-muted">
-            Jam di berkas ini diturunkan dari ketukan presensi: hari kerja dihitung dari jam pulang dikurangi
-            batas kewajiban 7,5 jam, hari libur dari jam masuk sampai jam pulang. Yang{" "}
+            Jam di berkas ini diturunkan dari ketukan presensi: hari kerja
+            dihitung dari jam pulang dikurangi batas kewajiban 7,5 jam, hari
+            libur dari jam masuk sampai jam pulang. Yang{" "}
             <strong className="text-ink-2">mengesahkan</strong> lembur tetap{" "}
-            <strong className="text-ink-2">surat perintah lembur</strong> - dokumen resmi di luar sistem ini.
-            Petugas yang mengadu berkas ini kepadanya sebelum dibayarkan.
+            <strong className="text-ink-2">surat perintah lembur</strong> -
+            dokumen resmi di luar sistem ini. Petugas yang mengadu berkas ini
+            kepadanya sebelum dibayarkan.
           </p>
         </div>
       )}

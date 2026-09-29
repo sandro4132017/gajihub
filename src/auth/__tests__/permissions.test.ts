@@ -38,6 +38,7 @@ import {
   canBukaHalamanPredikatKinerja,
   canMonitorUbahStatusLintasUnit,
   canViewRekonsiliasiLintasSatker,
+  canLihatTembusanBanding,
   canUsulkanPerubahanRole,
   canViewDashboardLintasUnit,
   canKelolaAssignmentRole,
@@ -295,6 +296,26 @@ describe("PPABP - approval jenjang final, lintas satker", () => {
     expect(canViewRekonsiliasiLintasSatker(bukanPpabp, SETJEN)).toBe(false);
     expect(canTelaahValidasiPengajuanLintasUnit(bukanPpabp, SETJEN)).toBe(false);
     expect(canMonitorUbahStatusLintasUnit(bukanPpabp, SETJEN)).toBe(false);
+  });
+
+  it("canLihatTembusanBanding: PPABP & ADMIN boleh, SEMUA role lain ditolak - termasuk PIMPINAN", () => {
+    expect(canLihatTembusanBanding(buatUser({ role: "PPABP", satuanKerja: null }), SETJEN)).toBe(true);
+    expect(canLihatTembusanBanding(buatUser({ role: "ADMIN" }), SETJEN)).toBe(true);
+
+    // OSDMA memutuskan bandingnya di halamannya sendiri, jadi tidak butuh
+    // tembusan; Kasubag TU sudah punya daftar unitnya sendiri.
+    expect(canLihatTembusanBanding(buatUser({ role: "OSDMA", satuanKerja: null }), SETJEN)).toBe(false);
+    expect(canLihatTembusanBanding(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }), SETJEN)).toBe(false);
+    expect(canLihatTembusanBanding(buatUser({ role: "PEGAWAI", satuanKerja: SETJEN }), SETJEN)).toBe(false);
+
+    // PIMPINAN DITOLAK dengan sengaja: halaman ini memuat alasan banding per
+    // orang, dan itu data pribadi - bukan angka agregat seperti dashboard.
+    expect(canLihatTembusanBanding(buatUser({ role: "PIMPINAN", satuanKerja: null }), SETJEN)).toBe(false);
+
+    // Akun dinonaktifkan tidak boleh lolos walau rolenya benar.
+    expect(canLihatTembusanBanding(buatUser({ role: "PPABP", satuanKerja: null, aktif: false }), SETJEN)).toBe(
+      false
+    );
   });
 
   it("canGenerateAdk, canUploadAnggaranRealisasi, canUsulkanPerubahanRole, canTarikAtauUploadPresensiFallback: PPABP (dan ADMIN lewat bypass privilege penuh), DITOLAK buat OSDMA/PIMPINAN", () => {

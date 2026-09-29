@@ -365,6 +365,12 @@ export async function uploadPresensiPdfAction(
                 jamMasuk: menitKeWaktu(h.tanggalIso, h.jamMasukMenit),
                 jamKeluar: menitKeWaktu(h.tanggalIso, h.jamKeluarMenit),
                 statusKehadiran: STATUS_HARIAN[h.kategori] ?? "TIDAK_DIKENALI",
+                // Teks status e-Presensi APA ADANYA + menit_kerja dari sumbernya.
+                // Keduanya TIDAK dipakai menghitung apa pun - disimpan supaya export
+                // rincian harian bisa menyebut label aslinya (WFH lawan WFA tidak bisa
+                // dipulihkan dari statusKehadiran) tanpa menebak. Lihat komentar di
+                // schema.prisma.
+                namaSistemKerja: h.statusTeks,
                 menitTerlambat: h.menitTerlambat,
                 menitPulangCepat: h.menitPulangCepat,
                 menitMeninggalkanKantor: 0,

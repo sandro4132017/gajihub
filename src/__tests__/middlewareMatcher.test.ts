@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { config } from "../middleware";
+import { RUTE_MESIN, config } from "../middleware";
 
 const regexMatcher = new RegExp(`^${config.matcher[0]}$`);
 const lewatMiddleware = (path: string) => regexMatcher.test(path);
@@ -48,5 +48,35 @@ describe("matcher middleware - halaman yang WAJIB tetap terkunci", () => {
     expect(lewatMiddleware("/.gitignore")).toBe(true);
     expect(lewatMiddleware("/.env")).toBe(true);
     expect(lewatMiddleware("/laporan.gaji.rahasia")).toBe(true);
+  });
+});
+
+describe("RUTE_MESIN - jalur yang lolos sesi karena diautentikasi header rahasia", () => {
+  it("memuat pengingat absen, dan CUMA itu", () => {
+    // Daftar ini yang paling berbahaya kalau melebar: tiap tambahan berarti
+    // satu jalur yang bisa diakses tanpa login, dan izinnya HARUS diperiksa di
+    // handler-nya sendiri.
+    expect([...RUTE_MESIN]).toEqual(["/api/pengingat-absen"]);
+  });
+
+  it("/api/kabar TIDAK ikut - isinya aktivitas per unit dan wajib bersesi", () => {
+    expect((RUTE_MESIN as readonly string[]).includes("/api/kabar")).toBe(false);
+  });
+
+  it("dicocokkan PERSIS, bukan awalan - tidak ada wildcard maupun tanda akhir", () => {
+    // `/api/` sebagai awalan akan membuka route API baru yang lupa memeriksa
+    // izinnya. Bentuk di bawah menahan daftar ini tetap berupa path utuh.
+    for (const r of RUTE_MESIN) {
+      expect(r.startsWith("/")).toBe(true);
+      expect(r).not.toContain("*");
+      expect(r.endsWith("/")).toBe(false);
+    }
+  });
+
+  it("tetap DILEWATKAN middleware - pengecualiannya di dalam fungsi, bukan di matcher", () => {
+    // Kalau matcher yang dilonggarkan, handler-nya tidak akan pernah dipanggil
+    // middleware dan pemeriksaan rahasianya jadi satu-satunya penjaga tanpa
+    // jaring pengaman. Jadi route ini HARUS tetap cocok matcher.
+    for (const r of RUTE_MESIN) expect(lewatMiddleware(r)).toBe(true);
   });
 });

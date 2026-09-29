@@ -554,7 +554,7 @@ export default async function KasubagDashboardPage({
                 href={`/tukin/presensi/export?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}
                 className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
               >
-                Rekap Presensi (Excel)
+                Presensi (Excel)
               </a>
               <a
                 href={`/kasubag/kalkulasi/export?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}

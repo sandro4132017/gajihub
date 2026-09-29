@@ -6,6 +6,7 @@ import { hitungTotalPenghasilanSlip } from "../../business-logic/gajiInduk";
 import { AksesDitolak } from "../AksesDitolak";
 import { RincianPotonganKehadiran } from "../RincianPotonganKehadiran";
 import { RincianUangMakan } from "../RincianUangMakan";
+import { RincianPendapatan } from "./RincianPendapatan";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
 import { dikecualikanPotonganKehadiran } from "../../business-logic/pejabatPimpinanTinggi";
 import { BadgePejabatEselon } from "../BadgePejabatEselon";
@@ -861,6 +862,22 @@ export default async function DataSayaPage({
 
           {!periodeTerbaru && (
             <p className="text-sm text-muted">Belum ada periode pendapatan yang tercatat untuk kamu.</p>
+          )}
+
+          {/* "Tunjangan saya apa saja, dan siapa yang menentukan angkanya" -
+              komponen pendapatan dikelompokkan menurut SISTEM ASAL. Ditaruh
+              TEPAT DI BAWAH stat tile karena keduanya menjawab pertanyaan yang
+              sama pada kedalaman berbeda: tile menjawab "berapa", rincian ini
+              menjawab "dari apa". Memisahkannya ke halaman lain berarti
+              pertanyaan kedua tidak akan pernah terjawab. */}
+          {periodeTerbaru && (
+            <RincianPendapatan
+              gaji={gajiTerbaru ?? null}
+              tukinBersih={tukinTerbaru?.tukinBersih ?? 0}
+              uangMakan={umTerbaru?.totalUangMakan ?? 0}
+              uangLembur={TAMPILKAN_NOMINAL_LEMBUR ? lemburTerbaru?.totalUangLembur ?? 0 : null}
+              total={totalTerbaru}
+            />
           )}
 
           {/* "Kenapa uang makan saya segini" - rantai golongan -> tarif -> hari

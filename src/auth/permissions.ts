@@ -668,6 +668,29 @@ export function canViewRekonsiliasiLintasSatker(user: AuthUser, targetSatuanKerj
 }
 
 /**
+ * TEMBUSAN banding yang sudah lolos verifikasi Kasubag TU (jenjang 1).
+ *
+ * MELIHAT SAJA - PPABP TIDAK punya keputusan di alur banding, dan itu
+ * disengaja (keputusan user 2026-09-29). Yang memutuskan koreksi data tetap
+ * OSDMA sebagai data steward, karena PPABP tidak bisa memperbaiki presensi,
+ * predikat kinerja, maupun kelas jabatan - memberi mereka gerbang di sini cuma
+ * menambah satu pintu yang bisa MENAHAN koreksi tanpa menambah satu pun
+ * pemeriksaan yang berarti.
+ *
+ * Yang benar-benar dibutuhkan PPABP adalah TAHU, karena pembayaran periode
+ * yang sama bisa jadi sudah APPROVED atau bahkan sudah ikut ADK yang disetor
+ * ke Web Gaji. Itu yang ditampilkan halamannya - konteks pembayaran, bukan
+ * tombol setuju/tolak.
+ *
+ * SENGAJA TIDAK diberikan ke PIMPINAN: role matrix menempatkannya sebagai
+ * pembaca dashboard agregat, sementara halaman ini memuat alasan banding
+ * per orang - itu data pribadi pegawai, bukan angka ringkasan.
+ */
+export function canLihatTembusanBanding(user: AuthUser, targetSatuanKerja?: string): boolean {
+  return cekPpabpAtauAdmin(user, targetSatuanKerja);
+}
+
+/**
  * MELIHAT dan MENGUSULKAN perubahan role user - eksekusi final ada di
  * ADMIN (lihat canEksekusiPerubahanRole), supaya tidak ada dua pihak yang
  * sama-sama bisa eksekusi langsung.
