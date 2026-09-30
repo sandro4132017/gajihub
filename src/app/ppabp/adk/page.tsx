@@ -33,15 +33,6 @@ import { SumberAcuan } from "../../SumberAcuan";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Jenis berkas ADK yang bisa diunduh dari halaman ini.
- *
- * `perBank` bukan sekadar penanda tampilan: hanya ADK Tukin yang memuat
- * perintah bayar (rekening + nilai uang), dan hanya perintah bayar yang perlu
- * dipecah per bank karena SAKTI SPP memprosesnya per bank. Uang Makan & Uang
- * Lembur menyetorkan fakta harian tanpa rupiah - memecahnya per bank tidak
- * menghasilkan apa-apa selain berkas yang salah bentuk.
- */
 type JenisBerkasAdk = "tukin" | "uang-makan" | "uang-lembur";
 
 const BERKAS_ADK: readonly {
@@ -78,56 +69,24 @@ export default async function ExportAdkPage({
     return <AksesDitolak pesan="Role kamu tidak berwenang mengekspor ADK." />;
   }
 
-  // Halaman ini mengekspor kalkulasi Tukin, jadi periode defaultnya ikut
-  // periode yang memang punya kalkulasi - bukan bulan berjalan, yang tombol
-  // downloadnya pasti menghasilkan file kosong.
   const periode = resolvePeriode(bulan, tahun, await periodePunyaTukin());
   const periodeBulan = String(periode.bulan);
   const periodeTahun = String(periode.tahun);
   const query = `bulan=${periodeBulan}&tahun=${periodeTahun}`;
 
-  // --- TIGA PENYARING BERKAS ----------------------------------------------
-  //
-  // Dulu halaman ini menampilkan SEMUA kemungkinan berkas sekaligus sebagai
-  // daftar tombol: satu untuk Tukin semua bank, satu per bank, satu untuk
-  // Uang Makan. Dengan bertambahnya pemisahan PNS/P3K daftar itu jadi
-  // perkalian - 2 jenis pegawai x (1 + jumlah bank) x jenis ADK - dan yang
-  // dicari orang tenggelam di antara tombol yang tidak dia butuhkan.
-  //
-  // Sekarang: pilih, lalu unduh SATU berkas. Penyaringnya lewat query string
-  // dan formnya `method="get"` biasa - halaman ini tetap bekerja tanpa
-  // JavaScript, sama seperti tombol unduhnya yang tetap `<a href>`.
   const jenisPegawai = bacaJenisPegawai(jenis ?? null);
   const adkDipilih: JenisBerkasAdk =
     adk === "uang-makan" || (adk === "uang-lembur" && TAMPILKAN_ADK_LEMBUR)
       ? adk
       : "tukin";
-  // Bank hanya berlaku untuk Tukin. Uang Makan & Uang Lembur tidak memuat
-  // perintah bayar sama sekali, jadi tidak ada yang bisa dipisah per bank -
-  // lihat keterangan di bawah halaman. Nilai yang tertinggal di URL dari
-  // pilihan sebelumnya sengaja diabaikan, bukan dipakai diam-diam.
   const bankDipilih = adkDipilih === "tukin" ? (bank ?? "") : "";
 
-  // Bank yang BENAR-BENAR ada di data periode ini - tombol per bank
-  // diturunkan dari sini, BUKAN dari daftar bank yang dihardcode. Kalau
-  // banknya berubah/nambah, UI ikut sendiri dan tidak ada tombol mati.
-  //
-  // SAKTI SPP cuma bisa memproses SPP per bank, jadi pemisahan ini bukan
-  // kenyamanan - tanpa itu filenya tidak terpakai.
-  // Populasi yang IKUT ke berkas - gerbangnya pengiriman unit, bukan lagi
-  // status APPROVED per baris. Dipakai bersama oleh pemisahan bank di bawah
-  // DAN oleh angka ringkasan, supaya keterangan di layar tidak bisa bercerita
-  // beda dari isi berkas yang terunduh.
   const satkerBoleh = await satkerTerkirim(
     prisma,
     Number(periodeBulan),
     Number(periodeTahun),
   );
 
-  // PENYARING SATUAN KERJA. `satkerBoleh` tetap dipegang apa adanya untuk
-  // angka "sudah dihitung tapi belum dikirim" di bawah - yang itu memang
-  // bicara tentang SELURUH unit, bukan tentang unit yang sedang dilihat.
-  // Yang menyempit cuma isi berkasnya.
   const { dipakai: satkerDipakai, terpilih: satkerTerpilih } =
     sempitkanKeSatker(satkerBoleh, satker);
 
@@ -149,33 +108,20 @@ export default async function ExportAdkPage({
   });
   const bankTukin = kelompokkanPerBank(rekeningTukin);
 
-  // SIAPA yang belum punya rekening tukin, bukan cuma BERAPA.
-  //
-  // Versi sebelumnya cuma menghitung selisih baris, dan angka telanjang
-  // "1 pegawai" tidak bisa ditindaklanjuti: yang membacanya harus membuka
-  // Rekening Pegawai lalu mencocokkan 47 nama satu per satu untuk menemukan
-  // yang mana. Namanya ada di data yang sudah diambil - tidak menampilkannya
-  // cuma memindahkan pekerjaan ke orangnya.
   const punyaRekening = new Set(rekeningTukin.map((r) => r.pegawaiId));
   const tanpaRekening = tukinPeriode
     .filter((t) => !punyaRekening.has(t.pegawaiId))
     .map((t) => t.pegawai);
 
-  // Ringkasan isi ADK harian - ditampilkan SEBELUM diunduh, supaya file kosong
-  // atau nyaris kosong ketahuan di halaman ini, bukan setelah dibuka di Excel.
   const bln = Number(periodeBulan);
   const thn = Number(periodeTahun);
-  // Pratinjau isi ADK Uang Makan - dari fungsi yang SAMA dengan yang menyusun
-  // berkasnya, jadi yang terlihat di layar persis yang terunduh.
   const pratinjauUm = await dataUangMakanHarian(
     bln,
     thn,
     satkerTerpilih || null,
     jenisPegawai,
   );
-  // Idem untuk Uang Lembur. Angka di layar TIDAK dihitung ulang di halaman ini -
-  // dulu begitu, dan akibatnya keterangan "sekian hari lembur" memakai populasi
-  // yang tidak sama dengan isi berkasnya.
+
   const pratinjauLembur = await dataUangLemburHarian(
     bln,
     thn,
@@ -183,18 +129,10 @@ export default async function ExportAdkPage({
     jenisPegawai,
   );
 
-  // Cacah pegawai Uang Makan yang ikut ke berkas. Dulu berpasangan dengan
-  // hitungan "hari hadir" untuk sebuah kalimat ringkasan di kartu berkas -
-  // kalimat itu DICABUT 2026-09-24 karena mengulang angka yang sudah ada di
-  // baris hasil, dan query harinya ikut dicabut bersamanya.
   const umIkut = await prisma.uangMakan.count({
     where: whereIkutAdk(bln, thn, satkerDipakai, jenisPegawai),
   });
 
-  // Berapa yang SUDAH dihitung tapi unitnya BELUM mengirim. Tanpa angka ini,
-  // periode yang tinggal menunggu unit menekan Kirim tidak bisa dibedakan dari
-  // periode yang memang belum pernah dihitung - dua keadaan dengan jalan
-  // keluar yang sama sekali berbeda.
   const belumKirim = {
     periodeBulan: bln,
     periodeTahun: thn,
@@ -209,20 +147,6 @@ export default async function ExportAdkPage({
     tukinPeriode.length + umIkut + pratinjauLembur.pegawai.length;
   const totalBelumApproved = tukinDraft + umDraft + lemburDraft;
 
-  // --- Berapa yang TERSINGKIR oleh penyaring jenis -------------------------
-  //
-  // Pegawai yang belum tercakup berkas basis data gaji tidak punya jenis
-  // kepegawaian yang bisa dipercaya, jadi begitu penyaring dipakai mereka
-  // keluar dari berkas - lihat alasan lengkapnya di ./jenisPegawaiAdk.ts.
-  //
-  // NAMANYA yang ditampilkan, bukan cuma jumlahnya. Orang yang memilih
-  // "ADK PNS" tidak punya cara lain mengetahui berkasnya kehilangan siapa;
-  // angka telanjang cuma memindahkan pekerjaan mencocokkan nama kepadanya,
-  // dan yang tersisa adalah menemukannya bulan depan lewat pegawai yang
-  // menelepon karena tidak dibayar.
-  //
-  // Cuma dijalankan untuk jenis ADK YANG SEDANG DIPILIH, dan cuma kalau
-  // penyaringnya memang dipakai - tanpa penyaring tidak ada yang tersingkir.
   const whereTanpaJenis = {
     periodeBulan: bln,
     periodeTahun: thn,
@@ -257,7 +181,6 @@ export default async function ExportAdkPage({
             })
           ).map((r) => r.pegawai);
 
-  // --- Berkas yang sedang dipilih ------------------------------------------
   const berkasTersedia = BERKAS_ADK.filter(
     (b) => b.kode !== "uang-lembur" || TAMPILKAN_ADK_LEMBUR,
   );
@@ -273,12 +196,6 @@ export default async function ExportAdkPage({
       : adkDipilih === "uang-makan"
         ? umIkut
         : pratinjauLembur.pegawai.length;
-  // KETERANGAN = FORMATNYA SAJA. Cacah pegawai & periode DICABUT dari sini
-  // (permintaan user 2026-09-24) - dulu keduanya disebut dua kali di kartu
-  // yang sama: sekali di kalimat format, sekali lagi di baris di bawahnya.
-  // Kartu hasil yang mengulang angkanya sendiri jadi panjang tanpa menambah
-  // apa pun, dan yang paling penting - berapa pegawai yang masuk berkas -
-  // justru tenggelam sebagai anak kalimat.
   const keteranganBerkas =
     adkDipilih === "tukin"
       ? bankTerpilih
@@ -288,11 +205,6 @@ export default async function ExportAdkPage({
         ? "Satu baris per pegawai per hari: NIP + tanggal."
         : "Satu baris per pegawai per hari: NIP + tanggal + jumlah jam.";
 
-  // BARIS HASIL - dipisah titik tengah supaya bisa DIPINDAI, bukan dibaca.
-  // Inilah jawaban atas penyaring di atas, jadi ia yang paling menonjol di
-  // kartu. Jumlah BARIS ikut disebut hanya untuk ADK harian: di situ satu
-  // pegawai menyumbang banyak baris, jadi dua angka itu memang berbeda - di
-  // ADK Tukin satu pegawai satu baris, dan menyebut keduanya cuma mengulang.
   const barisBerkas =
     adkDipilih === "uang-makan"
       ? pratinjauUm.totalBaris
@@ -308,10 +220,6 @@ export default async function ExportAdkPage({
     satkerTerpilih ? satkerTerpilih : "Seluruh unit yang sudah mengirim",
   ].join(" · ");
 
-  // Tautan unduh disusun dari penyaring yang sedang aktif. Parameter yang
-  // tidak dipakai TIDAK ikut ditulis - URL yang memuat `jenis=` kosong akan
-  // terbaca sebagai penyaring yang tidak menyaring apa-apa, dan itu bentuk
-  // yang paling gampang salah dibaca kalau suatu saat ditempel ke tiket.
   const hrefBerkas = (format: "xlsx" | "txt") => {
     const p = new URLSearchParams({
       bulan: periodeBulan,
@@ -324,11 +232,6 @@ export default async function ExportAdkPage({
     return `/ppabp/adk/${adkDipilih}?${p.toString()}`;
   };
 
-  // --- Papan progres pengiriman unit ---------------------------------------
-  //
-  // Daftar unitnya dari PEGAWAI, bukan dari baris pengiriman: unit yang belum
-  // mengirim sama sekali tidak punya baris pengiriman, dan justru merekalah
-  // yang perlu dilihat PPABP. Lihat catatan di rangkumProgres().
   const unitAktif = await prisma.pegawai.findMany({
     where: { statusPegawai: "AKTIF" },
     distinct: ["satuanKerja"],
@@ -772,18 +675,6 @@ export default async function ExportAdkPage({
         // PRIORITAS di PapanProgres.
       />
 
-      {/* Pratinjau isi berkas SEBELUM diunduh - bentuk panjangnya (2.000+
-          baris NIP+tanggal) tidak bisa diperiksa manusia.
-
-          TERTUTUP di halaman ini, terbuka di /uang-makan. Rumah pemeriksaannya
-          memang di menu Uang Makan; di sini orang datang untuk mengunduh, dan
-          grid 31 kolom yang terbuka sendiri cuma mendorong tombol unduhnya
-          keluar layar.
-
-          Yang kosong tidak diterangkan di sini - spanduk "semua file akan
-          KOSONG" di atas sudah menjelaskannya lebih dulu dan lebih lengkap.
-          Di /uang-makan tidak ada spanduk itu, jadi di sana kekosongannya
-          yang bicara. */}
       {pratinjauUm.pegawai.length > 0 && (
         <PratinjauAdkUangMakan
           data={pratinjauUm}

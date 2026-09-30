@@ -58,13 +58,10 @@ export async function GET(req: NextRequest) {
 
   // BATAS TAP MASUK DARI JADWAL, bukan dari template pesan.
   //
-  // Template user menulis "08:20", sementara toleransi Pasal 9 ayat (3) yang
-  // dipakai mesin potongan adalah 07:30 + 60 menit = 08:30. Bawaannya di sini
-  // 08:30 supaya pesan tidak pernah salah menyebut aturan yang menyentuh
-  // pembayaran - orang yang membaca "batas 08:20" bisa menyangka tap 08:25
-  // sudah dipotong, padahal tidak. Kalau memang ingin mengingatkan lebih awal,
-  // kirim `&batas=08:20` - sadar, bukan diam-diam.
-  const batasJam = req.nextUrl.searchParams.get("batas")?.trim() || "08:30";
+  // Diubah ke "08:20" (dari "08:30") atas permintaan user karena denda keterlambatan 
+  // (potongan 0,01% per menit) mulai dihitung tepat setelah 08:30. Pengingat 
+  // diatur lebih awal agar pegawai memiliki waktu untuk tap sebelum denda berlaku.
+  const batasJam = req.nextUrl.searchParams.get("batas")?.trim() || "08:20";
 
   // NAMA SATKER DICOCOKKAN PERSIS, bukan `contains`. Pencocokan longgar akan
   // menggabungkan dua unit yang namanya beririsan, dan daftar nama unit lain

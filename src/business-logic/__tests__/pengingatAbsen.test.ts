@@ -182,30 +182,31 @@ describe("pesanCheckin - bentuknya dikunci template user", () => {
   const d = susunDaftarPengingat({ roster: orang(3), perNip: new Map(), indeksHari: RABU });
 
   it("kepala, tanggal, daftar berbintang, batas, penutup", () => {
-    const teks = pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:30", d })!;
-    expect(teks).toContain("*Pengingat Absen Harian by Gajihub*");
-    expect(teks).toContain(TANGGAL);
-    expect(teks).toContain("Pegawai yang belum melakukan jam checkin:");
-    expect(teks).toContain("* Pegawai 0");
-    expect(teks).toContain("Batas tap masuk *08:30*.");
+    const teks = pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:20", d })!;
+    expect(teks).toContain("🔔 *PENGINGAT ABSEN HARIAN*");
+    expect(teks).toContain(`*Gajihub • ${TANGGAL}*`);
+    expect(teks).toContain("👤 *Belum melakukan Check-in:*");
+    expect(teks).toContain("• Pegawai 0");
+    expect(teks).toContain("⏰ *Batas Check-in: 08:20 WIB*");
+    expect(teks).toContain("*Gajihub — Pastikan presensi Anda tercatat dengan benar.*");
   });
 
   it("kalimat penutup WAJIB ADA - tanpanya daftar nama ini jadi tuduhan", () => {
     // Orang yang cuti resmi tapi cutinya belum masuk e-Presensi akan terbaca
     // membolos di depan seluruh unitnya.
-    const teks = pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:30", d })!;
-    expect(teks).toContain("Bagi yang sedang cuti, dinas, atau diklat silakan abaikan pesan ini.");
+    const teks = pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:20", d })!;
+    expect(teks).toContain("Jika sedang *cuti, dinas, atau diklat*, silakan abaikan pesan ini.");
   });
 
   it("daftar KOSONG -> null, tidak ada pesan yang dikirim", () => {
     // Pesan berisi daftar kosong mengajari orang mengabaikan pengingat ini.
     const kosong = susunDaftarPengingat({ roster: [], perNip: new Map(), indeksHari: RABU });
-    expect(pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:30", d: kosong })).toBeNull();
+    expect(pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:20", d: kosong })).toBeNull();
   });
 
   it("hari libur -> null, bot tidak mengirim apa pun", () => {
     const sabtu = susunDaftarPengingat({ roster: orang(5), perNip: new Map(), indeksHari: SABTU });
-    expect(pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:30", d: sabtu })).toBeNull();
+    expect(pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:20", d: sabtu })).toBeNull();
   });
 
   it(`lebih dari ${BATAS_NAMA_PER_PESAN} nama dipotong, sisanya DISEBUT jumlahnya`, () => {
@@ -214,13 +215,13 @@ describe("pesanCheckin - bentuknya dikunci template user", () => {
       perNip: new Map(),
       indeksHari: RABU,
     });
-    const teks = pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:30", d: banyak })!;
+    const teks = pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:20", d: banyak })!;
     expect(teks).toContain("_...dan 7 pegawai lainnya_");
-    expect(teks.split("\n").filter((b) => b.startsWith("* "))).toHaveLength(BATAS_NAMA_PER_PESAN);
+    expect(teks.split("\n").filter((b) => b.startsWith("• "))).toHaveLength(BATAS_NAMA_PER_PESAN);
   });
 
   it("hanya memakai penanda format yang DIKENALI WhatsApp", () => {
-    const teks = pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:30", d })!;
+    const teks = pesanCheckin({ tanggalTeks: TANGGAL, batasJam: "08:20", d })!;
     expect(teks).not.toMatch(/^#/m);
     expect(teks).not.toMatch(/\[.+\]\(.+\)/);
   });
@@ -235,21 +236,22 @@ describe("pesanCheckout", () => {
 
   it("menyebut nama beserta jam boleh pulangnya", () => {
     const teks = pesanCheckout({ tanggalTeks: TANGGAL, d })!;
-    expect(teks).toContain("Pegawai yang belum melakukan jam checkout:");
-    expect(teks).toContain("* Pegawai 0 - boleh pulang 16:00");
+    expect(teks).toContain("👤 *Belum melakukan Check-out:*");
+    expect(teks).toContain("• Pegawai 0 — *16:00 WIB*");
     // Datang 08:00 -> 08:00 + 7,5 jam + 60 menit istirahat = 16:30. Jam boleh
     // pulang memang BERGESER mengikuti kedatangan, tidak tetap 16:00.
-    expect(teks).toContain("* Pegawai 1 - boleh pulang 16:30");
+    expect(teks).toContain("• Pegawai 1 — *16:30 WIB*");
+    expect(teks).toContain("🕐 *Jam boleh pulang* tercantum di samping nama masing-masing.");
   });
 
   it("TIDAK memuat baris batas tap masuk - itu urusan pesan checkin", () => {
     const teks = pesanCheckout({ tanggalTeks: TANGGAL, d })!;
-    expect(teks).not.toContain("Batas tap masuk");
+    expect(teks).not.toContain("Batas Check-in");
   });
 
   it("penutupnya sama, dan tetap wajib", () => {
     const teks = pesanCheckout({ tanggalTeks: TANGGAL, d })!;
-    expect(teks).toContain("Bagi yang sedang cuti, dinas, atau diklat silakan abaikan pesan ini.");
+    expect(teks).toContain("Jika sedang *cuti, dinas, atau diklat*, silakan abaikan pesan ini.");
   });
 
   it("semua sudah tap pulang -> null", () => {

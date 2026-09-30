@@ -1,22 +1,3 @@
-// ============================================================================
-// Pengingat presensi harian per UNIT - dua pesan terpisah, checkin & checkout,
-// MENYEBUT NAMA pegawai.
-//
-// PURE - tidak ada I/O. Yang membaca ketiga database ada di
-// src/adapters/absenHariIni.ts, yang menyusun balasannya di
-// src/app/api/pengingat-absen/route.ts.
-//
-// BENTUK PESANNYA DIKUNCI TEMPLATE USER (2026-09-29) - urutan baris, tanda
-// bintang di depan nama, dan kalimat penutupnya mengikuti contoh yang diberikan.
-//
-// MENYEBUT NAMA ADALAH KEPUTUSAN USER, DIAMBIL SADAR. Pertimbangannya sudah
-// disampaikan lebih dulu: grup WhatsApp keanggotaannya tidak dikendalikan
-// Gajihub, pesannya bisa di-forward, dan kehadiran adalah bahan potongan
-// Tunjangan Kinerja. User memutuskan nama tetap disebut, dan template-nya
-// sendiri memuat kalimat pengaman "bagi yang sedang cuti, dinas, atau diklat
-// silakan abaikan". Kalimat itu WAJIB IKUT - lihat alasannya di `pesanCheckin()`.
-// ============================================================================
-
 import {
   ISTIRAHAT_MENIT,
   JADWAL_KERJA_DEFAULT,
@@ -182,13 +163,14 @@ export function susunDaftarPengingat({
 
 /** Daftar berbintang, dipotong di `BATAS_NAMA_PER_PESAN` dengan sisanya disebut. */
 function daftarBerbintang(baris: string[]): string[] {
-  if (baris.length <= BATAS_NAMA_PER_PESAN) return baris.map((b) => `* ${b}`);
-  const tampil = baris.slice(0, BATAS_NAMA_PER_PESAN).map((b) => `* ${b}`);
+  if (baris.length <= BATAS_NAMA_PER_PESAN) return baris.map((b) => `• ${b}`);
+  const tampil = baris.slice(0, BATAS_NAMA_PER_PESAN).map((b) => `• ${b}`);
   tampil.push(`_...dan ${baris.length - BATAS_NAMA_PER_PESAN} pegawai lainnya_`);
   return tampil;
 }
 
-const KEPALA = "*Pengingat Absen Harian by Gajihub*";
+const KEPALA = "🔔 *PENGINGAT ABSEN HARIAN*";
+const FOOTER = "*Gajihub — Pastikan presensi Anda tercatat dengan benar.*";
 
 /**
  * Kalimat penutup - WAJIB IKUT di kedua pesan, dan bukan sopan-sopanan.
@@ -197,7 +179,7 @@ const KEPALA = "*Pengingat Absen Harian by Gajihub*";
  * resmi tapi cutinya belum masuk e-Presensi akan terbaca sebagai membolos di
  * depan seluruh unitnya. Ada test yang menahannya supaya tidak pernah hilang.
  */
-const PENUTUP = "Bagi yang sedang cuti, dinas, atau diklat silakan abaikan pesan ini.";
+const PENUTUP = "Jika sedang *cuti, dinas, atau diklat*, silakan abaikan pesan ini.";
 
 /** null = tidak ada yang perlu diingatkan, jadi TIDAK ADA pesan yang dikirim. */
 export function pesanCheckin({
@@ -217,13 +199,16 @@ export function pesanCheckin({
 
   return [
     KEPALA,
-    tanggalTeks,
+    `*Gajihub • ${tanggalTeks}*`,
     "",
-    "Pegawai yang belum melakukan jam checkin:",
+    "👤 *Belum melakukan Check-in:*",
     ...daftarBerbintang(d.belumCheckin),
     "",
-    `Batas tap masuk *${batasJam}*.`,
+    `⏰ *Batas Check-in: ${batasJam} WIB*`,
+    "",
     PENUTUP,
+    "",
+    FOOTER,
   ].join("\n");
 }
 
@@ -239,11 +224,15 @@ export function pesanCheckout({
 
   return [
     KEPALA,
-    tanggalTeks,
+    `*Gajihub • ${tanggalTeks}*`,
     "",
-    "Pegawai yang belum melakukan jam checkout:",
-    ...daftarBerbintang(d.belumCheckout.map((b) => `${b.nama} - boleh pulang ${b.bolehPulang}`)),
+    "👤 *Belum melakukan Check-out:*",
+    ...daftarBerbintang(d.belumCheckout.map((b) => `${b.nama} — *${b.bolehPulang} WIB*`)),
+    "",
+    "🕐 *Jam boleh pulang* tercantum di samping nama masing-masing.",
     "",
     PENUTUP,
+    "",
+    FOOTER,
   ].join("\n");
 }
