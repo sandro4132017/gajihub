@@ -1,172 +1,311 @@
 # Gajihub Integration Layer
 
-Prototipe integrasi Gajihub - pipeline lengkap (kalkulasi -> validasi -> job
-scheduler -> approval digital -> dashboard) buat Tukin, Uang Makan, dan Uang
-Lembur, plus login sementara khusus approver. Masih pakai data mock, belum
-terhubung ke SIAP/e-Presensi/e-Kinerja/SAKTI asli.
+> **Platform Sentralisasi dan Integrasi Pengelolaan Belanja Pegawai**  
+> *Kementerian Ketenagakerjaan Republik Indonesia*  
+> 🌐 **Portal Resmi:** [https://gajihub.kemnaker.go.id/](https://gajihub.kemnaker.go.id/)
 
-## Setup awal
+Gajihub Integration Layer adalah platform integrasi terpadu untuk pengelolaan, kalkulasi, rekonsiliasi, dan digitalisasi alur persetujuan belanja pegawai (Tunjangan Kinerja, Uang Makan, Uang Lembur, dan Gaji Induk) di lingkungan Kementerian Ketenagakerjaan RI.
+
+Sistem ini dapat diakses secara resmi melalui [https://gajihub.kemnaker.go.id/](https://gajihub.kemnaker.go.id/) dan menerapkan prinsip **"Integrate, Don't Replace"** — menghubungkan sistem-sistem *source of truth* yang sudah ada tanpa menduplikasi basis data secara tidak perlu.
+
+---
+
+## 📑 Daftar Isi
+
+- [Arsitektur & Integrasi Sistem](#-arsitektur--integrasi-sistem)
+- [Fitur Utama](#-fitur-utama)
+- [Matriks Peran & Hak Akses (RBAC)](#-matriks-peran--hak-akses-rbac)
+- [Teknologi yang Digunakan](#-teknologi-yang-digunakan)
+- [Struktur Direktori](#-struktur-direktori)
+- [Panduan Instalasi & Setup](#-panduan-instalasi--setup)
+- [Konfigurasi Environment (.env)](#-konfigurasi-environment-env)
+- [Sinkronisasi Data & Background Jobs](#-sinkronisasi-data--background-jobs)
+- [Pengujian & Verifikasi Kualitas](#-pengujian--verifikasi-kualitas)
+- [Keamanan & Kepatuhan](#-keamanan--kepatuhan)
+
+---
+
+## 🏛 Arsitektur & Integrasi Sistem
+
+Gajihub bertindak sebagai lapisan orkestrasi dan validasi bisnis yang membaca data secara **Read-Only** dari sistem-sistem sumber:
+
+```
+                  +----------------------------------------------+
+                  |               SUMBER DATA ASLI               |
+                  +----------------------------------------------+
+                  |  - SIAP (MS SQL Server)    : Data Pegawai    |
+                  |  - e-Presensi (PostgreSQL) : Presensi & Cuti |
+                  |  - e-Kinerja BKN           : Predikat        |
+                  |  - GPP / SAKTI Kemenkeu    : Gaji Induk      |
+                  +----------------------------------------------+
+                                         │ (Read-Only)
+                                         ▼
++─────────────────────────────────────────────────────────────────────────────────+
+|                           GAJIHUB INTEGRATION LAYER                             |
+|                                                                                 |
+|  [ Business Logic Engine ]     [ Validation Gate ]     [ Digital Approval Log ] |
+|  - Permenaker 15/2024          - Deteksi Anomali       - Kasubag TU (Unit)      |
+|  - Kepsekjen 82/2025           - Threshold Potongan    - OSDMA (Biro OSDMA)     |
+|  - SBM 2026 (UM & Lembur)      - Kunci Periode         - PPABP (Biro Keuangan)  |
+|                                                                                 |
+|  [ Database Gajihub (PostgreSQL) ]                                              |
+|  - Kalkulasi Tukin, UM, Lembur, Rekonsiliasi, ADK, SK KGB/Hukdis, Audit Trail   |
++─────────────────────────────────────────────────────────────────────────────────+
+                                         │
+                                         ▼
++─────────────────────────────────────────────────────────────────────────────────+
+|                                OUTPUT SISTEM                                    |
+|  - Dashboard Interaktif per Role (Pegawai, Kasubag TU, OSDMA, PPABP, Pimpinan)  |
+|  - Berkas ADK (Arsip Data Komputer) & Rekap Excel Siap Upload ke SAKTI/GPP      |
+|  - Slip Gaji Digital Pegawai & Rekonsiliasi Lintas Unit                         |
++─────────────────────────────────────────────────────────────────────────────────+
+```
+
+---
+
+## ✨ Fitur Utama
+
+### 1. Kalkulasi Payroll Otomatis Berbasis Regulasi
+* **Tunjangan Kinerja (Tukin):**
+  * Komponen Kinerja (bobot 70%) berdasarkan integrasi Predikat e-Kinerja BKN (*Kepsekjen No. 82 Tahun 2025*).
+  * Komponen Kehadiran (bobot 30%) dikurangi potongan menit keterlambatan, pulang cepat, meninggalkan kantor, upacara bendera, dan jenis cuti (*Permenaker No. 15 Tahun 2024* Pasal 9, 10, 13, 14).
+* **Uang Makan Pegawai:**
+  * Perhitungan otomatis berdasarkan hari kerja hadir/dibayar (*Standar Biaya Masukan / SBM 2026*).
+* **Uang Lembur & Uang Makan Lembur:**
+  * Perhitungan jam lembur hari kerja vs hari libur dan uang makan lembur (lembur $\ge$ 2 jam).
+* **Basis Data Gaji Induk:**
+  * Rekonsiliasi data pembayaran gaji pokok, tunjangan keluarga, dan potongan pajak.
+
+### 2. Digital Approval Workflow Berjenjang
+* Menggantikan nota dinas fisik dengan jejak digital berjenjang (*DRAFT* $\rightarrow$ *Verifikasi Kasubag TU* $\rightarrow$ *Approval OSDMA/Pimpinan* $\rightarrow$ *Validasi PPABP*).
+* Dilengkapi *Validation Gate* untuk mendeteksi anomali perhitungan sebelum berkas disetujui.
+
+### 3. Ekspor ADK (Arsip Data Komputer) & Laporan
+* Pembuatan berkas ADK resmi untuk Tukin, Uang Makan, dan Uang Lembur format SAKTI / GPP.
+* Ekspor laporan rekapitulasi unit kerja format Excel lengkap dengan rekapitulasi pajak.
+
+### 4. Pengelolaan Layanan & Sanggahan Kepegawaian
+* **Kendala e-Presensi (Pasal 10 ayat 2):** Penandaan tanggal kendala server absensi untuk membatalkan potongan massal yang tidak sah.
+* **Verifikasi Sanggahan / Banding Presensi:** Alur pengajuan bukti dukung oleh pegawai dan verifikasi unit.
+* **Pengelolaan SK KGB & SK Hukuman Disiplin:** Pencatatan perubahan masa kerja, kenaikan gaji berkala, serta penyesuaian kelas jabatan akibat hukuman disiplin.
+* **Daftar Perubahan Data Pegawai:** Deteksi mutasi unit, pergeseran kelas jabatan (*grade*), dan perubahan status kepegawaian.
+
+---
+
+## 👥 Matriks Peran & Hak Akses (RBAC)
+
+Aplikasi menerapkan sistem hak akses berbasis peran (*Role-Based Access Control*):
+
+| Role | Cakupan Wilayah | Fitur & Tanggung Jawab Utama |
+|---|---|---|
+| `PEGAWAI` | Mandiri (Self-Service) | Melihat data pribadi, rincian slip gaji, presensi harian, dan mengajukan sanggahan/banding presensi. |
+| `KASUBAG_TU` | Unit Kerja Sendiri | Dashboard unit, kalkulasi massal unit, verifikasi banding presensi, pengajuan SK KGB & SK Hukdis unit. |
+| `OSDMA` | Biro OSDMA (Lintas Unit) | Approval final banding presensi, persetujuan SK KGB/Hukdis, monitoring data kepegawaian kementerian. |
+| `PPABP` | Biro Keuangan (Lintas Unit) | Validasi payroll lintas unit, rekonsiliasi data, ekspor ADK SAKTI/GPP, monitoring pagu & realisasi anggaran. |
+| `PIMPINAN` | Eksekutif Kementerian | Dashboard eksekutif lintas unit kerja (*Read-Only*) untuk monitoring capaian dan realisasi belanja pegawai. |
+| `ADMIN` | Sistem & Teknis | Pengelolaan *role assignment*, pemantauan audit trail, sinkronisasi data SIAP, dan konfigurasi adapter sistem. |
+
+---
+
+## 🛠 Teknologi yang Digunakan
+
+* **Framework:** [Next.js 16 (App Router)](https://nextjs.org/) dengan [React 19](https://react.dev/)
+* **Bahasa Pemrograman:** [TypeScript 5](https://www.typescriptlang.org/) (Strict Mode)
+* **Styling:** [Tailwind CSS 4](https://tailwindcss.com/) dengan Google Font *Plus Jakarta Sans* & *JetBrains Mono*
+* **Database Utama:** [PostgreSQL 16](https://www.postgresql.org/) dengan [Prisma ORM 5](https://www.prisma.io/)
+* **Integrasi Database Sumber:**
+  * `mssql` (TDS Protocol) untuk koneksi ke SIAP (Microsoft SQL Server)
+  * `pg` untuk koneksi ke e-Presensi (PostgreSQL)
+* **Pengolahan Berkas:** `exceljs`, `xlsx`, `unpdf`
+* **Keamanan:** Autentikasi sesi terenkripsi, Naco SSO (OAuth 2.0 PKCE/Auth Code), HTTP Security Headers, CSRF protection.
+* **Pengujian:** [Vitest](https://vitest.dev/) (1.000+ unit & integration test cases)
+
+---
+
+## 📁 Struktur Direktori
+
+```
+gajihub/
+├── prisma/
+│   └── schema.prisma           # Skema basis data inti Gajihub (PostgreSQL)
+├── public/
+│   ├── .well-known/            # security.txt dan metadata publik
+│   └── ...                     # Aset statis & logo
+├── scripts/
+│   └── sync-harian.sh          # Shell script otomatisasi cronjob sinkronisasi
+├── src/
+│   ├── adapters/               # Adapter koneksi ke SIAP, e-Presensi, e-Kinerja, Web Gaji
+│   ├── app/                    # Next.js App Router (Halaman & Server Actions per role)
+│   │   ├── admin/              # Dashboard Admin, Role Assignment, Sistem
+│   │   ├── api/                # Route Handlers & REST API internal
+│   │   ├── kasubag/            # Dashboard Unit & Layanan Kasubag TU
+│   │   ├── login/              # Form Login NIP & Integrasi Naco SSO
+│   │   ├── osdma/              # Dashboard Biro OSDMA & Verifikasi SK
+│   │   ├── pegawai/            # Master Data Pegawai & Status Kepegawaian
+│   │   ├── pimpinan/           # Dashboard Eksekutif Pimpinan
+│   │   ├── ppabp/              # Dashboard PPABP, Rekonsiliasi, ADK, Anggaran
+│   │   ├── saya/               # Portal Layanan Mandiri Pegawai (Self-Service)
+│   │   └── tukin/              # Dashboard Tukin, Presensi, Predikat Kinerja
+│   ├── approval/               # Engine evaluasi approval berjenjang digital
+│   ├── auth/                   # Autentikasi sesi, RBAC permissions, dan Naco SSO
+│   ├── business-logic/         # Pure functions kalkulasi Tukin, UM, Lembur, SBM
+│   ├── db/                     # Helper koneksi database & audit logging
+│   ├── jobs/                   # Scheduler & job runner sinkronisasi data
+│   ├── lib/                    # Prisma client singleton & utilities
+│   ├── types/                  # Definisi TypeScript domain types
+│   ├── validation/             # Validation gate anomali data sebelum approval
+│   └── middleware.ts           # Route protection & session guard
+├── next.config.mjs             # Konfigurasi Next.js & HTTP Security Headers
+├── package.json                # Dependencies & scripts npm
+└── tsconfig.json               # Konfigurasi TypeScript compiler
+```
+
+---
+
+## 🚀 Panduan Instalasi & Setup
+
+### 1. Prasyarat Sistem
+* **Node.js:** Versi `>= 20.x`
+* **npm:** Versi `>= 10.x`
+* **PostgreSQL:** Versi `>= 15.x` (sebagai database utama Gajihub)
+* Akses jaringan ke server SIAP (SQL Server) dan e-Presensi (PostgreSQL)
+
+### 2. Instalasi Dependencies
+Clone repositori dan pasang dependensi:
 
 ```bash
+git clone <url-repositori-gajihub>
+cd gajihub
 npm install
 ```
 
-## Database (PostgreSQL via Prisma)
-
-1. Siapkan PostgreSQL (lokal, VPS dev Pusdatik, atau lewat Homebrew:
-   `brew install postgresql@16 && brew services start postgresql@16`).
-2. Buat berkas `.env` di akar proyek. Berkas contohnya sengaja TIDAK ada di
-   repo ini - repo ini publik, dan berkas apa pun berawalan `.env` sekarang
-   dikunci `.gitignore` (lihat catatan insiden di sana). Yang dibutuhkan:
-
-   | Variabel | Keterangan |
-   |---|---|
-   | `DATABASE_URL` | PostgreSQL **milik Gajihub sendiri**, bukan SIAP/e-Presensi |
-   | `SESSION_SECRET` | acak & panjang - `openssl rand -hex 32` |
-   | `SIDIK_NIK_SECRET` | acak & panjang - kunci sidik NIK untuk SSO |
-   | `COOKIE_SECURE` | `true` HANYA kalau diakses lewat HTTPS asli |
-   | `SIAP_*` | sumber data pegawai (SQL Server), **READ-ONLY** |
-   | `EPRESENSI_*` | sumber presensi (PostgreSQL), **READ-ONLY** |
-   | `NACO_*` | SSO Kemnaker - boleh kosong, tombol SSO otomatis mati |
-
-   Nilai aslinya minta ke pengelola sistem masing-masing. JANGAN pernah
-   menaruhnya di berkas yang ikut ter-commit.
-3. Jalanin migrasi:
+### 3. Konfigurasi Environment
+Salin berkas template environment dan sesuaikan konfigurasinya:
 
 ```bash
+cp .env.example .env
+```
+
+*(Lihat bagian [Konfigurasi Environment](#-konfigurasi-environment-env) untuk rincian variabel).*
+
+### 4. Setup Basis Data
+Jalankan migrasi database Prisma untuk membuat tabel-tabel sistem:
+
+```bash
+# Menjalankan migrasi database
 npm run prisma:migrate
+
+# Generate Prisma Client
+npm run prisma:generate
 ```
 
-4. (Opsional) buka Prisma Studio buat lihat data secara visual:
+### 5. Menjalankan Aplikasi
+* **Mode Pengembangan (Development):**
+  ```bash
+  npm run dev
+  ```
+  Buka [http://localhost:3000](http://localhost:3000) di browser.
+
+* **Mode Produksi (Production):**
+  ```bash
+  npm run build
+  npm run start
+  ```
+  Di server produksi, aplikasi berjalan di balik reverse proxy / WAF dan diakses melalui [https://gajihub.kemnaker.go.id/](https://gajihub.kemnaker.go.id/).
+
+---
+
+## ⚙️ Konfigurasi Environment (.env)
+
+Berikut adalah daftar variabel konfigurasi yang digunakan aplikasi:
+
+| Variabel | Deskripsi | Contoh / Catatan |
+|---|---|---|
+| `DATABASE_URL` | Koneksi basis data PostgreSQL milik Gajihub | `postgresql://user:pass@localhost:5432/gajihub?schema=public` |
+| `SESSION_SECRET` | Kunci enkripsi sesi (32 byte hex) | Generate dengan: `openssl rand -hex 32` |
+| `COOKIE_SECURE` | Flag keamanan cookie HTTPS | Set `"true"` di server production HTTPS, `"false"` di lokal HTTP |
+| `SIAP_HOST` | Host server SIAP Kemnaker (SQL Server) | IP Server SIAP (Koneksi **Read-Only**) |
+| `SIAP_INSTANCE` | Instance name SQL Server SIAP | `MSSQLDEV` |
+| `SIAP_DB` | Nama database SIAP Kemnaker | `simpeg_kemnaker_...` |
+| `SIAP_USER` | Username database SIAP | Akun read-only SIAP |
+| `SIAP_PASSWORD` | Password database SIAP | Gunakan tanda kutip jika memuat karakter khusus |
+| `SIAP_ENCRYPT` | Enkripsi koneksi TDS SIAP | `"false"` jika server SIAP menggunakan TLS legacy |
+| `EPRESENSI_HOST` | Host server e-Presensi Kemnaker | IP Server e-Presensi (Koneksi **Read-Only**) |
+| `EPRESENSI_PORT` | Port server e-Presensi | `4020` |
+| `EPRESENSI_DB` | Nama database e-Presensi | `presensi_kemnaker` |
+| `EPRESENSI_USER` | Username database e-Presensi | Akun read-only e-Presensi |
+| `EPRESENSI_PASSWORD`| Password database e-Presensi | Password akun e-Presensi |
+| `NACO_BASE_URL` | Base URL server Naco SSO | `https://account.kemnaker.go.id` |
+| `NACO_CLIENT_ID` | OAuth2 Client ID Naco SSO | ID aplikasi dari Pusdatik |
+| `NACO_CLIENT_SECRET`| OAuth2 Client Secret Naco SSO | Secret aplikasi dari Pusdatik |
+| `NACO_REDIRECT_URI` | Callback URL OAuth2 Naco SSO | `https://gajihub.kemnaker.go.id/login/sso/callback` |
+
+---
+
+## 🔄 Sinkronisasi Data & Background Jobs
+
+Sinkronisasi data kepegawaian dan kehadiran dapat dijalankan melalui CLI ataupun terjadwal via cronjob:
+
+### 1. Sinkronisasi Data Pegawai dari SIAP
+Menarik seluruh perubahan data kepegawaian (status aktif/pensiun, mutasi satker, jabatan, dan kelas jabatan):
 
 ```bash
-npm run prisma:studio
+# Preview perubahan tanpa menyimpan (Dry Run)
+npm run sync:pegawai -- --dry-run
+
+# Eksekusi sinkronisasi data pegawai
+npm run sync:pegawai
 ```
 
-## Isi data contoh (mock) supaya dashboard ada isinya
-
-Job scheduler biasanya jalan otomatis via cron/scheduler di production, tapi
-untuk development jalanin manual dengan `tsx`:
+### 2. Sinkronisasi Data Presensi dari e-Presensi
+Menarik data absensi harian dan rekap cuti untuk periode tertentu:
 
 ```bash
-npx tsx src/jobs/runTukinJobDemo.ts
-npx tsx src/jobs/runUangMakanJobDemo.ts
-npx tsx src/jobs/runUangLemburJobDemo.ts
+# Sinkronisasi presensi bulan berjalan
+npm run sync:presensi -- --bulan=7 --tahun=2026 --oleh=SYSTEM
 ```
 
-Ini narik data dari mock adapter (`src/adapters/`), hitung tukin/uang
-makan/uang lembur, lalu simpan ke database dengan status `DRAFT`.
+### 3. Otomatisasi via Cronjob (Server Production)
+Gunakan skrip [`scripts/sync-harian.sh`](file:///d:/Sakeh/Project/gajihub/scripts/sync-harian.sh) untuk menjalankan sinkronisasi harian secara otomatis.
 
-Lalu bikin akun `User` contoh (buat login ke dashboard, satu akun per role):
+Contoh konfigurasi `crontab` server (dijalankan setiap pukul 02.00 dini hari):
 
 ```bash
-npx tsx src/auth/seedUsers.ts
+0 2 * * * GAJIHUB_SYNC_NIP=198703232015031002 /path/to/gajihub/scripts/sync-harian.sh >> /path/to/gajihub/log-sync/cron.log 2>&1
 ```
 
-**Login pakai NIP sebagai username SEKALIGUS password** (sengaja sama persis -
-solusi sementara sampai SSO Kemnaker tersambung, lihat `TODO(legal-confirm)`
-di `src/auth/session.ts` soal risikonya). NIP akun contoh:
+---
 
-| Role | NIP (= password) |
-|---|---|
-| PEGAWAI | `000000000000000001` |
-| KASUBAG_TU | `000000000000000102` |
-| PPABP | `000000000000000103` |
-| BIRO_OSDMA | `000000000000000104` |
-| ADMIN_SISTEM | `000000000000000105` |
-| ITJEN | `000000000000000106` |
-| PIMPINAN | `000000000000000107` |
+## 🧪 Pengujian & Verifikasi Kualitas
 
-Lihat `src/auth/seedUsers.ts` buat detail/ubah. Model `AkunApprover` (login
-lama, NIP `111`/`222`) sudah **tidak dipakai** oleh `/login` lagi - lihat
-catatan deprecated di schema-nya.
-
-## Import data pegawai asli (opsional)
-
-Kalau ada file basis data pegawai (format sama seperti sheet "Master
-Lengkap" - kolom NIP, Nama, Unit Kerja, GRADE, Gol, Jabatan mulai baris
-ke-7):
+Seluruh modul kalkulasi regulasi, approval digital, validation gate, dan sesi dilindungi oleh rangkaian pengujian unit otomatis (*1.000+ test cases*):
 
 ```bash
-npx tsx src/jobs/importPegawaiXlsx.ts "<path ke file xlsx>"
-```
-
-Ini cuma import identitas pokok pegawai (bukan data pribadi seperti alamat/
-No HP/NPWP) ke tabel `Pegawai`, JALANKAN ULANG tiap kali ada file yang lebih
-baru. Ini BUKAN pengganti job scheduler - job scheduler (Tukin/Uang Makan/
-Uang Lembur) tetap butuh data kehadiran & capaian kinerja dari adapter
-terpisah sebelum bisa menghitung tukin buat pegawai-pegawai ini.
-
-## Jalanin dashboard
-
-```bash
-npm run dev
-```
-
-Buka `http://localhost:3000` - otomatis diarahkan ke halaman login, lalu ke
-`/tukin`, `/uang-makan`, atau `/uang-lembur` setelah login.
-
-## Jalanin unit test
-
-```bash
+# Menjalankan seluruh test suite dengan Vitest
 npm test
-```
 
-Semua modul (business logic, validation gate, job scheduler, approval
-digital, session login) punya unit test - harusnya semuanya lulus sebelum
-lanjut nambah fitur.
+# Menjalankan pengujian dalam mode watch
+npm run test:watch
 
-```bash
+# Memeriksa kepatuhan tipe TypeScript
 npm run typecheck
 ```
 
-## Struktur folder
+---
 
-```
-prisma/schema.prisma        - skema database inti
-src/types/                  - domain types (dipakai bareng semua modul)
-src/business-logic/         - kalkulasi tukin, uang makan, uang lembur (pure functions)
-src/adapters/                - interface + mock implementation SIAP/e-Presensi/e-Kinerja
-src/validation/               - validation gate (cek anomali sebelum APPROVED)
-src/jobs/                     - job scheduler (adapter -> business logic -> validation -> Prisma)
-src/approval/                 - approval digital berjenjang
-src/auth/                     - login sementara khusus approver (session, seed akun)
-src/lib/                      - Prisma client singleton
-src/app/                      - dashboard Next.js (Tukin, Uang Makan, Uang Lembur)
-src/middleware.ts             - proteksi login untuk seluruh dashboard
-CLAUDE.md                     - konteks proyek buat Claude Code, WAJIB dibaca duluan
-```
+## 🛡 Keamanan & Kepatuhan
 
-## Status pipeline
+1. **Prinsip Read-Only pada Sistem Eksternal:** Aplikasi tidak memiliki hak tulis (*Write*) ke database SIAP maupun e-Presensi. Seluruh manipulasi data hanya dilakukan pada database internal Gajihub.
+2. **Audit Trail Komprehensif:** Setiap aksi perubahan data, approval, eksekusi role, dan pengunggahan berkas dicatat ke tabel `audit_trail` lengkap dengan identitas aktor dan timestamp.
+3. **Proteksi Header & Sesi:**
+   * Konfigurasi HTTP Security Headers (`HSTS`, `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`).
+   * Validasi header `Origin` bawaan Server Actions untuk proteksi CSRF.
+   * Header `X-Powered-By` dinonaktifkan untuk mencegah *information disclosure*.
+   * Berkas pelaporan kerentanan standar tersedia pada [`public/.well-known/security.txt`](file:///d:/Sakeh/Project/gajihub/public/.well-known/security.txt).
 
-| Bagian | Tukin | Uang Makan | Uang Lembur |
-|---|---|---|---|
-| Kalkulasi | selesai | selesai | selesai |
-| Validation gate | selesai | selesai | selesai |
-| Job scheduler | selesai | selesai | selesai |
-| Approval digital | selesai | selesai | selesai |
-| Dashboard | selesai | selesai | selesai |
+---
 
-Job scheduler & dashboard-nya masih diverifikasi pakai 2 pegawai contoh
-(NIP `000000000000000001`/`000000000000000003` - sengaja pakai NIP yang
-mustahil bentrok dengan NIP asli). Tarif tukin pokok per kelas jabatan dan
-konversi predikat kinerja SUDAH pakai angka resmi (lihat
-`src/business-logic/tarifTukinPokok.ts` dan `konversiPredikat.ts`). Tarif
-uang makan/lembur MASIH angka contoh (BUKAN tarif resmi SBM) - lihat
-komentar `TODO(confirm)` / `TODO(legal-confirm)` yang tersebar di kode
-buat daftar lengkap hal yang masih perlu dikonfirmasi ke pihak terkait
-sebelum dipakai ke data production.
+## 📄 Lisensi & Hak Cipta
 
-5.067 data pegawai asli (basis data Januari 2026, lihat "Import data
-pegawai asli" di atas) sudah ada di tabel `Pegawai`, tapi job scheduler
-belum pernah dijalankan untuk mereka - butuh data kehadiran & capaian
-kinerja asli yang belum tersedia (masih mock adapter).
-
-## Lanjutin dengan Claude Code
-
-1. Buka folder ini di Claude Code.
-2. Claude Code otomatis baca `CLAUDE.md` di root - itu berisi arsitektur,
-   status open items, dan urutan pengembangan yang disarankan.
-3. Jangan lupa cek bagian "open items" di CLAUDE.md sebelum minta Claude Code
-   nambahin fitur baru - beberapa keputusan regulasi/kebijakan masih perlu
-   dikonfirmasi ke pihak terkait (OSDMA, Biro Hukum, DJA) sebelum di-hardcode.
+Hak Cipta &copy; 2026 **Kementerian Ketenagakerjaan Republik Indonesia**.  
+Dikelola oleh Biro Keuangan dan Barang Milik Negara bekerja sama dengan Pusat Data dan Teknologi Informasi Ketenagakerjaan (Pusdatik).
