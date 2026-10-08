@@ -19,6 +19,8 @@ docs/
 
 rekap-presensi-*
 log-sync/
+public/uploads/*
+!public/uploads/**/.gitkeep
 
 *.dump
 *.backup

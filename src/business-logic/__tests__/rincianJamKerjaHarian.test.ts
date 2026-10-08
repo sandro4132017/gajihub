@@ -4,6 +4,7 @@ import {
   JAM_TAP_PULANG_HILANG,
   jamDariMenit,
   kejadianTidakPresensiHari,
+  keteranganTidakPresensiHari,
   potonganHarianPersen,
   rincianJamKerjaHari,
 } from "../rincianJamKerjaHarian";
@@ -279,6 +280,56 @@ describe("kejadianTidakPresensiHari", () => {
 
   it("hari libur tidak kena walau ketukannya hilang", () => {
     expect(kejadianTidakPresensiHari({ ...dasar, jamKeluarMenit: null, hariLibur: true })).toBe(0);
+  });
+});
+
+describe("keteranganTidakPresensiHari", () => {
+  const tanggal = new Date("2026-09-05T00:00:00.000Z");
+  const dasar = {
+    tanggal,
+    wajibPresensi: true,
+    hariLibur: false,
+    jamMasukMenit: MENIT(7, 30),
+    jamKeluarMenit: MENIT(16, 0),
+    dikecualikanKendala: false,
+    dikoreksiManual: false,
+  };
+
+  it("hari normal mengembalikan null", () => {
+    expect(keteranganTidakPresensiHari(dasar)).toBeNull();
+  });
+
+  it("lupa presensi masuk menghasilkan format tanggal (masuk)", () => {
+    expect(keteranganTidakPresensiHari({ ...dasar, jamMasukMenit: null })).toBe("05/09 (masuk)");
+  });
+
+  it("lupa presensi pulang menghasilkan format tanggal (pulang)", () => {
+    expect(keteranganTidakPresensiHari({ ...dasar, jamKeluarMenit: null })).toBe("05/09 (pulang)");
+  });
+
+  it("23:59 tanpa koreksi menghasilkan format tanggal (pulang)", () => {
+    expect(keteranganTidakPresensiHari({ ...dasar, jamKeluarMenit: JAM_TAP_PULANG_HILANG })).toBe("05/09 (pulang)");
+  });
+
+  it("23:59 dengan koreksi manual mengembalikan null", () => {
+    expect(
+      keteranganTidakPresensiHari({ ...dasar, jamKeluarMenit: JAM_TAP_PULANG_HILANG, dikoreksiManual: true })
+    ).toBeNull();
+  });
+
+  it("keduanya hilang menghasilkan format tanggal (masuk & pulang)", () => {
+    expect(keteranganTidakPresensiHari({ ...dasar, jamMasukMenit: null, jamKeluarMenit: null })).toBe(
+      "05/09 (masuk & pulang)"
+    );
+  });
+
+  it("tapTidakWajar menghasilkan format tanggal (tap tidak wajar)", () => {
+    expect(keteranganTidakPresensiHari({ ...dasar, tapTidakWajar: true })).toBe("05/09 (tap tidak wajar)");
+  });
+
+  it("kendala atau hari libur mengembalikan null", () => {
+    expect(keteranganTidakPresensiHari({ ...dasar, jamMasukMenit: null, dikecualikanKendala: true })).toBeNull();
+    expect(keteranganTidakPresensiHari({ ...dasar, jamMasukMenit: null, hariLibur: true })).toBeNull();
   });
 });
 

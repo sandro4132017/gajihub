@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import { hitungPotonganKehadiranPersen, type InputPotonganKehadiran } from "../business-logic/tukin";
 
 const rupiah = (n: number) =>
@@ -6,6 +9,79 @@ const rupiah = (n: number) =>
 const persen = (pecahan: number, desimal = 2) =>
   new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: desimal }).format(pecahan * 100) +
   "%";
+
+function InfoTanggalPopover({ tanggalList }: { tanggalList: string[] }) {
+  const [buka, setBuka] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setBuka(false);
+      }
+    }
+    if (buka) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [buka]);
+
+  return (
+    <div className="relative inline-flex items-center ml-1.5 align-middle" ref={popoverRef}>
+      <button
+        type="button"
+        onClick={() => setBuka((prev) => !prev)}
+        className="inline-flex size-4 items-center justify-center rounded-full text-teal-deep hover:bg-teal-tint/70 transition-colors focus:outline-none"
+        title="Klik untuk melihat rincian tanggal kejadian"
+        aria-label="Lihat rincian tanggal kejadian"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
+          <path
+            fillRule="evenodd"
+            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+
+      {buka && (
+        <div className="absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 rounded-xl border border-line bg-surface p-3 shadow-xl ring-1 ring-black/5 whitespace-normal min-w-[220px] max-w-xs text-left">
+          <div className="flex items-center justify-between pb-1.5 border-b border-line">
+            <p className="text-xs font-bold text-ink">Tanggal Kejadian</p>
+            <button
+              type="button"
+              onClick={() => setBuka(false)}
+              className="text-muted hover:text-ink text-xs font-semibold px-1"
+              aria-label="Tutup"
+            >
+              &times;
+            </button>
+          </div>
+          <div className="mt-2">
+            {tanggalList.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {tanggalList.map((tgl, idx) => (
+                  <span
+                    key={idx}
+                    className="rounded-md bg-surface-2 border border-line px-2 py-0.5 font-mono text-[11px] font-semibold text-ink-2"
+                  >
+                    {tgl}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted">
+                Rincian tanggal tidak tersedia untuk periode yang diisi lewat template Excel.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Tabel "kenapa tukin saya segini" - rincian potongan Pasal 13 per jenis
@@ -34,6 +110,7 @@ export function RincianPotonganKehadiran({
   bobotKehadiranPenuh,
   nilaiTersimpan,
   dikecualikan = false,
+  keteranganTidakPresensi,
 }: {
   rekap: InputPotonganKehadiran;
   /** 30% x tarif kelas jabatan, dalam rupiah. null kalau kelas jabatannya tidak diketahui. */
@@ -46,6 +123,11 @@ export function RincianPotonganKehadiran({
    * kolom rupiahnya nol dan diberi keterangan. Lihat pejabatPimpinanTinggi.ts.
    */
   dikecualikan?: boolean;
+  /**
+   * Daftar tanggal pelanggaran tidak presensi masuk/pulang (Pasal 13 ayat (2)),
+   * misal: ["05/09 (masuk)", "12/09 (pulang)"].
+   */
+  keteranganTidakPresensi?: string[];
 }) {
   const { totalPersen, rincian } = hitungPotonganKehadiranPersen(rekap);
   const totalPersenDiterapkan = dikecualikan ? 0 : totalPersen;
@@ -76,8 +158,8 @@ export function RincianPotonganKehadiran({
       <div className="p-4 pb-2">
         <p className="text-sm font-bold text-ink">Rincian potongan kehadiran</p>
         <p className="mt-0.5 text-xs text-muted">
-          Bobot kehadiran = <strong>30%</strong> dari tunjangan kinerja (Pasal 5 ayat (2) huruf b). Potongan di bawah
-          dihitung dari bobot itu, <strong>bukan</strong> dari total tunjangan kinerja.
+          Bobot kehadiran sebesar <strong>30%</strong> dari tunjangan kinerja (Pasal 5 ayat (2) huruf b). Potongan
+          dihitung dari bobot kehadiran, <strong>bukan</strong> dari total tunjangan kinerja.
         </p>
       </div>
 
@@ -102,12 +184,18 @@ export function RincianPotonganKehadiran({
         <tbody>
           {rincian.map((r) => {
             const rp = rupiahPotongan(r.totalPersen);
+            const isTidakPresensi = r.dasarHukum.includes("ayat (2)");
             return (
               <tr key={`${r.jenis}-${r.dasarHukum}`} className={`border-b border-line-2 ${dikecualikan ? "text-muted" : ""}`}>
                 <td className="px-3 py-2.5 text-ink">{r.jenis}</td>
                 <td className="px-3 py-2.5 text-xs text-muted">{r.dasarHukum}</td>
-                <td className="px-3 py-2.5 font-mono">
-                  {r.jumlah} {r.satuan}
+                <td className="px-3 py-2.5 font-mono whitespace-nowrap">
+                  <span className="inline-flex items-center">
+                    {r.jumlah} {r.satuan}
+                    {isTidakPresensi && (
+                      <InfoTanggalPopover tanggalList={keteranganTidakPresensi ?? []} />
+                    )}
+                  </span>
                 </td>
                 <td className="px-3 py-2.5 font-mono text-muted">{persen(r.tarifPersen, 2)}</td>
                 <td className={`px-3 py-2.5 font-mono ${dikecualikan ? "line-through" : ""}`}>

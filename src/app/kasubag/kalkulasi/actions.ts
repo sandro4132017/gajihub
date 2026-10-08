@@ -22,6 +22,9 @@ import {
   kurungTarifSbm,
 } from "../../../business-logic/tarifSbm";
 import { statusUnit } from "../../../business-logic/pengirimanUnit";
+import { muatHariLiburPeriode } from "../../../lib/hariLibur";
+import { tglTampil } from "../../tanggalTampil";
+import type { Prisma } from "@prisma/client";
 
 const HARI_KERJA_DEFAULT = 21;
 
@@ -633,3 +636,430 @@ export async function koreksiUangLemburAction(
     return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
   }
 }
+
+// ============================================================================
+// KOREKSI JAM LEMBUR HARIAN BERDASARKAN SURAT PERINTAH LEMBUR (SPL)
+// ============================================================================
+
+export interface KoreksiJamLemburHarianState {
+  error?: string;
+  success?: string;
+}
+
+function tanggalUtcDariIso(iso: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (d.getUTCMonth() !== Number(m[2]) - 1 || d.getUTCDate() !== Number(m[3])) return null;
+  return d;
+}
+
+function hitungJamMesinDariPresensi(
+  tanggal: Date,
+  jamMasuk: Date | null,
+  jamKeluar: Date | null,
+  hariLiburMap: Map<string, string>
+): number {
+  if (!jamKeluar) return 0;
+  const iso = tanggal.toISOString().slice(0, 10);
+  const day = tanggal.getUTCDay();
+  const isLibur = day === 0 || day === 6 || hariLiburMap.has(iso);
+
+  const jamKeluarMenit = jamKeluar.getUTCHours() * 60 + jamKeluar.getUTCMinutes();
+
+  if (isLibur) {
+    if (!jamMasuk) return 0;
+    const jamMasukMenit = jamMasuk.getUTCHours() * 60 + jamMasuk.getUTCMinutes();
+    const durasi = Math.max(0, jamKeluarMenit - jamMasukMenit);
+    return Math.floor(durasi / 60);
+  } else {
+    // Hari kerja: batas checkout 16:00 (Jumat 16:30)
+    const checkoutCutoff = day === 5 ? 990 : 960;
+    const lebih = Math.max(0, jamKeluarMenit - checkoutCutoff);
+    return Math.floor(lebih / 60);
+  }
+}
+
+async function sinkronkanUangLemburPegawai(
+  tx: Prisma.TransactionClient,
+  pegawai: { id: string; nip: string; satuanKerja: string | null; golongan: string | null },
+  periodeBulan: number,
+  periodeTahun: number,
+  hariLiburMap: Map<string, string>
+) {
+  const awal = new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1));
+  const akhir = new Date(Date.UTC(periodeTahun, periodeBulan, 1));
+
+  const semuaPresensi = await tx.presensiHarian.findMany({
+    where: { pegawaiId: pegawai.id, tanggal: { gte: awal, lt: akhir } },
+    select: { tanggal: true, jamLembur: true, statusKehadiran: true },
+  });
+
+  let jamLemburKerja = 0;
+  let jamLemburLibur = 0;
+  let hariMakanLemburKerja = 0;
+  let hariMakanLemburLibur = 0;
+  let hariLemburKerja = 0;
+  let jumlahHariWfo = 0;
+
+  for (const p of semuaPresensi) {
+    if (p.statusKehadiran === "WFO" || p.statusKehadiran === "HADIR") {
+      jumlahHariWfo++;
+    }
+    const iso = p.tanggal.toISOString().slice(0, 10);
+    const day = p.tanggal.getUTCDay();
+    const isLibur = day === 0 || day === 6 || hariLiburMap.has(iso);
+    const jam = Math.max(0, Math.floor(p.jamLembur));
+    if (jam > 0) {
+      if (isLibur) {
+        jamLemburLibur += jam;
+        if (jam >= 2) hariMakanLemburLibur++;
+      } else {
+        jamLemburKerja += jam;
+        hariLemburKerja++;
+        if (jam >= 2) hariMakanLemburKerja++;
+      }
+    }
+  }
+
+  // Update RekapPresensiPeriode jika ada
+  await tx.rekapPresensiPeriode.updateMany({
+    where: { pegawaiId: pegawai.id, periodeBulan, periodeTahun },
+    data: {
+      totalJamLembur: jamLemburKerja,
+      totalJamLemburHariLibur: jamLemburLibur,
+      jumlahHariLemburHariKerja: hariLemburKerja,
+      jumlahHariMakanLembur: hariMakanLemburKerja,
+      jumlahHariMakanLemburHariLibur: hariMakanLemburLibur,
+      diunggahPada: new Date(),
+    },
+  });
+
+  const gol = kurungTarifSbm(pegawai.golongan);
+  const totalJam = jamLemburKerja + jamLemburLibur;
+  if (totalJam > 0) {
+    const lemburLama = await tx.uangLembur.findUnique({
+      where: { pegawaiId_periodeBulan_periodeTahun: { pegawaiId: pegawai.id, periodeBulan, periodeTahun } },
+    });
+    const tarifPerJam = (gol ? TARIF_UANG_LEMBUR_PER_JAM[gol] : lemburLama?.tarifPerJam) ?? 25_000;
+    const tarifMakanLemburPerHari =
+      (gol ? TARIF_UANG_MAKAN_LEMBUR_PER_HARI[gol] : lemburLama?.tarifMakanLemburPerHari) ?? 30_000;
+
+    const hasilLembur = hitungUangLembur({
+      pegawaiId: pegawai.nip,
+      periodeBulan,
+      periodeTahun,
+      totalJamLembur: jamLemburKerja,
+      totalJamLemburHariLibur: jamLemburLibur,
+      jumlahHariLemburHariKerja: hariLemburKerja,
+      tarifPerJam,
+      jumlahHariMakanLembur: hariMakanLemburKerja,
+      jumlahHariMakanLemburHariLibur: hariMakanLemburLibur,
+      tarifMakanLemburPerHari,
+      jumlahHariWfo,
+    });
+    const validasiLemburHasil = validasiUangLembur(hasilLembur);
+    const isiLembur = {
+      totalJamLembur: hasilLembur.jamLemburDihitung,
+      jamLemburHariKerja: hasilLembur.jamLemburHariKerja,
+      jamLemburHariLibur: hasilLembur.jamLemburHariLibur,
+      tarifPerJam,
+      jumlahHariMakanLembur: hasilLembur.jumlahHariMakanLembur,
+      tarifMakanLemburPerHari,
+      uangLembur: hasilLembur.uangLembur,
+      uangMakanLembur: hasilLembur.uangMakanLembur,
+      totalUangLembur: hasilLembur.totalUangLembur,
+      status: "DRAFT",
+      catatanAnomali: validasiLemburHasil.anomali.length ? validasiLemburHasil.anomali.join("; ") : null,
+    };
+    await tx.uangLembur.upsert({
+      where: { pegawaiId_periodeBulan_periodeTahun: { pegawaiId: pegawai.id, periodeBulan, periodeTahun } },
+      create: { pegawaiId: pegawai.id, periodeBulan, periodeTahun, ...isiLembur },
+      update: { ...isiLembur, calculatedAt: new Date(), approvedAt: null, approvedBy: null },
+    });
+  } else {
+    // Jika jam lembur 0, hapus baris UangLembur agar tidak ada baris Rp 0
+    await tx.uangLembur.deleteMany({
+      where: { pegawaiId: pegawai.id, periodeBulan, periodeTahun },
+    });
+  }
+}
+
+/**
+ * Mengoreksi jam lembur harian satu pegawai berdasarkan Surat Perintah Lembur (SPL).
+ *
+ * Meng-update KoreksiPresensiHarian (dengan audit trail & dasar SPL),
+ * menyelaraskan PresensiHarian.jamLembur agar berkas ADK harian Web Gaji akurat,
+ * serta menghitung ulang RekapPresensiPeriode & UangLembur agar tidak ada ketidakcocokan.
+ */
+export async function koreksiJamLemburHarianAction(
+  _state: KoreksiJamLemburHarianState,
+  formData: FormData
+): Promise<KoreksiJamLemburHarianState> {
+  try {
+    const authUser = await ambilAuthUser();
+    if (!authUser) return { error: "Sesi login sudah habis - silakan login ulang." };
+    const user = await ambilUserSesi();
+    if (!user) return { error: "Akun login tidak ditemukan." };
+
+    const pegawaiId = String(formData.get("pegawaiId") ?? "").trim();
+    const tanggalIso = String(formData.get("tanggalIso") ?? "").trim();
+    const periodeBulan = Number(formData.get("periodeBulan"));
+    const periodeTahun = Number(formData.get("periodeTahun"));
+    const jamLemburStr = String(formData.get("jamLembur") ?? "").trim();
+    const alasan = String(formData.get("alasan") ?? "").trim();
+
+    if (!pegawaiId || !tanggalIso || !periodeBulan || !periodeTahun) {
+      return { error: "Data koreksi tidak lengkap." };
+    }
+
+    const tanggal = tanggalUtcDariIso(tanggalIso);
+    if (!tanggal) return { error: "Format tanggal tidak valid." };
+
+    const jamLembur = Number(jamLemburStr);
+    if (!Number.isFinite(jamLembur) || jamLembur < 0 || jamLembur > 24 || !Number.isInteger(jamLembur)) {
+      return { error: "Jam lembur harus bilangan bulat antara 0 sampai 24 (sisa menit tidak dibayar)." };
+    }
+
+    if (alasan.length < 10) {
+      return { error: "Dasar koreksi / nomor SPL wajib diisi minimal 10 karakter." };
+    }
+
+    const pegawai = await prisma.pegawai.findUnique({
+      where: { id: pegawaiId },
+      select: { id: true, nip: true, nama: true, satuanKerja: true, golongan: true },
+    });
+    if (!pegawai) return { error: "Pegawai tidak ditemukan." };
+
+    if (!canTelaahKoreksiAjukanUangLemburUnit(authUser, pegawai.satuanKerja)) {
+      return { error: `Role kamu tidak berwenang mengoreksi lembur pegawai ${pegawai.satuanKerja ?? "tanpa unit"}.` };
+    }
+
+    // Kunci pengiriman: jika rekap sudah dikirim ke PPABP, tidak boleh diedit
+    if (pegawai.satuanKerja) {
+      const pengiriman = await prisma.pengirimanUnit.findUnique({
+        where: {
+          satuanKerja_periodeBulan_periodeTahun: {
+            satuanKerja: pegawai.satuanKerja,
+            periodeBulan,
+            periodeTahun,
+          },
+        },
+      });
+      if (statusUnit(pengiriman).terkunci) {
+        return { error: "Periode ini sudah dikirim ke PPABP dan terkunci. Jam lembur tidak dapat diubah." };
+      }
+    }
+
+    const presensiLama = await prisma.presensiHarian.findUnique({
+      where: { pegawaiId_tanggal: { pegawaiId, tanggal } },
+      select: { id: true, jamMasuk: true, jamKeluar: true, jamLembur: true },
+    });
+
+    const koreksiLama = await prisma.koreksiPresensiHarian.findUnique({
+      where: { pegawaiId_tanggal: { pegawaiId, tanggal } },
+    });
+
+    const hariLiburMap = await muatHariLiburPeriode(periodeBulan, periodeTahun);
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Catat ke KoreksiPresensiHarian
+      await tx.koreksiPresensiHarian.upsert({
+        where: { pegawaiId_tanggal: { pegawaiId, tanggal } },
+        create: {
+          pegawaiId,
+          tanggal,
+          jamLembur,
+          alasan,
+          dikoreksiOlehId: user.id,
+        },
+        update: {
+          jamLembur,
+          alasan,
+          dikoreksiOlehId: user.id,
+          dikoreksiPada: new Date(),
+        },
+      });
+
+      // 2. Perbarui PresensiHarian jika baris kehadiran ada
+      if (presensiLama) {
+        await tx.presensiHarian.update({
+          where: { id: presensiLama.id },
+          data: { jamLembur },
+        });
+      }
+
+      // 3. Rekam jejak audit
+      await tx.auditTrail.create({
+        data: {
+          entitas: "koreksi_presensi_harian",
+          entitasId: `${pegawai.nip}-${tanggalIso}`,
+          aksi: koreksiLama ? "UPDATE" : "CREATE",
+          aktor: authUser.nip,
+          satuanKerja: pegawai.satuanKerja,
+          dataSebelum: {
+            tanggal: tanggalIso,
+            jamLemburMesin: presensiLama?.jamLembur ?? 0,
+            jamLemburSebelumnya: koreksiLama?.jamLembur ?? null,
+            alasanSebelumnya: koreksiLama?.alasan ?? null,
+          },
+          dataSesudah: {
+            tanggal: tanggalIso,
+            jamLembur,
+            alasan,
+            sumber: "Koreksi SPL Kasubag TU",
+          },
+        },
+      });
+
+      // 4. Selaraskan RekapPresensiPeriode & UangLembur
+      await sinkronkanUangLemburPegawai(tx, pegawai, periodeBulan, periodeTahun, hariLiburMap);
+    });
+
+    revalidatePath("/kasubag/kalkulasi");
+    revalidatePath(`/tukin/presensi/${pegawai.nip}`);
+
+    return {
+      success: `Jam lembur ${pegawai.nama} tgl ${tglTampil(tanggalIso)} disesuaikan jadi ${jamLembur} jam (SPL: ${alasan}).`,
+    };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+  }
+}
+
+/**
+ * Menghapus koreksi jam lembur harian dan memulihkan jam ke hitungan mesin e-Presensi.
+ */
+export async function hapusKoreksiJamLemburHarianAction(
+  _state: KoreksiJamLemburHarianState,
+  formData: FormData
+): Promise<KoreksiJamLemburHarianState> {
+  try {
+    const authUser = await ambilAuthUser();
+    if (!authUser) return { error: "Sesi login sudah habis - silakan login ulang." };
+
+    const koreksiId = String(formData.get("koreksiId") ?? "").trim();
+    const pegawaiId = String(formData.get("pegawaiId") ?? "").trim();
+    const tanggalIso = String(formData.get("tanggalIso") ?? "").trim();
+    const periodeBulan = Number(formData.get("periodeBulan"));
+    const periodeTahun = Number(formData.get("periodeTahun"));
+
+    if (!koreksiId || !pegawaiId || !tanggalIso || !periodeBulan || !periodeTahun) {
+      return { error: "Parameter hapus koreksi tidak lengkap." };
+    }
+
+    const tanggal = tanggalUtcDariIso(tanggalIso);
+    if (!tanggal) return { error: "Format tanggal tidak valid." };
+
+    const pegawai = await prisma.pegawai.findUnique({
+      where: { id: pegawaiId },
+      select: { id: true, nip: true, nama: true, satuanKerja: true, golongan: true },
+    });
+    if (!pegawai) return { error: "Pegawai tidak ditemukan." };
+
+    if (!canTelaahKoreksiAjukanUangLemburUnit(authUser, pegawai.satuanKerja)) {
+      return { error: `Role kamu tidak berwenang mengoreksi lembur pegawai ${pegawai.satuanKerja ?? "tanpa unit"}.` };
+    }
+
+    if (pegawai.satuanKerja) {
+      const pengiriman = await prisma.pengirimanUnit.findUnique({
+        where: {
+          satuanKerja_periodeBulan_periodeTahun: {
+            satuanKerja: pegawai.satuanKerja,
+            periodeBulan,
+            periodeTahun,
+          },
+        },
+      });
+      if (statusUnit(pengiriman).terkunci) {
+        return { error: "Periode ini sudah dikirim ke PPABP dan terkunci. Koreksi tidak dapat dihapus." };
+      }
+    }
+
+    const koreksi = await prisma.koreksiPresensiHarian.findUnique({
+      where: { id: koreksiId },
+    });
+    if (!koreksi) return { error: "Data koreksi tidak ditemukan atau sudah dihapus." };
+
+    const presensi = await prisma.presensiHarian.findUnique({
+      where: { pegawaiId_tanggal: { pegawaiId, tanggal } },
+      select: { id: true, jamMasuk: true, jamKeluar: true, jamLembur: true },
+    });
+
+    const hariLiburMap = await muatHariLiburPeriode(periodeBulan, periodeTahun);
+
+    // Cari jam mesin awal dari AuditTrail atau hitung dari jam tap
+    const jejakAudit = await prisma.auditTrail.findFirst({
+      where: {
+        entitas: "koreksi_presensi_harian",
+        entitasId: `${pegawai.nip}-${tanggalIso}`,
+      },
+      orderBy: { timestamp: "desc" },
+    });
+
+    const dataSebelum = jejakAudit?.dataSebelum as Record<string, unknown> | null;
+    const jamMesinAsli =
+      typeof dataSebelum?.jamLemburMesin === "number"
+        ? (dataSebelum.jamLemburMesin as number)
+        : hitungJamMesinDariPresensi(
+            tanggal,
+            presensi?.jamMasuk ?? null,
+            presensi?.jamKeluar ?? null,
+            hariLiburMap
+          );
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Hapus atau set jamLembur = null di KoreksiPresensiHarian
+      if (koreksi.jamMasuk === null && koreksi.jamKeluar === null) {
+        await tx.koreksiPresensiHarian.delete({ where: { id: koreksiId } });
+      } else {
+        await tx.koreksiPresensiHarian.update({
+          where: { id: koreksiId },
+          data: { jamLembur: null },
+        });
+      }
+
+      // 2. Pulihkan jamLembur di PresensiHarian
+      if (presensi) {
+        await tx.presensiHarian.update({
+          where: { id: presensi.id },
+          data: { jamLembur: jamMesinAsli },
+        });
+      }
+
+      // 3. Catat audit trail
+      await tx.auditTrail.create({
+        data: {
+          entitas: "koreksi_presensi_harian",
+          entitasId: `${pegawai.nip}-${tanggalIso}`,
+          aksi: "DELETE",
+          aktor: authUser.nip,
+          satuanKerja: pegawai.satuanKerja,
+          dataSebelum: {
+            tanggal: tanggalIso,
+            jamLemburSebelumnya: koreksi.jamLembur,
+            alasanSebelumnya: koreksi.alasan,
+          },
+          dataSesudah: {
+            tanggal: tanggalIso,
+            jamLemburDipulihkan: jamMesinAsli,
+            sumber: "Pencabutan Koreksi Lembur Kasubag TU",
+          },
+        },
+      });
+
+      // 4. Selaraskan RekapPresensiPeriode & UangLembur
+      await sinkronkanUangLemburPegawai(tx, pegawai, periodeBulan, periodeTahun, hariLiburMap);
+    });
+
+    revalidatePath("/kasubag/kalkulasi");
+    revalidatePath(`/tukin/presensi/${pegawai.nip}`);
+
+    return {
+      success: `Koreksi lembur tgl ${tglTampil(tanggalIso)} dicabut. Jam dikembalikan ke hitungan mesin (${jamMesinAsli} jam).`,
+    };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+  }
+}
+

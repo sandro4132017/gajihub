@@ -19,6 +19,7 @@ import { ambilPotonganEpresensi, pegawaiIdEpresensiUntukNip } from "../../../../
 import { muatHariLiburPeriode } from "../../../../lib/hariLibur";
 import {
   kejadianTidakPresensiHari,
+  keteranganTidakPresensiHari,
   potonganHarianPersen,
   rincianJamKerjaHari,
 } from "../../../../business-logic/rincianJamKerjaHarian";
@@ -176,6 +177,7 @@ export default async function RincianPresensiPegawaiPage({
       jamKeluarMenit: rincian.jamKeluarMenit,
       dikecualikanKendala: tanggalKendala.has(iso),
       dikoreksiManual: petaKoreksi.has(iso),
+      tapTidakWajar: rincian.tapTidakWajar,
     });
 
     return {
@@ -362,7 +364,7 @@ export default async function RincianPresensiPegawaiPage({
               <dd className="font-mono font-semibold text-ink">{rekap.totalMenitTerlambat} menit</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted">Total pulang cepat</dt>
+              <dt className="text-xs text-muted">Total kekurangan jam kerja</dt>
               <dd className="font-mono font-semibold text-ink">{rekap.totalMenitPulangCepat} menit</dd>
             </div>
             <div>
@@ -393,6 +395,22 @@ export default async function RincianPresensiPegawaiPage({
           bobotKehadiranPenuh={bobotKehadiranPenuh}
           nilaiTersimpan={tukinPeriode?.komponenKehadiran ?? null}
           dikecualikan={dikecualikanPotonganKehadiran(pegawai.kelasJabatan)}
+          keteranganTidakPresensi={harian
+            .map((h, i) => {
+              const b = barisJamKerja[i];
+              const iso = h.tanggal.toISOString().slice(0, 10);
+              return keteranganTidakPresensiHari({
+                tanggal: h.tanggal,
+                wajibPresensi: WAJIB_PRESENSI.includes(h.statusKehadiran),
+                hariLibur: b.rincian.hariLibur,
+                jamMasukMenit: b.rincian.jamMasukMenit,
+                jamKeluarMenit: b.rincian.jamKeluarMenit,
+                dikecualikanKendala: tanggalKendala.has(iso),
+                dikoreksiManual: petaKoreksi.has(iso),
+                tapTidakWajar: b.rincian.tapTidakWajar,
+              });
+            })
+            .filter((t): t is string => t !== null)}
         />
       )}
 
@@ -489,7 +507,7 @@ export default async function RincianPresensiPegawaiPage({
               <th className="px-3 py-2.5">Masuk</th>
               <th className="px-3 py-2.5">Pulang</th>
               <th className="px-3 py-2.5">Telat</th>
-              <th className="px-3 py-2.5">Pulang cepat</th>
+              <th className="px-3 py-2.5">Kekurangan jam kerja</th>
               <th className="px-3 py-2.5">Lembur</th>
               <th className="px-3 py-2.5">Uang makan</th>
               {bolehKoreksi && <th className="px-3 py-2.5">Koreksi</th>}

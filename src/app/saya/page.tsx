@@ -11,10 +11,13 @@ import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPo
 import { dikecualikanPotonganKehadiran } from "../../business-logic/pejabatPimpinanTinggi";
 import { BadgePejabatEselon } from "../BadgePejabatEselon";
 import { BandingForm, type SasaranBanding } from "./BandingForm";
+import { BandingTracker } from "./BandingTracker";
 import { labelReferensiBanding } from "../../business-logic/bandingData";
 import { NAMA_BULAN } from "../bulan";
 import { SearchableSelect } from "../SearchableSelect";
 import { labelStatus } from "../presensiTampilan";
+import { keteranganTidakPresensiHari, rincianJamKerjaHari } from "../../business-logic/rincianJamKerjaHarian";
+import { muatHariLiburPeriode } from "../../lib/hariLibur";
 import {
   DASAR_PENGENAAN_TER,
   hitungPtkp,
@@ -25,6 +28,12 @@ import { TAB_SAYA, resolveTabSaya } from "./tabs";
 import { kunciPeriode, pilihPeriode, type PeriodeSaya } from "./periodeSaya";
 import { TAMPILKAN_NOMINAL_LEMBUR } from "../tampilUangLembur";
 import { HALAMAN } from "../layoutHalaman";
+import { FiUser } from "react-icons/fi";
+import { RiCalendarCheckLine, RiScalesLine } from "react-icons/ri";
+import { BsBarChartFill } from "react-icons/bs";
+import { GrMoney } from "react-icons/gr";
+import { IoDocumentTextOutline } from "react-icons/io5";
+import { SlUser, SlUserFemale } from "react-icons/sl";
 
 export const dynamic = "force-dynamic";
 
@@ -42,23 +51,55 @@ type KalkulasiRow = {
   nilai: number;
 };
 
+function getTabIcon(tab: string) {
+  switch (tab) {
+    case "profil":
+      return <FiUser className="size-4 shrink-0" />;
+    case "kehadiran":
+      return <RiCalendarCheckLine className="size-4 shrink-0" />;
+    case "kinerja":
+      return <BsBarChartFill className="size-4 shrink-0" />;
+    case "pendapatan":
+      return <GrMoney className="size-4 shrink-0" />;
+    case "dokumen":
+      return <IoDocumentTextOutline className="size-4 shrink-0" />;
+    case "banding":
+      return <RiScalesLine className="size-4 shrink-0" />;
+    default:
+      return null;
+  }
+}
+
 function KalkulasiSection({ judul, rows }: { judul: string; rows: KalkulasiRow[] }) {
   return (
-    <section className="card p-4">
-      <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">{judul}</h2>
-      {rows.length === 0 && <p className="mt-2 text-sm text-muted">Belum ada data.</p>}
-      <div className="mt-2 space-y-3">
+    <section className="rounded-2xl border border-line bg-surface p-5 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+      <div className="flex items-center justify-between border-b border-line pb-3">
+        <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-ink">
+          <span className="size-2 rounded-full bg-biru" />
+          Riwayat Perhitungan {judul}
+        </h2>
+        <span className="text-xs font-semibold text-muted">{rows.length} periode</span>
+      </div>
+      {rows.length === 0 && <p className="mt-3 text-xs text-muted italic">Belum ada riwayat data.</p>}
+      <div className="mt-2 divide-y divide-line">
         {rows.map((row) => (
-          <div key={row.id} className="border-t border-line-2 pt-3 first:border-t-0 first:pt-0">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-ink-2">
+          <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs">
+            <div>
+              <span className="font-bold text-ink sm:text-sm">
                 Periode {row.periodeBulan}/{row.periodeTahun}
               </span>
-              <span className="font-mono font-bold text-ink">{formatRupiah(row.nilai)}</span>
+              <p className="mt-0.5 text-[11px] text-muted">
+                Status:{" "}
+                {row.status === "APPROVED" ? (
+                  <span className="font-bold text-green">✓ Disetujui (histori pembayaran)</span>
+                ) : (
+                  <span className="font-bold text-gold-deep">{row.status} (estimasi)</span>
+                )}
+              </p>
             </div>
-            <p className="mt-0.5 text-xs text-muted">
-              Status: {row.status === "APPROVED" ? "Disetujui (histori pembayaran)" : `${row.status} (estimasi, belum final)`}
-            </p>
+            <span className="font-mono text-sm sm:text-base font-extrabold text-navy">
+              {formatRupiah(row.nilai)}
+            </span>
           </div>
         ))}
       </div>
@@ -66,31 +107,38 @@ function KalkulasiSection({ judul, rows }: { judul: string; rows: KalkulasiRow[]
   );
 }
 
-function StatTile({ label, nilai }: { label: string; nilai: number }) {
+function StatTile({
+  label,
+  nilai,
+  highlight,
+  catatan,
+}: {
+  label: string;
+  nilai: number;
+  highlight?: boolean;
+  catatan?: string;
+}) {
   return (
-    <div className="rounded-xl border border-line bg-surface-2 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-1 font-mono text-lg font-extrabold text-ink">{formatRupiah(nilai)}</p>
+    <div
+      className={`rounded-2xl border p-4 shadow-xs transition ${
+        highlight
+          ? "border-teal bg-gradient-to-br from-teal-tint via-surface to-white shadow-sm ring-1 ring-teal/20"
+          : "border-line bg-surface hover:border-biru/30"
+      }`}
+    >
+      <p className="text-[11px] font-bold uppercase tracking-wider text-muted">{label}</p>
+      <p
+        className={`mt-1 font-mono text-lg sm:text-xl font-extrabold ${
+          highlight ? "text-navy" : "text-ink"
+        }`}
+      >
+        {formatRupiah(nilai)}
+      </p>
+      {catatan && <p className="mt-0.5 text-[10px] text-muted">{catatan}</p>}
     </div>
   );
 }
 
-/**
- * Satu butir keterangan bergaya dua baris (label kecil di atas, isi di bawah) -
- * pola yang sama dipakai di seluruh tab Profil.
- *
- * Sengaja BUKAN baris "label ... titik dua ... isi" yang lama: nilai yang
- * panjang (nama unit kerja Eselon II bisa 60 karakter) mendorong labelnya
- * keluar layar di HP, dan yang pertama hilang justru labelnya.
- */
-/**
- * Satu butir data berlabel.
- *
- * `keterangan` muncul sebagai tooltip pada labelnya, ditandai garis putus-
- * putus supaya kelihatan bisa ditunjuk. Dipakai untuk batasan yang HARUS ada
- * tapi tidak layak memakan satu paragraf di halaman - kalau tiap batasan
- * dicetak penuh, yang dibaca orang justru catatannya, bukan angkanya.
- */
 function Butir({
   label,
   keterangan,
@@ -101,60 +149,28 @@ function Butir({
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className="rounded-xl border border-line bg-surface-2/40 p-3 sm:p-3.5 transition hover:bg-surface-2/70">
       <dt
-        className={`text-[11px] font-semibold uppercase tracking-wide text-muted${
+        className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted${
           keterangan ? " cursor-help underline decoration-dotted underline-offset-2" : ""
         }`}
         title={keterangan}
       >
         {label}
       </dt>
-      <dd className="mt-0.5 text-sm font-semibold text-ink">{children}</dd>
+      <dd className="mt-1 text-xs sm:text-sm font-bold text-ink truncate sm:whitespace-normal">{children}</dd>
     </div>
   );
 }
 
-const TAHAP_BANDING = [
-  { key: "DIAJUKAN", label: "Diajukan" },
-  { key: "MENUNGGU_APPROVAL_FINAL", label: "Verifikasi Kasubag TU" },
-  { key: "DISETUJUI", label: "Approval final OSDMA" },
-] as const;
 
-function BandingStepper({ status }: { status: string }) {
-  if (status === "DITOLAK") {
-    return <span className="chip chip-danger">DITOLAK</span>;
-  }
-  const tahapAktif = TAHAP_BANDING.findIndex((t) => t.key === status);
-  const sudahDisetujui = status === "DISETUJUI";
-  return (
-    <div className="mt-2 flex items-center gap-1.5">
-      {TAHAP_BANDING.map((t, i) => {
-        const selesai = sudahDisetujui || tahapAktif > i;
-        const aktif = !sudahDisetujui && i === tahapAktif;
-        return (
-          <div key={t.key} className="flex items-center gap-1.5">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                aktif ? "bg-gold text-white" : selesai ? "bg-green text-white" : "bg-line-2 text-muted"
-              }`}
-            >
-              {t.label}
-            </span>
-            {i < TAHAP_BANDING.length - 1 && <span className="text-line">&rarr;</span>}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export default async function DataSayaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; periode?: string }>;
+  searchParams: Promise<{ tab?: string; periode?: string; bulan?: string; tahun?: string }>;
 }) {
-  const { tab, periode } = await searchParams;
+  const { tab, periode, bulan: paramBulan, tahun: paramTahun } = await searchParams;
   const tabAktif = resolveTabSaya(tab);
 
   // Guard: SEMUA role bisa masuk sini buat lihat data DIRI SENDIRI saja
@@ -205,6 +221,20 @@ export default async function DataSayaPage({
       <AksesDitolak pesan={`Data pegawai untuk NIP ${authUser.nip} tidak ditemukan di sistem.`} />
     );
   }
+
+  // Deteksi jenis kelamin: dari kolom database jenisKelamin (L/P dari SIAP),
+  // atau fallback standar BKN dari digit ke-15 NIP 18-digit (1=L/Pria, 2=P/Wanita).
+  const jkDb = pegawai.jenisKelamin?.trim().toUpperCase();
+  const nipDigits = pegawai.nip.replace(/\D/g, "");
+  const digit15 = nipDigits.length >= 15 ? nipDigits[14] : null;
+  const jenisKelamin: "L" | "P" | null =
+    jkDb === "L" || jkDb === "P"
+      ? (jkDb as "L" | "P")
+      : digit15 === "1"
+        ? "L"
+        : digit15 === "2"
+          ? "P"
+          : null;
 
   // Daftar yang BISA dibanding, disusun dari baris yang benar-benar dimiliki
   // pegawai ini - bukan daftar jenis yang tetap. Menawarkan "Kehadiran Juli"
@@ -272,7 +302,41 @@ export default async function DataSayaPage({
     bulan: r.periodeBulan,
     tahun: r.periodeTahun,
   }));
-  const periodeKehadiran = pilihPeriode(periode, periodeKehadiranTersedia);
+
+  // Jika user memfilter via dropdown terpisah bulan & tahun:
+  const kunciTerpilih = (() => {
+    if (paramTahun && paramBulan) {
+      return `${paramTahun}-${String(Number(paramBulan)).padStart(2, "0")}`;
+    }
+    if (paramTahun) {
+      const matchTahun = periodeKehadiranTersedia.find((p) => p.tahun === Number(paramTahun));
+      if (matchTahun) return kunciPeriode(matchTahun);
+    }
+    if (paramBulan) {
+      const matchBulan = periodeKehadiranTersedia.find((p) => p.bulan === Number(paramBulan));
+      if (matchBulan) return kunciPeriode(matchBulan);
+    }
+    return periode;
+  })();
+
+  const periodeKehadiran = pilihPeriode(kunciTerpilih, periodeKehadiranTersedia);
+
+  const tahunTersediaKehadiran = Array.from(
+    new Set(periodeKehadiranTersedia.map((p) => p.tahun))
+  ).sort((a, b) => b - a);
+
+  const daftarTahunKehadiran =
+    tahunTersediaKehadiran.length > 0 ? tahunTersediaKehadiran : [new Date().getFullYear()];
+
+  const opsiBulanKehadiran = NAMA_BULAN.map((nama, idx) => ({
+    value: String(idx + 1),
+    label: nama,
+  }));
+  const opsiTahunKehadiran = daftarTahunKehadiran.map((thn) => ({
+    value: String(thn),
+    label: String(thn),
+  }));
+
   const rekapKehadiran = periodeKehadiran
     ? pegawai.rekapPresensi.find(
         (r) => r.periodeBulan === periodeKehadiran.bulan && r.periodeTahun === periodeKehadiran.tahun
@@ -302,23 +366,91 @@ export default async function DataSayaPage({
   // /saya/presensi/[bulan]/[tahun] karena barisnya memang itu-itu juga.
   //
   // Dijalankan HANYA waktu tab Kehadiran dibuka - tab lain tidak menanggungnya.
-  const sebaranStatus =
-    tabAktif === "kehadiran" && periodeKehadiran
-      ? await prisma.presensiHarian.groupBy({
-          by: ["statusKehadiran"],
-          where: {
-            pegawaiId: pegawai.id,
-            tanggal: {
-              gte: new Date(Date.UTC(periodeKehadiran.tahun, periodeKehadiran.bulan - 1, 1)),
-              lt: new Date(Date.UTC(periodeKehadiran.tahun, periodeKehadiran.bulan, 1)),
+  const awalKehadiran = periodeKehadiran
+    ? new Date(Date.UTC(periodeKehadiran.tahun, periodeKehadiran.bulan - 1, 1))
+    : null;
+  const akhirKehadiran = periodeKehadiran
+    ? new Date(Date.UTC(periodeKehadiran.tahun, periodeKehadiran.bulan, 1))
+    : null;
+
+  const [harianKehadiran, kendalaKehadiran, koreksiKehadiran, hariLiburKehadiran] =
+    tabAktif === "kehadiran" && periodeKehadiran && awalKehadiran && akhirKehadiran
+      ? await Promise.all([
+          prisma.presensiHarian.findMany({
+            where: {
+              pegawaiId: pegawai.id,
+              tanggal: { gte: awalKehadiran, lt: akhirKehadiran },
             },
+            orderBy: { tanggal: "asc" },
+          }),
+          prisma.kendalaEpresensi.findMany({
+            where: {
+              tanggal: { gte: awalKehadiran, lt: akhirKehadiran },
+              OR: [{ satuanKerja: null }, { satuanKerja: pegawai.satuanKerja ?? undefined }],
+            },
+            select: { tanggal: true },
+          }),
+          prisma.koreksiPresensiHarian.findMany({
+            where: {
+              pegawaiId: pegawai.id,
+              tanggal: { gte: awalKehadiran, lt: akhirKehadiran },
+            },
+          }),
+          muatHariLiburPeriode(periodeKehadiran.bulan, periodeKehadiran.tahun),
+        ])
+      : [[], [], [], new Map<string, string>()];
+
+  const sebaranMap = new Map<string, number>();
+  for (const h of harianKehadiran) {
+    sebaranMap.set(h.statusKehadiran, (sebaranMap.get(h.statusKehadiran) ?? 0) + 1);
+  }
+  const sebaranTerurut = [...sebaranMap.entries()]
+    .map(([statusKehadiran, count]) => ({ statusKehadiran, _count: { _all: count } }))
+    .sort((a, b) => b._count._all - a._count._all);
+
+  const tanggalKendalaSaya = new Set(kendalaKehadiran.map((k) => k.tanggal.toISOString().slice(0, 10)));
+  const petaKoreksiSaya = new Map(koreksiKehadiran.map((k) => [k.tanggal.toISOString().slice(0, 10), k]));
+  const menitDariWaktu = (w: Date | null) => (w === null ? null : w.getUTCHours() * 60 + w.getUTCMinutes());
+
+  const keteranganTidakPresensiSaya: string[] = [];
+  for (const h of harianKehadiran) {
+    const iso = h.tanggal.toISOString().slice(0, 10);
+    const koreksiHari = petaKoreksiSaya.get(iso);
+    const keteranganLibur = hariLiburKehadiran.get(iso) ?? null;
+    const rincian = rincianJamKerjaHari({
+      tanggalIso: iso,
+      indeksHari: h.tanggal.getUTCDay(),
+      hariLibur: keteranganLibur !== null,
+      jamMasukMenit: menitDariWaktu(koreksiHari?.jamMasuk ?? h.jamMasuk),
+      jamKeluarMenit: menitDariWaktu(koreksiHari?.jamKeluar ?? h.jamKeluar),
+      masukDikoreksi: koreksiHari?.jamMasuk != null,
+      keluarDikoreksi: koreksiHari?.jamKeluar != null,
+    });
+    const tgl = keteranganTidakPresensiHari({
+      tanggal: h.tanggal,
+      wajibPresensi: ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA", "TIDAK_PRESENSI"].includes(h.statusKehadiran),
+      hariLibur: rincian.hariLibur,
+      jamMasukMenit: rincian.jamMasukMenit,
+      jamKeluarMenit: rincian.jamKeluarMenit,
+      dikecualikanKendala: tanggalKendalaSaya.has(iso),
+      dikoreksiManual: petaKoreksiSaya.has(iso),
+      tapTidakWajar: rincian.tapTidakWajar,
+    });
+    if (tgl) keteranganTidakPresensiSaya.push(tgl);
+  }
+
+  // Riwayat verifikasi/approval untuk tab Banding
+  const bandingIds = pegawai.banding.map((b) => b.id);
+  const approvalLogsBanding =
+    tabAktif === "banding" && bandingIds.length > 0
+      ? await prisma.approvalLog.findMany({
+          where: {
+            referensiTipe: "BANDING",
+            referensiId: { in: bandingIds },
           },
-          _count: { _all: true },
+          orderBy: { timestampAksi: "asc" },
         })
       : [];
-  // Diurutkan di memori, bukan lewat orderBy groupBy: jumlahnya paling banyak
-  // belasan baris, dan urutan "terbanyak dulu" jadi jelas terbaca di kode.
-  const sebaranTerurut = [...sebaranStatus].sort((a, b) => b._count._all - a._count._all);
 
   // Periode "berjalan" buat ringkasan pendapatan - diambil dari periode
   // Tukin paling baru yang ada datanya (fallback ke Uang Makan/Lembur kalau
@@ -387,40 +519,86 @@ export default async function DataSayaPage({
   };
 
   return (
-    <main className={HALAMAN}>
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Data Saya</h1>
-      <p className="mt-1 text-sm text-muted">Ringkasan data kepegawaian, pendapatan, dan banding milik sendiri.</p>
-
+    <main className={`${HALAMAN} space-y-6`}>
       {/* ====================================================================
-          KEPALA IDENTITAS - tetap terlihat di SEMUA tab.
-          Tanpa ini, orang yang berpindah ke tab Pendapatan kehilangan konteks
-          "ini punya siapa" - dan di halaman yang isinya angka gaji, keraguan
-          itu tidak boleh ada sedetik pun.
+          1. HEADER UTAMA
           ==================================================================== */}
-      <section className="card mt-5 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h2 className="text-lg font-extrabold tracking-tight text-ink">
-              {pegawai.nama}
-              <BadgePejabatEselon kelasJabatan={pegawai.kelasJabatan} />
-            </h2>
-            <p className="mt-0.5 text-sm text-muted">
-              {pegawai.jabatan ?? "Jabatan belum terisi"}
-              <span className="mx-1.5 text-line">&bull;</span>
-              {pegawai.unitKerja}
+      <div className="gj-masuk flex flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-black tracking-tight text-ink sm:text-3xl">
+                Data Saya
+              </h1>
+              <span className="chip chip-ok font-semibold text-xs">
+                {pegawai.statusPegawai}
+              </span>
+            </div>
+            <p className="mt-1 text-xs sm:text-sm text-muted">
+              Portal mandiri data kepegawaian, kehadiran, kinerja, pendapatan, dan pengajuan banding Anda.
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <span className="chip chip-navy font-mono">{pegawai.nip}</span>
-            <span className="chip chip-ok">{pegawai.statusPegawai}</span>
+        </div>
+      </div>
+
+      {/* ====================================================================
+          2. KEPALA IDENTITAS (HERO PROFILE CARD) - tetap terlihat di SEMUA tab.
+          ==================================================================== */}
+      <section className="overflow-hidden rounded-2xl border border-line bg-gradient-to-r from-surface to-surface-2/70 p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-4">
+            <div
+              className={`flex size-14 shrink-0 items-center justify-center rounded-2xl shadow-xs ${
+                jenisKelamin === "L"
+                  ? "bg-gradient-to-br from-teal-tint via-surface to-biru/20 text-biru ring-1 ring-biru/30"
+                  : jenisKelamin === "P"
+                    ? "bg-gradient-to-br from-rose-50 via-surface to-rose-100 text-rose-600 ring-1 ring-rose-300"
+                    : "bg-gradient-to-br from-teal-tint via-surface to-biru/10 text-biru ring-1 ring-biru/20"
+              }`}
+              title={
+                jenisKelamin === "L"
+                  ? "Pegawai Pria (Laki-laki)"
+                  : jenisKelamin === "P"
+                    ? "Pegawai Wanita (Perempuan)"
+                    : pegawai.nama
+              }
+            >
+              {jenisKelamin === "L" ? (
+                <SlUser className="size-8 shrink-0 text-biru" />
+              ) : jenisKelamin === "P" ? (
+                <SlUserFemale className="size-8 shrink-0 text-rose-600" />
+              ) : (
+                <span className="font-black text-xl text-biru">{pegawai.nama.slice(0, 2).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg sm:text-xl font-black tracking-tight text-ink">
+                  {pegawai.nama}
+                </h2>
+                <BadgePejabatEselon kelasJabatan={pegawai.kelasJabatan} />
+              </div>
+              <p className="mt-1 text-xs sm:text-sm font-medium text-ink-2">
+                {pegawai.jabatan ?? "Jabatan belum terisi"}
+              </p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+                <svg className="size-3.5 shrink-0 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                {pegawai.unitKerja} &bull; <span className="font-semibold text-ink-2">{pegawai.satuanKerja}</span>
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ====================================================================
-          TAB - <Link> biasa dengan ?tab=, bukan state React. Lihat tabs.ts.
+          3. TAB NAVIGATION - Rata Penuh (Full Width Grid)
           ==================================================================== */}
-      <nav className="mt-5 flex flex-wrap items-end gap-1 border-b border-line" aria-label="Bagian data saya">
+      <nav
+        className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 p-1.5 rounded-2xl border border-line bg-surface-2/70 select-none"
+        aria-label="Bagian data saya"
+      >
         {TAB_SAYA.map((t) => {
           const aktif = t.key === tabAktif;
           const jumlah = jumlahPerTab[t.key];
@@ -429,16 +607,17 @@ export default async function DataSayaPage({
               key={t.key}
               href={`/saya?tab=${t.key}`}
               aria-current={aktif ? "page" : undefined}
-              className={`-mb-px flex items-center gap-1.5 rounded-t-lg border-b-2 px-3.5 py-2.5 text-[13px] font-bold transition ${
+              className={`flex items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-xs font-bold transition-all text-center ${
                 aktif
-                  ? "border-navy bg-surface text-navy"
-                  : "border-transparent text-muted hover:border-line hover:text-ink"
+                  ? "bg-white text-navy shadow-sm ring-1 ring-line/80 font-extrabold"
+                  : "text-muted hover:bg-surface/80 hover:text-ink"
               }`}
             >
-              {t.label}
+              {getTabIcon(t.key)}
+              <span className="truncate">{t.label}</span>
               {jumlah !== undefined && jumlah > 0 && (
                 <span
-                  className={`rounded-full px-1.5 text-[10px] font-bold ${
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold shrink-0 ${
                     aktif ? "bg-teal-tint text-navy" : "bg-line-2 text-muted"
                   }`}
                 >
@@ -454,13 +633,37 @@ export default async function DataSayaPage({
           TAB: PROFIL
           ================================================================== */}
       {tabAktif === "profil" && (
-        <div className="mt-6 space-y-6">
-          <section className="card p-5">
-            <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Data kepegawaian</h2>
-            <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-6">
+          <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-teal-tint text-biru">
+                  <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </span>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Data Kepegawaian</h2>
+              </div>
+              <span className="chip chip-navy text-[11px] font-semibold">Sumber SIAP</span>
+            </div>
+
+            <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Butir label="Nama">{pegawai.nama}</Butir>
               <Butir label="NIP">
                 <span className="font-mono">{pegawai.nip}</span>
+              </Butir>
+              <Butir label="Jenis Kelamin">
+                {jenisKelamin === "L" ? (
+                  <span className="inline-flex items-center gap-1.5 font-bold text-ink">
+                    <SlUser className="size-3.5 text-biru" /> Laki-laki (Pria)
+                  </span>
+                ) : jenisKelamin === "P" ? (
+                  <span className="inline-flex items-center gap-1.5 font-bold text-ink">
+                    <SlUserFemale className="size-3.5 text-rose-500" /> Perempuan (Wanita)
+                  </span>
+                ) : (
+                  "-"
+                )}
               </Butir>
               <Butir label="Status kepegawaian">{pegawai.statusPegawai}</Butir>
               <Butir label="Jabatan">{pegawai.jabatan ?? "-"}</Butir>
@@ -473,62 +676,70 @@ export default async function DataSayaPage({
               </Butir>
             </dl>
 
-            {/* Tidak ada tombol ubah DI MANA PUN di tab ini, dan itu disengaja.
-                SIAP adalah sumber kebenaran kepegawaian; Gajihub cuma cerminnya
-                (lihat importPegawaiSiap.ts). Menyediakan tombol ubah di sini
-                berarti membuat dua versi kebenaran yang akan berbeda dalam
-                hitungan minggu - dan yang dipakai membayar adalah yang salah. */}
-            <p className="mt-5 border-t border-line-2 pt-3 text-xs text-muted">
+            <p className="mt-4 border-t border-line pt-3 text-[11px] text-muted flex items-center gap-1.5">
+              <svg className="size-3.5 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
               Data bersumber dari SIAP dan terakhir diperbarui pada {formatTanggal(pegawai.sourceSyncedAt)}.
             </p>
           </section>
 
-          <section className="card p-5">
-            <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Rekening pembayaran</h2>
-            <p className="mt-1 text-xs text-muted">
-              Rekening tujuan transfer per jenis pembayaran.
-            </p>
+          <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+            <div className="flex items-center gap-2.5 border-b border-line pb-4">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-gold-tint text-gold-deep">
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Rekening Pembayaran</h2>
+                <p className="text-[11px] text-muted">Rekening tujuan transfer per jenis pembayaran aktif</p>
+              </div>
+            </div>
+
             {pegawai.rekening.length === 0 && (
-              <p className="mt-3 text-sm text-muted">Belum ada rekening yang terdaftar untuk kamu.</p>
+              <p className="mt-4 text-sm text-muted italic">Belum ada rekening yang terdaftar untuk kamu.</p>
             )}
-            <div className="mt-3 space-y-3">
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {pegawai.rekening.map((r) => (
-                <div key={r.id} className="rounded-xl border border-line-2 bg-surface-2 p-3.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="chip chip-navy">{r.jenisPembayaran}</span>
-                    <span className="text-xs text-muted">{r.namaBank}</span>
+                <div key={r.id} className="rounded-xl border border-line bg-surface-2/50 p-4 transition hover:border-biru/40 hover:bg-surface-2 shadow-xs">
+                  <div className="flex items-center justify-between gap-2 border-b border-line/60 pb-2.5">
+                    <span className="chip chip-navy font-bold text-xs">{r.jenisPembayaran}</span>
+                    <span className="text-xs font-bold text-ink">{r.namaBank}</span>
                   </div>
-                  <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-                    {/* Nomornya ditampilkan UTUH, tidak disamarkan. Justru
-                        memeriksa digitnya yang jadi gunanya halaman ini -
-                        nomor yang keliru baru ketahuan waktu gaji tidak masuk,
-                        dan saat itu sudah terlambat satu periode. Ini rekening
-                        miliknya sendiri, bukan milik orang lain. */}
-                    <Butir label="Nomor rekening">
-                      <span className="font-mono">{r.nomorRekening}</span>
-                    </Butir>
-                    <Butir label="Nama rekening">{r.namaRekening ?? "-"}</Butir>
-                  </dl>
+                  <div className="mt-3 space-y-2">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Nomor Rekening</p>
+                      <p className="font-mono text-sm sm:text-base font-extrabold text-navy mt-0.5">{r.nomorRekening}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Nama Rekening</p>
+                      <p className="text-xs font-semibold text-ink mt-0.5">{r.namaRekening ?? "-"}</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="card p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Status PTKP (PPh Pasal 21)</h2>
-              <span className="chip chip-wait">Berdasarkan Data SIAP</span>
+          <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-teal-tint text-biru">
+                  <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </span>
+                <div>
+                  <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Status PTKP (PPh Pasal 21)</h2>
+                  <p className="text-[11px] text-muted">
+                    Status per <strong className="text-ink-2">{formatTanggal(acuanPtkp)}</strong>, dari data SIAP.
+                  </p>
+                </div>
+              </div>
+              <span className="chip chip-wait text-xs font-bold">Berdasarkan Data SIAP</span>
             </div>
-            {/* TANGGALNYA TETAP DISEBUT walau kalimatnya dipendekkan
-                (permintaan user 2026-09-06): PTKP ditetapkan menurut keadaan
-                AWAL TAHUN, bukan hari ini. Tanpa tanggal itu, pegawai yang
-                menikah di tengah tahun akan mengira sistemnya salah baca -
-                padahal justru begitu aturannya (PMK 168/2023).
-                "Bukan status resmi, yang berlaku yang terdaftar di DJP" sudah
-                diwakili chip "Dugaan sistem" di sebelah judul. */}
-            <p className="mt-1 text-xs text-muted">
-              Status per <strong className="text-ink-2">{formatTanggal(acuanPtkp)}</strong>, dari data SIAP.
-            </p>
 
             {!ptkp && (
               <p className="mt-4 text-sm text-muted">
@@ -539,7 +750,7 @@ export default async function DataSayaPage({
 
             {ptkp && (
               <>
-                <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+                <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Butir label="Kode PTKP">
                     <span className="font-mono text-base">{ptkp.kode}</span>
                   </Butir>
@@ -553,8 +764,6 @@ export default async function DataSayaPage({
                   </Butir>
                 </dl>
 
-                {/* Catatan dari mesin aturannya, bukan teks tetap - yang muncul
-                    persis alasan yang berlaku untuk orang ini. */}
                 {ptkp.catatan.length > 0 && (
                   <ul className="mt-4 space-y-1.5 rounded-xl border border-gold bg-gold/10 p-3.5">
                     {ptkp.catatan.map((c, i) => (
@@ -567,11 +776,7 @@ export default async function DataSayaPage({
               </>
             )}
 
-            {/* ------------------------------------------------------------
-                DASAR PENGENAAN - menjawab "tunjangan saya yang mana yang kena
-                pajak". Daftarnya dari contoh kasus resmi DJP, bukan tafsiran.
-                ------------------------------------------------------------ */}
-            <div className="mt-5 border-t border-line-2 pt-4">
+            <div className="mt-5 border-t border-line pt-4">
               <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
                 Penghasilan yang menjadi dasar pengenaan
               </p>
@@ -582,22 +787,9 @@ export default async function DataSayaPage({
                   </li>
                 ))}
               </ul>
-              {/* Dua keterangan dicabut dari layar atas permintaan user
-                  2026-09-06, dan keduanya TETAP BERLAKU:
-                  1. Untuk ASN yang penghasilannya dibebankan APBN, PPh Pasal
-                     21 atas komponen di atas DITANGGUNG PEMERINTAH - tidak
-                     mengurangi yang diterima pegawai.
-                  2. TODO(confirm) uang makan & uang lembur belum masuk daftar
-                     ini; perlakuan pajaknya menunggu penegasan Bagian
-                     Keuangan. */}
             </div>
 
-            {/* ------------------------------------------------------------
-                REZIM KEDUA - honorarium, tarif FINAL menurut golongan.
-                Dipisahkan dengan kotak sendiri dan diberi judul yang tegas
-                supaya tidak terbaca sebagai tarif atas tunjangan kinerja.
-                ------------------------------------------------------------ */}
-            <div className="mt-5 border-t border-line-2 pt-4">
+            <div className="mt-5 border-t border-line pt-4">
               <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
                 Honorarium APBN/APBD - dipotong final
               </p>
@@ -623,12 +815,8 @@ export default async function DataSayaPage({
               )}
             </div>
 
-            {/* ------------------------------------------------------------
-                ASAL & UMUR DATA - siapa pun yang membantah angka di atas akan
-                menanyakan ini lebih dulu: datanya dari mana dan kapan diambil.
-                ------------------------------------------------------------ */}
-            <div className="mt-5 border-t border-line-2 pt-4">
-              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-3">
+            <div className="mt-5 border-t border-line pt-4">
+              <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Butir label="Sumber data">{pegawai.sourceSystem}</Butir>
                 <Butir label="Terakhir disinkronkan">{formatTanggal(pegawai.sourceSyncedAt)}</Butir>
                 <Butir label="Status kawin tercatat">{pegawai.statusKawin ?? "(kosong)"}</Butir>
@@ -638,7 +826,6 @@ export default async function DataSayaPage({
                 sudah diperbarui di SIAP tetapi tanggal di atas masih lama, artinya sinkronisasi belum dijalankan.
               </p>
             </div>
-
           </section>
         </div>
       )}
@@ -647,71 +834,99 @@ export default async function DataSayaPage({
           TAB: KEHADIRAN
           ================================================================== */}
       {tabAktif === "kehadiran" && (
-        <div className="mt-6 space-y-6">
-          {/* Pemilih periode. <form method="get">, bukan state React - sama
-              dengan seluruh filter di aplikasi ini, jadi tetap jalan tanpa
-              JavaScript dan tiap periode punya URL sendiri.
-
-              Isinya HANYA periode yang rekapnya benar-benar ada. Dropdown
-              12 bulan yang sebagian menghasilkan halaman kosong lebih buruk
-              daripada dropdown pendek yang semuanya berisi. */}
+        <div className="space-y-6">
           {periodeKehadiran && (
-            <form method="get" className="flex flex-wrap items-center gap-2 [&_input]:mt-0">
-              <input type="hidden" name="tab" value="kehadiran" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Periode</span>
-              <SearchableSelect
-                name="periode"
-                className="w-52"
-                options={periodeKehadiranTersedia.map((p) => ({
-                  value: kunciPeriode(p),
-                  label: `${NAMA_BULAN[p.bulan - 1]} ${p.tahun}`,
-                }))}
-                defaultValue={kunciPeriode(periodeKehadiran)}
-              />
-              <button type="submit" className="btn btn-primary">
-                Tampilkan
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4 shadow-xs">
+              <form method="get" className="flex flex-wrap items-center gap-3 [&_input]:mt-0">
+                <input type="hidden" name="tab" value="kehadiran" />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Filter Presensi:</span>
+                
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-muted">Bulan:</span>
+                  <SearchableSelect
+                    name="bulan"
+                    className="w-36"
+                    options={opsiBulanKehadiran}
+                    defaultValue={String(periodeKehadiran.bulan)}
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-muted">Tahun:</span>
+                  <SearchableSelect
+                    name="tahun"
+                    className="w-28"
+                    options={opsiTahunKehadiran}
+                    defaultValue={String(periodeKehadiran.tahun)}
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary btn-sm">
+                  Tampilkan
+                </button>
+              </form>
               <Link
                 href={`/saya/presensi/${periodeKehadiran.bulan}/${periodeKehadiran.tahun}`}
-                className="btn btn-ghost inline-flex items-center gap-1.5"
+                className="btn btn-ghost btn-sm inline-flex items-center gap-1.5"
               >
                 <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                 </svg>
-                Presensi lengkap
+                Presensi Lengkap
               </Link>
-            </form>
+            </div>
           )}
 
           {rekapKehadiran && (
-            <section className="card p-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Rekap kehadiran</h2>
-                <span className="text-xs font-medium text-muted">
+            <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-teal-tint text-biru">
+                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </span>
+                  <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Rekap Kehadiran</h2>
+                </div>
+                <span className="chip chip-navy text-xs font-semibold">
                   {NAMA_BULAN[rekapKehadiran.periodeBulan - 1]} {rekapKehadiran.periodeTahun}
                 </span>
               </div>
-              {/* Dua angka INI yang dipakai menghitung, jadi dibaca dari rekap
-                  yang tersimpan - bukan dihitung ulang di layar. */}
-              <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4">
-                <Butir label="Hari kerja">{rekapKehadiran.jumlahHariKerja}</Butir>
-                <Butir label="Hari hadir">{rekapKehadiran.jumlahHariHadir}</Butir>
-              </dl>
 
-              {/* Sisi pelanggarannya (terlambat, alpha, tidak presensi) TIDAK
-                  diulang di sini - itu tugas panel rincian potongan di bawah,
-                  yang menampilkannya lengkap dengan perhitungan Pasal 13-nya.
-                  Mengulanginya di dua tempat berarti dua angka yang bisa beda. */}
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-line bg-surface-2/50 p-3.5 shadow-xs">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Hari Kerja</p>
+                  <p className="font-mono text-xl font-extrabold text-ink mt-0.5">
+                    {rekapKehadiran.jumlahHariKerja} <span className="text-xs font-normal text-muted">hari</span>
+                  </p>
+                </div>
+                <div className="rounded-xl border border-teal-tint bg-teal-tint/40 p-3.5 shadow-xs">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-biru">Hari Hadir</p>
+                  <p className="font-mono text-xl font-extrabold text-navy mt-0.5">
+                    {rekapKehadiran.jumlahHariHadir} <span className="text-xs font-normal text-muted">hari</span>
+                  </p>
+                </div>
+                <div className="rounded-xl border border-line bg-surface-2/50 p-3.5 col-span-2 sm:col-span-1 shadow-xs">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Tingkat Kehadiran</p>
+                  <p className="font-mono text-xl font-extrabold text-green mt-0.5">
+                    {rekapKehadiran.jumlahHariKerja > 0
+                      ? Math.round((rekapKehadiran.jumlahHariHadir / rekapKehadiran.jumlahHariKerja) * 100)
+                      : 0}
+                    %
+                  </p>
+                </div>
+              </div>
+
               {sebaranTerurut.length > 0 && (
-                <div className="mt-5 border-t border-line-2 pt-4">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Sebaran status hari</p>
-                  <ul className="mt-2.5 grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                <div className="mt-5 border-t border-line pt-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Sebaran Status Hari</p>
+                  <ul className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {sebaranTerurut.map((sb) => (
                       <li
                         key={sb.statusKehadiran}
-                        className="flex items-baseline justify-between gap-3 border-b border-line-2 py-1 text-sm last:border-b-0"
+                        className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/40 px-3 py-2 text-xs"
                       >
-                        <span className="text-ink-2">{labelStatus(sb.statusKehadiran)}</span>
+                        <span className="font-medium text-ink-2">{labelStatus(sb.statusKehadiran)}</span>
                         <span className="font-mono font-bold text-ink">{sb._count._all} hari</span>
                       </li>
                     ))}
@@ -719,13 +934,9 @@ export default async function DataSayaPage({
                 </div>
               )}
 
-              {/* Periode yang rekapnya diisi lewat template Excel tidak punya
-                  baris harian sama sekali, jadi sebarannya kosong. Dikatakan apa
-                  adanya - daftar kosong tanpa keterangan terbaca sebagai "saya
-                  tidak pernah cuti/sakit", padahal artinya "tidak tercatat". */}
               {sebaranTerurut.length === 0 && (
-                <div className="mt-5 border-t border-line-2 pt-4">
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+                <div className="mt-5 border-t border-line pt-4">
+                  <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <Butir label="WFO">{rekapKehadiran.jumlahHariWfo}</Butir>
                     <Butir label="WFH / WFA">{rekapKehadiran.jumlahHariWfhWfa}</Butir>
                     <Butir label="Diklat">{rekapKehadiran.jumlahHariDiklat}</Butir>
@@ -735,47 +946,35 @@ export default async function DataSayaPage({
                   </dl>
                   <p className="mt-3 text-xs text-muted">
                     Periode ini tidak punya rincian harian - rekapnya diisi lewat template Excel, bukan tarikan
-                    e-Presensi. Hari izin &amp; sakit tidak tersimpan di rekap, jadi tidak bisa ditampilkan untuk
-                    periode ini.
+                    e-Presensi.
                   </p>
                 </div>
               )}
 
-              <p className="mt-4 border-t border-line-2 pt-3 text-xs text-muted">
+              <p className="mt-4 border-t border-line pt-3 text-[11px] text-muted">
                 Hari hadir tidak sama dengan hari yang dibayar uang makan - diklat dan dinas luar tetap bekerja
-                tapi konsumsinya sudah ditanggung kegiatannya. Rinciannya di tab Pendapatan.
+                tapi konsumsinya ditanggung penyelenggara. Rinciannya di tab Pendapatan.
               </p>
             </section>
           )}
 
-          {/* "Kenapa tukin saya segini" - rincian potongan Pasal 13 per jenis
-              pelanggaran untuk periode yang SEDANG DIPILIH, bukan selalu yang
-              terbaru. Pegawai bisa menjawab sendiri tanpa minta rekap ke
-              Kasubag TU, dan angkanya datang dari fungsi yang SAMA dengan yang
-              menghitung pembayarannya. */}
           {rekapKehadiran && (
             <RincianPotonganKehadiran
               rekap={rekapKehadiran}
               bobotKehadiranPenuh={bobotKehadiranPenuhSaya}
               nilaiTersimpan={tukinKehadiran?.komponenKehadiran ?? null}
               dikecualikan={dikecualikanPotonganKehadiran(pegawai.kelasJabatan)}
+              keteranganTidakPresensi={keteranganTidakPresensiSaya}
             />
           )}
 
           {!periodeKehadiran && (
-            <section className="card p-4">
-              <p className="text-sm text-muted">
+            <section className="rounded-2xl border border-dashed border-line bg-surface-2 p-8 text-center">
+              <p className="text-sm font-semibold text-muted">
                 Belum ada rekap presensi untuk kamu. Rekap dibuat waktu unit kamu menarik presensi periode berjalan
-                dari e-Presensi - kalau periode ini sudah lewat tapi belum muncul, tanyakan ke Kasubag TU unit kamu.
+                dari e-Presensi.
               </p>
             </section>
-          )}
-
-          {periodeKehadiran && (
-            <p className="text-xs text-muted">
-              Kehadiran ditarik dari e-Presensi apa adanya - Gajihub tidak pernah mengubahnya. Kalau ada yang tidak
-              sesuai, ajukan lewat tab Banding.
-            </p>
           )}
         </div>
       )}
@@ -784,35 +983,43 @@ export default async function DataSayaPage({
           TAB: KINERJA
           ================================================================== */}
       {tabAktif === "kinerja" && (
-        <div className="mt-6 space-y-6">
-          <section className="card p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Predikat kinerja</h2>
-              <span className="text-xs font-medium text-muted">Sumber: e-Kinerja BKN</span>
+        <div className="space-y-6">
+          <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-teal-tint text-biru">
+                  <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </span>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Predikat Kinerja</h2>
+              </div>
+              <span className="chip chip-navy text-xs font-semibold">Sumber: e-Kinerja BKN</span>
             </div>
+
             {pegawai.predikatKinerja.length === 0 && (
-              <p className="mt-2 text-sm text-muted">Belum ada data predikat kinerja.</p>
+              <p className="mt-4 text-sm text-muted italic">Belum ada data predikat kinerja tercatat.</p>
             )}
+
             {pegawai.predikatKinerja.length > 0 && (
-              <table className="mt-2 w-full text-sm">
-                <tbody>
-                  {pegawai.predikatKinerja.map((pk) => (
-                    <tr key={pk.id} className="border-t border-line-2">
-                      <td className="py-1.5 text-muted">
-                        {pk.periodeBulan}/{pk.periodeTahun}
-                      </td>
-                      <td className="py-1.5 font-semibold text-ink">
-                        {pk.predikat} ({pk.nilaiAngka}%)
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="mt-4 divide-y divide-line">
+                {pegawai.predikatKinerja.map((pk) => (
+                  <div key={pk.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs sm:text-sm">
+                    <span className="font-bold text-ink">
+                      Periode {pk.periodeBulan}/{pk.periodeTahun}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="chip chip-ok font-bold text-xs">{pk.predikat}</span>
+                      <span className="font-mono font-extrabold text-navy text-xs sm:text-sm">{pk.nilaiAngka}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
-            <p className="mt-3 border-t border-line-2 pt-3 text-xs text-muted">
+
+            <p className="mt-4 border-t border-line pt-3 text-[11px] text-muted">
               Predikat kinerja menentukan komponen 70% Tunjangan Kinerja (Pasal 5). Perubahannya dilakukan di
-              e-Kinerja BKN, lalu diunggah ulang oleh unit kamu. Kalau predikat yang tercatat tidak sesuai,
-              ajukan lewat tab Banding.
+              e-Kinerja BKN, lalu diunggah ulang oleh unit Anda. Jika predikat tidak sesuai, ajukan lewat tab Banding.
             </p>
           </section>
         </div>
@@ -822,54 +1029,63 @@ export default async function DataSayaPage({
           TAB: PENDAPATAN
           ================================================================== */}
       {tabAktif === "pendapatan" && (
-        <div className="mt-6 space-y-6">
+        <div className="space-y-6">
           {periodeTerbaru && (
-            <section className="card p-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">
-                  Ringkasan pendapatan - periode {periodeTerbaru.periodeBulan}/{periodeTerbaru.periodeTahun}
-                </h2>
+            <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-gold-tint text-gold-deep">
+                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">
+                      Ringkasan Pendapatan
+                    </h2>
+                    <p className="text-[11px] text-muted">Periode {periodeTerbaru.periodeBulan}/{periodeTerbaru.periodeTahun}</p>
+                  </div>
+                </div>
                 <Link
                   href={`/saya/slip-gaji/${periodeTerbaru.periodeBulan}/${periodeTerbaru.periodeTahun}`}
-                  className="text-xs font-semibold text-teal-deep underline"
+                  className="btn btn-primary btn-sm inline-flex items-center gap-1.5"
                 >
-                  Lihat slip gaji
+                  <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Lihat Slip Gaji
                 </Link>
               </div>
+
               <div
-                className={`mt-3 grid grid-cols-2 gap-3 ${
+                className={`mt-4 grid grid-cols-2 gap-3 ${
                   TAMPILKAN_NOMINAL_LEMBUR ? "sm:grid-cols-5" : "sm:grid-cols-4"
                 }`}
               >
-                <StatTile label="Gaji bersih" nilai={gajiTerbaru?.gajiBersih ?? 0} />
+                <StatTile label="Gaji Bersih" nilai={gajiTerbaru?.gajiBersih ?? 0} />
                 <StatTile label="Tukin" nilai={tukinTerbaru?.tukinBersih ?? 0} />
                 <StatTile label="Uang Makan" nilai={umTerbaru?.totalUangMakan ?? 0} />
                 {TAMPILKAN_NOMINAL_LEMBUR && (
                   <StatTile label="Uang Lembur" nilai={lemburTerbaru?.totalUangLembur ?? 0} />
                 )}
-                <StatTile label="Total" nilai={totalTerbaru} />
+                <StatTile label="Total Diterima" nilai={totalTerbaru} highlight />
               </div>
+
               {!gajiTerbaru && (
-                <p className="mt-2 text-xs text-muted">
+                <p className="mt-3 text-xs text-muted">
                   Gaji bersih masih kosong karena data gaji induk periode ini belum diunggah PPABP.
                 </p>
               )}
               {gajiTerbaru && gajiTerbaru.honorarium > 0 && (
-                <p className="mt-2 text-xs text-muted">Total sudah termasuk honorarium periode ini.</p>
+                <p className="mt-3 text-xs text-muted">Total sudah termasuk honorarium periode ini.</p>
               )}
             </section>
           )}
 
           {!periodeTerbaru && (
-            <p className="text-sm text-muted">Belum ada periode pendapatan yang tercatat untuk kamu.</p>
+            <p className="text-sm text-muted italic">Belum ada periode pendapatan yang tercatat untuk Anda.</p>
           )}
 
-          {/* "Tunjangan saya apa saja, dan siapa yang menentukan angkanya" -
-              komponen pendapatan dikelompokkan menurut SISTEM ASAL. Ditaruh
-              TEPAT DI BAWAH stat tile karena keduanya menjawab pertanyaan yang
-              sama pada kedalaman berbeda: tile menjawab "berapa", rincian ini
-              menjawab "dari apa". Memisahkannya ke halaman lain berarti
-              pertanyaan kedua tidak akan pernah terjawab. */}
           {periodeTerbaru && (
             <RincianPendapatan
               gaji={gajiTerbaru ?? null}
@@ -880,10 +1096,6 @@ export default async function DataSayaPage({
             />
           )}
 
-          {/* "Kenapa uang makan saya segini" - rantai golongan -> tarif -> hari
-              dibayar. Ditampilkan meski baris kalkulasinya belum ada, karena
-              justru itu yang paling sering ditanyakan: hari hadir tidak sama
-              dengan hari dibayar (diklat & dinas keluar tidak berhak). */}
           {rekapTerbaru && (
             <RincianUangMakan
               input={{ golongan: pegawai.golongan, ...rekapTerbaru }}
@@ -913,67 +1125,118 @@ export default async function DataSayaPage({
           TAB: DOKUMEN
           ================================================================== */}
       {tabAktif === "dokumen" && (
-        <div className="mt-6 space-y-6">
-          <section className="card p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Slip gaji</h2>
-              <span className="text-xs font-medium text-muted">Perincian Pembayaran Gaji</span>
+        <div className="space-y-6">
+          <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-teal-tint text-biru">
+                  <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </span>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Slip Gaji</h2>
+              </div>
+              <span className="text-xs text-muted">{daftarPeriode.length} periode tersedia</span>
             </div>
-            {daftarPeriode.length === 0 && <p className="mt-2 text-sm text-muted">Belum ada periode yang bisa dicetak.</p>}
-            <div className="mt-2 space-y-2">
+
+            {daftarPeriode.length === 0 && <p className="mt-4 text-xs text-muted italic">Belum ada periode yang bisa dicetak.</p>}
+
+            <div className="mt-3 divide-y divide-line">
               {daftarPeriode.map((p) => (
-                <div key={`${p.tahun}-${p.bulan}`} className="flex items-center justify-between border-t border-line-2 pt-2 text-sm first:border-t-0 first:pt-0">
-                  <span className="text-ink-2">
+                <div key={`${p.tahun}-${p.bulan}`} className="flex items-center justify-between py-2.5 text-xs sm:text-sm">
+                  <span className="font-semibold text-ink">
                     Periode {p.bulan}/{p.tahun}
                   </span>
-                  <Link href={`/saya/slip-gaji/${p.bulan}/${p.tahun}`} className="text-xs font-semibold text-teal-deep underline">
-                    Lihat / cetak
+                  <Link
+                    href={`/saya/slip-gaji/${p.bulan}/${p.tahun}`}
+                    className="inline-flex items-center gap-1 font-bold text-biru hover:underline text-xs"
+                  >
+                    Lihat / Cetak
+                    <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
                   </Link>
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="card p-4">
-            <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Bukti potong pajak</h2>
-            <p className="mt-1 text-xs text-muted">
-              Hasil upload manual Kasubag TU/PPABP dari Web Gaji - kamu cuma bisa lihat/download di sini, bukan upload sendiri.
-            </p>
+          <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+            <div className="flex items-center gap-2.5 border-b border-line pb-4">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-teal-tint text-biru">
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Bukti Potong Pajak</h2>
+                <p className="text-[11px] text-muted">Hasil sinkronisasi Web Gaji oleh Satker / PPABP</p>
+              </div>
+            </div>
+
             {pegawai.buktiPotongPajak.length === 0 && (
-              <p className="mt-2 text-sm text-muted">Belum ada bukti potong pajak yang diunggah untuk kamu.</p>
+              <p className="mt-4 text-xs text-muted italic">Belum ada bukti potong pajak yang diunggah untuk Anda.</p>
             )}
-            <div className="mt-2 space-y-2">
+
+            <div className="mt-3 divide-y divide-line">
               {pegawai.buktiPotongPajak.map((b) => (
-                <div key={b.id} className="flex items-center justify-between border-t border-line-2 pt-2 text-sm first:border-t-0 first:pt-0">
+                <div key={b.id} className="flex items-center justify-between py-2.5 text-xs sm:text-sm">
                   <div>
-                    <span className="text-ink-2">Tahun pajak {b.tahunPajak}</span>
-                    {b.nomorBuktiPotong && <span className="ml-2 font-mono text-xs text-muted">{b.nomorBuktiPotong}</span>}
+                    <span className="font-bold text-ink">Tahun Pajak {b.tahunPajak}</span>
+                    {b.nomorBuktiPotong && (
+                      <span className="ml-2 font-mono text-xs text-muted">No: {b.nomorBuktiPotong}</span>
+                    )}
                   </div>
-                  <a href={b.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-teal-deep underline">
-                    Download
+                  <a
+                    href={b.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-bold text-biru hover:underline text-xs"
+                  >
+                    Unduh Dokumen
+                    <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
                   </a>
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="card p-4">
-            <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">SK Kenaikan Gaji Berkala</h2>
-            {pegawai.skKgb.length === 0 && <p className="mt-2 text-sm text-muted">Belum ada SK KGB yang tercatat.</p>}
-            <div className="mt-2 space-y-2">
+          <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+            <div className="flex items-center gap-2.5 border-b border-line pb-4">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-teal-tint text-biru">
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">SK Kenaikan Gaji Berkala (KGB)</h2>
+                <p className="text-[11px] text-muted">Riwayat penyesuaian gaji berkala pegawai</p>
+              </div>
+            </div>
+
+            {pegawai.skKgb.length === 0 && <p className="mt-4 text-xs text-muted italic">Belum ada SK KGB yang tercatat.</p>}
+
+            <div className="mt-3 divide-y divide-line">
               {pegawai.skKgb.map((sk) => (
-                <div key={sk.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-line-2 pt-2 text-sm first:border-t-0 first:pt-0">
+                <div key={sk.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs">
                   <div className="min-w-0">
-                    <p className="font-mono text-xs text-ink-2">{sk.nomorSk}</p>
-                    <p className="text-xs text-muted">
-                      {sk.golonganLama} &rarr; {sk.golonganBaru} &bull; TMT {formatTanggal(sk.tmtKgb)}
+                    <p className="font-mono text-xs font-bold text-ink">{sk.nomorSk}</p>
+                    <p className="text-xs text-muted mt-0.5">
+                      {sk.golonganLama} &rarr; <strong className="text-ink">{sk.golonganBaru}</strong> &bull; TMT {formatTanggal(sk.tmtKgb)}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className="chip chip-draft">{sk.status}</span>
+                    <span className="chip chip-draft text-xs">{sk.status}</span>
                     {sk.fileUrl && (
-                      <a href={sk.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-teal-deep underline">
-                        Download
+                      <a
+                        href={sk.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-outline btn-sm inline-flex items-center gap-1 text-xs"
+                      >
+                        Unduh
                       </a>
                     )}
                   </div>
@@ -982,32 +1245,40 @@ export default async function DataSayaPage({
             </div>
           </section>
 
-          {/* Ditampilkan ke pegawainya sendiri dengan sengaja: hukuman disiplin
-              MENURUNKAN tukin (Pasal 14), dan orang berhak tahu dasar angka
-              yang dibayarkan kepadanya. Menyembunyikannya cuma memindahkan
-              pertanyaan "kenapa tukin saya turun" ke meja Kasubag TU. */}
-          <section className="card p-4">
-            <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">SK Hukuman Disiplin</h2>
+          <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-[0_2px_12px_rgba(19,65,107,0.06)]">
+            <div className="flex items-center gap-2.5 border-b border-line pb-4">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-red-tint text-red">
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">SK Hukuman Disiplin</h2>
+                <p className="text-[11px] text-muted">Dasar hukum penyesuaian potongan tunjangan kinerja (Pasal 14)</p>
+              </div>
+            </div>
+
             {pegawai.skHukumanDisiplin.length === 0 && (
-              <p className="mt-2 text-sm text-muted">Tidak ada hukuman disiplin yang tercatat.</p>
+              <p className="mt-4 text-xs text-muted italic">Tidak ada catatan hukuman disiplin.</p>
             )}
-            <div className="mt-2 space-y-2">
+
+            <div className="mt-3 divide-y divide-line">
               {pegawai.skHukumanDisiplin.map((sk) => (
-                <div key={sk.id} className="border-t border-line-2 pt-2 text-sm first:border-t-0 first:pt-0">
+                <div key={sk.id} className="py-3 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold text-ink">{sk.jenisHukuman}</span>
-                    <span className="text-xs text-muted">
+                    <span className="font-bold text-ink sm:text-sm">{sk.jenisHukuman}</span>
+                    <span className="chip chip-draft text-xs">
                       {sk.skBelumTerbit ? "SK belum terbit" : (sk.nomorSk ?? "Nomor SK belum diisi")}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs text-muted">
+                  <p className="mt-1 text-xs text-muted">
                     Berlaku {sk.periodeMulaiBulan}/{sk.periodeMulaiTahun}
                     {sk.periodeSelesaiBulan && sk.periodeSelesaiTahun
                       ? ` s.d. ${sk.periodeSelesaiBulan}/${sk.periodeSelesaiTahun}`
                       : " sampai dicabut"}
-                    {sk.kelasJabatanSelamaHukuman !== null && ` • kelas jabatan ${sk.kelasJabatanSelamaHukuman}`}
+                    {sk.kelasJabatanSelamaHukuman !== null && ` • Kelas Jabatan ${sk.kelasJabatanSelamaHukuman}`}
                   </p>
-                  {sk.keterangan && <p className="mt-1 text-xs text-ink-2">{sk.keterangan}</p>}
+                  {sk.keterangan && <p className="mt-1 text-xs italic text-ink-2">&ldquo;{sk.keterangan}&rdquo;</p>}
                 </div>
               ))}
             </div>
@@ -1019,67 +1290,43 @@ export default async function DataSayaPage({
           TAB: BANDING
           ================================================================== */}
       {tabAktif === "banding" && (
-        <div className="mt-6 space-y-6">
-          {/* PENGAJUAN dulu, riwayat sesudahnya. Orang membuka tab ini dengan
-              satu maksud - mengajukan - dan riwayat yang mendahuluinya membuat
-              tombolnya terdorong ke bawah begitu bandingnya sudah beberapa.
-
-              Tertutup secara default: yang datang untuk memantau tidak perlu
-              melewati formulir dulu. */}
-          <details className="card group p-4" open={pegawai.banding.length === 0}>
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-              <span className="text-[14.5px] font-extrabold tracking-tight text-ink">Ajukan banding</span>
-              <span className="btn btn-gold btn-sm group-open:hidden">Buka formulir</span>
-              <span className="hidden text-xs font-semibold text-muted group-open:inline">Tutup</span>
+        <div className="space-y-6">
+          <details
+            className="rounded-2xl border border-line bg-surface shadow-[0_2px_12px_rgba(19,65,107,0.06)] overflow-hidden group"
+            open={pegawai.banding.length === 0}
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-gradient-to-r from-surface to-surface-2/60 p-4 sm:p-5 select-none transition hover:bg-surface-2/80 [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center gap-2.5">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-gold-tint text-gold-deep">
+                  <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </span>
+                <div>
+                  <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Formulir Pengajuan Banding</h2>
+                  <p className="text-[11px] text-muted">Ajukan koreksi jika terdapat data presensi, predikat, atau nominal yang tidak sesuai</p>
+                </div>
+              </div>
+              <span className="btn btn-gold btn-sm group-open:hidden">Buka Formulir</span>
+              <span className="hidden text-xs font-bold text-muted group-open:inline">Tutup Formulir ✕</span>
             </summary>
-            <p className="mt-2 text-xs leading-relaxed text-muted">
-              Ajukan koreksi jika terdapat data atau hasil perhitungan yang tidak sesuai.
-            </p>
-            <div className="mt-3">
+            <div className="p-5 sm:p-6 border-t border-line">
               <BandingForm sasaran={sasaranBanding} />
             </div>
           </details>
 
-          <section className="card p-4">
-            <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Proses banding saya</h2>
-            {pegawai.banding.length === 0 && (
-              <p className="mt-2 text-sm text-muted">
-                Belum pernah mengajukan banding. Yang diajukan lewat formulir di atas muncul di sini beserta
-                tahapannya.
-              </p>
-            )}
-            <div className="mt-2 space-y-3">
-              {pegawai.banding.map((b) => (
-                <div key={b.id} className="border-t border-line-2 pt-3 first:border-t-0 first:pt-0 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-ink-2">
-                      {labelReferensiBanding(b.referensiTipe)} - Periode {b.periodeBulan}/{b.periodeTahun}
-                    </span>
-                  </div>
-                  <BandingStepper status={b.status} />
-                  {b.bagianData && <p className="mt-2 text-xs font-semibold text-ink">{b.bagianData}</p>}
-                  <p className="mt-1 text-xs text-muted">{b.alasan}</p>
-                  {b.usulanPerbaikan && (
-                    <p className="mt-1 text-xs text-ink-2">
-                      <span className="font-semibold">Usulan kamu:</span> {b.usulanPerbaikan}
-                    </p>
-                  )}
-                  {/*
-                    Upload bukti dukung SENGAJA belum ada di sini - mekanisme
-                    penyimpanan file (local disk vs object storage) masih
-                    TODO(confirm), lihat komentar model BuktiDukung di
-                    schema.prisma dan CLAUDE.md. Jangan bikin implementasi
-                    storage sendiri tanpa konfirmasi kebijakan retensi dokumen.
-                  */}
-                  {b.buktiDukung.length === 0 && (
-                    <p className="mt-1 text-xs text-muted/70">
-                      Upload bukti dukung belum tersedia di sistem ini.
-                    </p>
-                  )}
-                </div>
-              ))}
+          <div className="mt-8">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 px-1">
+              <div>
+                <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-biru" />
+                  Pelacakan Status Banding ({pegawai.banding.length})
+                </h2>
+                <p className="text-xs text-muted mt-0.5">Alur pemeriksaan berjenjang transparan dari Satker hingga Biro OSDMA</p>
+              </div>
             </div>
-          </section>
+            <BandingTracker bandings={pegawai.banding} approvalLogs={approvalLogsBanding} />
+          </div>
         </div>
       )}
     </main>

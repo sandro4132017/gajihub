@@ -190,7 +190,7 @@ export async function ambilIsiPanelKabar(
     notifikasi.push({
       id: "rekonsiliasi",
       teks: `${rekonPerluTangani} rekonsiliasi perlu ditangani`,
-      keterangan: "Ada selisih atau sanggahan yang menahan pembayaran.",
+      keterangan: "Ada selisih atau banding yang menahan pembayaran.",
       href: "/ppabp/rekonsiliasi",
       nada: "danger",
     });

@@ -144,6 +144,10 @@ export async function GET(req: NextRequest) {
       // mengabaikan pengingat ini.
       pesanCheckin: pesanCheckin({ tanggalTeks, batasJam, d: daftar }),
       pesanCheckout: pesanCheckout({ tanggalTeks, d: daftar }),
+      daftar: {
+        belumCheckin: daftar.belumCheckin,
+        belumCheckout: daftar.belumCheckout,
+      },
     },
     { headers: { "Cache-Control": "private, no-store" } }
   );

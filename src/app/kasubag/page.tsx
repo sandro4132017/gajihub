@@ -1169,7 +1169,7 @@ export default async function KasubagDashboardPage({
                     href={`/kasubag/banding?satker=${encodeURIComponent(satkerEfektif)}`}
                     className="mt-2 inline-block text-xs font-bold text-biru hover:underline"
                   >
-                    Periksa Sanggahan & Banding &rarr;
+                    Periksa Banding &rarr;
                   </Link>
                 </div>
               </div>

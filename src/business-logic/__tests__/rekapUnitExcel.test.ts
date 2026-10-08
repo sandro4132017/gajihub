@@ -2,11 +2,19 @@ import { describe, it, expect } from "vitest";
 import {
   KOLOM_REKAP_PRESENSI,
   KOLOM_REKAP_TUKIN,
+  KOLOM_REKAP_TUKIN_LENGKAP,
+  KOLOM_RUPIAH_TUKIN,
+  KOLOM_RUPIAH_TUKIN_LENGKAP,
   labelJenisCuti,
   susunRekapPresensiExcel,
   susunRekapTukinExcel,
+  susunRekapTukinLengkapExcel,
+  jenisKepegawaian,
+  selCuti,
+  formatPersenDesimal,
   type BarisRekapPresensi,
   type BarisRekapTukin,
+  type BarisRekapTukinLengkap,
 } from "../rekapUnitExcel";
 
 const presensiKosong: BarisRekapPresensi = {
@@ -171,5 +179,166 @@ describe("susunRekapTukinExcel", () => {
     expect(hasil.header).toHaveLength(KOLOM_REKAP_TUKIN.length);
     expect(hasil.baris[0]).toHaveLength(KOLOM_REKAP_TUKIN.length);
     expect(hasil.total).toHaveLength(KOLOM_REKAP_TUKIN.length);
+  });
+});
+
+const tukinLengkapKosong: BarisRekapTukinLengkap = {
+  nip: "199000100000000008",
+  nama: "Tirta Anggara",
+  golongan: "III/c",
+  kelasJabatan: 9,
+  nominalTukin: 5_079_200,
+  statusPegawai: "PNS",
+  jumlahHariKerja: 22,
+  jumlahHariWfo: 12,
+  jumlahHariWfhWfa: 10,
+  totalMenitTerlambat: 15,
+  jumlahTidakPresensi: 1,
+  jumlahHariAlpha: 0,
+  jumlahHariDinasLuar: 2,
+  ctGugurKandungan1: "",
+  ctGugurKandungan2: "",
+  cutiTahunan: "v",
+  cutiMelahirkan: "",
+  cutiSakitBulan1: "",
+  cutiSakitBulan2: "",
+  cutiSakitBulan3: "",
+  cutiSakitLebih3Bulan: "",
+  ctBesarApKurang1Bulan: "",
+  ctBesarBulan1: "",
+  ctBesarBulan2: "",
+  ctBesarBulan3: "",
+  jumlahHariTugasBelajar: 0,
+  jumlahHariDiklat: 0,
+  jumlahTidakIkutUpacara: 0,
+  jumlahWfoWfh: 22,
+  persenPotongan: 1.15,
+  persenKehadiran: 28.85,
+  nominalKehadiran: 1_465_349,
+  jumlahPotonganKehadiran: 58_411,
+  hasilKerja: "Sesuai Ekspektasi",
+  perilakuKerja: "Sesuai Ekspektasi",
+  capaianKinerja: "Baik",
+  persenKinerja: 70,
+  nominalKinerja: 3_555_440,
+  dibayarkan: 5_020_789,
+  potonganPph: 0,
+  statusPengajuan: "DRAFT",
+  catatanAnomali: null,
+};
+
+describe("susunRekapTukinLengkapExcel", () => {
+  it("menyusun tabel 43 kolom dengan lebar seragam untuk header, baris, dan total", () => {
+    const hasil = susunRekapTukinLengkapExcel([tukinLengkapKosong]);
+    expect(hasil.header).toHaveLength(KOLOM_REKAP_TUKIN_LENGKAP.length);
+    expect(hasil.baris).toHaveLength(1);
+    expect(hasil.baris[0]).toHaveLength(KOLOM_REKAP_TUKIN_LENGKAP.length);
+    expect(hasil.total).toHaveLength(KOLOM_REKAP_TUKIN_LENGKAP.length);
+    expect(hasil.total[1]).toBe("TOTAL");
+  });
+
+  it("mempertahankan NIP pada kolom indeks 2 sebagai string", () => {
+    const hasil = susunRekapTukinLengkapExcel([tukinLengkapKosong]);
+    expect(hasil.baris[0][2]).toBe("199000100000000008");
+    expect(typeof hasil.baris[0][2]).toBe("string");
+  });
+
+  it("menjumlahkan nominal dan kuantitas presensi di baris total", () => {
+    const baris1 = { ...tukinLengkapKosong, nominalTukin: 5_000_000, dibayarkan: 4_500_000, jumlahHariKerja: 20 };
+    const baris2 = { ...tukinLengkapKosong, nip: "198005152010012002", nominalTukin: 6_000_000, dibayarkan: 5_500_000, jumlahHariKerja: 22 };
+    const hasil = susunRekapTukinLengkapExcel([baris1, baris2]);
+
+    const idx = (nama: string) => KOLOM_REKAP_TUKIN_LENGKAP.indexOf(nama as never);
+    expect(hasil.total[idx("Nominal Tukin")]).toBe(11_000_000);
+    expect(hasil.total[idx("Dibayarkan")]).toBe(10_000_000);
+    expect(hasil.total[idx("Hari Kerja")]).toBe(42);
+    // Kolom persen TIDAK dijumlahkan
+    expect(hasil.total[idx("% Pot")]).toBe("");
+    expect(hasil.total[idx("Persentase Kehadiran (30%)")]).toBe("");
+  });
+
+  it("format persen desimal terkonversi dengan simbol %", () => {
+    const baris = { ...tukinLengkapKosong, persenPotongan: 2.5, persenKehadiran: 27.5 };
+    const hasil = susunRekapTukinLengkapExcel([baris]);
+    const idx = (nama: string) => KOLOM_REKAP_TUKIN_LENGKAP.indexOf(nama as never);
+    expect(hasil.baris[0][idx("% Pot")]).toBe("2,5%");
+    expect(hasil.baris[0][idx("Persentase Kehadiran (30%)")]).toBe("27,5%");
+  });
+
+  it("membulatkan nilai desimal rupiah menjadi integer utuh", () => {
+    const baris = {
+      ...tukinLengkapKosong,
+      nominalKehadiran: 1377855.7275,
+      jumlahPotonganKehadiran: 58411.2725,
+      nominalKinerja: 3555439.8,
+      dibayarkan: 4933295.5275,
+    };
+    const hasil = susunRekapTukinLengkapExcel([baris]);
+    const idx = (nama: string) => KOLOM_REKAP_TUKIN_LENGKAP.indexOf(nama as never);
+    expect(hasil.baris[0][idx("Nominal Kehadiran")]).toBe(1377856);
+    expect(hasil.baris[0][idx("Jumlah Potongan Kehadiran")]).toBe(58411);
+    expect(hasil.baris[0][idx("Nominal Kinerja")]).toBe(3555440);
+    expect(hasil.baris[0][idx("Dibayarkan")]).toBe(4933296);
+    expect(hasil.total[idx("Nominal Kehadiran")]).toBe(1377856);
+  });
+
+  it("daftar kosong tetap menghasilkan header dan total", () => {
+    const hasil = susunRekapTukinLengkapExcel([]);
+    expect(hasil.baris).toHaveLength(0);
+    expect(hasil.header).toHaveLength(KOLOM_REKAP_TUKIN_LENGKAP.length);
+    expect(hasil.total[1]).toBe("TOTAL");
+  });
+});
+
+describe("jenisKepegawaian", () => {
+  it("mengenali PNS dari format romawi dengan garis miring", () => {
+    expect(jenisKepegawaian("III/c")).toBe("PNS");
+    expect(jenisKepegawaian("IV/a")).toBe("PNS");
+    expect(jenisKepegawaian("II/b")).toBe("PNS");
+  });
+
+  it("mengenali PPPK dari format angka romawi murni", () => {
+    expect(jenisKepegawaian("IX")).toBe("PPPK");
+    expect(jenisKepegawaian("VII")).toBe("PPPK");
+    expect(jenisKepegawaian("X")).toBe("PPPK");
+  });
+
+  it("mengembalikan null jika tidak dikenal atau kosong", () => {
+    expect(jenisKepegawaian(null)).toBeNull();
+    expect(jenisKepegawaian("")).toBeNull();
+    expect(jenisKepegawaian("HONORER")).toBeNull();
+  });
+});
+
+describe("selCuti", () => {
+  it("mencocokkan cuti gugur kandungan dengan ambang batas 30 hari", () => {
+    expect(selCuti("GUGUR_1", { jenisCutiAktif: "CUTI_SAKIT_GUGUR_KANDUNGAN", bulanCutiKeberapa: 1, jumlahHariCuti: 20 })).toBe("20");
+    expect(selCuti("GUGUR_2", { jenisCutiAktif: "CUTI_SAKIT_GUGUR_KANDUNGAN", bulanCutiKeberapa: 1, jumlahHariCuti: 35 })).toBe("35");
+  });
+
+  it("mencocokkan cuti tahunan", () => {
+    expect(selCuti("TAHUNAN", { jenisCutiAktif: "CUTI_TAHUNAN", bulanCutiKeberapa: 1, jumlahHariCuti: 3 })).toBe("3");
+    expect(selCuti("TAHUNAN", { jenisCutiAktif: "CUTI_TAHUNAN", bulanCutiKeberapa: 1, jumlahHariCuti: 0 })).toBe("v");
+  });
+
+  it("mencocokkan cuti sakit per urutan bulan", () => {
+    expect(selCuti("SAKIT_1", { jenisCutiAktif: "CUTI_SAKIT", bulanCutiKeberapa: 1, jumlahHariCuti: 5 })).toBe("5");
+    expect(selCuti("SAKIT_2", { jenisCutiAktif: "CUTI_SAKIT", bulanCutiKeberapa: 2, jumlahHariCuti: 5 })).toBe("5");
+    expect(selCuti("SAKIT_4", { jenisCutiAktif: "CUTI_SAKIT", bulanCutiKeberapa: 4, jumlahHariCuti: 10 })).toBe("10");
+  });
+
+  it("mengembalikan string kosong jika tidak cocok atau tidak cuti", () => {
+    expect(selCuti("TAHUNAN", null)).toBe("");
+    expect(selCuti("TAHUNAN", { jenisCutiAktif: null, bulanCutiKeberapa: null, jumlahHariCuti: 0 })).toBe("");
+    expect(selCuti("MELAHIRKAN", { jenisCutiAktif: "CUTI_TAHUNAN", bulanCutiKeberapa: 1, jumlahHariCuti: 3 })).toBe("");
+  });
+});
+
+describe("formatPersenDesimal", () => {
+  it("memformat persentase dengan tanda koma dan simbol persen", () => {
+    expect(formatPersenDesimal(0)).toBe("0%");
+    expect(formatPersenDesimal(30)).toBe("30%");
+    expect(formatPersenDesimal(2.5, 2)).toBe("2,5%");
+    expect(formatPersenDesimal(0.08, 2)).toBe("0,08%");
   });
 });

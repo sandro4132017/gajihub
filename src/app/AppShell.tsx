@@ -120,7 +120,7 @@ const MENU_OSDMA = [
   },
   {
     href: "/osdma/banding",
-    label: "Approval Final Banding",
+    label: "Persetujuan Banding",
     Ikon: IoMdCheckboxOutline,
   },
   {
@@ -165,7 +165,7 @@ const MENU_PPABP = [
   ...MENU_UANG_LEMBUR,
   {
     href: "/ppabp/banding",
-    label: "Tembusan Banding",
+    label: "Monitoring Banding",
     Ikon: RiScalesLine,
   },
   {

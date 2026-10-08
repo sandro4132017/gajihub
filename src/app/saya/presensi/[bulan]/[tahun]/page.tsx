@@ -123,7 +123,7 @@ export default async function PresensiSayaPage({
               <p className="mt-1 font-mono text-lg font-extrabold text-ink">{totalTerlambat} mnt</p>
             </div>
             <div className="rounded-xl border border-line bg-surface p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Total pulang cepat</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Total kekurangan jam kerja</p>
               <p className="mt-1 font-mono text-lg font-extrabold text-ink">{totalPulangCepat} mnt</p>
             </div>
             <div className="rounded-xl border border-line bg-surface p-3">
@@ -156,7 +156,7 @@ export default async function PresensiSayaPage({
                   <th className="px-3 py-2.5">Masuk</th>
                   <th className="px-3 py-2.5">Pulang</th>
                   <th className="px-3 py-2.5">Terlambat</th>
-                  <th className="px-3 py-2.5">Pulang cepat</th>
+                  <th className="px-3 py-2.5">Kekurangan jam kerja</th>
                   <th className="px-3 py-2.5">Tinggalkan kantor</th>
                   <th className="px-3 py-2.5">Lembur</th>
                 </tr>

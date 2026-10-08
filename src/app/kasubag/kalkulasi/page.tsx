@@ -11,6 +11,7 @@ import { ambilAksesUnit } from "../access";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../business-logic/tarifTukinPokok";
 import { TARIF_POTONGAN_PASAL_13 } from "../../../business-logic/tukin";
 import { rincianTukinTersimpan } from "../../../business-logic/rincianTukinTersimpan";
+import { selCuti, jenisKepegawaian } from "../../../business-logic/rekapUnitExcel";
 import { LABEL_PREDIKAT } from "../../tukin/predikat-kinerja/predikat";
 import { KalkulasiMassalForm } from "./KalkulasiMassalForm";
 import { PanelKesiapan } from "./PanelKesiapan";
@@ -39,7 +40,9 @@ import { KirimRekapForm } from "../kirim/KirimRekapForm";
 import { VerifikasiTabelPanel } from "../kirim/VerifikasiTabelPanel";
 import { TabelPemeriksaanLembur } from "./TabelPemeriksaanLembur";
 import { TabelPerubahanPegawai } from "./TabelPerubahanPegawai";
+import { PanelTteSptjm } from "./PanelTteSptjm";
 import { HALAMAN } from "../../layoutHalaman";
+import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 
 export const dynamic = "force-dynamic";
 
@@ -114,47 +117,12 @@ function NamaPegawai({
   );
 }
 
-function jenisKepegawaian(golongan: string | null): string | null {
-  if (!golongan) return null;
-  const g = golongan.trim().toUpperCase();
-  if (/^[IVX]+\/[A-E]$/.test(g)) return "PNS";
-  if (/^[IVX]+$/.test(g)) return "PPPK";
-  return null;
-}
-
 function BelumAda({ judul }: { judul: string }) {
   return (
     <span className="text-muted/60" title={judul}>
       -
     </span>
   );
-}
-
-function selCuti(
-  kunci: string,
-  rekap: { jenisCutiAktif: string | null; bulanCutiKeberapa: number | null; jumlahHariCuti: number } | undefined
-): string {
-  if (!rekap?.jenisCutiAktif) return "";
-  const bulan = rekap.bulanCutiKeberapa ?? 1;
-  const jenis = rekap.jenisCutiAktif;
-
-  const cocok =
-    kunci === "GUGUR_1" ? jenis === "CUTI_SAKIT_GUGUR_KANDUNGAN" && rekap.jumlahHariCuti <= 30 :
-    kunci === "GUGUR_2" ? jenis === "CUTI_SAKIT_GUGUR_KANDUNGAN" && rekap.jumlahHariCuti > 30 :
-    kunci === "TAHUNAN" ? jenis === "CUTI_TAHUNAN" :
-    kunci === "MELAHIRKAN" ? jenis === "CUTI_MELAHIRKAN_ANAK_1_2_3" :
-    kunci === "SAKIT_1" ? jenis === "CUTI_SAKIT" && bulan === 1 :
-    kunci === "SAKIT_2" ? jenis === "CUTI_SAKIT" && bulan === 2 :
-    kunci === "SAKIT_3" ? jenis === "CUTI_SAKIT" && bulan === 3 :
-    kunci === "SAKIT_4" ? jenis === "CUTI_SAKIT" && bulan > 3 :
-    kunci === "BESAR_AP_KURANG" ? jenis === "CUTI_BESAR_KURANG_1_BULAN" || jenis === "CUTI_ALASAN_PENTING" :
-    kunci === "BESAR_1" ? jenis === "CUTI_BESAR" && bulan === 1 :
-    kunci === "BESAR_2" ? jenis === "CUTI_BESAR" && bulan === 2 :
-    kunci === "BESAR_3" ? jenis === "CUTI_BESAR" && bulan >= 3 :
-    false;
-
-  if (!cocok) return "";
-  return rekap.jumlahHariCuti > 0 ? String(rekap.jumlahHariCuti) : "v";
 }
 
 export default async function KalkulasiUnitPage({
@@ -286,21 +254,88 @@ export default async function KalkulasiUnitPage({
   // per hari di hulu - dan kalau berbeda berarti rekapnya dihitung sebelum
   // presensinya berubah. Yang dibayar Web Gaji adalah jam di berkas, bukan
   // angka yang tersimpan, jadi selisihnya wajib terlihat SEBELUM dikirim.
-  const lemburHarianPerPegawai = await prisma.presensiHarian.groupBy({
-    by: ["pegawaiId"],
+  const awalPeriodeLembur = new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1));
+  const akhirPeriodeLembur = new Date(Date.UTC(periodeTahun, periodeBulan, 1));
+
+  const [lemburHarianPerPegawai, koreksiLemburRows, hariLiburMap] = await Promise.all([
+    prisma.presensiHarian.groupBy({
+      by: ["pegawaiId"],
+      where: {
+        pegawaiId: { in: pegawaiList.map((p) => p.id) },
+        tanggal: {
+          gte: awalPeriodeLembur,
+          lt: akhirPeriodeLembur,
+        },
+        jamLembur: { gt: 0 },
+      },
+      _sum: { jamLembur: true },
+    }),
+    prisma.koreksiPresensiHarian.findMany({
+      where: {
+        pegawaiId: { in: pegawaiList.map((p) => p.id) },
+        tanggal: {
+          gte: awalPeriodeLembur,
+          lt: akhirPeriodeLembur,
+        },
+        jamLembur: { not: null },
+      },
+      select: {
+        id: true,
+        pegawaiId: true,
+        tanggal: true,
+        jamLembur: true,
+        alasan: true,
+        dikoreksiPada: true,
+        dikoreksiOleh: { select: { nama: true } },
+      },
+      orderBy: { tanggal: "asc" },
+    }),
+    muatHariLiburPeriode(periodeBulan, periodeTahun),
+  ]);
+
+  const presensiLemburRows = await prisma.presensiHarian.findMany({
     where: {
       pegawaiId: { in: pegawaiList.map((p) => p.id) },
       tanggal: {
-        gte: new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1)),
-        lt: new Date(Date.UTC(periodeTahun, periodeBulan, 1)),
+        gte: awalPeriodeLembur,
+        lt: akhirPeriodeLembur,
       },
-      jamLembur: { gt: 0 },
+      OR: [
+        { jamLembur: { gt: 0 } },
+        { tanggal: { in: koreksiLemburRows.map((k) => k.tanggal) } },
+      ],
     },
-    _sum: { jamLembur: true },
+    select: {
+      pegawaiId: true,
+      tanggal: true,
+      jamMasuk: true,
+      jamKeluar: true,
+      jamLembur: true,
+    },
+    orderBy: { tanggal: "asc" },
   });
+
   const petaLemburHarian = new Map(
     lemburHarianPerPegawai.map((g) => [g.pegawaiId, { jam: g._sum.jamLembur ?? 0 }])
   );
+
+  const petaPresensiPerPegawai = new Map<string, typeof presensiLemburRows>();
+  for (const pr of presensiLemburRows) {
+    const list = petaPresensiPerPegawai.get(pr.pegawaiId) ?? [];
+    list.push(pr);
+    petaPresensiPerPegawai.set(pr.pegawaiId, list);
+  }
+
+  const petaKoreksiLemburPerPegawai = new Map<string, typeof koreksiLemburRows>();
+  for (const kr of koreksiLemburRows) {
+    const list = petaKoreksiLemburPerPegawai.get(kr.pegawaiId) ?? [];
+    list.push(kr);
+    petaKoreksiLemburPerPegawai.set(kr.pegawaiId, list);
+  }
+
+  const NAMA_HARI_LEMBUR = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const jamTeksLembur = (d: Date | null | undefined) =>
+    d ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : null;
   // Berapa hari presensi tiap orang pernah dikoreksi manual pada periode ini.
   //
   // Bukan cacat data - justru sebaliknya. Ditampilkan karena yang memeriksa
@@ -361,6 +396,24 @@ export default async function KalkulasiUnitPage({
     satuanKerja: satkerEfektif,
     periodeBulan,
     periodeTahun,
+  });
+
+  const dokumenTteTerbaru = await prisma.dokumenTte.findFirst({
+    where: {
+      satuanKerja: satkerEfektif,
+      periodeBulan,
+      periodeTahun,
+      jenisDokumen: "SPTJM_LEMBUR",
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      status: true,
+      nomorDokumen: true,
+      fileSignedPath: true,
+      signedAt: true,
+      penandatanganNama: true,
+    },
   });
 
   // Pemeriksaan kelengkapan SEBELUM tombol Hitung. Yang dikecualikan sudah
@@ -1210,9 +1263,58 @@ export default async function KalkulasiUnitPage({
       <TabelPemeriksaanLembur
         periodeBulan={periodeBulan}
         periodeTahun={periodeTahun}
+        terkunci={kirimStatus.terkunci}
         baris={pegawaiList.map((p) => {
           const lembur = p.uangLembur[0];
           const harian = petaLemburHarian.get(p.id);
+
+          const daftarPresensi = petaPresensiPerPegawai.get(p.id) ?? [];
+          const daftarKoreksi = petaKoreksiLemburPerPegawai.get(p.id) ?? [];
+          const petaKoreksiTgl = new Map(daftarKoreksi.map((k) => [k.tanggal.toISOString().slice(0, 10), k]));
+          const petaPresensiTgl = new Map(daftarPresensi.map((pr) => [pr.tanggal.toISOString().slice(0, 10), pr]));
+
+          const semuaTanggalIso = Array.from(
+            new Set([...petaPresensiTgl.keys(), ...petaKoreksiTgl.keys()])
+          ).sort();
+
+          const rincianHari = semuaTanggalIso.map((iso) => {
+            const pr = petaPresensiTgl.get(iso);
+            const kr = petaKoreksiTgl.get(iso);
+            const d = pr ? pr.tanggal : kr!.tanggal;
+            const day = d.getUTCDay();
+            const namaHari = NAMA_HARI_LEMBUR[day];
+            const liburKeterangan = hariLiburMap.get(iso);
+            const isHariLibur = day === 0 || day === 6 || !!liburKeterangan;
+            const keteranganHari = liburKeterangan
+              ? liburKeterangan
+              : day === 0 || day === 6
+              ? "Akhir Pekan"
+              : "Hari Kerja";
+
+            const [y, b, h] = iso.split("-");
+            const tanggalTampil = `${namaHari}, ${h}/${b}/${y}`;
+
+            return {
+              tanggalIso: iso,
+              tanggalTampil,
+              isHariLibur,
+              keteranganHari,
+              jamMasuk: jamTeksLembur(pr?.jamMasuk),
+              jamKeluar: jamTeksLembur(pr?.jamKeluar),
+              jamMesin: pr?.jamLembur ?? 0,
+              jamSaatIni: kr?.jamLembur ?? pr?.jamLembur ?? 0,
+              koreksi: kr
+                ? {
+                    id: kr.id,
+                    jamLembur: kr.jamLembur,
+                    alasan: kr.alasan,
+                    dikoreksiOlehNama: kr.dikoreksiOleh.nama,
+                    dikoreksiPada: kr.dikoreksiPada.toISOString(),
+                  }
+                : null,
+            };
+          });
+
           return {
             pegawaiId: p.id,
             nip: p.nip,
@@ -1221,6 +1323,7 @@ export default async function KalkulasiUnitPage({
             jamHariLibur: lembur?.jamLemburHariLibur ?? null,
             totalTersimpan: lembur?.totalJamLembur ?? null,
             jamHarian: harian?.jam ?? 0,
+            rincianHari,
           };
         })}
       />
@@ -1241,10 +1344,26 @@ export default async function KalkulasiUnitPage({
       <section id="kirim" className="card mt-6 border-l-2 border-l-navy">
         <div className="border-b border-line-2 px-4 py-3 sm:px-5">
           <h2 className="text-sm font-bold text-ink">Periksa &amp; kirim rekap</h2>
-          {/* Akibatnya saja, BUKAN instruksinya - urutan kerjanya sudah
-              dikatakan nomor 1 & 2 dan subjudul tiap kolom. Kalimat yang
-              mengulang tiga kali berhenti dibaca di ketiganya. */}
           <p className="mt-0.5 text-xs text-muted">Pengiriman mengunci periode ini.</p>
+        </div>
+
+        {/* Panel Tanda Tangan Elektronik (TTE) BSrE untuk Dokumen SPTJM */}
+        <div className="border-b border-line-2 px-4 py-3 sm:px-5">
+          <PanelTteSptjm
+            periodeBulan={periodeBulan}
+            periodeTahun={periodeTahun}
+            satuanKerja={satkerEfektif}
+            dokumenTteTerbaru={
+              dokumenTteTerbaru
+                ? {
+                    ...dokumenTteTerbaru,
+                    signedAt: dokumenTteTerbaru.signedAt
+                      ? dokumenTteTerbaru.signedAt.toISOString()
+                      : null,
+                  }
+                : null
+            }
+          />
         </div>
 
         {/* Pemisah vertikal HANYA dari lg ke atas. Di bawah itu keduanya

@@ -1,5 +1,8 @@
 "use server";
 
+import { writeFile, mkdir } from "node:fs/promises";
+import path from "node:path";
+import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../auth/getSessionAccount";
@@ -51,6 +54,10 @@ function cariBaris(referensiTipe: ReferensiBanding, referensiId: string): Promis
   }
 }
 
+function sanitasiNamaBerkas(nama: string): string {
+  return nama.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
 /**
  * Ajukan banding atas kalkulasi Tukin/Uang Makan/Uang Lembur milik sendiri
  * (role matrix PEGAWAI - lihat CLAUDE.md). Sama seperti action approval,
@@ -87,6 +94,8 @@ export async function ajukanBandingAction(
     const alasan = String(formData.get("alasan") ?? "").trim();
     const bagianData = String(formData.get("bagianData") ?? "").trim();
     const usulanPerbaikan = String(formData.get("usulanPerbaikan") ?? "").trim();
+    const lampiranRaw = formData.get("lampiran");
+    const lampiran = lampiranRaw instanceof File && lampiranRaw.size > 0 ? lampiranRaw : null;
 
     if (!isReferensiBanding(referensiTipeRaw)) {
       return { error: "Jenis banding tidak valid." };
@@ -153,6 +162,42 @@ export async function ajukanBandingAction(
       return { error: "Masih ada banding untuk data yang sama dan belum diputuskan." };
     }
 
+    // Pemrosesan berkas lampiran bukti dukung (jika disertakan)
+    let savedFileUrl: string | null = null;
+    let savedFileBufferLength: number | null = null;
+    let savedOriginalFileName: string | null = null;
+
+    if (lampiran) {
+      const MAKS_UKURAN_LAMPIRAN = 2 * 1024 * 1024; // 2 MB
+      if (lampiran.size > MAKS_UKURAN_LAMPIRAN) {
+        return { error: "Ukuran berkas lampiran melebihi batas maksimal 2 MB." };
+      }
+
+      const ekstensi = path.extname(lampiran.name).toLowerCase();
+      const ekstensiDiizinkan = [".pdf", ".png", ".jpg", ".jpeg", ".webp"];
+      if (!ekstensiDiizinkan.includes(ekstensi)) {
+        return {
+          error:
+            "Format berkas lampiran tidak didukung. Harap unggah berkas PDF atau gambar (PNG, JPG, WebP).",
+        };
+      }
+
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "bukti-dukung");
+      await mkdir(uploadDir, { recursive: true });
+
+      const namaBersih = sanitasiNamaBerkas(lampiran.name);
+      const randomId = crypto.randomBytes(4).toString("hex");
+      const namaFileSimpan = `${Date.now()}_${randomId}_${namaBersih}`;
+      const targetPath = path.join(uploadDir, namaFileSimpan);
+
+      const buffer = Buffer.from(await lampiran.arrayBuffer());
+      await writeFile(targetPath, buffer);
+
+      savedFileUrl = `/uploads/bukti-dukung/${namaFileSimpan}`;
+      savedFileBufferLength = buffer.length;
+      savedOriginalFileName = lampiran.name;
+    }
+
     // ReconciliationStatus SANGGAH menandai "periode ini sedang dipersoalkan".
     //
     // DATA_PEGAWAI SENGAJA TIDAK ikut menandainya: jabatan dan kelas jabatan
@@ -165,7 +210,7 @@ export async function ajukanBandingAction(
     const tandaiSanggah = referensiTipeRaw !== "DATA_PEGAWAI";
 
     await prisma.$transaction(async (tx) => {
-      await tx.banding.create({
+      const bandingBaru = await tx.banding.create({
         data: {
           pegawaiId: pegawai.id,
           periodeBulan: baris.periodeBulan,
@@ -178,6 +223,39 @@ export async function ajukanBandingAction(
           usulanPerbaikan: usulanPerbaikan || null,
         },
       });
+
+      if (savedFileUrl && savedOriginalFileName) {
+        let jenisDokumen = "LAINNYA";
+        const bagianLower = (bagianData || "").toLowerCase();
+        const namaLower = savedOriginalFileName.toLowerCase();
+        if (
+          referensiTipeRaw === "DATA_PEGAWAI" ||
+          bagianLower.includes("sk") ||
+          bagianLower.includes("grade") ||
+          namaLower.includes("sk")
+        ) {
+          jenisDokumen = "SK";
+        } else if (namaLower.includes("sakit") || bagianLower.includes("sakit")) {
+          jenisDokumen = "SURAT_SAKIT";
+        } else if (
+          namaLower.includes("cuti") ||
+          namaLower.includes("izin") ||
+          bagianLower.includes("cuti")
+        ) {
+          jenisDokumen = "SURAT_CUTI_IZIN";
+        }
+
+        await tx.buktiDukung.create({
+          data: {
+            bandingId: bandingBaru.id,
+            jenisDokumen,
+            namaFile: savedOriginalFileName,
+            fileUrl: savedFileUrl,
+            ukuranBita: savedFileBufferLength,
+            diunggahOlehId: user.id,
+          },
+        });
+      }
 
       if (!tandaiSanggah) return;
       await tx.reconciliationStatus.upsert({

@@ -407,8 +407,7 @@ export default async function ExportAdkPage({
       {totalApproved === 0 && (
         <div className="card mt-4 border-l-4 border-l-gold p-4">
           <p className="text-sm font-bold text-ink">
-            Semua file untuk periode {NAMA_BULAN[Number(periodeBulan) - 1]}{" "}
-            {periodeTahun} akan KOSONG
+            ADK {NAMA_BULAN[Number(periodeBulan) - 1]} {periodeTahun} belum tersedia
           </p>
           {totalBelumApproved === 0 ? (
             <p className="mt-1 text-sm text-muted">
@@ -420,26 +419,16 @@ export default async function ExportAdkPage({
               >
                 Kalkulasi
               </Link>
-              , lalu Kasubag TU menekan <strong>Kirim &amp; kunci</strong>, baru
-              filenya ada isinya.
+              , lalu Kasubag TU menekan <strong>Kirim &amp; kunci</strong>.
             </p>
           ) : (
             <>
               <p className="mt-1 text-sm text-muted">
-                Kalkulasinya <strong>sudah ada</strong> (
-                {tukinPeriode.length + tukinDraft} Tukin, {umIkut + umDraft}{" "}
-                Uang Makan) tapi{" "}
-                <strong>belum ada unit yang mengirimnya</strong>. ADK sengaja
-                hanya memuat unit yang rekapnya sudah dikirim &amp; dikunci
-                Kasubag TU - angka yang unitnya belum memeriksa tidak boleh
-                sampai ke Web Gaji, dan itu bukan sesuatu yang bisa dilewati
-                dari halaman ini.
+                Belum ada unit yang mengirim dan mengunci rekap. ADK hanya
+                tersedia untuk unit yang sudah menyelesaikan proses tersebut.
               </p>
               <p className="mt-2 text-sm text-muted">
-                Kasubag TU tiap unit yang menekan{" "}
-                <strong>Kirim &amp; kunci</strong> di halaman Kalkulasi Unit -
-                papan progres di bawah memperlihatkan unit mana yang belum.
-                Angkanya bisa diperiksa dulu di{" "}
+                Progres pengiriman dapat diperiksa di{" "}
                 <Link
                   href={`/tukin?${query}`}
                   className="font-semibold text-teal-deep underline"
@@ -472,7 +461,7 @@ export default async function ExportAdkPage({
       )}
 
       <p className="mt-6 text-xs font-bold uppercase tracking-wide text-muted">
-        Berkas siap diunduh
+        Export Dokumen ADK
       </p>
       <div className="card mt-2 border-l-4 border-l-navy p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

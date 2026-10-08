@@ -660,6 +660,8 @@ model User {
   aksesSatkerDiberikan       AksesSatkerTambahan[]   @relation("AksesSatkerDiberikanOleh")
   skGradeDicatat             SkGrade[]               @relation("SkGradeDicatatOleh")
   pengecualianDitandai       PengecualianPegawai[]   @relation("PengecualianDitandaiOleh")
+  dokumenTteDitandatangani   DokumenTte[]            @relation("DokumenTtePenandatangan")
+  logGagalTte                LogGagalTte[]           @relation("LogGagalTteUser")
 
   @@index([role])
   @@index([satuanKerja])
@@ -1772,3 +1774,83 @@ model PengecualianPegawai {
   @@index([periodeBulan, periodeTahun])
   @@map("pengecualian_pegawai")
 }
+
+// ---------------------------------------------------------------------------
+// TTE BSrE - PENCATATAN DOKUMEN TTE & AUDIT KEGAGALAN
+// Sesuai 11 Kriteria Integrasi Sistem dengan BSrE BSSN (Kriteria IX & Pedoman Teknis)
+// ---------------------------------------------------------------------------
+
+enum StatusDokumenTte {
+  DRAFT
+  MENUNGGU_TTE
+  TERTANDATANGANI
+  GAGAL
+}
+
+model DokumenTte {
+  id String @id @default(uuid())
+
+  // Jenis Dokumen: SPTJM_LEMBUR, SPTJM_TUKIN, SPTJM_UANG_MAKAN, dll
+  jenisDokumen String @map("jenis_dokumen")
+  nomorDokumen String? @map("nomor_dokumen")
+  judulDokumen String @map("judul_dokumen")
+
+  // Periode terkait dokumen
+  periodeBulan Int @map("periode_bulan")
+  periodeTahun Int @map("periode_tahun")
+  satuanKerja  String @map("satuan_kerja")
+
+  status StatusDokumenTte @default(DRAFT)
+
+  // File PDF (tersimpan di server / storage lokal)
+  fileDraftPath  String? @map("file_draft_path")
+  fileSignedPath String? @map("file_signed_path")
+
+  // Metadata BSrE setelah penandatanganan sukses
+  idDokumenBsre String?   @map("id_dokumen_bsre")
+  signedAt      DateTime? @map("signed_at")
+  signingTimeMs Int?      @map("signing_time_ms")
+
+  // Data Penandatangan (User yang melakukan TTE)
+  penandatanganId String? @map("penandatangan_id")
+  penandatangan   User?   @relation("DokumenTtePenandatangan", fields: [penandatanganId], references: [id])
+  penandatanganNip String? @map("penandatangan_nip")
+  penandatanganNama String? @map("penandatangan_nama")
+  penandatanganJabatan String? @map("penandatangan_jabatan")
+
+  // Log kegagalan jika ada
+  logKegagalan LogGagalTte[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([jenisDokumen, periodeBulan, periodeTahun])
+  @@index([satuanKerja, periodeBulan, periodeTahun])
+  @@index([status])
+  @@map("dokumen_tte")
+}
+
+model LogGagalTte {
+  id String @id @default(uuid())
+
+  dokumenTteId String?     @map("dokumen_tte_id")
+  dokumenTte   DokumenTte? @relation(fields: [dokumenTteId], references: [id], onDelete: Cascade)
+
+  // Pengguna yang mencoba menandatangani
+  userId String? @map("user_id")
+  user   User?   @relation("LogGagalTteUser", fields: [userId], references: [id])
+  nip    String
+
+  // Detail Error dari respon API BSrE (Kriteria IX: mencatat failure response resmi)
+  // PERINGATAN KERAS: JANGAN PERNAH MENYIMPAN PASSPHRASE DI SINI ATAU DI MANA PUN!
+  statusCode    Int?    @map("status_code")
+  pesanError    String  @map("pesan_error")
+  kategoriError String? @map("kategori_error") // misal: PASSPHRASE_SALAH, SERTIFIKAT_EXPIRED, NETWORK_TIMEOUT, dll
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([dokumenTteId])
+  @@index([nip, createdAt])
+  @@map("log_gagal_tte")
+}
+

@@ -342,9 +342,15 @@ export function kejadianTidakPresensiHari(input: {
   dikecualikanKendala: boolean;
   /** Petugas absensi sudah memperbaiki jamnya berdasarkan bukti pegawai. */
   dikoreksiManual: boolean;
+  /** Ketukan tidak wajar (mustahil kedatangan/kepulangan/ketukan ganda) - ditagih 1 kejadian ayat (2). */
+  tapTidakWajar?: boolean;
 }): number {
   if (!input.wajibPresensi || input.hariLibur) return 0;
   if (input.dikecualikanKendala) return 0;
+
+  if (input.tapTidakWajar) {
+    return 1;
+  }
 
   // Per KETUKAN, bukan per hari - ayat (2) eksplisit "setiap kali".
   let kejadian = (input.jamMasukMenit === null ? 1 : 0) + (input.jamKeluarMenit === null ? 1 : 0);
@@ -362,4 +368,43 @@ export function kejadianTidakPresensiHari(input: {
 export function jamDariMenit(menit: number | null): string | null {
   if (menit === null) return null;
   return `${String(Math.floor(menit / 60)).padStart(2, "0")}:${String(menit % 60).padStart(2, "0")}`;
+}
+
+/**
+ * Menyusun keterangan tanggal dan jenis ketukan yang hilang (masuk / pulang / keduanya / tap tidak wajar)
+ * untuk ditampilkan pada rincian potongan Pasal 13 ayat (2).
+ */
+export function keteranganTidakPresensiHari(input: {
+  tanggal: Date;
+  wajibPresensi: boolean;
+  hariLibur: boolean;
+  jamMasukMenit: number | null;
+  jamKeluarMenit: number | null;
+  dikecualikanKendala: boolean;
+  dikoreksiManual: boolean;
+  tapTidakWajar?: boolean;
+}): string | null {
+  if (!input.wajibPresensi || input.hariLibur || input.dikecualikanKendala) return null;
+
+  const tglTeks = `${String(input.tanggal.getUTCDate()).padStart(2, "0")}/${String(
+    input.tanggal.getUTCMonth() + 1
+  ).padStart(2, "0")}`;
+
+  if (input.tapTidakWajar) {
+    return `${tglTeks} (tap tidak wajar)`;
+  }
+
+  const masukKosong = input.jamMasukMenit === null;
+  const pulangKosong =
+    input.jamKeluarMenit === null || (!input.dikoreksiManual && input.jamKeluarMenit === JAM_TAP_PULANG_HILANG);
+
+  if (!masukKosong && !pulangKosong) return null;
+
+  if (masukKosong && pulangKosong) {
+    return `${tglTeks} (masuk & pulang)`;
+  }
+  if (masukKosong) {
+    return `${tglTeks} (masuk)`;
+  }
+  return `${tglTeks} (pulang)`;
 }

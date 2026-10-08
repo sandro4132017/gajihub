@@ -20,12 +20,15 @@ export function responseRekapExcel({
   namaSheet,
   namaFile,
   kolomTeks = [1],
+  kolomRupiah = [],
 }: {
   rekap: HasilRekapExcel;
   namaSheet: string;
   namaFile: string;
   /** Indeks kolom yang dipaksa bertipe teks. Bawaannya kolom NIP. */
   kolomTeks?: number[];
+  /** Indeks kolom mata uang yang diformat dengan format Rupiah di Excel. */
+  kolomRupiah?: number[];
 }): Response {
   const ws = utils.aoa_to_sheet([[...rekap.header], ...rekap.baris, rekap.total]);
 
@@ -37,14 +40,24 @@ export function responseRekapExcel({
   // satu. Jebakan yang sama sudah menggigit di basis data gaji (46 baris
   // ber-NIP `...000`) dan di ADK harian.
   //
-  // Baris 0 header, jadi data mulai baris 1.
-  for (let r = 1; r <= rekap.baris.length; r++) {
+  // Baris 0 header, data mulai baris 1 sampai baris total (rekap.baris.length + 1).
+  const totalBaris = rekap.baris.length + 1;
+  for (let r = 1; r <= totalBaris; r++) {
     for (const c of kolomTeks) {
       const alamat = utils.encode_cell({ r, c });
       const sel = ws[alamat];
       if (sel && sel.v !== undefined && sel.v !== "") {
         sel.t = "s";
         sel.v = String(sel.v);
+      }
+    }
+
+    for (const c of kolomRupiah) {
+      const alamat = utils.encode_cell({ r, c });
+      const sel = ws[alamat];
+      if (sel && typeof sel.v === "number") {
+        sel.v = Math.round(sel.v);
+        sel.z = '"Rp "#,##0;\\-"Rp "#,##0;"Rp "0';
       }
     }
   }
