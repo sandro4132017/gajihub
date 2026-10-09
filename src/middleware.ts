@@ -18,7 +18,41 @@ import { LANDING_ROLE } from "./auth/roleAktif";
  */
 export const RUTE_MESIN = ["/api/pengingat-absen"] as const;
 
+function terapkanHeaderKeamanan(res: NextResponse): NextResponse {
+  res.headers.set(
+    "Strict-Transport-Security",
+    "max-age=31536000; includeSubDomains; preload"
+  );
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  return res;
+}
+
 export async function middleware(request: NextRequest) {
+  // PENGAMANAN LAPIS DEPAN: Langsung drop URL scanning / fuzzing payload (baik unencoded maupun encoded)
+  const rawUrl = request.url.toLowerCase();
+  let decodedUrl = rawUrl;
+  try {
+    decodedUrl = decodeURIComponent(rawUrl).toLowerCase();
+  } catch {
+    // Malformed percent-encoding adalah ciri khas fuzzing/scanner
+    return terapkanHeaderKeamanan(new NextResponse("Bad Request", { status: 400 }));
+  }
+
+  const payloadMencurigakan =
+    rawUrl.includes("<script") ||
+    decodedUrl.includes("<script") ||
+    decodedUrl.includes("union select") ||
+    decodedUrl.includes("etc/passwd") ||
+    decodedUrl.includes("169.254.169.254") ||
+    decodedUrl.includes("metadata.google.internal");
+
+  if (payloadMencurigakan) {
+    return terapkanHeaderKeamanan(new NextResponse("Bad Request", { status: 400 }));
+  }
+
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const session = token ? await verifikasiTokenSesi(token) : null;
   const path = request.nextUrl.pathname;
@@ -28,12 +62,17 @@ export async function middleware(request: NextRequest) {
   const isRuteMesin = (RUTE_MESIN as readonly string[]).includes(path);
 
   if (!session && !isLoginPage && !isRuteSso && !isRuteMesin) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return terapkanHeaderKeamanan(
+      NextResponse.redirect(new URL("/login", request.url))
+    );
   }
   if (session && isLoginPage) {
-    return NextResponse.redirect(new URL(LANDING_ROLE[session.role], request.url));
+    return terapkanHeaderKeamanan(
+      NextResponse.redirect(new URL(LANDING_ROLE[session.role], request.url))
+    );
   }
-  return NextResponse.next();
+
+  return terapkanHeaderKeamanan(NextResponse.next());
 }
 
 export const config = {

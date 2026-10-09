@@ -9,37 +9,21 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-09-28** - **daftar perubahan data pegawai, gerbang
-verifikasi, dan tombol sinkronisasi**. Tiga hal yang saling menyambung:
+Terakhir diperbarui: **2026-10-09** - **integrasi TTE BSrE (SPTJM Lembur), audit Agent OS Bootstrap, dan penguatan keamanan**:
 
-1. **Sinkronisasi pegawai tidak lagi cuma lewat terminal.** `/admin/sistem`
-   dapat tombol dua langkah (periksa -> terapkan); tombol "Terapkan" belum ada
-   sampai pratinjaunya tampil. Logikanya dipindah ke `src/jobs/sinkronPegawaiSiap.ts`
-   supaya dipakai bareng CLI - sebelumnya `importPegawaiSiap.ts` memanggil
-   `main()` di baris teratas, jadi meng-IMPOR-nya saja menjalankan sinkronisasi
-   5.078 pegawai.
-2. **Perubahan kelas jabatan ternyata TIDAK PERNAH terdeteksi.** Sinkronisasi
-   cuma membandingkan satuan kerja dan status. Padahal seluruh tarif Tukin
-   pokok diturunkan dari kelas jabatan - kelas bergeser dari 9 ke 10 (selisih
-   Rp 900.000/bulan) tanpa satu pun kolom lain berubah, dan tidak ada yang
-   tahu. Sekarang ikut dideteksi, bersama jabatan.
-3. **Daftar Perubahan Data Pegawai** (tabel `perubahan_data_pegawai`) -
-   perubahan tidak lagi menguap sesudah diterapkan. Ia jadi tabel keempat yang
-   WAJIB dicentang sebelum rekap dikirim ke PPABP, dan `perluHitungUlang()`
-   sekarang ikut menandai "data kepegawaian berubah". Polanya dari sharing
-   session BOT Gaji & Tukin Kemenkeu (23 Sep 2026): di sana perubahan
-   kepegawaian jadi **dokumen tersendiri yang diuji** bersama daftar gaji,
-   bukan sekadar disinkronkan diam-diam.
-
-**Pemicunya nyata**: 24 Sep 2026 sinkronisasi memindahkan **21 pegawai antar
-unit**, satu di antaranya masuk Biro Keuangan - unit yang Juli & Agustusnya
-sudah dikirim & dikunci. Karena scoping satker dibaca hidup, seluruh riwayat
-pembayaran orang itu ikut pindah.
-
-Selain itu: kartu "Periksa & kirim" dilebur jadi satu (dua kolom), ikon
-diseragamkan ke `react-icons`, font pindah ke `next/font` (di-host sendiri -
-sebelumnya `@import` ke Google Fonts, yang jatuh diam-diam ke Segoe UI di
-jaringan VPN), dan skill baru **`gajihub-laws-of-ux`**. Test 438 -> **945**.
+1. **Integrasi TTE BSrE BSSN (Esign Client Service v2.2.2)**:
+   - Terhubung langsung ke Esign Client (`192.168.221.11`).
+   - Kepatuhan 11 Kriteria Integrasi BSrE: Passphrase HANYA di memori saat fetch (zero persistence, `autocomplete="off"`, Kriteria V & VIII), audit log kegagalan resmi di `log_gagal_tte` (Kriteria IX), dan footer resmi BSrE pada PDF SPTJM (Kriteria XI).
+   - Pengujian end-to-end penandatanganan dan verifikasi berhasil (status VALID, signer Hantek Production).
+   - Model database: `DokumenTte` dan `LogGagalTte`.
+2. **Koreksi Jam Lembur Harian & Tracker Banding**:
+   - Koreksi jam lembur harian Kasubag TU dengan validasi bilangan bulat 0-24 jam & alasan minimal 10 karakter (SPL).
+   - Tracker status banding kehadiran dan format cetak lembur Excel.
+3. **Agent OS Bootstrap & Penguatan Keamanan**:
+   - 4 Global skills (`task-graph`, `autonomous-decision`, `self-improve`, `hygiene-sweep`) terhubung via junction di `$HOME\.claude\skills`.
+   - Skill baru: `gajihub-tte-bsre` untuk panduan integrasi dan kepatuhan TTE.
+   - Hook `stop.mjs` diperkuat dengan deteksi kebocoran kredensial BSrE (`ESIGN_API_PASS`), private key sertifikat, dan passphrase.
+   - Total test suite: **1.049 passed** (63 test files).
 
 > **`.claude/` ada di `.gitignore` (baris 41).** Sepuluh skill lama selamat
 > karena sudah terlacak duluan; `gajihub-laws-of-ux` BELUM - perlu

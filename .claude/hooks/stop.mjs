@@ -77,6 +77,10 @@ const polaRahasia = [
   [/NACO_CLIENT_SECRET\s*=\s*["']?\S+/i, "NACO_CLIENT_SECRET"],
   [/(SIAP|EPRESENSI)_PASSWORD\s*=\s*["']?\S+/i, "password database sumber"],
   [/SESSION_SECRET\s*=\s*["']?\S{8,}/i, "SESSION_SECRET"],
+  [/ESIGN_API_PASS\s*=\s*["']?\S+/i, "ESIGN_API_PASS (kredensial API BSrE)"],
+  [/DEV_AUTH_PASS\s*=\s*["']?\S+/i, "DEV_AUTH_PASS (password testing dev)"],
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----/i, "private key sertifikat"],
+  [/Bsre\d{4}\.#!/i, "passphrase dummy BSrE"],
 ];
 const rahasia = polaRahasia.filter(([pola]) => pola.test(isi)).map(([, nama]) => nama);
 

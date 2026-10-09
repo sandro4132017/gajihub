@@ -29,7 +29,11 @@ public/uploads/*
 
 !prisma/migrations/**/*.sql
 
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/global-skills/
+!.claude/hooks/
+!.claude/settings.json
 
 # NIP asli akun demo. Selama password masih sama dengan NIP, isinya
 # setara KREDENSIAL - bukan sekadar identitas. Repo ini publik.

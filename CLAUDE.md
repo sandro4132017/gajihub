@@ -29,6 +29,7 @@ sudah 5.189 baris - **verbatim, nol baris hilang**, diverifikasi dengan diff).
 | Approval berjenjang, `ApprovalLog`, setujui semua, hitung ulang | `gajihub-approval-siklus` |
 | Tabel, filter, dropdown, warna, sidebar, paginasi, periode default | `gajihub-ui-konvensi` |
 | Menambah/mengubah apa pun yang DILIHAT orang: halaman, tabel, menu, peringatan, gerbang, konfirmasi | `gajihub-laws-of-ux` |
+| TTE BSrE, tanda tangan digital, SPTJM, Esign Client, sertifikat elektronik | `gajihub-tte-bsre` |
 | Deploy, VPS, pm2, nginx, migrasi, SSO Naco, cara akses dari luar | `gajihub-akses-sso-deploy` |
 
 Skill lintas-proyek (`~/.claude/skills/`, isinya di `.claude/global-skills/`):
@@ -101,6 +102,7 @@ Perintah: `npm test` · `npm run typecheck` · `npm run build` ·
   Perbaiki kodenya, jangan menyesuaikan kutipannya supaya cocok.
 - **JANGAN `npm run build` selagi `npm run dev` jalan** - keduanya menulis ke
   `.next` yang sama, dan hasilnya **404 pada route yang file-nya jelas ada**.
+- **Passphrase TTE BSrE DILARANG disimpan** di database, sesi, localStorage, cookie, maupun file log. Form wajib `autocomplete="off"`, passphrase hanya di memori saat fetch, kegagalan dicatat ke `log_gagal_tte` tanpa passphrase (Kriteria BSrE V, VIII, IX).
 - Repo ini **PUBLIK** dan pemiliknya akun orang lain; user cuma kolaborator.
 - Dari e-Presensi diambil **fakta** (tanggal, status, jam) - **tidak pernah**
   angka potongannya.

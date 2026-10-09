@@ -85,15 +85,17 @@ export function PanelTteSptjm({
       <ModalPassphraseTte
         terbuka={modalTerbuka}
         onTutup={() => setModalTerbuka(false)}
+        jenisDokumen="SPTJM_LEMBUR"
         periodeBulan={periodeBulan}
         periodeTahun={periodeTahun}
         satuanKerja={satuanKerja}
+        defaultNomorDokumen={dokumen?.nomorDokumen || undefined}
         onSukses={(res) => {
           if (res.downloadUrl) {
             setDokumen({
               id: res.dokumenId || "new",
               status: "TERTANDATANGANI",
-              nomorDokumen: null,
+              nomorDokumen: res.nomorDokumen || null,
               fileSignedPath: res.downloadUrl,
               signedAt: new Date().toISOString(),
               penandatanganNama: "Kasubag Tata Usaha",

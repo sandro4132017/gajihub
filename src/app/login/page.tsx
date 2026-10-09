@@ -35,50 +35,35 @@ export default async function LoginPage({
             Perhitungan Tunjangan Kinerja, Uang Makan, dan Uang Lembur - dari Presensi sampai ADK
           </p>
 
-          {/* Hasil percobaan SSO (kalau ada) muncul di ATAS pilihan masuk -
-              kalau ditaruh di bawah, pesannya tidak terlihat waktu orang
-              langsung mencoba lagi. */}
+          {/* Hasil percobaan SSO (kalau ada) muncul di ATAS pilihan masuk */}
           <PesanSso kode={sso} pesan={pesan} />
 
-          {adaSso && (
-            <div className="mt-7">
-              {/*
-                WAJIB <a> BIASA, JANGAN <Link> DARI next/link.
+          {/* JALUR UTAMA: SSO NACO (AKUN SIAP ID) */}
+          <div className="mt-7">
+            <a
+              href="/login/sso"
+              className="btn btn-primary flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base shadow-sm transition hover:shadow-md"
+            >
+              <svg className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Masuk dengan Akun SIAP ID
+            </a>
+            <p className="mt-3 text-center text-xs text-muted leading-relaxed">
+              Autentikasi terenkripsi melalui Single Sign-On (SSO) resmi Kementerian Ketenagakerjaan.
+            </p>
+          </div>
 
-                <Link> menyulap kliknya jadi navigasi sisi-klien: Next
-                mengambil rutenya lewat fetch() (alamatnya berimbuhan
-                `?_rsc=...`), lalu browser mengikuti redirect 307 kita ke
-                account.kemnaker.go.id sebagai permintaan LINTAS-ORIGIN -
-                dan diblokir CORS:
-
-                  "Response to preflight request doesn't pass access control
-                   check: No 'Access-Control-Allow-Origin' header"
-
-                Naco memang tidak akan pernah mengirim header CORS; halaman
-                otorisasi OAuth ditujukan untuk perpindahan halaman, bukan
-                fetch. <a> polos membuat browser berpindah di tingkat atas,
-                sehingga redirect lintas-origin sah dan CORS tidak berlaku.
-
-                Sekaligus menepati janji "jalan tanpa JavaScript" - <Link>
-                tidak pernah benar-benar menepatinya di sini.
-              */}
-              <a href="/login/sso" className="btn btn-primary w-full rounded-xl py-3.5 text-base">
-                Masuk dengan Akun SIAP ID
-              </a>
-              <div className="mt-6 flex items-center gap-3">
-                <span className="h-px flex-1 bg-line" />
-                <span className="text-xs font-semibold text-muted">atau NIP</span>
-                <span className="h-px flex-1 bg-line" />
+          {/* KHUSUS PENGUJIAN / QA: Form Login Dev (Hanya aktif jika DEV_AUTH_USER terisi di .env) */}
+          {Boolean(process.env.DEV_AUTH_USER || process.env.ALLOW_NIP_LOGIN === "true") && (
+            <div className="mt-8 border-t border-line pt-6">
+              <div className="mb-4 rounded-lg bg-teal-tint/60 p-2.5 text-center text-[11px] font-semibold text-navy">
+                Akses Pengujian (Akun Dev / QA)
               </div>
+              <LoginForm />
             </div>
           )}
 
-          <div className={adaSso ? "mt-5" : "mt-7"}>
-            <LoginForm />
-          </div>
-
-          {/* Baris inilah yang menjawab keraguan soal alamat tadi, dan
-              harganya cuma satu baris. */}
           <p className="mt-8 text-center text-xs text-muted">Kementerian Ketenagakerjaan Republik Indonesia</p>
         </div>
         </div>

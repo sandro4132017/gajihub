@@ -27,25 +27,36 @@ export async function loginAction(
   _state: LoginFormState,
   formData: FormData
 ): Promise<LoginFormState> {
-  const nip = String(formData.get("nip") ?? "").trim();
-  const password = String(formData.get("password") ?? "").trim();
+  const inputUsername = String(formData.get("username") ?? formData.get("nip") ?? "").trim();
+  const inputPassword = String(formData.get("password") ?? "").trim();
 
-  if (!nip || !password) {
-    return { error: "NIP dan password wajib diisi." };
-  }
-  if (password !== nip) {
-    return { error: "NIP atau password salah." };
+  if (!inputUsername || !inputPassword) {
+    return { error: "Username dan password wajib diisi." };
   }
 
-  const user = await prisma.user.findUnique({ where: { nip } });
+  const devUser = process.env.DEV_AUTH_USER?.trim();
+  const devPass = process.env.DEV_AUTH_PASS?.trim();
+
+  // Verifikasi kredensial akun khusus dev dari .env
+  const isDevLogin = Boolean(devUser && devPass && inputUsername === devUser && inputPassword === devPass);
+
+  if (!isDevLogin) {
+    return {
+      error:
+        "Username atau password salah. (Login umum wajib menggunakan Akun SIAP ID / SSO Kemnaker).",
+    };
+  }
+
+  // NIP target untuk akun pengujian (default: Alpha Sandro Adithyaswara)
+  const targetNip = process.env.DEV_AUTH_NIP?.trim() || "198703232015031002";
+
+  const user = await prisma.user.findUnique({ where: { nip: targetNip } });
   if (!user || !user.aktif) {
-    return { error: "NIP atau password salah." };
+    return { error: "Akun pengujian tidak ditemukan atau tidak aktif di database." };
   }
 
-  // Jabatan buat ditampilkan & dicatat di ApprovalLog - ambil dari data
-  // Pegawai kalau NIP-nya cocok (sekarang ada 5.069 data pegawai asli),
-  // fallback ke label role kalau tidak ketemu.
-  const pegawai = await prisma.pegawai.findUnique({ where: { nip } });
+  // Jabatan buat ditampilkan & dicatat di ApprovalLog
+  const pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
   const jabatan = pegawai?.jabatan ?? LABEL_ROLE[user.role];
 
   const token = await buatTokenUntukUser(user, jabatan);
@@ -53,9 +64,7 @@ export async function loginAction(
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
 
-  // Login SELALU mulai dari role UTAMA akun (bukan role tambahan yang
-  // terakhir dipakai) - role tambahan dipilih sendiri lewat menu "Ganti
-  // role" setelah masuk.
+  // Login mulai dari role UTAMA akun (ADMIN untuk Alpha Sandro)
   redirect(LANDING_ROLE[user.role]);
 }
 

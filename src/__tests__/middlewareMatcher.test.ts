@@ -80,3 +80,29 @@ describe("RUTE_MESIN - jalur yang lolos sesi karena diautentikasi header rahasia
     for (const r of RUTE_MESIN) expect(lewatMiddleware(r)).toBe(true);
   });
 });
+
+describe("header keamanan middleware", () => {
+  it("menetapkan HSTS, X-Frame-Options, nosniff, Referrer-Policy, dan Permissions-Policy pada redirect", async () => {
+    const { NextRequest } = await import("next/server");
+    const { middleware } = await import("../middleware");
+    const req = new NextRequest("http://localhost:3000/");
+    const res = await middleware(req);
+    expect(res.headers.get("Strict-Transport-Security")).toContain("max-age=31536000");
+    expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+    expect(res.headers.get("Permissions-Policy")).toContain("camera=()");
+  });
+
+  it("menetapkan header keamanan pada blokir payload fuzzing/bad request", async () => {
+    const { NextRequest } = await import("next/server");
+    const { middleware } = await import("../middleware");
+    const req = new NextRequest("http://localhost:3000/?test=%3Cscript%3Ealert(1)%3C/script%3E");
+    const res = await middleware(req);
+    expect(res.status).toBe(400);
+    expect(res.headers.get("Strict-Transport-Security")).toContain("max-age=31536000");
+    expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+});
+

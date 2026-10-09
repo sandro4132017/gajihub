@@ -30,6 +30,7 @@ import {
 } from "./jenisPegawaiAdk";
 import { HALAMAN } from "../../layoutHalaman";
 import { SumberAcuan } from "../../SumberAcuan";
+import { PanelTteSptjmPpk } from "./PanelTteSptjmPpk";
 
 export const dynamic = "force-dynamic";
 
@@ -244,6 +245,31 @@ export default async function ExportAdkPage({
     unitAktif.map((u) => u.satuanKerja),
     new Map(barisPengiriman.map((b) => [b.satuanKerja, b])),
   );
+
+  const jenisSptjm =
+    adkDipilih === "tukin"
+      ? "SPTJM_TUKIN"
+      : adkDipilih === "uang-makan"
+      ? "SPTJM_UANG_MAKAN"
+      : "SPTJM_LEMBUR";
+
+  const dokumenTtePpk = await prisma.dokumenTte.findFirst({
+    where: {
+      jenisDokumen: jenisSptjm,
+      periodeBulan: bln,
+      periodeTahun: thn,
+      ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      status: true,
+      nomorDokumen: true,
+      fileSignedPath: true,
+      signedAt: true,
+      penandatanganNama: true,
+    },
+  });
 
   return (
     <main className={HALAMAN}>
@@ -531,6 +557,26 @@ export default async function ExportAdkPage({
             Berkas ini akan <strong>kosong</strong> dengan pilihan sekarang.
           </p>
         )}
+      </div>
+
+      {/* Panel Tanda Tangan Elektronik (TTE) SPTJM PPK untuk SAKTI */}
+      <div className="mt-6">
+        <PanelTteSptjmPpk
+          periodeBulan={bln}
+          periodeTahun={thn}
+          adkAktif={adkDipilih}
+          satuanKerja={satkerTerpilih || "Biro Keuangan dan BMN"}
+          dokumenTteAwal={
+            dokumenTtePpk
+              ? {
+                  ...dokumenTtePpk,
+                  signedAt: dokumenTtePpk.signedAt
+                    ? dokumenTtePpk.signedAt.toISOString()
+                    : null,
+                }
+              : null
+          }
+        />
       </div>
 
       <p className="mt-6 text-xs font-bold uppercase tracking-wide text-muted">

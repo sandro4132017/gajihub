@@ -16,21 +16,17 @@ export function LoginForm() {
   return (
     <form action={formAction} autoComplete="off" className="space-y-4">
       <div>
-        <label htmlFor="nip" className="sr-only">
-          NIP
+        <label htmlFor="username" className="sr-only">
+          Username
         </label>
         <div className="relative">
           <input
-            id="nip"
-            name="nip"
+            id="username"
+            name="username"
             required
             autoFocus
-            placeholder="NIP"
+            placeholder="Username"
             autoComplete="off"
-            // NIP itu 18 angka - `inputMode` memunculkan papan tombol angka di
-            // HP. SENGAJA bukan `type="number"`: itu membuang nol di depan,
-            // dan sebagian NIP diawali nol.
-            inputMode="numeric"
             className={KELAS_FIELD}
           />
           <IkonOrang />
@@ -60,20 +56,19 @@ export function LoginForm() {
         disabled={pending}
         className="btn btn-primary mt-2 w-full rounded-xl py-3.5 text-base"
       >
-        {pending ? "Memproses..." : "Login"}
+        {pending ? "Memproses..." : "Login Pengujian"}
       </button>
 
-      {/* role="alert" supaya kegagalan login ikut dibacakan pembaca layar -
-          tanpa itu, yang terjadi cuma teks muncul diam-diam di bawah tombol. */}
+      {/* role="alert" supaya kegagalan login ikut dibacakan pembaca layar */}
       {state.error && (
         <p role="alert" className="pt-1 text-center text-sm font-semibold text-red">
           {state.error}
         </p>
       )}
 
-      {/* Pertanyaan pertama orang yang belum pernah masuk, dan sampai sekarang
-          tidak ada yang menjawabnya di halaman ini. */}
-      <p className="pt-2 text-center text-xs text-muted">Masuk memakai NIP.</p>
+      <p className="pt-2 text-center text-xs text-muted">
+        Masuk menggunakan username & password dev yang terdaftar di .env.
+      </p>
     </form>
   );
 }
