@@ -47,8 +47,11 @@ export async function loginAction(
     };
   }
 
-  // NIP target untuk akun pengujian (default: Alpha Sandro Adithyaswara)
-  const targetNip = process.env.DEV_AUTH_NIP?.trim() || "198703232015031002";
+  // NIP target untuk akun pengujian dev (diambil dari konfigurasi .env)
+  const targetNip = process.env.DEV_AUTH_NIP?.trim();
+  if (!targetNip) {
+    return { error: "DEV_AUTH_NIP belum dikonfigurasi di environment (.env)." };
+  }
 
   const user = await prisma.user.findUnique({ where: { nip: targetNip } });
   if (!user || !user.aktif) {

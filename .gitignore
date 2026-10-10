@@ -35,7 +35,6 @@ public/uploads/*
 !.claude/hooks/
 !.claude/settings.json
 
-# NIP asli akun demo. Selama password masih sama dengan NIP, isinya
-# setara KREDENSIAL - bukan sekadar identitas. Repo ini publik.
-# Cetakan kosongnya (seed-akun-demo.contoh.json) TETAP ikut ter-commit.
-seed-akun-demo.json
+# Akun demo lokal
+seed-akun-demo*.json
+
