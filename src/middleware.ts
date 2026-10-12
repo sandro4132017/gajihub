@@ -27,6 +27,11 @@ function terapkanHeaderKeamanan(res: NextResponse): NextResponse {
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // Mencegah cache browser untuk halaman data/aplikasi sensitif (WAS Plugin 112553)
+  if (!res.headers.has("Cache-Control")) {
+    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  }
+  res.headers.set("Pragma", "no-cache");
   return res;
 }
 

@@ -61,12 +61,9 @@ export function sidikNik(nik: unknown, kunci: string): string | null {
  * Kunci dari lingkungan. **SENGAJA MELEMPAR kalau belum diisi**, tidak
  * memakai nilai cadangan.
  *
- * Ini pelajaran dari `getSecretKey()` di `session.ts`, yang diam-diam memakai
- * `"dev-only-insecure-secret-..."` kalau `SESSION_SECRET` kosong - tanpa galat,
- * tanpa peringatan, dan nilainya ada di repo yang PUBLIK. Kalau fungsi ini
- * ikut punya cadangan, kunci itu juga akan ada di repo publik, dan sidik NIK
- * seluruh pegawai bisa dihitung ulang siapa saja - persis menghapus satu-
- * satunya alasan memakai HMAC.
+ * `SESSION_SECRET` pada sesi juga wajib terisi dan ditolak jika terlalu
+ * pendek. Kedua kunci tidak memiliki nilai cadangan agar rahasia tidak
+ * tertanam di repo publik.
  *
  * Panjang minimum 32 karakter: kunci pendek membuat pencarian menyeluruh
  * kembali masuk akal.

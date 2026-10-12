@@ -67,9 +67,7 @@ describe("kunciSidikNik", () => {
     else process.env.SIDIK_NIK_SECRET = asli;
   });
 
-  // Pelajaran dari getSecretKey() di session.ts, yang diam-diam memakai nilai
-  // cadangan yang ada di repo PUBLIK. Kalau fungsi ini punya cadangan, sidik
-  // seluruh pegawai bisa dihitung ulang siapa saja.
+  // Kedua kunci rahasia harus dikonfigurasi tanpa nilai cadangan di source.
   it("MELEMPAR kalau kunci belum diisi - tidak pernah memakai nilai cadangan", () => {
     delete process.env.SIDIK_NIK_SECRET;
     expect(() => kunciSidikNik()).toThrow(/SIDIK_NIK_SECRET belum diisi/);

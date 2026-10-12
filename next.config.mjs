@@ -28,6 +28,7 @@ const nextConfig = {
       // form-nya berhenti berfungsi lagi dengan cara yang persis sama.
       allowedOrigins: [
         "gajihub.kemnaker.go.id",
+        "gajihub.rokeubmn.id",
         "192.168.221.44:3002",
         "localhost:3000",
         "localhost:3002",

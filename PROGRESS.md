@@ -9,7 +9,7 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-10-09** - **integrasi TTE BSrE (SPTJM Lembur), audit Agent OS Bootstrap, dan penguatan keamanan**:
+Terakhir diperbarui: **2026-10-12** - **tindak lanjut laporan keamanan WAS dan fail-closed secret sesi**:
 
 1. **Integrasi TTE BSrE BSSN (Esign Client Service v2.2.2)**:
    - Terhubung langsung ke Esign Client (`192.168.221.11`).
@@ -23,7 +23,11 @@ Terakhir diperbarui: **2026-10-09** - **integrasi TTE BSrE (SPTJM Lembur), audit
    - 4 Global skills (`task-graph`, `autonomous-decision`, `self-improve`, `hygiene-sweep`) terhubung via junction di `$HOME\.claude\skills`.
    - Skill baru: `gajihub-tte-bsre` untuk panduan integrasi dan kepatuhan TTE.
    - Hook `stop.mjs` diperkuat dengan deteksi kebocoran kredensial BSrE (`ESIGN_API_PASS`), private key sertifikat, dan passphrase.
-   - Total test suite: **1.049 passed** (63 test files).
+   - Batch keamanan 2026-10-12: 23 test terarah lulus dan `npm run typecheck` lulus.
+4. **Tindak lanjut laporan WAS**:
+   - `SESSION_SECRET` tidak lagi memakai fallback; token sesi gagal diterbitkan/diverifikasi jika secret kosong atau kurang dari 32 byte.
+   - Token CSRF statis yang tidak diverifikasi di form login dihapus; perlindungan Server Action tetap mengandalkan pemeriksaan Origin bawaan Next.js.
+   - Header keamanan dari laporan sudah diterapkan di source; retest pada deployment/proxy publik masih diperlukan.
 
 > **`.claude/` ada di `.gitignore` (baris 41).** Sepuluh skill lama selamat
 > karena sudah terlacak duluan; `gajihub-laws-of-ux` BELUM - perlu

@@ -222,7 +222,7 @@ Berikut adalah daftar variabel konfigurasi yang digunakan aplikasi:
 | Variabel | Deskripsi | Contoh / Catatan |
 |---|---|---|
 | `DATABASE_URL` | Koneksi basis data PostgreSQL milik Gajihub | `postgresql://user:pass@localhost:5432/gajihub?schema=public` |
-| `SESSION_SECRET` | Kunci enkripsi sesi (32 byte hex) | Generate dengan: `openssl rand -hex 32` |
+| `SESSION_SECRET` | Kunci HMAC penandatanganan sesi wajib, minimal 32 byte | Generate dengan: `openssl rand -hex 32`; aplikasi menolak menerbitkan atau memverifikasi sesi jika kosong/terlalu pendek |
 | `COOKIE_SECURE` | Flag keamanan cookie HTTPS | Set `"true"` di server production HTTPS, `"false"` di lokal HTTP |
 | `SIAP_HOST` | Host server SIAP Kemnaker (SQL Server) | IP Server SIAP (Koneksi **Read-Only**) |
 | `SIAP_INSTANCE` | Instance name SQL Server SIAP | `MSSQLDEV` |

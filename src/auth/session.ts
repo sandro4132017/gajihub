@@ -43,11 +43,11 @@ interface SessionPayloadTersimpan extends SessionPayload {
 }
 
 function getSecretKey(): string {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) {
-    // TODO(confirm): dev-only fallback - WAJIB set SESSION_SECRET asli
-    // (env var, acak, panjang) sebelum dipakai di luar localhost.
-    return "dev-only-insecure-secret-jangan-dipakai-di-production";
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret || new TextEncoder().encode(secret).length < 32) {
+    throw new Error(
+      "SESSION_SECRET wajib diatur dengan nilai acak minimal 32 byte."
+    );
   }
   return secret;
 }

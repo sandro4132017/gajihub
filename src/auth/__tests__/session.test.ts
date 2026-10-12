@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { buatTokenSesi, verifikasiTokenSesi } from "../session";
 
 beforeAll(() => {
-  process.env.SESSION_SECRET = "test-secret-buat-unit-test-saja";
+  process.env.SESSION_SECRET = "test-secret-buat-unit-test-saja-32";
 });
 
 const PAYLOAD = {
@@ -15,6 +15,33 @@ const PAYLOAD = {
 };
 
 describe("buatTokenSesi & verifikasiTokenSesi", () => {
+  it("gagal eksplisit jika SESSION_SECRET tidak tersedia", async () => {
+    const secretSebelumnya = process.env.SESSION_SECRET;
+    delete process.env.SESSION_SECRET;
+
+    try {
+      await expect(buatTokenSesi(PAYLOAD)).rejects.toThrow(/SESSION_SECRET/);
+      await expect(verifikasiTokenSesi("payload.signature")).rejects.toThrow(
+        /SESSION_SECRET/
+      );
+    } finally {
+      if (secretSebelumnya === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = secretSebelumnya;
+    }
+  });
+
+  it("menolak SESSION_SECRET yang terlalu pendek", async () => {
+    const secretSebelumnya = process.env.SESSION_SECRET;
+    process.env.SESSION_SECRET = "secret-pendek";
+
+    try {
+      await expect(buatTokenSesi(PAYLOAD)).rejects.toThrow(/minimal 32 byte/);
+    } finally {
+      if (secretSebelumnya === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = secretSebelumnya;
+    }
+  });
+
   it("token yang baru dibuat bisa diverifikasi dan isinya sama", async () => {
     const token = await buatTokenSesi(PAYLOAD);
     const hasil = await verifikasiTokenSesi(token);
