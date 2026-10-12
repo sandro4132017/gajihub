@@ -1,11 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Role } from "@prisma/client";
-import { gantiRoleAction, logoutAction, type GantiRoleFormState } from "./login/actions";
 import { labelPilihanRole, labelRole } from "../auth/roleLabel";
-
-const INITIAL_STATE: GantiRoleFormState = {};
 
 /**
  * Tombol akun di kaki sidebar - sekarang jadi MENU (popover), bukan cuma
@@ -15,9 +12,8 @@ const INITIAL_STATE: GantiRoleFormState = {};
  *     role tanpa logout-login pakai NIP orang lain;
  *   - Logout.
  *
- * Role yang sedang aktif ditandai dan tidak bisa diklik. Pergantian role
- * TETAP diverifikasi ulang di server (gantiRoleAction) - daftar di sini cuma
- * tampilan, jangan dianggap sebagai pembatas keamanan.
+ * Menggunakan Route Handler API standar via fetch agar 100% kebal dari masalah
+ * Server Action CSRF mismatch saat berjalan di belakang reverse proxy Pusdatik.
  */
 export function AccountMenu({
   nama,
@@ -44,10 +40,43 @@ export function AccountMenu({
   ringkas?: boolean;
 }) {
   const [buka, setBuka] = useState(false);
-  const [state, gantiRole, pending] = useActionState(gantiRoleAction, INITIAL_STATE);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const multiRole = rolesTersedia.length > 1;
+
+  async function onPilihRole(r: Role) {
+    if (r === role || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/ganti-role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: r }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        window.location.href = data.redirect || "/";
+        return;
+      }
+      setError(data.error || "Gagal mengganti role.");
+      setPending(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan koneksi ke server.");
+      setPending(false);
+    }
+  }
+
+  async function onLogout() {
+    setPending(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login";
+    }
+  }
 
   // Tutup menu kalau klik di luar / tekan Escape - perilaku popover biasa.
   useEffect(() => {
@@ -82,44 +111,38 @@ export function AccountMenu({
               {rolesTersedia.map((r) => {
                 const aktif = r === role;
                 return (
-                  <form key={r} action={gantiRole}>
-                    <input type="hidden" name="role" value={r} />
-                    <button
-                      type="submit"
-                      disabled={aktif || pending}
-                      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[12.5px] font-semibold transition ${
-                        aktif
-                          ? "cursor-default font-bold text-navy"
-                          : "text-ink-2 hover:bg-line-2 hover:text-navy disabled:opacity-60"
-                      }`}
-                    >
-                      {/* labelPilihanRole, BUKAN labelRole: ini daftar sudut
-                          pandang milik akun ini sendiri, jadi unitnya sama di
-                          semua baris dan tidak membedakan apa-apa. Label di
-                          bawah (role yang sedang aktif) TETAP menyebut unit -
-                          di sana pertanyaannya "saya sedang jadi siapa". */}
-                      <span className="truncate">{labelPilihanRole(r)}</span>
-                      {aktif && (
-                        <svg viewBox="0 0 24 24" className="size-4 flex-none text-biru" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                          <path d="M20 6 9 17l-5-5" />
-                        </svg>
-                      )}
-                    </button>
-                  </form>
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => onPilihRole(r)}
+                    disabled={aktif || pending}
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[12.5px] font-semibold transition ${
+                      aktif
+                        ? "cursor-default font-bold text-navy"
+                        : "text-ink-2 hover:bg-line-2 hover:text-navy disabled:opacity-60"
+                    }`}
+                  >
+                    <span className="truncate">{labelPilihanRole(r)}</span>
+                    {aktif && (
+                      <svg viewBox="0 0 24 24" className="size-4 flex-none text-biru" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    )}
+                  </button>
                 );
               })}
-              {state.error && <p className="px-3 pb-1.5 text-[11px] font-semibold text-red">{state.error}</p>}
+              {error && <p className="px-3 pb-1.5 text-[11px] font-semibold text-red">{error}</p>}
               <div className="my-1 border-t border-line" />
             </>
           )}
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              className="w-full px-3 py-2.5 text-left text-[12.5px] font-bold text-ink-2 transition hover:bg-line-2 hover:text-navy"
-            >
-              Logout
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={onLogout}
+            disabled={pending}
+            className="w-full px-3 py-2.5 text-left text-[12.5px] font-bold text-ink-2 transition hover:bg-line-2 hover:text-navy disabled:opacity-60"
+          >
+            {pending ? "Memproses..." : "Logout"}
+          </button>
         </div>
       )}
 
