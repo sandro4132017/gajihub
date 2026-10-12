@@ -1,10 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
-import { eksekusiUsulanRoleAction, type EksekusiUsulanFormState } from "./actions";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { SearchableSelect } from "../../SearchableSelect";
-
-const INITIAL_STATE: EksekusiUsulanFormState = {};
 
 export function EksekusiUsulanForm({
   usulanId,
@@ -19,16 +17,41 @@ export function EksekusiUsulanForm({
   /** Prefill: unit akun sekarang, atau kalau kosong unit data pegawainya. */
   satuanKerjaDefault: string;
 }) {
-  const [state, formAction, pending] = useActionState(eksekusiUsulanRoleAction, INITIAL_STATE);
+  const router = useRouter();
+  const [satuanKerja, setSatuanKerja] = useState(satuanKerjaDefault);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  if (state.success) {
-    return <p className="mt-3 text-xs font-semibold text-green">{state.success}</p>;
+  if (success) {
+    return <p className="mt-3 text-xs font-semibold text-green">{success}</p>;
+  }
+
+  async function kirim(keputusan: "EKSEKUSI" | "TOLAK") {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/usulan-role/eksekusi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usulanId, keputusan, satuanKerja }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || "Gagal memproses usulan");
+      } else {
+        setSuccess(data.success || "Berhasil");
+        router.refresh();
+      }
+    } catch (err) {
+      setError(`Gagal menghubungi server: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
-    <form action={formAction} className="mt-3 border-t border-line-2 pt-3">
-      <input type="hidden" name="usulanId" value={usulanId} />
-
+    <div className="mt-3 border-t border-line-2 pt-3">
       {/* Ini yang dulu bikin akun "buta unit": eksekusi mengubah role jadi
           Kasubag TU tanpa pernah mengisi User.satuanKerja, jadi akunnya
           langsung tidak bisa lihat unit manapun. Sekarang unitnya diminta
@@ -40,6 +63,7 @@ export function EksekusiUsulanForm({
             name="satuanKerja"
             options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
             defaultValue={satuanKerjaDefault}
+            onValueChange={setSatuanKerja}
             required
           />
           <p className="mt-1 text-[11px] text-muted">
@@ -49,14 +73,24 @@ export function EksekusiUsulanForm({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="submit" name="keputusan" value="EKSEKUSI" disabled={pending} className="btn btn-primary btn-sm">
-          Eksekusi
+        <button
+          type="button"
+          onClick={() => kirim("EKSEKUSI")}
+          disabled={pending}
+          className="btn btn-primary btn-sm"
+        >
+          {pending ? "..." : "Eksekusi"}
         </button>
-        <button type="submit" name="keputusan" value="TOLAK" disabled={pending} className="btn btn-danger btn-sm">
-          Tolak
+        <button
+          type="button"
+          onClick={() => kirim("TOLAK")}
+          disabled={pending}
+          className="btn btn-danger btn-sm"
+        >
+          {pending ? "..." : "Tolak"}
         </button>
-        {state.error && <p className="text-sm font-medium text-red">{state.error}</p>}
+        {error && <p className="text-sm font-medium text-red">{error}</p>}
       </div>
-    </form>
+    </div>
   );
 }

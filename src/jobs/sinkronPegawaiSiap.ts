@@ -70,7 +70,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import sql from "mssql";
-import { konfigurasiSiap, labelSumberSiap } from "../lib/siapConfig";
+import { bukaPoolSiap, konfigurasiSiap, labelSumberSiap } from "../lib/siapConfig";
 import { kunciSidikNik, normalkanNik, sidikNik } from "../auth/sidikNik";
 
 // Prisma memuat .env sendiri buat DATABASE_URL, tapi variabel SIAP_* di
@@ -130,7 +130,7 @@ async function ambilStatusDariSiap(nips: string[]): Promise<Map<string, string>>
   const peta = new Map<string, string>();
   if (nips.length === 0) return peta;
 
-  const pool = await sql.connect(konfigurasiSiap());
+  const pool = await bukaPoolSiap();
   try {
     const POTONGAN = 500;
     for (let i = 0; i < nips.length; i += POTONGAN) {
@@ -151,7 +151,7 @@ async function ambilStatusDariSiap(nips: string[]): Promise<Map<string, string>>
 }
 
 async function ambilDariSiap(prefixSatker: string | null): Promise<BarisSiap[]> {
-  const pool = await sql.connect(konfigurasiSiap());
+  const pool = await bukaPoolSiap();
   try {
     const request = pool.request();
     request.input("prefix", sql.VarChar, prefixSatker ? `${prefixSatker}%` : null);

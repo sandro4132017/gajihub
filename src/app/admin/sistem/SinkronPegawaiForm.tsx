@@ -1,35 +1,51 @@
 "use client";
 
-import { useActionState } from "react";
-import {
-  periksaSyncPegawaiAction,
-  terapkanSyncPegawaiAction,
-  type SyncPegawaiFormState,
-} from "./actionsSyncPegawai";
-
-/**
- * Tombol sinkronisasi pegawai - DUA LANGKAH, dan langkah pertama wajib.
- *
- * Tombol "Terapkan" baru muncul SETELAH pratinjaunya tampil. Bukan sekadar
- * dinonaktifkan: selama daftar perubahannya belum ada di layar, tombol itu
- * tidak ada sama sekali, jadi tidak ada jalan menerapkan perubahan yang belum
- * dilihat. Servernya sendiri tidak menuntut urutan itu - yang menjaganya di
- * sini bentuk layarnya, dan itu memang cukup untuk aksi yang cuma bisa
- * dijalankan Admin.
- */
+import { useState } from "react";
+import type { SyncPegawaiFormState } from "./actionsSyncPegawai";
 
 const AWAL: SyncPegawaiFormState = {};
 
 export function SinkronPegawaiForm() {
-  const [cek, aksiCek, sedangCek] = useActionState(periksaSyncPegawaiAction, AWAL);
-  const [terap, aksiTerap, sedangTerap] = useActionState(terapkanSyncPegawaiAction, AWAL);
+  const [cek, setCek] = useState<SyncPegawaiFormState>(AWAL);
+  const [terap, setTerap] = useState<SyncPegawaiFormState>(AWAL);
+  const [sedangCek, setSedangCek] = useState(false);
+  const [sedangTerap, setSedangTerap] = useState(false);
 
-  // Yang ditampilkan: hasil penerapan kalau sudah ada, kalau belum ya
-  // pratinjaunya. Sesudah diterapkan, angka pratinjau sudah basi dan
-  // menampilkannya berdampingan cuma mengundang orang membaca yang salah.
   const rencana = terap.hasil?.rencana ?? cek.rencana;
   const sudahDiterapkan = terap.hasil !== undefined;
   const pesanGalat = terap.error ?? cek.error;
+
+  async function handleCek(e: React.FormEvent) {
+    e.preventDefault();
+    if (sedangCek || sedangTerap) return;
+    setSedangCek(true);
+    setCek({});
+    try {
+      const res = await fetch("/api/admin/sync-pegawai/periksa", { method: "POST" });
+      const data = await res.json();
+      setCek(data);
+    } catch (err) {
+      setCek({ error: `Gagal menghubungi server: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setSedangCek(false);
+    }
+  }
+
+  async function handleTerap(e: React.FormEvent) {
+    e.preventDefault();
+    if (sedangTerap) return;
+    setSedangTerap(true);
+    setTerap({});
+    try {
+      const res = await fetch("/api/admin/sync-pegawai/terapkan", { method: "POST" });
+      const data = await res.json();
+      setTerap(data);
+    } catch (err) {
+      setTerap({ error: `Gagal menghubungi server: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setSedangTerap(false);
+    }
+  }
 
   return (
     <section className="card mt-4 border-l-4 border-l-navy p-4">
@@ -42,13 +58,13 @@ export function SinkronPegawaiForm() {
           </p>
         </div>
         <div className="flex flex-none items-center gap-2">
-          <form action={aksiCek}>
+          <form onSubmit={handleCek}>
             <button type="submit" disabled={sedangCek || sedangTerap} className="btn btn-secondary">
               {sedangCek ? "Memeriksa..." : "Periksa perubahan"}
             </button>
           </form>
           {rencana && !sudahDiterapkan && (
-            <form action={aksiTerap}>
+            <form onSubmit={handleTerap}>
               <button type="submit" disabled={sedangTerap} className="btn btn-primary">
                 {sedangTerap ? "Menerapkan..." : "Terapkan"}
               </button>

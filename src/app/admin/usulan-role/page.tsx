@@ -32,7 +32,7 @@ export default async function EksekusiUsulanRolePage() {
   // pegawainya (tebakan paling masuk akal - Kasubag TU biasanya memimpin
   // unitnya sendiri). Admin tetap bisa menggantinya sebelum eksekusi.
   const nipPerluPrefill = usulanList
-    .filter((u) => u.status === "MENUNGGU" && u.roleDiusulkan === "KASUBAG_TU")
+    .filter((u) => u.status === "MENUNGGU" && u.roleDiusulkan === "KASUBAG_TU" && u.user?.nip)
     .map((u) => u.user.nip);
   const pegawaiByNip = new Map(
     (await prisma.pegawai.findMany({ where: { nip: { in: nipPerluPrefill } } })).map((p) => [p.nip, p])
@@ -51,10 +51,10 @@ export default async function EksekusiUsulanRolePage() {
           <div key={u.id} className="card p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-bold text-ink">{u.user.nama}</p>
+                <p className="font-bold text-ink">{u.user?.nama ?? "(User tidak ditemukan)"}</p>
                 <p className="text-sm text-muted">
-                  {labelRole(u.roleSaatIni, u.user.satuanKerja)} &rarr; {LABEL_ROLE[u.roleDiusulkan]} - diusulkan oleh{" "}
-                  {u.diusulkanOleh.nama}
+                  {labelRole(u.roleSaatIni, u.user?.satuanKerja)} &rarr; {LABEL_ROLE[u.roleDiusulkan] ?? u.roleDiusulkan} - diusulkan oleh{" "}
+                  {u.diusulkanOleh?.nama ?? "(Tidak diketahui)"}
                 </p>
                 {u.alasan && <p className="mt-1 text-sm text-ink-2">{u.alasan}</p>}
                 {u.diputuskanOleh && (
@@ -70,7 +70,7 @@ export default async function EksekusiUsulanRolePage() {
                 usulanId={u.id}
                 butuhSatuanKerja={u.roleDiusulkan === "KASUBAG_TU"}
                 satuanKerjaList={satuanKerjaList}
-                satuanKerjaDefault={u.user.satuanKerja ?? pegawaiByNip.get(u.user.nip)?.satuanKerja ?? ""}
+                satuanKerjaDefault={u.user?.satuanKerja ?? (u.user?.nip ? pegawaiByNip.get(u.user.nip)?.satuanKerja : undefined) ?? ""}
               />
             )}
           </div>

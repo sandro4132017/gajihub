@@ -36,10 +36,10 @@ export default async function UsulanPerubahanRolePage() {
           <div key={u.id} className="card p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-bold text-ink">{u.user.nama}</p>
+                <p className="font-bold text-ink">{u.user?.nama ?? "(User tidak ditemukan)"}</p>
                 <p className="text-sm text-muted">
-                  {labelRole(u.roleSaatIni, u.user.satuanKerja)} &rarr; {LABEL_ROLE[u.roleDiusulkan]} - diusulkan oleh{" "}
-                  {u.diusulkanOleh.nama}
+                  {labelRole(u.roleSaatIni, u.user?.satuanKerja)} &rarr; {LABEL_ROLE[u.roleDiusulkan] ?? u.roleDiusulkan} - diusulkan oleh{" "}
+                  {u.diusulkanOleh?.nama ?? "(Tidak diketahui)"}
                 </p>
                 {u.alasan && <p className="mt-1 text-sm text-ink-2">{u.alasan}</p>}
                 {u.diputuskanOleh && (
