@@ -1,9 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
-import { loginAction, type LoginFormState } from "./actions";
-
-const INITIAL_STATE: LoginFormState = {};
+import { useState } from "react";
 
 const KELAS_FIELD =
   "w-full rounded-xl border border-transparent bg-line py-3.5 pl-4 pr-12 text-sm font-semibold text-ink " +
@@ -11,10 +8,42 @@ const KELAS_FIELD =
   "focus:border-biru focus:bg-white focus:shadow-[0_0_0_3px_rgba(63,114,175,0.18)]";
 
 export function LoginForm() {
-  const [state, formAction, pending] = useActionState(loginAction, INITIAL_STATE);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setPending(true);
+
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const username = String(formData.get("username") ?? "").trim();
+    const password = String(formData.get("password") ?? "").trim();
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Gagal login. Periksa kembali username dan password.");
+        setPending(false);
+        return;
+      }
+
+      window.location.href = data.redirect || "/admin";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan koneksi ke server.");
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={formAction} autoComplete="off" className="space-y-4">
+    <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
       <div>
         <label htmlFor="username" className="sr-only">
           Username
@@ -60,9 +89,9 @@ export function LoginForm() {
       </button>
 
       {/* role="alert" supaya kegagalan login ikut dibacakan pembaca layar */}
-      {state.error && (
+      {error && (
         <p role="alert" className="pt-1 text-center text-sm font-semibold text-red">
-          {state.error}
+          {error}
         </p>
       )}
 

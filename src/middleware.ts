@@ -64,10 +64,15 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isLoginPage = path === "/login";
   const isRuteSso = path === "/login/sso" || path.startsWith("/login/sso/");
-
+  const isRuteAuthApi = path === "/api/auth" || path.startsWith("/api/auth/");
   const isRuteMesin = (RUTE_MESIN as readonly string[]).includes(path);
 
-  if (!session && !isLoginPage && !isRuteSso && !isRuteMesin) {
+  // Server Action menangani otorisasi & streaming RSC di tingkat handler
+  if (request.headers.has("next-action")) {
+    return NextResponse.next();
+  }
+
+  if (!session && !isLoginPage && !isRuteSso && !isRuteAuthApi && !isRuteMesin) {
     const origin = asalPublik(request.headers, request.url);
     return terapkanHeaderKeamanan(
       NextResponse.redirect(new URL("/login", origin))
