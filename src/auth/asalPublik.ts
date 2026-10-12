@@ -33,3 +33,4 @@ export function asalPublik(headers: Headers, asalPermintaan: string): string {
   }
   return new URL(asalPermintaan).origin;
 }
+
