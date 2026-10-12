@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 export default function ErrorPage({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -15,6 +16,21 @@ export default function ErrorPage({
       <p className="mt-1 text-sm text-muted">
         Permintaan Anda tidak dapat diproses saat ini. Silakan coba beberapa saat lagi.
       </p>
+
+      {/* Informasi error untuk membantu diagnosis pengembang */}
+      {error && (
+        <div className="mt-4 max-w-xl rounded-xl border border-red/20 bg-red-tint/30 p-4 text-left">
+          <p className="font-mono text-xs font-semibold text-red">
+            {error.message || "Kesalahan internal (tanpa deskripsi)"}
+          </p>
+          {error.digest && (
+            <p className="mt-1 font-mono text-[11px] text-muted">
+              Digest ID: {error.digest}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="mt-6 flex gap-3">
         <button
           onClick={() => reset()}
@@ -32,4 +48,3 @@ export default function ErrorPage({
     </div>
   );
 }
-
