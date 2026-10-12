@@ -8,3 +8,4 @@ export async function POST() {
   res.cookies.delete(SESSION_COOKIE_NAME);
   return res;
 }
+
