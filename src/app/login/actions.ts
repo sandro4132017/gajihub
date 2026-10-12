@@ -27,48 +27,62 @@ export async function loginAction(
   _state: LoginFormState,
   formData: FormData
 ): Promise<LoginFormState> {
-  const inputUsername = String(formData.get("username") ?? formData.get("nip") ?? "").trim();
-  const inputPassword = String(formData.get("password") ?? "").trim();
+  let urlTujuan: string | null = null;
 
-  if (!inputUsername || !inputPassword) {
-    return { error: "Username dan password wajib diisi." };
-  }
+  try {
+    const inputUsername = String(formData.get("username") ?? formData.get("nip") ?? "").trim();
+    const inputPassword = String(formData.get("password") ?? "").trim();
 
-  const devUser = process.env.DEV_AUTH_USER?.trim();
-  const devPass = process.env.DEV_AUTH_PASS?.trim();
+    if (!inputUsername || !inputPassword) {
+      return { error: "Username dan password wajib diisi." };
+    }
 
-  // Verifikasi kredensial akun khusus dev dari .env
-  const isDevLogin = Boolean(devUser && devPass && inputUsername === devUser && inputPassword === devPass);
+    const devUser = process.env.DEV_AUTH_USER?.trim();
+    const devPass = process.env.DEV_AUTH_PASS?.trim();
 
-  if (!isDevLogin) {
+    // Verifikasi kredensial akun khusus dev dari .env
+    const isDevLogin = Boolean(devUser && devPass && inputUsername === devUser && inputPassword === devPass);
+
+    if (!isDevLogin) {
+      return {
+        error:
+          "Username atau password salah. (Login umum wajib menggunakan Akun SIAP ID / SSO Kemnaker).",
+      };
+    }
+
+    // NIP target untuk akun pengujian dev (diambil dari konfigurasi .env)
+    const targetNip = process.env.DEV_AUTH_NIP?.trim();
+    if (!targetNip) {
+      return { error: "DEV_AUTH_NIP belum dikonfigurasi di environment (.env)." };
+    }
+
+    const user = await prisma.user.findUnique({ where: { nip: targetNip } });
+    if (!user || !user.aktif) {
+      return { error: `Akun pengujian dengan NIP ${targetNip} tidak ditemukan atau tidak aktif di database.` };
+    }
+
+    // Jabatan buat ditampilkan & dicatat di ApprovalLog
+    const pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
+    const jabatan = pegawai?.jabatan ?? LABEL_ROLE[user.role];
+
+    const token = await buatTokenUntukUser(user, jabatan);
+
+    const cookieStore = await cookies();
+    cookieStore.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
+
+    urlTujuan = LANDING_ROLE[user.role];
+  } catch (error) {
+    console.error("[loginAction error]", error);
     return {
-      error:
-        "Username atau password salah. (Login umum wajib menggunakan Akun SIAP ID / SSO Kemnaker).",
+      error: `Gagal login: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 
-  // NIP target untuk akun pengujian dev (diambil dari konfigurasi .env)
-  const targetNip = process.env.DEV_AUTH_NIP?.trim();
-  if (!targetNip) {
-    return { error: "DEV_AUTH_NIP belum dikonfigurasi di environment (.env)." };
+  if (urlTujuan) {
+    redirect(urlTujuan);
   }
 
-  const user = await prisma.user.findUnique({ where: { nip: targetNip } });
-  if (!user || !user.aktif) {
-    return { error: "Akun pengujian tidak ditemukan atau tidak aktif di database." };
-  }
-
-  // Jabatan buat ditampilkan & dicatat di ApprovalLog
-  const pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
-  const jabatan = pegawai?.jabatan ?? LABEL_ROLE[user.role];
-
-  const token = await buatTokenUntukUser(user, jabatan);
-
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
-
-  // Login mulai dari role UTAMA akun (ADMIN untuk Alpha Sandro)
-  redirect(LANDING_ROLE[user.role]);
+  return {};
 }
 
 export async function logoutAction(): Promise<void> {
