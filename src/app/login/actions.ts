@@ -37,8 +37,8 @@ export async function loginAction(
       return { error: "Username dan password wajib diisi." };
     }
 
-    const devUser = process.env.DEV_AUTH_USER?.trim();
-    const devPass = process.env.DEV_AUTH_PASS?.trim();
+    const devUser = process.env.DEV_AUTH_USER?.trim().replace(/^["']|["']$/g, "");
+    const devPass = process.env.DEV_AUTH_PASS?.trim().replace(/^["']|["']$/g, "");
 
     // Verifikasi kredensial akun khusus dev dari .env
     const isDevLogin = Boolean(devUser && devPass && inputUsername === devUser && inputPassword === devPass);
@@ -51,7 +51,7 @@ export async function loginAction(
     }
 
     // NIP target untuk akun pengujian dev (diambil dari konfigurasi .env)
-    const targetNip = process.env.DEV_AUTH_NIP?.trim();
+    const targetNip = process.env.DEV_AUTH_NIP?.trim().replace(/^["']|["']$/g, "");
     if (!targetNip) {
       return { error: "DEV_AUTH_NIP belum dikonfigurasi di environment (.env)." };
     }

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME, verifikasiTokenSesi } from "./auth/session";
 import { LANDING_ROLE } from "./auth/roleAktif";
+import { asalPublik } from "./auth/asalPublik";
 
 /**
  * Route MESIN - diautentikasi header rahasia di dalam handler-nya sendiri,
@@ -67,13 +68,15 @@ export async function middleware(request: NextRequest) {
   const isRuteMesin = (RUTE_MESIN as readonly string[]).includes(path);
 
   if (!session && !isLoginPage && !isRuteSso && !isRuteMesin) {
+    const origin = asalPublik(request.headers, request.url);
     return terapkanHeaderKeamanan(
-      NextResponse.redirect(new URL("/login", request.url))
+      NextResponse.redirect(new URL("/login", origin))
     );
   }
   if (session && isLoginPage) {
+    const origin = asalPublik(request.headers, request.url);
     return terapkanHeaderKeamanan(
-      NextResponse.redirect(new URL(LANDING_ROLE[session.role], request.url))
+      NextResponse.redirect(new URL(LANDING_ROLE[session.role], origin))
     );
   }
 

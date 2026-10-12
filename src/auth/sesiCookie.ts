@@ -17,7 +17,7 @@ export const OPSI_COOKIE_SESI = {
   // non-HTTPS - user kelihatan "berhasil login" tapi langsung logout
   // lagi di request berikutnya). COOKIE_SECURE eksplisit di .env,
   // default false - set "true" begitu server ini sudah pakai HTTPS asli.
-  secure: process.env.COOKIE_SECURE === "true",
+  secure: process.env.COOKIE_SECURE?.trim().replace(/^["']|["']$/g, "") === "true",
   sameSite: "lax",
   path: "/",
   maxAge: 60 * 60 * 8,
