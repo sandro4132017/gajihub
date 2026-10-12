@@ -56,9 +56,21 @@ export async function loginAction(
       return { error: "DEV_AUTH_NIP belum dikonfigurasi di environment (.env)." };
     }
 
-    const user = await prisma.user.findUnique({ where: { nip: targetNip } });
-    if (!user || !user.aktif) {
-      return { error: `Akun pengujian dengan NIP ${targetNip} tidak ditemukan atau tidak aktif di database.` };
+    let user = await prisma.user.findUnique({ where: { nip: targetNip } });
+    if (!user) {
+      const pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
+      user = await prisma.user.create({
+        data: {
+          nip: targetNip,
+          nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
+          role: "ADMIN",
+          satuanKerja: pegawai?.satuanKerja || null,
+          rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
+          aktif: true,
+        },
+      });
+    } else if (!user.aktif) {
+      return { error: `Akun pengujian dengan NIP ${targetNip} berstatus nonaktif di database.` };
     }
 
     // Jabatan buat ditampilkan & dicatat di ApprovalLog

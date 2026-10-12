@@ -43,7 +43,8 @@ interface SessionPayloadTersimpan extends SessionPayload {
 }
 
 function getSecretKey(): string {
-  const secret = process.env.SESSION_SECRET?.trim();
+  const raw = process.env.SESSION_SECRET?.trim();
+  const secret = raw ? raw.replace(/^["']|["']$/g, "") : "";
   if (!secret || new TextEncoder().encode(secret).length < 32) {
     throw new Error(
       "SESSION_SECRET wajib diatur dengan nilai acak minimal 32 byte."
