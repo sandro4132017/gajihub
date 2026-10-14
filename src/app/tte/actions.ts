@@ -55,27 +55,29 @@ export async function ambilStatusSptjmAction(
 
   const satkerEfektif = satker || user.satuanKerja || "Biro Keuangan dan BMN";
 
-  const dokumen = await prisma.dokumenTte.findFirst({
-    where: {
-      jenisDokumen: jenis,
-      periodeBulan: bulan,
-      periodeTahun: tahun,
-      satuanKerja: satkerEfektif,
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      status: true,
-      nomorDokumen: true,
-      fileDraftPath: true,
-      fileSignedPath: true,
-      idDokumenBsre: true,
-      signedAt: true,
-      penandatanganNama: true,
-      penandatanganNip: true,
-      penandatanganJabatan: true,
-    },
-  });
+  const dokumen = await prisma.dokumenTte
+    .findFirst({
+      where: {
+        jenisDokumen: jenis,
+        periodeBulan: bulan,
+        periodeTahun: tahun,
+        satuanKerja: satkerEfektif,
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        status: true,
+        nomorDokumen: true,
+        fileDraftPath: true,
+        fileSignedPath: true,
+        idDokumenBsre: true,
+        signedAt: true,
+        penandatanganNama: true,
+        penandatanganNip: true,
+        penandatanganJabatan: true,
+      },
+    })
+    .catch(() => null);
 
   const nomorDefault = generateNomorSptjmDefault(jenis, bulan, tahun);
 

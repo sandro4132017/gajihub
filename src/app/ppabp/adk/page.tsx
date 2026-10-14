@@ -212,59 +212,65 @@ export default async function ExportAdkPage({
             })
           ).map((r) => r.pegawai);
 
-  // 6. TTE SPTJM PPK DOKUMEN PER JENIS
+  // 6. TTE SPTJM PPK DOKUMEN PER JENIS (Defensif fallback null jika tabel belum dimigrasi)
   const [tteTukin, tteUangMakan, tteLembur] = await Promise.all([
-    prisma.dokumenTte.findFirst({
-      where: {
-        jenisDokumen: "SPTJM_TUKIN",
-        periodeBulan: bln,
-        periodeTahun: thn,
-        ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        status: true,
-        nomorDokumen: true,
-        fileSignedPath: true,
-        signedAt: true,
-        penandatanganNama: true,
-      },
-    }),
-    prisma.dokumenTte.findFirst({
-      where: {
-        jenisDokumen: "SPTJM_UANG_MAKAN",
-        periodeBulan: bln,
-        periodeTahun: thn,
-        ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        status: true,
-        nomorDokumen: true,
-        fileSignedPath: true,
-        signedAt: true,
-        penandatanganNama: true,
-      },
-    }),
-    prisma.dokumenTte.findFirst({
-      where: {
-        jenisDokumen: "SPTJM_LEMBUR",
-        periodeBulan: bln,
-        periodeTahun: thn,
-        ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        status: true,
-        nomorDokumen: true,
-        fileSignedPath: true,
-        signedAt: true,
-        penandatanganNama: true,
-      },
-    }),
+    prisma.dokumenTte
+      .findFirst({
+        where: {
+          jenisDokumen: "SPTJM_TUKIN",
+          periodeBulan: bln,
+          periodeTahun: thn,
+          ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          nomorDokumen: true,
+          fileSignedPath: true,
+          signedAt: true,
+          penandatanganNama: true,
+        },
+      })
+      .catch(() => null),
+    prisma.dokumenTte
+      .findFirst({
+        where: {
+          jenisDokumen: "SPTJM_UANG_MAKAN",
+          periodeBulan: bln,
+          periodeTahun: thn,
+          ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          nomorDokumen: true,
+          fileSignedPath: true,
+          signedAt: true,
+          penandatanganNama: true,
+        },
+      })
+      .catch(() => null),
+    prisma.dokumenTte
+      .findFirst({
+        where: {
+          jenisDokumen: "SPTJM_LEMBUR",
+          periodeBulan: bln,
+          periodeTahun: thn,
+          ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          nomorDokumen: true,
+          fileSignedPath: true,
+          signedAt: true,
+          penandatanganNama: true,
+        },
+      })
+      .catch(() => null),
   ]);
 
   const dokumenTteDipilih =

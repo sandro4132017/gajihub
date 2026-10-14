@@ -398,23 +398,25 @@ export default async function KalkulasiUnitPage({
     periodeTahun,
   });
 
-  const dokumenTteTerbaru = await prisma.dokumenTte.findFirst({
-    where: {
-      satuanKerja: satkerEfektif,
-      periodeBulan,
-      periodeTahun,
-      jenisDokumen: "SPTJM_LEMBUR",
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      status: true,
-      nomorDokumen: true,
-      fileSignedPath: true,
-      signedAt: true,
-      penandatanganNama: true,
-    },
-  });
+  const dokumenTteTerbaru = await prisma.dokumenTte
+    .findFirst({
+      where: {
+        satuanKerja: satkerEfektif,
+        periodeBulan,
+        periodeTahun,
+        jenisDokumen: "SPTJM_LEMBUR",
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        status: true,
+        nomorDokumen: true,
+        fileSignedPath: true,
+        signedAt: true,
+        penandatanganNama: true,
+      },
+    })
+    .catch(() => null);
 
   // Pemeriksaan kelengkapan SEBELUM tombol Hitung. Yang dikecualikan sudah
   // keluar lewat `pegawaiAktif` di atas - lihat alasannya di
