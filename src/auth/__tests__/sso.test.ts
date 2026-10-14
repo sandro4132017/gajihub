@@ -201,6 +201,18 @@ describe("asalPublik", () => {
     process.env.NACO_REDIRECT_URI = "bukan-url";
     expect(asalPublik(new Headers(), "http://localhost:3000/x")).toBe("http://localhost:3000");
   });
+
+  it("TIDAK membajak akses localhost meskipun NACO_REDIRECT_URI aktif", () => {
+    process.env.NACO_REDIRECT_URI = "https://gajihub.kemnaker.go.id/login/sso/callback";
+    const h = new Headers({ host: "localhost:3000" });
+    expect(asalPublik(h, "http://localhost:3000/login")).toBe("http://localhost:3000");
+  });
+
+  it("TIDAK membajak akses direct IP lokal meskipun NACO_REDIRECT_URI aktif", () => {
+    process.env.NACO_REDIRECT_URI = "https://gajihub.kemnaker.go.id/login/sso/callback";
+    const h = new Headers({ host: "192.168.221.44:3002" });
+    expect(asalPublik(h, "http://192.168.221.44:3002/login")).toBe("http://192.168.221.44:3002");
+  });
 });
 
 describe("ringkasFieldInfo - bentuk field", () => {
