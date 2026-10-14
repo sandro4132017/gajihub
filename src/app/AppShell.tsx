@@ -228,6 +228,11 @@ const MENU_ADMIN = [
     Ikon: RiUserSettingsLine,
   },
   {
+    href: "/ppabp/adk",
+    label: "Export ADK",
+    Ikon: RiFileDownloadLine,
+  },
+  {
     href: "/admin/sistem",
     label: "Konfigurasi & Kesehatan Sistem",
     Ikon: RiSettingsLine,
