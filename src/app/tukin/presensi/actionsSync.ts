@@ -81,8 +81,6 @@ export async function tarikPresensiEpresensiAction(
     });
     const peta = new Map(pegawaiDb.map((p) => [p.nip, p]));
 
-    const satkerFilter = (formData.get("satker") as string | null)?.trim() || null;
-
     // AKUN YANG TERKUNCI SATU UNIT TIDAK DIBERI DAFTAR UNIT LAIN.
     //
     // Tarikan ini selalu mengambil seluruh kementerian, jadi buat Kasubag TU
@@ -115,10 +113,6 @@ export async function tarikPresensiEpresensiAction(
       const pegawai = peta.get(p.nip);
       if (!pegawai) {
         catat("NIP belum ada di data Pegawai Gajihub");
-        continue;
-      }
-      if (satkerFilter && pegawai.satuanKerja !== satkerFilter) {
-        // Dilewati jika sedang memfilter unit kerja tertentu
         continue;
       }
       if (!canUploadRekapPresensi(authUser, pegawai.satuanKerja)) {

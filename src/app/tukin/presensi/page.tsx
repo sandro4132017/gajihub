@@ -275,7 +275,6 @@ export default async function PresensiTukinPage({
       <SinkronisasiPresensi
         defaultBulan={periodeBulan}
         defaultTahun={periodeTahun}
-        satker={satkerEfektif}
         tahunOpsi={daftarTahunPeriode()}
         koreksiMenunggu={koreksiMenunggu}
         paramDipertahankan={{
