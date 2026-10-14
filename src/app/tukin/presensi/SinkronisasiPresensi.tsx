@@ -16,12 +16,14 @@ const BATAS_ALASAN = 8;
 export function SinkronisasiPresensi({
   defaultBulan,
   defaultTahun,
+  satker,
   tahunOpsi,
   koreksiMenunggu,
   paramDipertahankan,
 }: {
   defaultBulan: number;
   defaultTahun: number;
+  satker?: string | null;
   koreksiMenunggu: number;
   tahunOpsi: number[];
   paramDipertahankan: Record<string, string>;
@@ -110,12 +112,13 @@ export function SinkronisasiPresensi({
           />
         </form>
 
-        <form action={formAction}>
+        <form action={formAction} className="flex flex-wrap items-center gap-2">
           {/* Periodenya diambil dari yang SEDANG DILIHAT, bukan dari kendali
               terpisah. Itu yang membuat "Tarik Data Presensi" tidak pernah
               menyentuh bulan selain yang tertulis di sebelahnya. */}
           <input type="hidden" name="bulan" value={defaultBulan} />
           <input type="hidden" name="tahun" value={defaultTahun} />
+          {satker && <input type="hidden" name="satker" value={satker} />}
           <button
             type="submit"
             disabled={pending}
@@ -125,9 +128,27 @@ export function SinkronisasiPresensi({
               ? "Menarik data..."
               : koreksiMenunggu > 0
                 ? "Terapkan Koreksi Presensi"
-                : "Tarik Data Presensi"}
+                : satker
+                  ? `Tarik Presensi (${satker.length > 25 ? satker.slice(0, 22) + "..." : satker})`
+                  : "Tarik Data Presensi"}
           </button>
         </form>
+
+        {satker && (
+          <form action={formAction}>
+            <input type="hidden" name="bulan" value={defaultBulan} />
+            <input type="hidden" name="tahun" value={defaultTahun} />
+            <input type="hidden" name="satker" value="" />
+            <button
+              type="submit"
+              disabled={pending}
+              className="btn btn-secondary px-3.5 py-2.5 text-xs font-semibold"
+              title="Tarik data presensi seluruh pegawai kementerian (semua satker)"
+            >
+              {pending ? "Menarik..." : "Tarik Seluruh Satker"}
+            </button>
+          </form>
+        )}
       </div>
 
       {koreksiMenunggu > 0 && (

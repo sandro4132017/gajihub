@@ -81,6 +81,8 @@ export async function tarikPresensiEpresensiAction(
     });
     const peta = new Map(pegawaiDb.map((p) => [p.nip, p]));
 
+    const satkerFilter = (formData.get("satker") as string | null)?.trim() || null;
+
     // AKUN YANG TERKUNCI SATU UNIT TIDAK DIBERI DAFTAR UNIT LAIN.
     //
     // Tarikan ini selalu mengambil seluruh kementerian, jadi buat Kasubag TU
@@ -102,12 +104,21 @@ export async function tarikPresensiEpresensiAction(
     const catat = (alasan: string) => alasanDilewati.set(alasan, (alasanDilewati.get(alasan) ?? 0) + 1);
     for (const d of tarikan.dilewati) catat(d.alasan);
 
-    let tersimpan = 0;
+    const siapSimpan: {
+      pegawaiId: string;
+      nip: string;
+      hasil: (typeof tarikan.pegawai)[number]["hasil"];
+    }[] = [];
+
     let kejadianDikecualikan = 0;
     for (const p of tarikan.pegawai) {
       const pegawai = peta.get(p.nip);
       if (!pegawai) {
         catat("NIP belum ada di data Pegawai Gajihub");
+        continue;
+      }
+      if (satkerFilter && pegawai.satuanKerja !== satkerFilter) {
+        // Dilewati jika sedang memfilter unit kerja tertentu
         continue;
       }
       if (!canUploadRekapPresensi(authUser, pegawai.satuanKerja)) {
@@ -122,19 +133,46 @@ export async function tarikPresensiEpresensiAction(
       // pegawai di luar kewenangan tidak ikut ditulis, jadi tidak boleh ikut
       // dilaporkan sebagai "sudah dikecualikan".
       kejadianDikecualikan += p.hasil.kejadianDikecualikanKendala;
-      await simpanHasilPresensi(prisma, {
+      siapSimpan.push({
         pegawaiId: pegawai.id,
-        periodeBulan: bulan,
-        periodeTahun: tahun,
+        nip: p.nip,
         hasil: p.hasil,
-        diunggahOlehId: user.id,
-        sourceSystem: "e-Presensi (sinkronisasi)",
       });
-      tersimpan++;
     }
 
-    revalidatePath("/tukin/presensi");
-    revalidatePath("/tukin");
+    // SIMPAN SECARA PARALEL BERTAHAP (CONCURRENCY 15)
+    // Jalur sequential memakan 60-90 detik untuk 5.000+ pegawai sehingga memicu HTTP timeout (500)
+    // di Next.js Server Action. Dengan concurrency 15, proses selesai dalam ~15 detik.
+    let tersimpan = 0;
+    const CONCURRENCY = 15;
+    let index = 0;
+    const workers = new Array(CONCURRENCY).fill(0).map(async () => {
+      while (index < siapSimpan.length) {
+        const item = siapSimpan[index++];
+        if (!item) break;
+        try {
+          await simpanHasilPresensi(prisma, {
+            pegawaiId: item.pegawaiId,
+            periodeBulan: bulan,
+            periodeTahun: tahun,
+            hasil: item.hasil,
+            diunggahOlehId: user.id,
+            sourceSystem: "e-Presensi (sinkronisasi)",
+          });
+          tersimpan++;
+        } catch (simpanErr) {
+          catat(`Gagal simpan database (${simpanErr instanceof Error ? simpanErr.message : String(simpanErr)})`);
+        }
+      }
+    });
+    await Promise.all(workers);
+
+    try {
+      revalidatePath("/tukin/presensi");
+      revalidatePath("/tukin");
+    } catch {
+      // Revalidasi tidak boleh menggagalkan hasil aksi
+    }
 
     return {
       ringkasan: {
