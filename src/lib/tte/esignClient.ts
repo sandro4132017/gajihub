@@ -55,25 +55,45 @@ function getEsignConfig() {
  */
 export async function checkUserStatus(nik: string): Promise<UserStatusResult> {
   const { baseUrl, authHeader } = getEsignConfig();
+  const cleanNik = (nik || "").trim();
+
+  if (!cleanNik) {
+    return {
+      success: false,
+      statusCode: 400,
+      status: "INPUT",
+      message: "NIK penandatangan belum diisi.",
+    };
+  }
 
   try {
-    const res = await fetch(`${baseUrl}/api/user/status/${encodeURIComponent(nik)}`, {
+    const res = await fetch(`${baseUrl}/api/user/status/${encodeURIComponent(cleanNik)}`, {
       method: "GET",
       headers: {
         Authorization: authHeader,
       },
+      cache: "no-store",
     });
 
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      if (res.status === 500 || res.status === 404) {
+      if (res.status === 404) {
         return {
           success: false,
-          statusCode: res.status,
-          status: "BELUM_TERDAFTAR",
+          statusCode: 404,
+          status: "NOT_FOUND",
+          message: "Layanan verifikasi status NIK tidak ditemukan di server BSrE.",
+        };
+      }
+
+      if (res.status === 500) {
+        return {
+          success: false,
+          statusCode: 500,
+          status: "SERVER_ERROR",
           message:
-            "NIK belum terdaftar di modul BSrE server ini. Untuk pengujian silakan gunakan NIK akun demo: 0803202100007062.",
+            "Server BSrE sedang mengalami kendala internal (HTTP 500). Silakan coba sesaat lagi atau gunakan mode simulasi.",
         };
       }
 
@@ -85,11 +105,21 @@ export async function checkUserStatus(nik: string): Promise<UserStatusResult> {
       };
     }
 
+    // Response normal BSrE:
+    // status_code 1111 -> status "ISSUE"
+    // status_code 2011 -> status "NOT_REGISTERED"
+    const statusRaw = data.status || (data.status_code === 1111 ? "ISSUE" : "UNKNOWN");
+    const isIssue = data.status_code === 1111 || String(statusRaw).toUpperCase() === "ISSUE";
+
     return {
-      success: true,
+      success: isIssue,
       statusCode: data.status_code || res.status,
-      status: data.status || "UNKNOWN",
-      message: data.message || "Pengecekan status berhasil.",
+      status: String(statusRaw).toUpperCase(),
+      message:
+        data.message ||
+        (isIssue
+          ? "Sertifikat elektronik aktif dan siap digunakan."
+          : "NIK belum terdaftar di modul BSrE server ini."),
     };
   } catch (err: any) {
     return {
@@ -100,6 +130,7 @@ export async function checkUserStatus(nik: string): Promise<UserStatusResult> {
     };
   }
 }
+
 
 /**
  * Kirim request penandatanganan dokumen PDF ke server Esign Client BSrE

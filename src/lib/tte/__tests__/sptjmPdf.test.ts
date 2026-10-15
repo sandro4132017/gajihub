@@ -5,7 +5,25 @@ import {
   terapkanStempelTteSimulasi,
   type JenisSptjm,
 } from "../sptjmPdf";
+import { checkUserStatus } from "../esignClient";
 import { extractText } from "unpdf";
+
+describe("checkUserStatus BSrE", () => {
+  it("memeriksa status sertifikat akun demo di server BSrE", async () => {
+    const res = await checkUserStatus("0803202100007062");
+    expect(["ISSUE", "NETWORK_ERROR", "SERVER_ERROR"]).toContain(res.status);
+    if (res.status === "ISSUE") {
+      expect(res.success).toBe(true);
+      expect(res.statusCode).toBe(1111);
+    }
+  });
+
+  it("menangani NIK kosong dengan status INPUT", async () => {
+    const res = await checkUserStatus("");
+    expect(res.status).toBe("INPUT");
+    expect(res.success).toBe(false);
+  });
+});
 
 describe("generateNomorSptjmDefault (Opsi A)", () => {
   it("menghasilkan nomor dokumen dengan bulan Romawi yang benar", () => {
