@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   generateDraftSptjm,
   generateNomorSptjmDefault,
+  terapkanStempelTteSimulasi,
   type JenisSptjm,
 } from "../sptjmPdf";
 import { extractText } from "unpdf";
@@ -50,5 +51,45 @@ describe("generateDraftSptjm Universal", () => {
     expect(fullText).toContain("Pejabat Pembuat Komitmen");
     expect(fullText).toContain(keyword);
     expect(fullText).toContain("Balai Sertifikasi Elektronik (BSrE)");
+  });
+
+  it("merender QR Code dan label pada mode previewTte", async () => {
+    const pdfBuffer = await generateDraftSptjm({
+      jenis: "SPTJM_TUKIN",
+      nomorDokumen: "1/3059/KU.02/VIII/2026",
+      periodeBulan: 8,
+      periodeTahun: 2026,
+      previewTte: true,
+    });
+
+    const { text } = await extractText(new Uint8Array(pdfBuffer));
+    const fullText = text.join(" ");
+    expect(fullText).toContain("DITANDATANGANI SECARA ELEKTRONIK");
+    expect(fullText).toContain("[ PRATINJAU DOKUMEN TTE ]");
+  });
+
+  it("membubuhkan QR Code asli dan segel visual BSrE saat terapkanStempelTteSimulasi", async () => {
+    const draft = await generateDraftSptjm({
+      jenis: "SPTJM_LEMBUR",
+      nomorDokumen: "1/2903/KU.02/VIII/2026",
+      periodeBulan: 8,
+      periodeTahun: 2026,
+    });
+
+    const signed = await terapkanStempelTteSimulasi(draft, {
+      namaPenandatangan: "Alpha Sandro Adithyaswara, S.Sos., M.M.",
+      nipPenandatangan: "19870323 201503 1 002",
+      idDokumenBsre: "BSRE-TEST-123456",
+      verifyUrl: "https://gajihub.kemnaker.go.id/tte/verify/test",
+    });
+
+    expect(signed).toBeInstanceOf(Buffer);
+    expect(signed.length).toBeGreaterThan(draft.length);
+
+    const { text } = await extractText(new Uint8Array(signed));
+    const fullText = text.join(" ");
+    expect(fullText).toContain("DITANDATANGANI SECARA ELEKTRONIK");
+    expect(fullText).toContain("Balai Sertifikasi Elektronik (BSrE)");
+    expect(fullText).toContain("BSRE-TEST-123456");
   });
 });

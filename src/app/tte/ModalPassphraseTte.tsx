@@ -58,7 +58,9 @@ export function ModalPassphraseTte({
   onSukses,
 }: ModalPassphraseTteProps) {
   const [state, formAction, pending] = useActionState(signSptjmPpkAction, INITIAL_STATE);
-  const [passphrase, setPassphrase] = useState("");
+  const [passphrase, setPassphrase] = useState(
+    defaultNik === "0803202100007062" ? "Bsre2026.#!" : ""
+  );
   const [nik, setNik] = useState(defaultNik);
 
   const romawi =
@@ -368,9 +370,21 @@ export function ModalPassphraseTte({
 
           {/* Passphrase BSrE (Kriteria V & VIII: type="password", autocomplete="off") */}
           <div>
-            <label className="block text-xs font-semibold text-ink" htmlFor="tte-passphrase">
-              Passphrase BSrE
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-ink" htmlFor="tte-passphrase">
+                Passphrase BSrE
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setNik("0803202100007062");
+                  setPassphrase("Bsre2026.#!");
+                }}
+                className="text-[11px] font-medium text-biru hover:underline"
+              >
+                Gunakan Akun Demo
+              </button>
+            </div>
             <div className="relative mt-1">
               <input
                 id="tte-passphrase"
@@ -380,7 +394,7 @@ export function ModalPassphraseTte({
                 onChange={(e) => setPassphrase(e.target.value)}
                 autoComplete="off"
                 placeholder="Masukkan passphrase sertifikat elektronik Anda"
-                className="field-input w-full pr-8 text-xs"
+                className="field-input w-full pr-8 text-xs font-mono"
                 required
               />
               <FiLock className="absolute right-2.5 top-2.5 size-3.5 text-muted pointer-events-none" />

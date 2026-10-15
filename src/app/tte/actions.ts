@@ -129,6 +129,7 @@ export async function buatDraftSptjmAction(params: {
       jabatanPenandatangan: "Pejabat Pembuat Komitmen",
       satuanKerja: satker,
       unitEselon1: "Sekretariat Jenderal",
+      previewTte: true,
     });
 
     const tempFileName = `draft_${params.jenis}_${params.bulan}_${params.tahun}_${Date.now()}.pdf`;
@@ -259,6 +260,20 @@ export async function signSptjmPpkAction(
         errorMsg.includes("network") ||
         errorMsg.includes("fetch failed") ||
         errorMsg.includes("econnrefused");
+      const isPassphraseError =
+        errorMsg.includes("passphrase") ||
+        signResult.statusCode === 0;
+
+      // Jika server BSrE aktif dan mengembalikan passphrase salah, jangan samarkan sebagai simulasi
+      if (isPassphraseError) {
+        await prisma.dokumenTte.update({
+          where: { id: recordDokumen.id },
+          data: { status: "GAGAL" },
+        });
+        return {
+          error: signResult.error || "Passphrase BSrE salah. Untuk akun uji coba gunakan: Bsre2026.#!",
+        };
+      }
 
       if (isConnectionIssue || process.env.NODE_ENV !== "production") {
         isSimulasiMode = true;

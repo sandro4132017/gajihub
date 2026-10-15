@@ -150,14 +150,18 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
 
     if (!res.ok || contentType.includes("application/json")) {
       const errorJson = await res.json().catch(() => ({}));
-      const errorMsg =
+      let errorMsg =
         errorJson.message ||
         errorJson.error ||
         `Gagal menandatangani dokumen (HTTP ${res.status}).`;
 
+      if (errorJson.status_code === 0) {
+        errorMsg = "Passphrase BSrE salah atau sertifikat tidak cocok. (Untuk akun demo gunakan: Bsre2026.#!)";
+      }
+
       return {
         success: false,
-        statusCode: res.status,
+        statusCode: errorJson.status_code !== undefined ? errorJson.status_code : res.status,
         error: errorMsg,
       };
     }

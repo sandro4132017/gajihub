@@ -1,4 +1,5 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import QRCode from "qrcode";
 import fs from "fs";
 import path from "path";
 import {
@@ -255,13 +256,86 @@ export async function generateDraftSptjm(data: DataSptjmUniversal): Promise<Buff
     maxWidth: 210,
   });
 
-  // TAG KOORDINAT TTE BSrE ('#' kecil transparan / penanda letak QR Code BSrE)
-  page.drawText("#", {
-    x: posXSign + 25,
-    y: curY - 32,
-    size: 9,
-    font: fontRegular,
-  });
+  // TAG KOORDINAT TTE BSrE ATAU PREVIEW TTE VISUAL
+  if (data.previewTte) {
+    try {
+      const qrBuf = await QRCode.toBuffer(
+        `https://gajihub.kemnaker.go.id/tte/verify/preview`,
+        {
+          type: "png",
+          width: 250,
+          margin: 1,
+          color: { dark: "#002855", light: "#FFFFFF" },
+        }
+      );
+      const qrImg = await doc.embedPng(qrBuf);
+
+      page.drawRectangle({
+        x: posXSign,
+        y: curY - 70,
+        width: 205,
+        height: 66,
+        color: rgb(0.98, 0.99, 1.0),
+        borderColor: rgb(0.2, 0.45, 0.75),
+        borderWidth: 0.8,
+      });
+
+      page.drawImage(qrImg, {
+        x: posXSign + 4,
+        y: curY - 67,
+        width: 60,
+        height: 60,
+      });
+
+      page.drawText("DITANDATANGANI SECARA ELEKTRONIK", {
+        x: posXSign + 68,
+        y: curY - 20,
+        size: 6.5,
+        font: fontBold,
+        color: rgb(0.08, 0.28, 0.58),
+      });
+
+      page.drawText("Balai Sertifikasi Elektronik (BSrE)", {
+        x: posXSign + 68,
+        y: curY - 30,
+        size: 6,
+        font: fontBold,
+        color: rgb(0.15, 0.15, 0.15),
+      });
+
+      page.drawText("Badan Siber dan Sandi Negara", {
+        x: posXSign + 68,
+        y: curY - 40,
+        size: 5.5,
+        font: fontRegular,
+        color: rgb(0.35, 0.35, 0.35),
+      });
+
+      page.drawText("[ PRATINJAU DOKUMEN TTE ]", {
+        x: posXSign + 68,
+        y: curY - 50,
+        size: 5.5,
+        font: fontBold,
+        color: rgb(0.8, 0.4, 0.0),
+      });
+
+      page.drawText("Scan QR untuk verifikasi naskah", {
+        x: posXSign + 68,
+        y: curY - 60,
+        size: 5,
+        font: fontRegular,
+        color: rgb(0.2, 0.5, 0.3),
+      });
+    } catch {}
+  } else {
+    page.drawText("#", {
+      x: posXSign + 25,
+      y: curY - 32,
+      size: 9,
+      font: fontRegular,
+      color: rgb(0.85, 0.85, 0.85),
+    });
+  }
   curY -= 75;
 
   // Nama Penandatangan di Tanda Tangan
@@ -421,50 +495,75 @@ export async function terapkanStempelTteSimulasi(
   const fontRegular = await doc.embedFont(StandardFonts.Helvetica);
 
   const posX = 330;
-  const posY = 175;
+  const posY = 200; // Posisi ruang tanda tangan tepat di atas nama penandatangan
 
-  // Gambar kotak visual TTE
+  // Generate QR Code asli dari URL verifikasi naskah
+  const qrBuf = await QRCode.toBuffer(options.verifyUrl, {
+    type: "png",
+    width: 250,
+    margin: 1,
+    color: { dark: "#002855", light: "#FFFFFF" },
+  });
+  const qrImg = await doc.embedPng(qrBuf);
+
+  // Gambar kotak visual segel resmi TTE BSrE (menutupi tanda pagar '#' dengan latar putih)
   page.drawRectangle({
     x: posX,
-    y: posY - 45,
-    width: 200,
-    height: 48,
-    color: rgb(0.97, 0.98, 1.0),
-    borderColor: rgb(0.25, 0.45, 0.7),
-    borderWidth: 0.8,
+    y: posY,
+    width: 205,
+    height: 68,
+    color: rgb(1, 1, 1),
+    borderColor: rgb(0.15, 0.4, 0.7),
+    borderWidth: 0.9,
   });
 
-  // Teks Informasi TTE
+  // Gambar QR Code TTE
+  page.drawImage(qrImg, {
+    x: posX + 4,
+    y: posY + 4,
+    width: 60,
+    height: 60,
+  });
+
+  // Teks Informasi Resmi TTE BSrE
   page.drawText("DITANDATANGANI SECARA ELEKTRONIK", {
-    x: posX + 6,
-    y: posY - 10,
+    x: posX + 68,
+    y: posY + 52,
     size: 6.5,
     font: fontBold,
-    color: rgb(0.15, 0.35, 0.65),
+    color: rgb(0.08, 0.28, 0.58),
   });
 
-  page.drawText(options.namaPenandatangan, {
-    x: posX + 6,
-    y: posY - 20,
-    size: 7,
-    font: fontBold,
-    color: rgb(0.1, 0.1, 0.1),
-  });
-
-  page.drawText(`NIP. ${options.nipPenandatangan}`, {
-    x: posX + 6,
-    y: posY - 29,
+  page.drawText("Balai Sertifikasi Elektronik (BSrE)", {
+    x: posX + 68,
+    y: posY + 41,
     size: 6,
-    font: fontRegular,
-    color: rgb(0.2, 0.2, 0.2),
+    font: fontBold,
+    color: rgb(0.15, 0.15, 0.15),
   });
 
-  page.drawText(`BSrE BSSN | ID: ${options.idDokumenBsre.slice(0, 16)}...`, {
-    x: posX + 6,
-    y: posY - 39,
+  page.drawText("Badan Siber dan Sandi Negara", {
+    x: posX + 68,
+    y: posY + 31,
+    size: 5.5,
+    font: fontRegular,
+    color: rgb(0.35, 0.35, 0.35),
+  });
+
+  page.drawText(`ID: ${options.idDokumenBsre.slice(0, 18)}`, {
+    x: posX + 68,
+    y: posY + 20,
     size: 5.5,
     font: fontRegular,
     color: rgb(0.4, 0.4, 0.4),
+  });
+
+  page.drawText("Scan QR untuk verifikasi keaslian", {
+    x: posX + 68,
+    y: posY + 9,
+    size: 5.5,
+    font: fontRegular,
+    color: rgb(0.15, 0.5, 0.25),
   });
 
   const signedBytes = await doc.save();

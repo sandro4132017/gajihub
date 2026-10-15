@@ -15,6 +15,7 @@ export interface DataSptjmUniversal {
   // Metadata angka (opsional untuk catatan/arsip)
   jumlahPegawai?: number;
   totalNominal?: number;
+  previewTte?: boolean;
 }
 
 // Backward compatibility untuk pemanggil lama
