@@ -7,7 +7,13 @@ import {
   buatDraftSptjmAction,
   type TteActionResult,
 } from "./actions";
-import { type JenisSptjm, generateNomorSptjmDefault } from "@/lib/tte/sptjmTypes";
+import {
+  type JenisSptjm,
+  BULAN_ROMAWI,
+  DEFAULT_NOMOR_AGENDA_SPTJM,
+  generateNomorSptjmDefault,
+  parseNomorSptjm,
+} from "@/lib/tte/sptjmTypes";
 import { Modal } from "@/app/Modal";
 import {
   FiCheckCircle,
@@ -55,11 +61,25 @@ export function ModalPassphraseTte({
   const [passphrase, setPassphrase] = useState("");
   const [nik, setNik] = useState(defaultNik);
 
-  // Penomoran Dokumen Opsi A: Default otomatis dari sistem & editable
+  const romawi =
+    BULAN_ROMAWI[Math.max(0, Math.min(11, periodeBulan - 1))] || "X";
+
+  // Penomoran Dokumen: Bagian 1, 3, 4, 5 tetap/baku, Bagian 2 (nomor agenda) dapat diedit
   const nomorAwal =
     defaultNomorDokumen ||
     generateNomorSptjmDefault(jenisDokumen, periodeBulan, periodeTahun);
-  const [nomorDokumen, setNomorDokumen] = useState(nomorAwal);
+
+  const [nomorUrut, setNomorUrut] = useState(() => {
+    return parseNomorSptjm(nomorAwal, periodeBulan, periodeTahun).nomorUrut;
+  });
+  const [nomorKustom, setNomorKustom] = useState(nomorAwal);
+  const [isModeKustom, setIsModeKustom] = useState(() => {
+    return parseNomorSptjm(nomorAwal, periodeBulan, periodeTahun).isKustom;
+  });
+
+  const nomorDokumen = isModeKustom
+    ? nomorKustom
+    : `1/${nomorUrut.trim() || "0000"}/KU.02/${romawi}/${periodeTahun}`;
 
   const [statusSertifikat, setStatusSertifikat] = useState<{
     loading: boolean;
@@ -74,10 +94,13 @@ export function ModalPassphraseTte({
   // Perbarui nomor dokumen saat jenis/periode berubah
   useEffect(() => {
     if (terbuka) {
-      setNomorDokumen(
+      const baru =
         defaultNomorDokumen ||
-          generateNomorSptjmDefault(jenisDokumen, periodeBulan, periodeTahun)
-      );
+        generateNomorSptjmDefault(jenisDokumen, periodeBulan, periodeTahun);
+      const parsed = parseNomorSptjm(baru, periodeBulan, periodeTahun);
+      setNomorUrut(parsed.nomorUrut);
+      setNomorKustom(baru);
+      setIsModeKustom(parsed.isKustom);
     }
   }, [terbuka, jenisDokumen, periodeBulan, periodeTahun, defaultNomorDokumen]);
 
@@ -231,27 +254,74 @@ export function ModalPassphraseTte({
             <div className="text-[11px] text-red">{draftError}</div>
           )}
 
-          {/* OPSI A: Nomor Dokumen Editable */}
+          {/* Penomoran Dokumen Sesuai Format Resmi Tata Naskah Dinas Kemnaker */}
           <div>
             <div className="flex items-center justify-between">
               <label
-                className="block text-xs font-semibold text-ink flex items-center gap-1"
-                htmlFor="tte-nomor"
+                className="text-xs font-semibold text-ink flex items-center gap-1"
+                htmlFor="tte-nomor-urut"
               >
-                <FiEdit2 className="size-3 text-biru" /> Nomor Dokumen SPTJM (Opsi A)
+                <FiEdit2 className="size-3 text-biru" /> Nomor Dokumen SPTJM
               </label>
-              <span className="text-[10px] text-muted">Dapat diedit sesuai register</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isModeKustom) {
+                    setNomorKustom(nomorDokumen);
+                  }
+                  setIsModeKustom(!isModeKustom);
+                }}
+                className="text-[11px] text-biru hover:underline font-medium"
+              >
+                {isModeKustom ? "Gunakan Format Baku Kemnaker" : "Edit Format Lengkap"}
+              </button>
             </div>
-            <input
-              id="tte-nomor"
-              type="text"
-              name="nomorDokumen"
-              value={nomorDokumen}
-              onChange={(e) => setNomorDokumen(e.target.value)}
-              className="field-input mt-1 w-full font-mono text-xs font-semibold"
-              placeholder="Contoh: 1/3059/KU.02/X/2026"
-              required
-            />
+
+            {!isModeKustom ? (
+              <div className="mt-1">
+                <div className="flex items-stretch rounded-lg border border-line-2 bg-surface overflow-hidden shadow-xs focus-within:border-biru focus-within:ring-1 focus-within:ring-biru">
+                  <span className="inline-flex items-center bg-surface-2 px-2.5 py-1.5 font-mono text-xs font-bold text-muted border-r border-line-2 select-none">
+                    1/
+                  </span>
+                  <input
+                    id="tte-nomor-urut"
+                    type="text"
+                    value={nomorUrut}
+                    onChange={(e) => setNomorUrut(e.target.value)}
+                    className="w-24 px-2.5 py-1.5 font-mono text-xs font-bold text-ink bg-transparent focus:outline-none"
+                    placeholder={DEFAULT_NOMOR_AGENDA_SPTJM[jenisDokumen] || "2903"}
+                    title="Nomor agenda keluar yang dapat diedit"
+                    required
+                  />
+                  <span className="inline-flex flex-1 items-center bg-surface-2 px-2.5 py-1.5 font-mono text-xs font-semibold text-muted border-l border-line-2 select-none">
+                    /KU.02/{romawi}/{periodeTahun}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-[11px] text-muted">
+                  <span>
+                    Format di surat: <strong className="font-mono text-ink">NOMOR {nomorDokumen}</strong>
+                  </span>
+                  <span className="text-[10px] text-muted italic">Hanya angka agenda yang diedit</span>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-1">
+                <input
+                  id="tte-nomor"
+                  type="text"
+                  value={nomorKustom}
+                  onChange={(e) => setNomorKustom(e.target.value)}
+                  className="field-input w-full font-mono text-xs font-semibold"
+                  placeholder={`1/2903/KU.02/${romawi}/${periodeTahun}`}
+                  required
+                />
+                <p className="mt-1 text-[11px] text-muted">
+                  Mode manual aktif. Masukkan nomor naskah dinas lengkap secara bebas.
+                </p>
+              </div>
+            )}
+
+            <input type="hidden" name="nomorDokumen" value={nomorDokumen} />
           </div>
 
           {/* Status Sertifikat BSrE */}

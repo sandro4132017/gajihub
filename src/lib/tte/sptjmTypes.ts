@@ -42,6 +42,12 @@ export const NAMA_BULAN = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
 
+export const DEFAULT_NOMOR_AGENDA_SPTJM: Record<JenisSptjm, string> = {
+  SPTJM_LEMBUR: "2903",
+  SPTJM_TUKIN: "3059",
+  SPTJM_UANG_MAKAN: "3106",
+};
+
 /**
  * Generate nomor dokumen default sesuai template resmi naskah dinas Kemnaker (Opsi A)
  */
@@ -51,16 +57,33 @@ export function generateNomorSptjmDefault(
   tahun: number
 ): string {
   const romawi = BULAN_ROMAWI[Math.max(0, Math.min(11, bulan - 1))] || "X";
+  const nomorAgenda = DEFAULT_NOMOR_AGENDA_SPTJM[jenis] || "3000";
   // Nomor kode klasifikasi arsip naskah dinas Kemnaker: KU.02 (Keuangan)
-  switch (jenis) {
-    case "SPTJM_LEMBUR":
-      return `1/2903/KU.02/${romawi}/${tahun}`;
-    case "SPTJM_TUKIN":
-      return `1/3059/KU.02/${romawi}/${tahun}`;
-    case "SPTJM_UANG_MAKAN":
-      return `1/3106/KU.02/${romawi}/${tahun}`;
-    default:
-      return `1/3000/KU.02/${romawi}/${tahun}`;
+  return `1/${nomorAgenda}/KU.02/${romawi}/${tahun}`;
+}
+
+/**
+ * Parse nomor dokumen untuk memisahkan nomor agenda (bisa diedit)
+ * dari bagian tetap (1/..., /KU.02/..., bulan romawi, dan tahun)
+ */
+export function parseNomorSptjm(
+  nomor: string,
+  bulan: number,
+  tahun: number
+): { nomorUrut: string; isKustom: boolean } {
+  const romawi = BULAN_ROMAWI[Math.max(0, Math.min(11, bulan - 1))] || "X";
+  const cleaned = nomor.trim().replace(/^NOMOR\s+/i, "");
+  // Cocokkan pola standar: 1/{nomorUrut}/KU.02/{romawi}/{tahun}
+  const regex = new RegExp(`^1\\/([^\\/]+)\\/KU\\.02\\/${romawi}\\/${tahun}$`, "i");
+  const match = cleaned.match(regex);
+  if (match) {
+    return { nomorUrut: match[1], isKustom: false };
   }
+  // Alternatif bila format memiliki KU.02
+  const matchGeneric = cleaned.match(/^1\/([^\/]+)\/KU\.02\//i);
+  if (matchGeneric) {
+    return { nomorUrut: matchGeneric[1], isKustom: false };
+  }
+  return { nomorUrut: cleaned, isKustom: true };
 }
 
