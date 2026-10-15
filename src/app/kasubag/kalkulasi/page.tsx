@@ -398,25 +398,65 @@ export default async function KalkulasiUnitPage({
     periodeTahun,
   });
 
-  const dokumenTteTerbaru = await prisma.dokumenTte
-    .findFirst({
-      where: {
-        satuanKerja: satkerEfektif,
-        periodeBulan,
-        periodeTahun,
-        jenisDokumen: "SPTJM_LEMBUR",
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        status: true,
-        nomorDokumen: true,
-        fileSignedPath: true,
-        signedAt: true,
-        penandatanganNama: true,
-      },
-    })
-    .catch(() => null);
+  const [tteTukin, tteUangMakan, tteLembur] = await Promise.all([
+    prisma.dokumenTte
+      .findFirst({
+        where: {
+          satuanKerja: satkerEfektif,
+          periodeBulan,
+          periodeTahun,
+          jenisDokumen: "SPTJM_TUKIN",
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          nomorDokumen: true,
+          fileSignedPath: true,
+          signedAt: true,
+          penandatanganNama: true,
+        },
+      })
+      .catch(() => null),
+    prisma.dokumenTte
+      .findFirst({
+        where: {
+          satuanKerja: satkerEfektif,
+          periodeBulan,
+          periodeTahun,
+          jenisDokumen: "SPTJM_UANG_MAKAN",
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          nomorDokumen: true,
+          fileSignedPath: true,
+          signedAt: true,
+          penandatanganNama: true,
+        },
+      })
+      .catch(() => null),
+    prisma.dokumenTte
+      .findFirst({
+        where: {
+          satuanKerja: satkerEfektif,
+          periodeBulan,
+          periodeTahun,
+          jenisDokumen: "SPTJM_LEMBUR",
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          nomorDokumen: true,
+          fileSignedPath: true,
+          signedAt: true,
+          penandatanganNama: true,
+        },
+      })
+      .catch(() => null),
+  ]);
 
   // Pemeriksaan kelengkapan SEBELUM tombol Hitung. Yang dikecualikan sudah
   // keluar lewat `pegawaiAktif` di atas - lihat alasannya di
@@ -1349,23 +1389,66 @@ export default async function KalkulasiUnitPage({
           <p className="mt-0.5 text-xs text-muted">Pengiriman mengunci periode ini.</p>
         </div>
 
-        {/* Panel Tanda Tangan Elektronik (TTE) BSrE untuk Dokumen SPTJM */}
-        <div className="border-b border-line-2 px-4 py-3 sm:px-5">
-          <PanelTteSptjm
-            periodeBulan={periodeBulan}
-            periodeTahun={periodeTahun}
-            satuanKerja={satkerEfektif}
-            dokumenTteTerbaru={
-              dokumenTteTerbaru
-                ? {
-                    ...dokumenTteTerbaru,
-                    signedAt: dokumenTteTerbaru.signedAt
-                      ? dokumenTteTerbaru.signedAt.toISOString()
-                      : null,
-                  }
-                : null
-            }
-          />
+        {/* Panel Tanda Tangan Elektronik (TTE) BSrE untuk 3 Dokumen SPTJM (Tukin, Uang Makan, Uang Lembur) */}
+        <div className="border-b border-line-2 px-4 py-4 sm:px-5 space-y-3">
+          <div>
+            <h3 className="text-sm font-bold text-ink">
+              Tanda Tangan Elektronik (TTE) SPTJM
+            </h3>
+            <p className="mt-0.5 text-xs text-muted">
+              Pengesahan SPTJM digital via BSrE BSSN untuk 3 berkas (Tunjangan Kinerja, Uang Makan, dan Uang Lembur) sebelum dikirim ke PPABP.
+            </p>
+          </div>
+          <div className="space-y-2.5">
+            <PanelTteSptjm
+              jenisDokumen="SPTJM_TUKIN"
+              periodeBulan={periodeBulan}
+              periodeTahun={periodeTahun}
+              satuanKerja={satkerEfektif}
+              dokumenTteTerbaru={
+                tteTukin
+                  ? {
+                      ...tteTukin,
+                      signedAt: tteTukin.signedAt
+                        ? tteTukin.signedAt.toISOString()
+                        : null,
+                    }
+                  : null
+              }
+            />
+            <PanelTteSptjm
+              jenisDokumen="SPTJM_UANG_MAKAN"
+              periodeBulan={periodeBulan}
+              periodeTahun={periodeTahun}
+              satuanKerja={satkerEfektif}
+              dokumenTteTerbaru={
+                tteUangMakan
+                  ? {
+                      ...tteUangMakan,
+                      signedAt: tteUangMakan.signedAt
+                        ? tteUangMakan.signedAt.toISOString()
+                        : null,
+                    }
+                  : null
+              }
+            />
+            <PanelTteSptjm
+              jenisDokumen="SPTJM_LEMBUR"
+              periodeBulan={periodeBulan}
+              periodeTahun={periodeTahun}
+              satuanKerja={satkerEfektif}
+              dokumenTteTerbaru={
+                tteLembur
+                  ? {
+                      ...tteLembur,
+                      signedAt: tteLembur.signedAt
+                        ? tteLembur.signedAt.toISOString()
+                        : null,
+                    }
+                  : null
+              }
+            />
+          </div>
         </div>
 
         {/* Pemisah vertikal HANYA dari lg ke atas. Di bawah itu keduanya

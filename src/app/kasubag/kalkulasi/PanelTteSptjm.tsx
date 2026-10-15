@@ -2,9 +2,35 @@
 
 import { useState } from "react";
 import { ModalPassphraseTte } from "@/app/tte/ModalPassphraseTte";
+import { type JenisSptjm } from "@/lib/tte/sptjmTypes";
 import { FiCheckCircle, FiFileText, FiDownload, FiEdit3 } from "react-icons/fi";
 
+const CONFIG_JENIS: Record<
+  JenisSptjm,
+  { judul: string; label: string; deskripsiBelum: string }
+> = {
+  SPTJM_TUKIN: {
+    judul: "TTE SPTJM Tunjangan Kinerja",
+    label: "Tukin",
+    deskripsiBelum:
+      "SPTJM Tukin disahkan secara elektronik menggunakan sertifikat digital BSrE BSSN sebelum kirim rekap.",
+  },
+  SPTJM_UANG_MAKAN: {
+    judul: "TTE SPTJM Uang Makan",
+    label: "Uang Makan",
+    deskripsiBelum:
+      "SPTJM Uang Makan disahkan secara elektronik menggunakan sertifikat digital BSrE BSSN sebelum kirim rekap.",
+  },
+  SPTJM_LEMBUR: {
+    judul: "TTE SPTJM Uang Lembur",
+    label: "Uang Lembur",
+    deskripsiBelum:
+      "SPTJM Uang Lembur disahkan secara elektronik menggunakan sertifikat digital BSrE BSSN sebelum kirim rekap.",
+  },
+};
+
 interface PanelTteSptjmProps {
+  jenisDokumen?: JenisSptjm;
   periodeBulan: number;
   periodeTahun: number;
   satuanKerja: string;
@@ -19,6 +45,7 @@ interface PanelTteSptjmProps {
 }
 
 export function PanelTteSptjm({
+  jenisDokumen = "SPTJM_TUKIN",
   periodeBulan,
   periodeTahun,
   satuanKerja,
@@ -28,6 +55,12 @@ export function PanelTteSptjm({
   const [dokumen, setDokumen] = useState(dokumenTteTerbaru);
 
   const isSudahTte = dokumen?.status === "TERTANDATANGANI";
+  const cfg = CONFIG_JENIS[jenisDokumen] ?? {
+    judul: `TTE ${jenisDokumen}`,
+    label: jenisDokumen,
+    deskripsiBelum:
+      "SPTJM disahkan secara elektronik menggunakan sertifikat digital BSrE BSSN sebelum kirim rekap.",
+  };
 
   return (
     <div className="rounded-xl border border-line-2 bg-surface-2 p-4">
@@ -39,7 +72,7 @@ export function PanelTteSptjm({
           <div>
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-bold text-ink">
-                TTE SPTJM Uang Lembur
+                {cfg.judul}
               </h4>
               {isSudahTte ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-green/10 px-2 py-0.5 text-[11px] font-bold text-green">
@@ -54,7 +87,7 @@ export function PanelTteSptjm({
             <p className="mt-0.5 text-xs text-muted">
               {isSudahTte
                 ? `Ditandatangani secara digital oleh ${dokumen?.penandatanganNama || "Kasubag TU"} via BSrE BSSN.`
-                : "SPTJM disahkan secara elektronik menggunakan sertifikat digital BSrE BSSN sebelum kirim rekap."}
+                : cfg.deskripsiBelum}
             </p>
           </div>
         </div>
@@ -85,7 +118,7 @@ export function PanelTteSptjm({
       <ModalPassphraseTte
         terbuka={modalTerbuka}
         onTutup={() => setModalTerbuka(false)}
-        jenisDokumen="SPTJM_LEMBUR"
+        jenisDokumen={jenisDokumen}
         periodeBulan={periodeBulan}
         periodeTahun={periodeTahun}
         satuanKerja={satuanKerja}
