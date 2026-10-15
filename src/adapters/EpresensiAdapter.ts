@@ -103,10 +103,21 @@ interface BarisEpresensi {
 export function hariKerjaKalender(
   bulan: number,
   tahun: number,
-  hariLibur: ReadonlySet<string> = new Set()
+  hariLibur: ReadonlySet<string> = new Set(),
+  waktuAcuan: Date = new Date()
 ): number {
+  const sekarang = waktuAcuan;
+  const adalahBulanBerjalan =
+    tahun === sekarang.getFullYear() && bulan === sekarang.getMonth() + 1;
+
+  const hariTerakhirBulan = new Date(Date.UTC(tahun, bulan, 0)).getUTCDate();
+  // Untuk bulan berjalan, hitung hari kerja real-time sampai hari ini (bukan sampai akhir bulan yang belum terjadi).
+  const batasTanggal = adalahBulanBerjalan
+    ? Math.min(sekarang.getDate(), hariTerakhirBulan)
+    : hariTerakhirBulan;
+
   let n = 0;
-  for (let d = 1; d <= new Date(Date.UTC(tahun, bulan, 0)).getUTCDate(); d++) {
+  for (let d = 1; d <= batasTanggal; d++) {
     const tanggal = new Date(Date.UTC(tahun, bulan - 1, d));
     const hari = tanggal.getUTCDay();
     if (hari < 1 || hari > 5) continue;
