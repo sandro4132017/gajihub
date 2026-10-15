@@ -106,11 +106,25 @@ export function ModalPassphraseTte({
     }
   }, [terbuka, jenisDokumen, periodeBulan, periodeTahun, defaultNomorDokumen]);
 
-  // Cek status sertifikat saat modal pertama kali dibuka
+  // Cek status sertifikat saat modal dibuka atau NIK berubah
   useEffect(() => {
-    if (terbuka && nik) {
-      setStatusSertifikat({ loading: true });
-      cekStatusTteAction(nik).then((res) => {
+    if (!terbuka || !nik) return;
+    const cleanNik = nik.trim();
+    if (cleanNik.length < 16) {
+      setStatusSertifikat({
+        loading: false,
+        status: "INPUT",
+        pesan: "Masukkan 16 digit NIK penandatangan untuk memeriksa sertifikat.",
+      });
+      return;
+    }
+
+    let isMounted = true;
+    setStatusSertifikat({ loading: true });
+
+    const timer = setTimeout(() => {
+      cekStatusTteAction(cleanNik).then((res) => {
+        if (!isMounted) return;
         if ("status" in res) {
           setStatusSertifikat({
             loading: false,
@@ -125,7 +139,12 @@ export function ModalPassphraseTte({
           });
         }
       });
-    }
+    }, 300);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, [terbuka, nik]);
 
   // Callback sukses
@@ -332,27 +351,55 @@ export function ModalPassphraseTte({
               Memeriksa sertifikat elektronik di server BSrE...
             </div>
           ) : statusSertifikat.status ? (
-            <div className="flex items-center gap-1.5 text-[11px]">
-              <span className="font-semibold text-muted">Sertifikat BSrE:</span>
-              <span
-                className={`font-mono font-bold ${
-                  statusSertifikat.status === "ISSUE"
-                    ? "text-green"
-                    : statusSertifikat.status === "OFFLINE"
-                    ? "text-blue-500"
-                    : "text-gold-deep"
-                }`}
-              >
-                {statusSertifikat.status} ({statusSertifikat.pesan})
-              </span>
+            <div
+              className={`rounded-lg border p-2.5 text-xs ${
+                statusSertifikat.status === "ISSUE"
+                  ? "border-green/30 bg-green/10 text-green"
+                  : statusSertifikat.status === "OFFLINE"
+                  ? "border-biru/30 bg-biru/10 text-biru"
+                  : statusSertifikat.status === "INPUT"
+                  ? "border-line-2 bg-surface-2 text-muted"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-700"
+              }`}
+            >
+              <div className="flex items-center justify-between font-semibold">
+                <span>Status Sertifikat BSrE: {statusSertifikat.status}</span>
+                {statusSertifikat.status === "BELUM_TERDAFTAR" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNik("0803202100007062");
+                      setPassphrase("Bsre2026.#!");
+                    }}
+                    className="text-[11px] font-bold text-biru underline"
+                  >
+                    Gunakan Akun Demo
+                  </button>
+                )}
+              </div>
+              <p className="mt-0.5 text-[11px] leading-relaxed opacity-90">{statusSertifikat.pesan}</p>
             </div>
           ) : null}
 
           {/* NIK Penandatangan BSrE */}
           <div>
-            <label className="block text-xs font-semibold text-ink" htmlFor="tte-nik">
-              NIK Penandatangan BSrE
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-ink" htmlFor="tte-nik">
+                NIK Penandatangan BSrE
+              </label>
+              {nik !== "0803202100007062" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNik("0803202100007062");
+                    setPassphrase("Bsre2026.#!");
+                  }}
+                  className="text-[11px] font-medium text-biru hover:underline"
+                >
+                  Pakai NIK Demo (0803202100007062)
+                </button>
+              )}
+            </div>
             <input
               id="tte-nik"
               type="text"
@@ -360,11 +407,11 @@ export function ModalPassphraseTte({
               value={nik}
               onChange={(e) => setNik(e.target.value)}
               className="field-input mt-1 w-full font-mono text-xs"
-              placeholder="16 digit NIK"
+              placeholder="16 digit NIK terdaftar BSrE"
               required
             />
             <p className="mt-0.5 text-[10px] text-muted">
-              *Akun uji coba dev BSrE: <code>0803202100007062</code> (Passphrase: <code>Bsre2026.#!</code>)
+              *Masukkan 16 digit <strong>NIK</strong> (bukan NIP). Akun uji coba server BSrE ini: <code>0803202100007062</code>
             </p>
           </div>
 

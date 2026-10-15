@@ -67,6 +67,16 @@ export async function checkUserStatus(nik: string): Promise<UserStatusResult> {
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
+      if (res.status === 500 || res.status === 404) {
+        return {
+          success: false,
+          statusCode: res.status,
+          status: "BELUM_TERDAFTAR",
+          message:
+            "NIK belum terdaftar di modul BSrE server ini. Untuk pengujian silakan gunakan NIK akun demo: 0803202100007062.",
+        };
+      }
+
       return {
         success: false,
         statusCode: res.status,
