@@ -1,8 +1,10 @@
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canMonitorKesehatanSistem, canKonfigurasiAdapter, type AuthUser } from "../../../auth/permissions";
+import { getModeJaringan } from "../../../auth/modeJaringan";
 import { AksesDitolak } from "../../AksesDitolak";
 import { HALAMAN } from "../../layoutHalaman";
+import { ToggleModeJaringan } from "../ToggleModeJaringan";
 import { SinkronPegawaiForm } from "./SinkronPegawaiForm";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +62,7 @@ export default async function SistemPage() {
     prisma.auditTrail.findMany({ orderBy: { timestamp: "desc" }, take: 10 }),
     prisma.tukinCalculation.findFirst({ orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }], select: { periodeBulan: true, periodeTahun: true, calculatedAt: true } }),
   ]);
+  const modeJaringan = getModeJaringan();
 
   return (
     <main className={HALAMAN}>
@@ -67,6 +70,8 @@ export default async function SistemPage() {
       <p className="mt-1 text-sm text-muted">
         Ringkasan isi database dan cara Gajihub mengambil data dari sistem lain.
       </p>
+
+      <ToggleModeJaringan modeAwal={modeJaringan} />
 
       {/* DI ATAS ringkasan angka, bukan di bawah daftar adapter: ini
           satu-satunya bagian halaman ini yang bisa DIKERJAKAN, sisanya bacaan.

@@ -117,6 +117,7 @@ export async function tukarKodeKeToken(cfg: KonfigurasiSso, code: string): Promi
       redirect_uri: cfg.redirectUri,
     }),
     cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
   });
 
   const teks = await res.text();
@@ -154,6 +155,7 @@ export async function ambilInfoPengguna(cfg: KonfigurasiSso, accessToken: string
   const res = await fetch(`${cfg.baseUrl}/api/v1/users/me`, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
     cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
   });
   const teks = await res.text();
   if (!res.ok) {

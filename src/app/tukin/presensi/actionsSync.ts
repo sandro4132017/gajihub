@@ -22,7 +22,7 @@ import { ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canUploadRekapPresensi, type AuthUser } from "../../../auth/permissions";
 import { satkerTerkunciUntukAkun } from "../../dashboardScope";
 import { tarikPresensiPeriode } from "../../../adapters/EpresensiAdapter";
-import { simpanHasilPresensi } from "../../../jobs/simpanRekapPresensi";
+import { simpanHasilPresensiMassal } from "../../../jobs/simpanRekapPresensi";
 import { muatKendalaPeriode, muatKoreksiPeriode } from "../../../lib/kendalaPresensi";
 import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 
@@ -61,6 +61,20 @@ export async function tarikPresensiEpresensiAction(
       return { error: "Periode tidak valid - pilih bulan 1-12 dan tahun yang benar." };
     }
 
+    // Jika role pengguna terkunci pada satu satuan kerja (mis. Kasubag TU),
+    // ambil daftar NIP unit tersebut lebih dulu agar query ke SIAP & e-Presensi
+    // hanya menarik pegawai unit itu saja (< 1 detik), bukan seluruh kementerian.
+    // Sedangkan untuk PPABP / Admin, tarik seluruh satker sekaligus.
+    const terkunciSatuUnit = satkerTerkunciUntukAkun(authUser);
+    let filterNipUnit: Set<string> | undefined;
+    if (terkunciSatuUnit && authUser.satuanKerja) {
+      const pegawaiUnit = await prisma.pegawai.findMany({
+        where: { satuanKerja: authUser.satuanKerja },
+        select: { nip: true },
+      });
+      filterNipUnit = new Set(pegawaiUnit.map((p) => p.nip));
+    }
+
     // Penanda kendala e-Presensi (Pasal 10 ayat (2)) dimuat SEBELUM tarikan,
     // lalu dioper ke dalamnya - pengecualiannya terjadi di fungsi yang sama
     // yang menghitung kejadiannya, bukan dikurangkan belakangan.
@@ -72,7 +86,8 @@ export async function tarikPresensiEpresensiAction(
       tahun,
       kendala.untukNip,
       koreksi.untukNip,
-      hariLibur
+      hariLibur,
+      filterNipUnit
     );
 
     const pegawaiDb = await prisma.pegawai.findMany({
@@ -80,23 +95,6 @@ export async function tarikPresensiEpresensiAction(
       select: { id: true, nip: true, satuanKerja: true },
     });
     const peta = new Map(pegawaiDb.map((p) => [p.nip, p]));
-
-    // AKUN YANG TERKUNCI SATU UNIT TIDAK DIBERI DAFTAR UNIT LAIN.
-    //
-    // Tarikan ini selalu mengambil seluruh kementerian, jadi buat Kasubag TU
-    // yang berwenang atas satu unit, hampir semua baris berakhir sebagai
-    // "di luar kewenangan" - 70-an alasan tentang unit yang memang bukan
-    // urusannya. Daftar sepanjang itu menenggelamkan alasan yang BENAR-BENAR
-    // perlu dia baca, yaitu yang menyangkut pegawainya sendiri (mis. NIP yang
-    // belum ada di data Pegawai).
-    //
-    // Diringkas jadi SATU teks alasan, dan pengelompokannya terjadi sendiri
-    // karena Map di bawah memang berkunci teks.
-    //
-    // Tidak disembunyikan sama sekali: tanpa satu baris ini, selisih antara
-    // "5.183 pegawai di e-Presensi" dan "48 tersimpan" jadi tidak punya
-    // penjelasan apa pun, dan itu terbaca seperti tarikan yang gagal.
-    const terkunciSatuUnit = satkerTerkunciUntukAkun(authUser);
 
     const alasanDilewati = new Map<string, number>();
     const catat = (alasan: string) => alasanDilewati.set(alasan, (alasanDilewati.get(alasan) ?? 0) + 1);
@@ -134,32 +132,18 @@ export async function tarikPresensiEpresensiAction(
       });
     }
 
-    // SIMPAN SECARA PARALEL BERTAHAP (CONCURRENCY 15)
-    // Jalur sequential memakan 60-90 detik untuk 5.000+ pegawai sehingga memicu HTTP timeout (500)
-    // di Next.js Server Action. Dengan concurrency 15, proses selesai dalam ~15 detik.
-    let tersimpan = 0;
-    const CONCURRENCY = 15;
-    let index = 0;
-    const workers = new Array(CONCURRENCY).fill(0).map(async () => {
-      while (index < siapSimpan.length) {
-        const item = siapSimpan[index++];
-        if (!item) break;
-        try {
-          await simpanHasilPresensi(prisma, {
-            pegawaiId: item.pegawaiId,
-            periodeBulan: bulan,
-            periodeTahun: tahun,
-            hasil: item.hasil,
-            diunggahOlehId: user.id,
-            sourceSystem: "e-Presensi (sinkronisasi)",
-          });
-          tersimpan++;
-        } catch (simpanErr) {
-          catat(`Gagal simpan database (${simpanErr instanceof Error ? simpanErr.message : String(simpanErr)})`);
-        }
-      }
-    });
-    await Promise.all(workers);
+    const hasilSimpan = await simpanHasilPresensiMassal(
+      prisma,
+      siapSimpan,
+      bulan,
+      tahun,
+      user.id,
+      "e-Presensi (sinkronisasi)"
+    );
+    const tersimpan = hasilSimpan.tersimpan;
+    for (const pesanGagal of hasilSimpan.gagal) {
+      catat(`Gagal simpan database (${pesanGagal})`);
+    }
 
     try {
       revalidatePath("/tukin/presensi");

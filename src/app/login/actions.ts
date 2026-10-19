@@ -12,6 +12,7 @@ import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../auth/sesiCookie";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { daftarRoleTersedia, LANDING_ROLE } from "../../auth/roleAktif";
 import { LABEL_ROLE } from "../../auth/roleLabel";
+import { isModeInternal } from "../../auth/modeJaringan";
 
 
 // TODO(legal-confirm): password = NIP itu sengaja (bukan bug) - permintaan
@@ -39,42 +40,67 @@ export async function loginAction(
 
     const devUser = process.env.DEV_AUTH_USER?.trim().replace(/^["']|["']$/g, "");
     const devPass = process.env.DEV_AUTH_PASS?.trim().replace(/^["']|["']$/g, "");
+    const modeInternal = isModeInternal() || process.env.ALLOW_NIP_LOGIN === "true";
 
-    // Verifikasi kredensial akun khusus dev dari .env
+    // Verifikasi kredensial akun khusus dev dari .env atau login NIP 18 digit saat Mode INTERNAL aktif
     const isDevLogin = Boolean(devUser && devPass && inputUsername === devUser && inputPassword === devPass);
+    const nipKandidat = inputUsername.replace(/[ .\-]/g, "");
+    const isNipFormat = /^\d{18}$/.test(nipKandidat);
+    const passClean = inputPassword.replace(/[ .\-]/g, "");
+    const isNipLogin = Boolean(
+      modeInternal &&
+        isNipFormat &&
+        (passClean === nipKandidat || (devPass && inputPassword === devPass))
+    );
 
-    if (!isDevLogin) {
+    if (!isDevLogin && !isNipLogin) {
       return {
-        error:
-          "Username atau password salah. (Login umum wajib menggunakan Akun SIAP ID / SSO Kemnaker).",
+        error: modeInternal
+          ? "Username/NIP atau password salah."
+          : "Username atau password salah. (Mode Akses Publik aktif: login umum wajib menggunakan Akun SIAP ID / SSO Kemnaker).",
       };
     }
 
-    // NIP target untuk akun pengujian dev (diambil dari konfigurasi .env)
-    const targetNip = process.env.DEV_AUTH_NIP?.trim().replace(/^["']|["']$/g, "");
+    const targetNip = isDevLogin
+      ? process.env.DEV_AUTH_NIP?.trim().replace(/^["']|["']$/g, "")
+      : nipKandidat;
     if (!targetNip) {
       return { error: "DEV_AUTH_NIP belum dikonfigurasi di environment (.env)." };
     }
 
     let user = await prisma.user.findUnique({ where: { nip: targetNip } });
+    const pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
     if (!user) {
-      const pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
-      user = await prisma.user.create({
-        data: {
-          nip: targetNip,
-          nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
-          role: "ADMIN",
-          satuanKerja: pegawai?.satuanKerja || null,
-          rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
-          aktif: true,
-        },
-      });
+      if (isDevLogin) {
+        user = await prisma.user.create({
+          data: {
+            nip: targetNip,
+            nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
+            role: "ADMIN",
+            satuanKerja: pegawai?.satuanKerja || null,
+            rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
+            aktif: true,
+          },
+        });
+      } else if (pegawai) {
+        user = await prisma.user.create({
+          data: {
+            nip: targetNip,
+            nama: pegawai.nama,
+            role: "PEGAWAI",
+            satuanKerja: pegawai.satuanKerja || null,
+            rolesTambahan: [],
+            aktif: true,
+          },
+        });
+      } else {
+        return { error: `NIP ${targetNip} tidak ditemukan di data pegawai Gajihub.` };
+      }
     } else if (!user.aktif) {
-      return { error: `Akun pengujian dengan NIP ${targetNip} berstatus nonaktif di database.` };
+      return { error: `Akun dengan NIP ${targetNip} berstatus nonaktif di database.` };
     }
 
     // Jabatan buat ditampilkan & dicatat di ApprovalLog
-    const pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
     const jabatan = pegawai?.jabatan ?? LABEL_ROLE[user.role];
 
     const token = await buatTokenUntukUser(user, jabatan);

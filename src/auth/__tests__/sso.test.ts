@@ -213,6 +213,17 @@ describe("asalPublik", () => {
     const h = new Headers({ host: "192.168.221.44:3002" });
     expect(asalPublik(h, "http://192.168.221.44:3002/login")).toBe("http://192.168.221.44:3002");
   });
+
+  it("mengikuti toggle Mode Jaringan: saat INTERNAL aktif, host apa pun dipertahankan dan tidak dialihkan ke NACO_REDIRECT_URI", () => {
+    process.env.NACO_REDIRECT_URI = "https://gajihub.kemnaker.go.id/login/sso/callback";
+    process.env.TEST_NETWORK_MODE = "INTERNAL";
+    try {
+      const h = new Headers({ host: "intranet.kemnaker.go.id:8080" });
+      expect(asalPublik(h, "http://localhost:3002/login")).toBe("http://intranet.kemnaker.go.id:8080");
+    } finally {
+      delete process.env.TEST_NETWORK_MODE;
+    }
+  });
 });
 
 describe("ringkasFieldInfo - bentuk field", () => {

@@ -2,8 +2,10 @@ import Link from "next/link";
 import { prisma } from "../../lib/prisma";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../auth/permissions";
+import { getModeJaringan } from "../../auth/modeJaringan";
 import { AksesDitolak } from "../AksesDitolak";
 import { HALAMAN } from "../layoutHalaman";
+import { ToggleModeJaringan } from "./ToggleModeJaringan";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,7 @@ export default async function AdminDashboardPage() {
   // dicabut 2026-09-06 - keputusan desainnya belum berubah, cuma tidak lagi
   // ditayangkan ke pengguna.
   const usulanMenunggu = await prisma.usulanPerubahanRole.count({ where: { status: "MENUNGGU" } });
+  const modeJaringan = getModeJaringan();
 
   return (
     <main className={HALAMAN}>
@@ -28,6 +31,8 @@ export default async function AdminDashboardPage() {
       <p className="mt-1 text-sm text-muted">
         Kewenangan teknis (konfigurasi, monitoring, eksekusi role) beserta akses ke seluruh menu role lain.
       </p>
+
+      <ToggleModeJaringan modeAwal={modeJaringan} />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <Link href="/admin/role-assignment" className="card p-4 transition hover:border-teal-deep">

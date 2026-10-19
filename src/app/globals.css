@@ -15,10 +15,11 @@
    baru, artinya tetap.
    ========================================================================= */
 @theme {
-  /* Dimuat `next/font` di layout.tsx (di-host sendiri) - alasannya di sana.
-     Cadangan sistem dipertahankan untuk sekejap sebelum fontnya siap. */
-  --font-sans: var(--font-manrope), -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  /* Font stack lokal yang mandiri di jaringan internal tanpa perlu koneksi ke fonts.googleapis.com */
+  --font-manrope: "Manrope", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-jetbrains: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-jetbrains);
 
   --color-navy: #13416b;
   --color-navy-deep: #0e3255;

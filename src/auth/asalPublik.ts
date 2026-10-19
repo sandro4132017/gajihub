@@ -1,3 +1,5 @@
+import { isModeInternal } from "./modeJaringan";
+
 function isAlamatLokal(host: string): boolean {
   const h = host.split(":")[0].toLowerCase();
   return (
@@ -5,7 +7,12 @@ function isAlamatLokal(host: string): boolean {
     h === "127.0.0.1" ||
     h === "::1" ||
     h === "[::1]" ||
+    !h.includes(".") ||
     h.endsWith(".local") ||
+    h.endsWith(".rokeubmn.id") ||
+    h.endsWith(".internal") ||
+    h.endsWith(".intranet") ||
+    h.endsWith(".lan") ||
     h.startsWith("192.168.") ||
     h.startsWith("10.") ||
     /^172\.(1[6-9]|2\d|3[0-1])\./.test(h)
@@ -13,20 +20,13 @@ function isAlamatLokal(host: string): boolean {
 }
 
 /**
- * Alamat PUBLIK aplikasi ini - yang dilihat browser, bukan yang dilihat server.
+ * Alamat PUBLIK / INTERNAL aplikasi ini - yang dilihat browser, bukan yang dilihat server.
  *
- * WAJIB dipakai untuk setiap redirect yang keluar dari Route Handler maupun Middleware.
- * Di belakang reverse proxy, `req.url` berisi alamat INTERNAL (mis. http://localhost:3002
- * atau http://192.168.221.44:3002), sehingga `new URL(path, req.url)` menghasilkan Location
- * internal yang tidak bisa dijangkau browser pengguna di internet atau melanggar HTTPS/HSTS.
- *
- * Urutan sumber:
- *   1. Jika sedang di mode development (npm run dev) -> selalu pakai asal permintaan lokal.
- *   2. Jika request langsung ke localhost / direct IP lokal (tanpa proxy HTTPS) -> pertahankan alamat lokal.
- *   3. Asal NACO_REDIRECT_URI -> alamat publik yang paling sahih dan terdaftar resmi di balik proxy.
- *   4. Header X-Forwarded-Host & X-Forwarded-Proto dari reverse proxy.
- *   5. Header Host dari request.
- *   6. Asal permintaan (req.url) sebagai fallback saat jalan langsung tanpa proxy.
+ * Mengikuti toggle Mode Jaringan (`NETWORK_MODE` = "INTERNAL" | "PUBLIC"):
+ * - Saat Mode INTERNAL aktif (akses publik diputus Pusdatik): selalu mempertahankan
+ *   host/IP yang diakses pengguna tanpa pernah mengalihkan ke NACO_REDIRECT_URI publik.
+ * - Saat Mode PUBLIC aktif (akses publik dibuka): mengarahkan ke origin NACO_REDIRECT_URI
+ *   resmi (https://gajihub.kemnaker.go.id) kecuali diakses langsung dari localhost/IP lokal.
  */
 export function asalPublik(headers: Headers, asalPermintaan: string): string {
   // 1. Pada mode development (next dev), selalu gunakan origin lokal
@@ -41,9 +41,10 @@ export function asalPublik(headers: Headers, asalPermintaan: string): string {
   const host = headers.get("x-forwarded-host") ?? headers.get("host");
   const proto = headers.get("x-forwarded-proto")?.split(",")[0].trim();
 
-  // 2. Jika akses langsung ke localhost atau IP lokal (dan BUKAN dari reverse proxy HTTPS),
-  // pertahankan alamat lokal tersebut agar akses dev / direct IP tidak dialihkan ke domain publik.
-  if (host && isAlamatLokal(host) && proto !== "https") {
+  // 2. Jika Mode Jaringan INTERNAL aktif ATAU host merupakan alamat lokal/intranet,
+  // pertahankan alamat yang sedang diakses browser agar tidak terlempar ke domain publik yang mati.
+  if (host && (isModeInternal() || isAlamatLokal(host))) {
+    if (proto) return `${proto}://${host}`;
     try {
       const reqProto = new URL(asalPermintaan).protocol;
       return `${reqProto}//${host}`;

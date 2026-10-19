@@ -65,14 +65,31 @@ export async function middleware(request: NextRequest) {
   const isLoginPage = path === "/login";
   const isRuteSso = path === "/login/sso" || path.startsWith("/login/sso/");
   const isRuteAuthApi = path === "/api/auth" || path.startsWith("/api/auth/");
+  const isRuteVerifikasiTte = path.startsWith("/tte/verify/");
   const isRuteMesin = (RUTE_MESIN as readonly string[]).includes(path);
 
-  // Server Action menangani otorisasi & streaming RSC di tingkat handler
+  // Server Action menangani otorisasi & streaming RSC di tingkat handler.
+  // Di jaringan internal / VPN / reverse proxy lokal yang kerap menulis ulang Host
+  // ke localhost/IP internal tanpa X-Forwarded-Host yang seragam, selaraskan
+  // x-forwarded-host dengan host dari Origin agar Next.js action-handler tidak
+  // melempar HTTP 500 ("An unexpected response was received from the server").
   if (request.headers.has("next-action")) {
+    const originHeader = request.headers.get("origin");
+    if (originHeader && originHeader !== "null") {
+      try {
+        const originUrl = new URL(originHeader);
+        const reqHeaders = new Headers(request.headers);
+        reqHeaders.set("x-forwarded-host", originUrl.host);
+        reqHeaders.set("x-forwarded-proto", originUrl.protocol.replace(":", ""));
+        return NextResponse.next({ request: { headers: reqHeaders } });
+      } catch {
+        // Abaikan jika header Origin tidak berbentuk URL valid
+      }
+    }
     return NextResponse.next();
   }
 
-  if (!session && !isLoginPage && !isRuteSso && !isRuteAuthApi && !isRuteMesin) {
+  if (!session && !isLoginPage && !isRuteSso && !isRuteAuthApi && !isRuteVerifikasiTte && !isRuteMesin) {
     const origin = asalPublik(request.headers, request.url);
     return terapkanHeaderKeamanan(
       NextResponse.redirect(new URL("/login", origin))

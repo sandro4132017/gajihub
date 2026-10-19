@@ -138,7 +138,14 @@ function keMenit(jam: string | null): number | null {
   return menit === 0 ? null : menit;
 }
 
-async function ambilBarisPresensi(bulan: number, tahun: number): Promise<BarisEpresensi[]> {
+async function ambilBarisPresensi(
+  bulan: number,
+  tahun: number,
+  filterIdPegawai?: string[]
+): Promise<BarisEpresensi[]> {
+  if (filterIdPegawai && filterIdPegawai.length === 0) {
+    return [];
+  }
   const { EPRESENSI_HOST, EPRESENSI_PORT, EPRESENSI_DB, EPRESENSI_USER, EPRESENSI_PASSWORD } = process.env;
   if (!EPRESENSI_HOST || !EPRESENSI_DB || !EPRESENSI_USER || !EPRESENSI_PASSWORD) {
     throw new Error("Kredensial e-Presensi belum lengkap di .env (EPRESENSI_HOST/DB/USER/PASSWORD).");
@@ -149,9 +156,11 @@ async function ambilBarisPresensi(bulan: number, tahun: number): Promise<BarisEp
     database: EPRESENSI_DB,
     user: EPRESENSI_USER,
     password: EPRESENSI_PASSWORD,
+    connectionTimeoutMillis: 15_000,
   });
   await client.connect();
   try {
+    const pakaiFilterId = Boolean(filterIdPegawai && filterIdPegawai.length > 0);
     // tanggal di-cast ke teks di SQL supaya tidak bergeser hari oleh zona
     // waktu klien - pola yang sama dengan jalur PDF (tanggal apa adanya).
     const { rows } = await client.query<BarisEpresensi & { id_presensi: string }>(
@@ -168,8 +177,9 @@ async function ambilBarisPresensi(bulan: number, tahun: number): Promise<BarisEp
          LEFT JOIN sistem_kerja sk ON sk.id_sistem_kerja = p.id_sistem_kerja
         WHERE p.tanggal >= make_date($1, $2, 1)
           AND p.tanggal <  (make_date($1, $2, 1) + interval '1 month')
+          ${pakaiFilterId ? "AND p.id_pegawai = ANY($3::text[])" : ""}
         ORDER BY p.id_pegawai, p.tanggal`,
-      [tahun, bulan]
+      pakaiFilterId ? [tahun, bulan, filterIdPegawai] : [tahun, bulan]
     );
 
     // ------------------------------------------------------------------
@@ -203,8 +213,9 @@ async function ambilBarisPresensi(bulan: number, tahun: number): Promise<BarisEp
          JOIN presensi p ON p.id_presensi = pc.id_presensi
         WHERE p.tanggal >= make_date($1, $2, 1)
           AND p.tanggal <  (make_date($1, $2, 1) + interval '1 month')
+          ${pakaiFilterId ? "AND p.id_pegawai = ANY($3::text[])" : ""}
         ORDER BY pc."createdAt" ASC`,
-      [tahun, bulan]
+      pakaiFilterId ? [tahun, bulan, filterIdPegawai] : [tahun, bulan]
     );
     const petaCuti = new Map<string, string>();
     for (const b of barisCuti) petaCuti.set(b.id_presensi, b.nama_cuti);
@@ -218,8 +229,9 @@ async function ambilBarisPresensi(bulan: number, tahun: number): Promise<BarisEp
   }
 }
 
-/** PEGAWAIID SIAP -> NIP 18 digit. Dikirim per potongan supaya IN(...) tidak kepanjangan. */
+/** PEGAWAIID SIAP -> NIP 18 digit. */
 async function petaIdKeNip(ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
   // Konfigurasinya WAJIB sama persis dengan importPegawaiSiap.ts - kalau
   // keduanya menunjuk instance berbeda, pemetaan id_pegawai->NIP dilakukan
   // terhadap daftar pegawai yang berbeda dari yang ada di Gajihub, dan
@@ -230,9 +242,22 @@ async function petaIdKeNip(ids: string[]): Promise<Map<string, string>> {
   const pool = await bukaPoolSiap();
   const peta = new Map<string, string>();
   try {
-    const POTONGAN = 500;
-    for (let i = 0; i < ids.length; i += POTONGAN) {
-      const bagian = ids.slice(i, i + POTONGAN).map((v) => `'${v.replace(/'/g, "''")}'`);
+    if (ids.length > 500) {
+      // Untuk tarikan seluruh satker (±5.200 pegawai), 1 query tunggal jauh lebih cepat
+      // daripada 11 kali table scan beruntun akibat fungsi LTRIM(RTRIM(PEGAWAIID)) IN (...).
+      const setIds = new Set(ids);
+      const hasil = await pool.request().query<{ PEGAWAIID: string; NIPBARU: string }>(
+        `SELECT LTRIM(RTRIM(PEGAWAIID)) AS PEGAWAIID, LTRIM(RTRIM(NIPBARU)) AS NIPBARU
+           FROM dbo.PEGAWAI
+          WHERE NIPBARU IS NOT NULL AND LEN(LTRIM(RTRIM(NIPBARU))) = 18`
+      );
+      for (const r of hasil.recordset) {
+        if (setIds.has(r.PEGAWAIID)) {
+          peta.set(r.PEGAWAIID, r.NIPBARU);
+        }
+      }
+    } else {
+      const bagian = ids.map((v) => `'${v.replace(/'/g, "''")}'`);
       const hasil = await pool.request().query<{ PEGAWAIID: string; NIPBARU: string }>(
         `SELECT LTRIM(RTRIM(PEGAWAIID)) AS PEGAWAIID, LTRIM(RTRIM(NIPBARU)) AS NIPBARU
            FROM dbo.PEGAWAI
@@ -240,6 +265,38 @@ async function petaIdKeNip(ids: string[]): Promise<Map<string, string>> {
             AND NIPBARU IS NOT NULL AND LEN(LTRIM(RTRIM(NIPBARU))) = 18`
       );
       for (const r of hasil.recordset) peta.set(r.PEGAWAIID, r.NIPBARU);
+    }
+  } finally {
+    await pool.close();
+  }
+  return peta;
+}
+
+/**
+ * Pemetaan khusus ketika pemanggil hanya meminta NIP tertentu (mis. Kasubag TU
+ * yang hanya menarik presensi 1 satuan kerja). Mengambil PEGAWAIID -> NIPBARU
+ * untuk daftar NIP tersebut terlebih dahulu supaya query ke e-Presensi cukup
+ * menarik baris unit itu saja.
+ */
+async function petaIdKeNipUntukDaftarNip(nips: string[]): Promise<Map<string, string>> {
+  if (nips.length === 0) return new Map();
+  const pool = await bukaPoolSiap();
+  const peta = new Map<string, string>();
+  try {
+    const POTONGAN = 500;
+    for (let i = 0; i < nips.length; i += POTONGAN) {
+      const bagian = nips.slice(i, i + POTONGAN).map((v) => `'${v.replace(/'/g, "''")}'`);
+      const hasil = await pool.request().query<{ PEGAWAIID: string; NIPBARU: string }>(
+        `SELECT LTRIM(RTRIM(PEGAWAIID)) AS PEGAWAIID, LTRIM(RTRIM(NIPBARU)) AS NIPBARU
+           FROM dbo.PEGAWAI
+          WHERE LTRIM(RTRIM(NIPBARU)) IN (${bagian.join(",")})
+            AND PEGAWAIID IS NOT NULL`
+      );
+      for (const r of hasil.recordset) {
+        if (r.PEGAWAIID && r.NIPBARU) {
+          peta.set(r.PEGAWAIID, r.NIPBARU);
+        }
+      }
     }
   } finally {
     await pool.close();
@@ -384,10 +441,31 @@ export async function tarikPresensiPeriode(
    * `HariLiburNasional`. Berlaku sama untuk semua pegawai - jadi cukup satu
    * daftar, tidak perlu fungsi per-NIP seperti dua parameter di atas.
    */
-  hariLiburNasional: ReadonlyMap<string, string> = new Map()
+  hariLiburNasional: ReadonlyMap<string, string> = new Map(),
+  /**
+   * Jika diisi (mis. saat ditarik oleh role Kasubag TU yang terkunci pada satu
+   * satuan kerja), adapter hanya memetakan NIP tersebut di SIAP dan hanya
+   * menarik baris presensi milik pegawai unit tersebut dari e-Presensi.
+   */
+  filterNipSet?: ReadonlySet<string>
 ): Promise<HasilTarikPeriode> {
   const kunciLibur = new Set(hariLiburNasional.keys());
-  const baris = await ambilBarisPresensi(bulan, tahun);
+
+  let peta: Map<string, string>;
+  let baris: BarisEpresensi[];
+
+  if (filterNipSet && filterNipSet.size > 0) {
+    peta = await petaIdKeNipUntukDaftarNip([...filterNipSet]);
+    baris = await ambilBarisPresensi(bulan, tahun, [...peta.keys()]);
+  } else {
+    baris = await ambilBarisPresensi(bulan, tahun);
+    const idUnik = new Set<string>();
+    for (const b of baris) {
+      const id = (b.id_pegawai ?? "").trim();
+      if (id) idUnik.add(id);
+    }
+    peta = await petaIdKeNip([...idUnik]);
+  }
 
   const perPegawai = new Map<string, BarisEpresensi[]>();
   for (const b of baris) {
@@ -397,8 +475,6 @@ export async function tarikPresensiPeriode(
     if (daftar) daftar.push(b);
     else perPegawai.set(id, [b]);
   }
-
-  const peta = await petaIdKeNip([...perPegawai.keys()]);
 
   const pegawai: HasilTarikPegawai[] = [];
   const dilewati: DilewatiTarik[] = [];

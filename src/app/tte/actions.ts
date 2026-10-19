@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ambilUserSesi } from "@/auth/getSessionAccount";
 import { checkUserStatus, signPdf } from "@/lib/tte/esignClient";
@@ -227,7 +228,16 @@ export async function signSptjmPpkAction(
     });
 
     // 3. Panggil Server Esign Client BSrE
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://gajihub.kemnaker.go.id";
+    const reqHeaders = await headers();
+    const hostHeader = reqHeaders.get("x-forwarded-host") || reqHeaders.get("host");
+    const protoHeader = reqHeaders.get("x-forwarded-proto")?.split(",")[0].trim() || "http";
+    const { isModeInternal } = await import("@/auth/modeJaringan");
+    const appUrl = isModeInternal()
+      ? hostHeader
+        ? `${protoHeader}://${hostHeader}`
+        : process.env.NEXT_PUBLIC_APP_URL || "http://192.168.221.44:3002"
+      : process.env.NEXT_PUBLIC_APP_URL || "https://gajihub.kemnaker.go.id";
+
     const signResult = await signPdf({
       fileBuffer: draftPdfBuffer,
       fileName: `sptjm_${jenis.toLowerCase()}_${bulan}_${tahun}.pdf`,
