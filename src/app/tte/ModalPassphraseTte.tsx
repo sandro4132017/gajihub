@@ -160,23 +160,22 @@ export function ModalPassphraseTte({
       if (!passphrase && targetNik === "0803202100007062") {
         setPassphrase("Bsre2026.#!");
       }
-      periksaStatusNik(targetNik);
     }
   }, [terbuka, jenisDokumen, periodeBulan, periodeTahun, defaultNomorDokumen]);
 
-  // Cek status sertifikat saat NIK berubah setelah debounced
+  // Cek status sertifikat saat modal terbuka atau NIK berubah (debounced 250ms agar tidak memicu double request)
   useEffect(() => {
-    if (!terbuka || !nik) return;
-    const cleanNik = nik.trim();
+    if (!terbuka) return;
+    const cleanNik = (nik || defaultNik || "0803202100007062").trim();
 
     const timer = setTimeout(() => {
       periksaStatusNik(cleanNik);
-    }, 400);
+    }, 250);
 
     return () => {
       clearTimeout(timer);
     };
-  }, [terbuka, nik]);
+  }, [terbuka, nik, defaultNik]);
 
 
   // Callback sukses

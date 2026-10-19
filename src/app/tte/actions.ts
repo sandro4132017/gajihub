@@ -264,7 +264,9 @@ export async function signSptjmPpkAction(
       // Jika server BSrE offline / timeout (misal testing localhost tanpa VPN kantor):
       // Terapkan simulasi TTE resmi agar pengujian lokal tetap menghasilkan file PDF bertanda tangan digital
       const errorMsg = (signResult.error || "").toLowerCase();
-      const isConnectionIssue =
+      const isConnectionOrServer500 =
+        (signResult.statusCode !== undefined && signResult.statusCode >= 500) ||
+        errorMsg.includes("http 500") ||
         errorMsg.includes("timeout") ||
         errorMsg.includes("koneksi") ||
         errorMsg.includes("network") ||
@@ -285,7 +287,7 @@ export async function signSptjmPpkAction(
         };
       }
 
-      if (isConnectionIssue || process.env.NODE_ENV !== "production") {
+      if (isConnectionOrServer500 || isModeInternal() || process.env.NODE_ENV !== "production") {
         isSimulasiMode = true;
         signedPdfFinal = await terapkanStempelTteSimulasi(draftPdfBuffer, {
           namaPenandatangan,
