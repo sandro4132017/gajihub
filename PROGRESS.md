@@ -9,7 +9,7 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-10-12** - **tindak lanjut laporan keamanan WAS dan fail-closed secret sesi**:
+Terakhir diperbarui: **2026-10-19** - **mengalihkan kalkulasi massal Tukin ke JSON API untuk menghindari kegagalan respons Server Action di balik proxy**:
 
 1. **Integrasi TTE BSrE BSSN (Esign Client Service v2.2.2)**:
    - Terhubung langsung ke Esign Client (`192.168.221.11`).
@@ -28,6 +28,9 @@ Terakhir diperbarui: **2026-10-12** - **tindak lanjut laporan keamanan WAS dan f
    - `SESSION_SECRET` tidak lagi memakai fallback; token sesi gagal diterbitkan/diverifikasi jika secret kosong atau kurang dari 32 byte.
    - Token CSRF statis yang tidak diverifikasi di form login dihapus; perlindungan Server Action tetap mengandalkan pemeriksaan Origin bawaan Next.js.
    - Header keamanan dari laporan sudah diterapkan di source; retest pada deployment/proxy publik masih diperlukan.
+5. **Kalkulasi massal Tukin**:
+   - Form `/kasubag/kalkulasi` memakai `POST /api/kasubag/kalkulasi` agar tidak bergantung pada transport Server Action yang bermasalah di balik proxy.
+   - Pemeriksaan sesi, role, satker, dan penguncian periode tetap dilakukan oleh aksi server yang sama. Perubahan ini baru di source; verifikasi pada deployment masih menunggu.
 
 > **`.claude/` ada di `.gitignore` (baris 41).** Sepuluh skill lama selamat
 > karena sudah terlacak duluan; `gajihub-laws-of-ux` BELUM - perlu

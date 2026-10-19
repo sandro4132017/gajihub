@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { kalkulasiMassalTukinUangMakanAction, type KalkulasiMassalFormState } from "./actions";
+import { type FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { KalkulasiMassalFormState } from "./actions";
 
 const INITIAL_STATE: KalkulasiMassalFormState = {};
 
@@ -18,12 +19,54 @@ export function KalkulasiMassalForm({
   jumlahBelumPunyaPredikat: number;
   namaBulan: string;
 }) {
-  const [state, formAction, pending] = useActionState(kalkulasiMassalTukinUangMakanAction, INITIAL_STATE);
+  const [state, setState] = useState<KalkulasiMassalFormState>(INITIAL_STATE);
+  const [pending, setPending] = useState(false);
+  const router = useRouter();
   const belumLengkap = jumlahBelumPunyaPredikat > 0;
   const sudahHitung = Boolean(state.success);
 
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+
+    setPending(true);
+    setState({});
+
+    try {
+      const formData = new FormData(event.currentTarget);
+      const res = await fetch("/api/kasubag/kalkulasi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(formData.entries())),
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        setState({
+          error:
+            res.status === 502 || res.status === 504
+              ? `Waktu tunggu server habis (HTTP ${res.status}). Kalkulasi mungkin masih berjalan; periksa hasil periode ini sebelum mencoba lagi.`
+              : `Server tidak mengembalikan hasil kalkulasi (HTTP ${res.status}). Periksa hasil periode ini sebelum mencoba lagi.`,
+        });
+        return;
+      }
+
+      const hasil = (await res.json()) as KalkulasiMassalFormState;
+      setState(hasil);
+      if (hasil.ringkasan) router.refresh();
+    } catch (err) {
+      setState({
+        error: `Gagal menghubungi server saat menghitung Tukin: ${
+          err instanceof Error ? err.message : String(err)
+        }. Periksa hasil periode ini sebelum mencoba lagi.`,
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
-    <form action={formAction} className="card mt-4 p-4">
+    <form onSubmit={handleSubmit} className="card mt-4 p-4">
       <input type="hidden" name="satuanKerja" value={satuanKerja} />
       <input type="hidden" name="periodeBulan" value={periodeBulan} />
       <input type="hidden" name="periodeTahun" value={periodeTahun} />
