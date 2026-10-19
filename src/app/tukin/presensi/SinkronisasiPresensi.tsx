@@ -1,11 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  tarikPresensiEpresensiAction,
-  type SinkronPresensiFormState,
-} from "./actionsSync";
+import type { SinkronPresensiFormState } from "./actionsSync";
 import { NAMA_BULAN } from "../../bulan";
 import { PilihPeriode } from "./PilihPeriode";
 
@@ -26,16 +23,56 @@ export function SinkronisasiPresensi({
   tahunOpsi: number[];
   paramDipertahankan: Record<string, string>;
 }) {
-  const [state, formAction, pending] = useActionState(
-    tarikPresensiEpresensiAction,
-    INITIAL_STATE,
-  );
+  const [state, setState] = useState<SinkronPresensiFormState>(INITIAL_STATE);
+  const [pending, setPending] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   // Penanda supaya perpindahan terjadi SEKALI per hasil tarikan. Tanpa ini,
   // router.replace memicu render ulang yang menjalankan efeknya lagi.
   const sudahPindah = useRef<string | null>(null);
+
+  async function handleSubmitSync(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setState({});
+
+    try {
+      const res = await fetch("/api/tukin/presensi/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bulan: defaultBulan, tahun: defaultTahun }),
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await res.text().catch(() => "");
+        setState({
+          error:
+            res.status === 504 || res.status === 502
+              ? `Waktu tunggu proxy habis (HTTP ${res.status}). Silakan klik Tarik Data Presensi sekali lagi.`
+              : `Respons server tidak terduga (HTTP ${res.status}): ${text.slice(0, 120)}`,
+        });
+        setPending(false);
+        return;
+      }
+
+      const data = (await res.json()) as SinkronPresensiFormState;
+      setState(data);
+      if (data.ringkasan) {
+        router.refresh();
+      }
+    } catch (err) {
+      setState({
+        error: `Gagal menghubungi server saat menarik presensi: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      });
+    } finally {
+      setPending(false);
+    }
+  }
 
   const ringkasan = state.ringkasan;
   // Dijumlah dari alasannya sendiri, BUKAN dari (total sumber - tersimpan):
@@ -85,7 +122,7 @@ export function SinkronisasiPresensi({
 
       {/* DUA FORM BERDAMPINGAN, bukan satu - dan itu keharusan, bukan gaya.
           Mengganti periode cuma BERPINDAH HALAMAN (GET); menarik data
-          MENULIS ke database (Server Action). Menyatukannya berarti melihat
+          MENULIS ke database. Menyatukannya berarti melihat
           bulan lain otomatis ikut menimpa rekapnya. Form tidak boleh
           bersarang di HTML, jadi keduanya bersebelahan dalam satu baris. */}
       <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -110,7 +147,7 @@ export function SinkronisasiPresensi({
           />
         </form>
 
-        <form action={formAction}>
+        <form onSubmit={handleSubmitSync}>
           {/* Periodenya diambil dari yang SEDANG DILIHAT, bukan dari kendali
               terpisah. Itu yang membuat "Tarik Data Presensi" tidak pernah
               menyentuh bulan selain yang tertulis di sebelahnya. */}

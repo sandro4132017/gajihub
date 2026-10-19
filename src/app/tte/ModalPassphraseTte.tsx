@@ -1,12 +1,8 @@
 "use client";
 
-import { useState, useActionState, useEffect, useTransition } from "react";
-import {
-  signSptjmPpkAction,
-  cekStatusTteAction,
-  buatDraftSptjmAction,
-  type TteActionResult,
-} from "./actions";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import type { TteActionResult } from "./actions";
 import {
   type JenisSptjm,
   BULAN_ROMAWI,
@@ -57,7 +53,9 @@ export function ModalPassphraseTte({
   jabatanPenandatanganDefault = "Pejabat Pembuat Komitmen",
   onSukses,
 }: ModalPassphraseTteProps) {
-  const [state, formAction, pending] = useActionState(signSptjmPpkAction, INITIAL_STATE);
+  const router = useRouter();
+  const [state, setState] = useState<TteActionResult>(INITIAL_STATE);
+  const [pending, setPending] = useState(false);
   const [passphrase, setPassphrase] = useState(
     defaultNik === "0803202100007062" ? "Bsre2026.#!" : ""
   );
@@ -90,7 +88,7 @@ export function ModalPassphraseTte({
   }>({ loading: false });
 
   // State untuk pratinjau draft PDF
-  const [draftPending, startDraftTransition] = useTransition();
+  const [draftPending, setDraftPending] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
 
   // Perbarui nomor dokumen & periksa status saat modal dibuka
@@ -119,22 +117,34 @@ export function ModalPassphraseTte({
 
     setStatusSertifikat({ loading: true });
 
-    cekStatusTteAction(cleanNik).then((res) => {
-      if ("status" in res && res.status) {
-        setStatusSertifikat({
-          loading: false,
-          status: res.status,
-          pesan: res.message,
-        });
-      } else {
-        const errorPesan = "error" in res ? res.error : "Server BSrE sedang offline (mode simulasi aktif).";
+    fetch("/api/tte", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "status", nik: cleanNik }),
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        if (res && typeof res.status === "string") {
+          setStatusSertifikat({
+            loading: false,
+            status: res.status,
+            pesan: res.message,
+          });
+        } else {
+          setStatusSertifikat({
+            loading: false,
+            status: "OFFLINE",
+            pesan: res?.error || "Server BSrE sedang offline (mode simulasi aktif).",
+          });
+        }
+      })
+      .catch(() => {
         setStatusSertifikat({
           loading: false,
           status: "OFFLINE",
-          pesan: errorPesan || "Server BSrE sedang offline (mode simulasi aktif).",
+          pesan: "Server BSrE sedang offline (mode simulasi aktif).",
         });
-      }
-    });
+      });
   };
 
   const gunakanAkunDemo = () => {
@@ -147,6 +157,7 @@ export function ModalPassphraseTte({
 
   useEffect(() => {
     if (terbuka) {
+      setState(INITIAL_STATE);
       const baru =
         defaultNomorDokumen ||
         generateNomorSptjmDefault(jenisDokumen, periodeBulan, periodeTahun);
@@ -177,16 +188,9 @@ export function ModalPassphraseTte({
     };
   }, [terbuka, nik, defaultNik]);
 
-
-  // Callback sukses
-  useEffect(() => {
-    if (state.success && onSukses) {
-      onSukses(state);
-    }
-  }, [state, onSukses]);
-
   const handleTutup = () => {
     setPassphrase("");
+    setState(INITIAL_STATE);
     onTutup();
   };
 
@@ -197,23 +201,73 @@ export function ModalPassphraseTte({
       ? "Uang Makan"
       : "Uang Lembur";
 
-  const handlePratinjauDraft = () => {
+  const handlePratinjauDraft = async () => {
     setDraftError(null);
-    startDraftTransition(async () => {
-      const res = await buatDraftSptjmAction({
-        jenis: jenisDokumen,
-        bulan: periodeBulan,
-        tahun: periodeTahun,
-        nomorDokumen,
-        satuanKerja,
+    setDraftPending(true);
+    try {
+      const r = await fetch("/api/tte", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "draft",
+          jenis: jenisDokumen,
+          bulan: periodeBulan,
+          tahun: periodeTahun,
+          nomorDokumen,
+          satuanKerja,
+        }),
       });
-
+      const res = await r.json();
       if (res.success && res.downloadUrl) {
         window.open(res.downloadUrl, "_blank");
       } else {
         setDraftError(res.error || "Gagal membuat draft PDF.");
       }
-    });
+    } catch {
+      setDraftError("Gagal menghubungi server untuk pratinjau draft.");
+    } finally {
+      setDraftPending(false);
+    }
+  };
+
+  const handleSubmitSign = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setState({});
+    try {
+      const r = await fetch("/api/tte", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sign",
+          jenis: jenisDokumen,
+          bulan: periodeBulan,
+          tahun: periodeTahun,
+          satuanKerja,
+          namaPenandatangan: namaPenandatanganDefault,
+          nipPenandatangan: nipPenandatanganDefault,
+          jabatanPenandatangan: jabatanPenandatanganDefault,
+          nomorDokumen,
+          nik,
+          passphrase,
+        }),
+      });
+      const res = (await r.json()) as TteActionResult;
+      setState(res);
+      if (res.success) {
+        if (onSukses) onSukses(res);
+        router.refresh();
+      }
+    } catch (err) {
+      setState({
+        error: `Gagal menghubungi server TTE: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      });
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -264,7 +318,7 @@ export function ModalPassphraseTte({
           </div>
         </div>
       ) : (
-        <form action={formAction} className="space-y-4 pt-1">
+        <form onSubmit={handleSubmitSign} className="space-y-4 pt-1">
           <input type="hidden" name="jenis" value={jenisDokumen} />
           <input type="hidden" name="bulan" value={periodeBulan} />
           <input type="hidden" name="tahun" value={periodeTahun} />
