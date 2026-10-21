@@ -15,11 +15,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "sync:pegawai": "tsx src/jobs/importPegawaiSiap.ts",
+    "presync:presensi": "prisma generate",
     "sync:presensi": "tsx src/jobs/importPresensiEpresensi.ts",
+    "precek:tte": "prisma generate",
     "cek:tte": "tsx src/jobs/cekTteSptjm.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
+    "preisi:hash-tte": "prisma generate",
     "isi:hash-tte": "tsx src/jobs/isiHashDokumenTte.ts"
   },
   "dependencies": {
