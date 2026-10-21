@@ -33,7 +33,16 @@ export async function GET(req: NextRequest) {
   const res = NextResponse.redirect(urlOtorisasi(cfg, state));
   res.cookies.set(COOKIE_STATE_SSO, state, {
     httpOnly: true,
-    secure: process.env.COOKIE_SECURE === "true",
+    // Dibaca dengan cara yang SAMA seperti OPSI_COOKIE_SESI di
+    // src/auth/sesiCookie.ts, supaya satu nilai tidak berarti dua hal.
+    //
+    // Loader .env milik Next SUDAH membuang tanda kutip (diukur: .env berisi
+    // COOKIE_SECURE="true" sampai ke kode sebagai true polos), jadi untuk
+    // nilai dari .env pembersihan ini tidak mengubah apa pun. Yang ditutupnya
+    // adalah variabel yang datang dari LUAR .env - pm2, systemd, atau export
+    // di shell - yang meneruskan tanda kutipnya apa adanya.
+    secure:
+      process.env.COOKIE_SECURE?.trim().replace(/^["']|["']$/g, "") === "true",
     sameSite: "lax",
     path: "/",
     maxAge: UMUR_STATE_DETIK,

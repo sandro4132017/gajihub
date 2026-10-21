@@ -32,6 +32,8 @@
 // PEMETAAN KOLOM (hasil penelusuran ke database, bukan tebakan):
 //   nip           <- PEGAWAI.NIPBARU (18 digit; kolom NIP 9 digit TIDAK dipakai)
 //   nama          <- PEGAWAI.NAMA
+//   gelarDepan    <- PEGAWAI.GELARDEPAN
+//   gelarBelakang <- PEGAWAI.GELARBELAKANG
 //   unitKerja     <- SATKER.SATKER pada SATKERID persis (unit terdalam)
 //   satuanKerja   <- SATKER.SATKER pada LEFT(SATKERID,6) = Eselon II.
 //                    SATKERID hirarkis: 4 digit Eselon I, 6 digit Eselon II.
@@ -72,6 +74,7 @@ import { PrismaClient } from "@prisma/client";
 import sql from "mssql";
 import { bukaPoolSiap, konfigurasiSiap, labelSumberSiap } from "../lib/siapConfig";
 import { kunciSidikNik, normalkanNik, sidikNik } from "../auth/sidikNik";
+import { judulkanNama } from "../business-logic/namaPegawai";
 
 // Prisma memuat .env sendiri buat DATABASE_URL, tapi variabel SIAP_* di
 // bawah dibaca langsung dari process.env - jadi .env perlu dimuat eksplisit.
@@ -91,6 +94,8 @@ const STATUS_AKTIF = ["1", "2", "23"];
 interface BarisSiap {
   nip: string | null;
   nama: string | null;
+  gelarDepan: string | null;
+  gelarBelakang: string | null;
   unitKerja: string | null;
   satuanKerja: string | null;
   jabatan: string | null;
@@ -163,6 +168,8 @@ async function ambilDariSiap(prefixSatker: string | null): Promise<BarisSiap[]> 
       SELECT
         LTRIM(RTRIM(p.NIPBARU))            AS nip,
         LTRIM(RTRIM(p.NAMA))               AS nama,
+        LTRIM(RTRIM(p.GELARDEPAN))         AS gelarDepan,
+        LTRIM(RTRIM(p.GELARBELAKANG))      AS gelarBelakang,
         sUnit.SATKER                       AS unitKerja,
         sEs2.SATKER                        AS satuanKerja,
         rj.NAMAJABATAN                     AS jabatan,
@@ -292,6 +299,8 @@ export interface HasilSinkronPegawai {
   statusDiperbarui: number;
   sidikNikTerisi: number;
   sidikNikDilewati: number;
+  /** Akun yang namanya disamakan dengan tabel pegawai pada sinkronisasi ini. */
+  namaAkunDisamakan: number;
   /** null = tidak ada yang perlu dikatakan soal padanan SSO. */
   catatanSidikNik: string | null;
 }
@@ -619,7 +628,24 @@ export async function terapkanSinkronPegawai(
         }
 
         const isi = {
-          nama: bersih(b.nama),
+          // DISIMPAN BER-TITLE CASE, bukan kapital semua seperti di SIAP.
+          //
+          // Normalisasinya di SINI, bukan di 83 titik render. Aturan yang
+          // harus diingat di 83 tempat pasti terlanggar di tempat ke-84,
+          // dan itulah yang sudah terjadi: layar yang membaca app_user
+          // menampilkan Title Case, yang membaca pegawai menampilkan
+          // KAPITAL - orang yang sama, dua bentuk, sering dalam satu
+          // halaman.
+          //
+          // AMAN untuk pencarian: seluruh filter nama memakai
+          // `mode: "insensitive"`, dan tidak ada satu pun pencocokan yang
+          // peka huruf besar-kecil. Berkas ADK dijaga terpisah - lihat
+          // catatan di ppabp/adk/tukin/route.ts.
+          nama: judulkanNama(bersih(b.nama)),
+          // Disimpan APA ADANYA - perapiannya saat dicetak, supaya nilai
+          // asli SIAP tetap bisa ditelusuri kalau ada yang janggal.
+          gelarDepan: bersih(b.gelarDepan) || null,
+          gelarBelakang: bersih(b.gelarBelakang) || null,
           unitKerja: bersih(b.unitKerja) || bersih(b.satuanKerja),
           satuanKerja: satkerDari(b),
           jabatan: jabatanDari(b),
@@ -651,6 +677,21 @@ export async function terapkanSinkronPegawai(
     );
     tersimpan += batch.length;
   }
+
+  // NAMA AKUN DISAMAKAN DENGAN NAMA PEGAWAI.
+  //
+  // `app_user.nama` dulu hanya disalin SEKALI saat akun dibuat, lalu beku
+  // selamanya - terukur 3.045 dari 5.075 akun sudah berbeda dari tabel
+  // pegawai. Akibatnya dua hal: penulisannya tidak seragam di layar, dan
+  // pegawai yang berganti nama di SIAP tetap memakai nama lama di akunnya.
+  //
+  // Satu pernyataan SQL, hanya menyentuh baris yang memang berbeda.
+  const namaAkunDisamakan = await prisma.$executeRaw`
+    UPDATE "app_user" u
+       SET nama = p.nama
+      FROM "pegawai" p
+     WHERE p.nip = u.nip
+       AND u.nama <> p.nama`;
 
   // Penandaan status - MENANDAI, tidak pernah menghapus. Orang yang pensiun di
   // tengah tahun tetap berhak atas tukin bulan-bulan yang sudah dia kerjakan,
@@ -684,6 +725,7 @@ export async function terapkanSinkronPegawai(
     statusDiperbarui: rencana.gantiStatus.length,
     sidikNikTerisi: sidikTerisi,
     sidikNikDilewati: sidikDilewati,
+    namaAkunDisamakan,
     catatanSidikNik,
   };
 }

@@ -94,3 +94,49 @@ describe("buatTokenSesi & verifikasiTokenSesi", () => {
     expect(hasil).toBeNull();
   });
 });
+
+// ============================================================================
+// COOKIE CACAT TIDAK BOLEH MELEMPAR.
+//
+// verifikasiTokenSesi dipanggil dari src/middleware.ts, dan lemparan di
+// middleware jadi HTTP 500 untuk SETIAP halaman - /login ikut, sehingga tidak
+// ada jalan untuk membuang cookie penyebabnya. Pernah terjadi sungguhan:
+// `atob` di dalam base64UrlDecode melempar "Invalid character" untuk cookie
+// yang bukan base64url.
+//
+// Yang TETAP melempar: SESSION_SECRET belum diatur - itu salah konfigurasi
+// server, bukan cookie pengunjung, dan dijaga test di atas.
+// ============================================================================
+
+describe("verifikasiTokenSesi menghadapi cookie cacat", () => {
+  const CACAT = [
+    ["bukan base64url", "aaa.!!!bukan-base64!!!"],
+    ["tanda tangan berisi karakter terlarang", "YWJj.@@@@"],
+    ["payload berisi karakter terlarang", "@@@@.YWJj"],
+    ["cuma titik", "."],
+    ["titik di tengah teks acak", "halo.dunia"],
+    ["payload base64 tapi bukan JSON", "YWJj.YWJj"],
+    ["tiga bagian", "YWJj.YWJj.YWJj"],
+  ] as const;
+
+  for (const [label, token] of CACAT) {
+    it(`mengembalikan null, tidak melempar - ${label}`, async () => {
+      await expect(verifikasiTokenSesi(token)).resolves.toBeNull();
+    });
+  }
+
+  it("token sah yang dipotong di tengah juga null", async () => {
+    const token = await buatTokenSesi(PAYLOAD);
+    await expect(
+      verifikasiTokenSesi(token.slice(0, token.length - 5))
+    ).resolves.toBeNull();
+  });
+
+  it("token sah yang bagian payload-nya diganti juga null", async () => {
+    const token = await buatTokenSesi(PAYLOAD);
+    const tandaTangan = token.split(".")[1];
+    await expect(
+      verifikasiTokenSesi("ZGlnYW50aQ." + tandaTangan)
+    ).resolves.toBeNull();
+  });
+});

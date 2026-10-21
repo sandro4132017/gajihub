@@ -15,16 +15,61 @@ dengan menerbitkan data itu tanpa kunci.
 **JANGAN pernah menaruh alamat SIAP/e-Presensi di `DATABASE_URL`** - itu database
 PostgreSQL milik Gajihub sendiri.
 
-## Tiga cara akses (status 2026-08-31)
+## Tiga cara akses (status 2026-10-20)
 
-| | Jalur | Status |
+**AKSES PUBLIK SEDANG DIMATIKAN PUSDATIK.** Jalur yang hidup sekarang jalur B
+(jaringan internal / VPN). Ini BUKAN keadaan permanen - bisa dibuka lagi, dan
+aplikasinya sudah punya sakelarnya (lihat `NETWORK_MODE` di bawah).
+
+| | Jalur | Status 2026-10-20 |
 |---|---|---|
-| **A** | `https://gajihub.kemnaker.go.id` lewat proxy Pusdatik | scan Tenable lolos (0 Critical / 0 High), publikasi **on proses** di Pusdatik |
-| **B** | VPN FortiClient -> `http://192.168.221.44:3002` | dipakai untuk demo; gateway `103.87.196.249:9443` |
+| **A** | `https://gajihub.kemnaker.go.id` lewat proxy Pusdatik | **MATI** - akses publik diputus Pusdatik. Scan Tenable sendiri sudah lolos (0 Critical / 0 High) |
+| **B** | Jaringan internal / VPN FortiClient -> `http://192.168.221.44:3002` | **INI YANG DIPAKAI**; gateway `103.87.196.249:9443` |
 | **C** | `https://gajihub-demo.vercel.app` + data dummy (Neon) | cadangan; 3 fitur yang menyentuh SIAP/e-Presensi mati di sana |
 
+Jangan mengukur jalur A lalu menyimpulkan apa pun - pernah terukur HTTP 200
+pada 2026-09-29 ketika publikasinya masih terbuka, dan sekarang tidak lagi.
+**Ukur sendiri sebelum mengutip status ini.**
+
+### `NETWORK_MODE` - sakelar INTERNAL / PUBLIC (`src/auth/modeJaringan.ts`)
+
+Dibaca **per pemanggilan**, bukan dibekukan saat impor, jadi toggle di
+`/admin` berlaku tanpa restart. Bawaannya **INTERNAL** kalau env kosong, dan
+nilai yang tidak dikenali juga jatuh ke INTERNAL - arah yang masih bisa
+dipulihkan sendiri, sementara salah arah ke PUBLIC melempar pengguna ke
+domain yang tidak menjawab. 11 test di `src/auth/__tests__/modeJaringan.test.ts`
+menguncinya.
+
+### Login NIP MASIH HIDUP di mode INTERNAL (diperiksa 2026-10-20)
+
+User menyebut login NIP sudah dihapus dan fokusnya SSO + akun dev. **Kodenya
+belum.** `isNipLogin` di `src/app/login/actions.ts:48` dan
+`src/app/api/auth/login/route.ts:36` masih menerima username 18 digit dengan
+password = NIP, dan gerbangnya `isModeInternal() || ALLOW_NIP_LOGIN` - jadi
+mode INTERNAL yang sekarang aktif justru MEMBUKA jalur itu.
+
+Diukur dengan `.env` nyata dimuat: NETWORK_MODE=INTERNAL, ALLOW_NIP_LOGIN
+tidak diset, DEV_AUTH_USER/PASS terisi, COOKIE_SECURE=false (benar untuk
+akses HTTP internal) - dan hasilnya login password=NIP **AKTIF**.
+
+Jadi janji "password = NIP sudah tidak dipakai" belum tercapai. Kalau memang
+mau dimatikan, yang dicabut adalah `isNipLogin`, bukan mode jaringannya -
+mematikannya lewat NETWORK_MODE=PUBLIC justru akan melumpuhkan satu-satunya
+jalur akses yang hidup.
+
+Yang berubah saat INTERNAL: redirect mempertahankan host/IP yang diakses
+(`asalPublik()`), QR TTE mengarah ke host internal, dan login NIP 18 digit
+dibuka sebagai cadangan SSO.
+
+Toggle di `/admin` menyimpan ke `.env` secara **atomik** (tulis berkas
+sementara lalu `rename`) - berkas itu memuat seluruh kredensial aplikasi, dan
+penulisan yang terputus di tengah akan melumpuhkan aplikasinya. Kalau
+penyimpanannya gagal, pesan suksesnya memuat PERINGATAN eksplisit bahwa
+modenya hanya berlaku sampai restart.
+
 `COOKIE_SECURE=true` akan **mematikan jalur B** (HTTP langsung ke IP) - jangan
-diubah selama jalur itu masih dipakai.
+diubah selama jalur itu masih dipakai. Selama akses publik mati, jalur B
+satu-satunya yang ada, jadi ini sekarang bukan catatan kecil lagi.
 
 ---
 

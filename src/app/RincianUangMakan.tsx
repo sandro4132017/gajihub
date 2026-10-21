@@ -57,36 +57,40 @@ export function RincianUangMakan({
         </span>
       </div>
 
-      <div className="mt-2 overflow-x-auto">
+      <div className="mt-2.5 overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-muted">
-              <th className="py-1 pr-2 font-medium">Status kehadiran</th>
-              <th className="py-1 pr-2 font-medium">Hari</th>
-              <th className="py-1 pl-2 font-medium">Uang makan</th>
+            <tr className="border-b border-line text-muted">
+              <th className="py-1.5 pr-3 text-left font-semibold">Status kehadiran</th>
+              <th className="py-1.5 px-3 text-center font-semibold">Hari</th>
+              <th className="py-1.5 pl-3 text-right font-semibold">Uang makan</th>
             </tr>
           </thead>
           <tbody>
             {r.baris.map((b) => (
               <tr key={b.status} className="border-t border-line/60">
-                <td className="py-1 pr-2 text-ink-2">{b.status}</td>
-                <td className="py-1 pr-2 font-mono text-ink">{b.jumlahHari}</td>
-                <td className={`py-1 pl-2 ${b.berhak ? "text-ink" : "text-muted"}`}>
+                <td className="py-1.5 pr-3 text-left font-medium text-ink-2">{b.status}</td>
+                <td className="py-1.5 px-3 text-center font-mono text-ink">{b.jumlahHari}</td>
+                <td className={`py-1.5 pl-3 text-right ${b.berhak ? "text-ink" : "text-muted"}`}>
                   {b.berhak ? (
-                    <span className="font-mono">
+                    <span className="font-mono font-semibold">
                       {r.tarifPerHari === null ? "-" : rupiah(b.jumlahHari * r.tarifPerHari)}
                     </span>
                   ) : (
-                    <span className="line-through decoration-muted/70">tidak dibayar</span>
+                    <span>
+                      <span className="line-through decoration-muted/70">tidak dibayar</span>{" "}
+                      <span className="text-[11px] text-muted">({b.alasan})</span>
+                    </span>
                   )}
-                  {!b.berhak && <span className="ml-1 not-italic text-muted">({b.alasan})</span>}
                 </td>
               </tr>
             ))}
-            <tr className="border-t-2 border-line font-semibold">
-              <td className="py-1.5 pr-2 text-ink">Dibayar</td>
-              <td className="py-1.5 pr-2 font-mono text-ink">{r.hariDibayar}</td>
-              <td className="py-1.5 pl-2 font-mono text-ink">{r.total === null ? "-" : rupiah(r.total)}</td>
+            <tr className="border-t-2 border-line font-bold">
+              <td className="py-2 pr-3 text-left text-ink">Total Dibayar</td>
+              <td className="py-2 px-3 text-center font-mono text-ink">{r.hariDibayar} hari</td>
+              <td className="py-2 pl-3 text-right font-mono text-teal-deep">
+                {r.total === null ? "-" : rupiah(r.total)}
+              </td>
             </tr>
           </tbody>
         </table>

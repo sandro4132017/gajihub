@@ -17,6 +17,8 @@ import { lemburTeks } from "../presensiTampilan";
 import { Paginasi, hitungPaginasi } from "../Paginasi";
 import { NAMA_BULAN } from "../bulan";
 import { periodePunyaUangLembur, resolvePeriode } from "../periodeDefault";
+import { dataUangLemburHarian } from "../ppabp/adk/dataUangLemburHarian";
+import { PratinjauAdkUangLembur } from "../ppabp/adk/PratinjauAdkUangLembur";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -133,6 +135,9 @@ export default async function UangLemburPage({
     pengirimanPeriode.map((p) => [`${p.satuanKerja}|${p.periodeBulan}|${p.periodeTahun}`, p.status])
   );
 
+  // Pratinjau ADK harian Uang Lembur (jam lembur per tanggal)
+  const pratinjauAdk = await dataUangLemburHarian(periodeBulan, periodeTahun, satkerEfektif);
+
   return (
     <main className={HALAMAN}>
       <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
@@ -196,6 +201,13 @@ export default async function UangLemburPage({
         bulan={String(periodeBulan)}
         tahun={String(periodeTahun)}
         satker={satkerEfektif}
+      />
+
+      <PratinjauAdkUangLembur
+        data={pratinjauAdk}
+        periodeBulan={periodeBulan}
+        periodeTahun={periodeTahun}
+        satuanKerja={satkerEfektif || null}
       />
 
       <div className="mt-6">

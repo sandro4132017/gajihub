@@ -153,7 +153,13 @@ export async function GET(req: NextRequest) {
       );
       return {
         nip: r.pegawai.nip,
-        nama: petaIdentitas.get(r.pegawaiId)?.nama ?? r.pegawai.nama,
+        // CADANGANNYA DIKAPITALKAN supaya isi berkas pembayaran TIDAK
+        // berubah sedikit pun oleh perapian nama di sisi tampilan.
+        // `Pegawai.nama` kini disimpan ber-Title Case (lihat
+        // sinkronPegawaiSiap.ts); sebelum itu ia kapital semua, dan itulah
+        // yang sudah pernah dikirim ke Web Gaji. Nama di berkas pembayaran
+        // bukan tempat merapikan tampilan.
+        nama: petaIdentitas.get(r.pegawaiId)?.nama ?? r.pegawai.nama.toUpperCase(),
         kelasJabatan: efektif.kelas,
         // Tarif PENUH kelas jabatannya, bukan `tukinPokok` yang tersimpan -
         // kolom itu sudah nilai SETELAH potongan. Lihat nilaiUangAdkTukin().

@@ -7,6 +7,7 @@ import {
   canCetakSlipGajiSendiri,
   canDownloadBuktiPotongPajakSendiri,
   canViewRekapUnitKerja,
+  canTandatanganiSptjmUnit,
   canExportRekapUnit,
   canVerifikasiBandingJenjang1,
   canKirimRekapUnit,
@@ -752,5 +753,59 @@ describe("canLihat* kendala & hari libur - MELIHAT dipisah dari MENGUBAH", () =>
   it("akun nonaktif ditolak, sama seperti jalur mengubah", () => {
     expect(canLihatKendalaEpresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM, aktif: false }))).toBe(false);
     expect(canLihatHariLibur(buatUser({ role: "PPABP", aktif: false }))).toBe(false);
+  });
+});
+
+describe("canTandatanganiSptjmUnit - TTE SPTJM, satu-satunya izin yang menutup ADMIN", () => {
+  // SPTJM menyatakan hitungan kalkulasi unit sudah benar, dan tanda tangan
+  // elektroniknya melekat pada sertifikat milik ORANG. Keputusan user
+  // 2026-10-20: yang boleh menandatangani hanya Kasubag TU unit itu sendiri.
+
+  it("Kasubag TU unitnya sendiri -> boleh", () => {
+    expect(canTandatanganiSptjmUnit(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(true);
+  });
+
+  it("Kasubag TU unit LAIN -> DITOLAK", () => {
+    expect(canTandatanganiSptjmUnit(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }), SETJEN)).toBe(false);
+  });
+
+  it("ADMIN DITOLAK - disengaja, bukan kelalaian", () => {
+    // Hampir seluruh izin lain di berkas ini memberi ADMIN jalan pintas.
+    // Di sini TIDAK: jalur yang bisa menandatangani SPTJM semua unit
+    // meniadakan arti "tanggung jawab mutlak" yang jadi nama dokumennya.
+    expect(canTandatanganiSptjmUnit(buatUser({ role: "ADMIN", satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(false);
+    expect(canTandatanganiSptjmUnit(buatUser({ role: "ADMIN", satuanKerja: null }), BIRO_UMUM)).toBe(false);
+  });
+
+  it("role lain DITOLAK semuanya, termasuk PPABP & OSDMA", () => {
+    for (const role of SEMUA_ROLE) {
+      if (role === "KASUBAG_TU") continue;
+      expect(canTandatanganiSptjmUnit(buatUser({ role, satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(false);
+    }
+  });
+
+  it("akun nonaktif DITOLAK", () => {
+    expect(canTandatanganiSptjmUnit(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM, aktif: false }), BIRO_UMUM)).toBe(false);
+  });
+
+  it("satuanKerja NULL tidak boleh cocok dengan target kosong", () => {
+    // Akun KASUBAG_TU ber-satuanKerja NULL memang ada di data. Tanpa
+    // penjagaan ini, null === "" bisa meloloskannya menandatangani dokumen
+    // ber-unit kosong.
+    expect(canTandatanganiSptjmUnit(buatUser({ role: "KASUBAG_TU", satuanKerja: null }), "")).toBe(false);
+    expect(canTandatanganiSptjmUnit(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }), "")).toBe(false);
+    expect(canTandatanganiSptjmUnit(buatUser({ role: "KASUBAG_TU", satuanKerja: null }), BIRO_UMUM)).toBe(false);
+  });
+
+  it("hibah satuanKerjaTambahan TIDAK memberi wewenang menandatangani", () => {
+    // Hibah itu izin MELIHAT (canLihatSatker). Menandatangani pernyataan
+    // tanggung jawab atas unit yang bukan miliknya adalah hal berbeda jenis.
+    const user = buatUser({
+      role: "KASUBAG_TU",
+      satuanKerja: BIRO_UMUM,
+      satuanKerjaTambahan: [SETJEN],
+    });
+    expect(canTandatanganiSptjmUnit(user, SETJEN)).toBe(false);
+    expect(canTandatanganiSptjmUnit(user, BIRO_UMUM)).toBe(true);
   });
 });

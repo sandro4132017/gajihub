@@ -238,27 +238,52 @@ export async function kembalikanRekapUnitAction(
     return { error: "Rekap ini sudah dalam keadaan dikembalikan." };
   }
 
-  await prisma.pengirimanUnit.update({
-    where: { satuanKerja_periodeBulan_periodeTahun: kunciPeriode },
-    data: {
-      status: "DIKEMBALIKAN",
-      alasanKembali: alasan,
-      dikembalikanOlehId: user.id,
-      dikembalikanPada: new Date(),
-    },
-  });
-
-  await prisma.auditTrail.create({
-    data: {
-      entitas: "PengirimanUnit",
-      entitasId: `${satuanKerja}|${periode.bulan}|${periode.tahun}`,
-      aksi: "KEMBALIKAN",
-      aktor: user.nip,
-      satuanKerja,
-      dataSebelum: { status: "TERKIRIM" },
-      dataSesudah: { status: "DIKEMBALIKAN", alasanKembali: alasan },
-    },
-  });
+  // CENTANG VERIFIKASI TABEL IKUT DIHAPUS, dan ini bukan kerapian - ini inti
+  // dari apa yang dinyatakan centang itu.
+  //
+  // Centangnya berarti "saya sudah memeriksa tabel ini dan angkanya benar".
+  // Begitu PPABP menemukan anomali dan mengembalikannya, pernyataan itu
+  // TERBANTAH - angkanya akan berubah, dan tabel yang sama harus diperiksa
+  // ulang. Membiarkan centangnya menempel membuat unit mengirim ulang tanpa
+  // seorang pun benar-benar melihat lagi, lalu menandatangani SPTJM di atas
+  // pemeriksaan yang sebenarnya sudah basi.
+  //
+  // Satu transaksi dengan perubahan statusnya: kalau salah satu gagal,
+  // jangan sampai rekapnya terbuka sementara centangnya tetap penuh.
+  const dikembalikanPada = new Date();
+  await prisma.$transaction([
+    prisma.pengirimanUnit.update({
+      where: { satuanKerja_periodeBulan_periodeTahun: kunciPeriode },
+      data: {
+        status: "DIKEMBALIKAN",
+        alasanKembali: alasan,
+        dikembalikanOlehId: user.id,
+        dikembalikanPada,
+      },
+    }),
+    prisma.verifikasiTabelUnit.deleteMany({
+      where: {
+        satuanKerja,
+        periodeBulan: periode.bulan,
+        periodeTahun: periode.tahun,
+      },
+    }),
+    prisma.auditTrail.create({
+      data: {
+        entitas: "PengirimanUnit",
+        entitasId: `${satuanKerja}|${periode.bulan}|${periode.tahun}`,
+        aksi: "KEMBALIKAN",
+        aktor: user.nip,
+        satuanKerja,
+        dataSebelum: { status: "TERKIRIM" },
+        dataSesudah: {
+          status: "DIKEMBALIKAN",
+          alasanKembali: alasan,
+          verifikasiTabelDireset: true,
+        },
+      },
+    }),
+  ]);
 
   revalidatePath("/kasubag");
   revalidatePath("/kasubag/kalkulasi");

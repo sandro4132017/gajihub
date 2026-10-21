@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE_NAME, verifikasiTokenSesi } from "./auth/session";
+import {
+  SESSION_COOKIE_NAME,
+  verifikasiTokenSesi,
+  type SessionPayload,
+} from "./auth/session";
 import { LANDING_ROLE } from "./auth/roleAktif";
 import { asalPublik } from "./auth/asalPublik";
+import { hostAsalTepercaya } from "./auth/asalTepercaya";
 
 /**
  * Route MESIN - diautentikasi header rahasia di dalam handler-nya sendiri,
@@ -60,7 +65,34 @@ export async function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const session = token ? await verifikasiTokenSesi(token) : null;
+
+  // MIDDLEWARE TIDAK BOLEH MELEMPAR. Apa pun yang dilempar di sini jadi HTTP
+  // 500 untuk SETIAP permintaan yang cocok matcher - /login termasuk, jadi
+  // tidak ada satu halaman pun yang bisa dibuka untuk memperbaikinya.
+  //
+  // Sesudah verifikasiTokenSesi dibuat tahan cookie cacat, satu-satunya sebab
+  // yang tersisa adalah SESSION_SECRET yang belum diatur atau kurang dari 32
+  // byte di .env server - dan itu disebut namanya di log, bukan dibiarkan
+  // muncul sebagai 500 tanpa keterangan.
+  let session: SessionPayload | null = null;
+  try {
+    session = token ? await verifikasiTokenSesi(token) : null;
+  } catch (err) {
+    console.error(
+      "[middleware] Sesi tidak bisa diverifikasi - periksa SESSION_SECRET di .env server:",
+      err instanceof Error ? err.message : err
+    );
+    return terapkanHeaderKeamanan(
+      new NextResponse(
+        "Konfigurasi sesi server belum lengkap. Hubungi pengelola aplikasi.",
+        {
+          status: 503,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        }
+      )
+    );
+  }
+
   const path = request.nextUrl.pathname;
   const isLoginPage = path === "/login";
   const isRuteSso = path === "/login/sso" || path.startsWith("/login/sso/");
@@ -75,17 +107,21 @@ export async function middleware(request: NextRequest) {
   // melempar HTTP 500 ("An unexpected response was received from the server").
   if (request.headers.has("next-action")) {
     const originHeader = request.headers.get("origin");
-    if (originHeader && originHeader !== "null") {
-      try {
-        const originUrl = new URL(originHeader);
-        const reqHeaders = new Headers(request.headers);
-        reqHeaders.set("x-forwarded-host", originUrl.host);
-        reqHeaders.set("x-forwarded-proto", originUrl.protocol.replace(":", ""));
-        return NextResponse.next({ request: { headers: reqHeaders } });
-      } catch {
-        // Abaikan jika header Origin tidak berbentuk URL valid
-      }
+    const hostTepercaya = hostAsalTepercaya(originHeader);
+
+    if (hostTepercaya) {
+      const reqHeaders = new Headers(request.headers);
+      reqHeaders.set("x-forwarded-host", hostTepercaya);
+      reqHeaders.set(
+        "x-forwarded-proto",
+        originHeader?.startsWith("https:") ? "https" : "http"
+      );
+      return NextResponse.next({ request: { headers: reqHeaders } });
     }
+
+    // Asal DI LUAR daftar sengaja TIDAK diselaraskan. Menyelaraskannya berarti
+    // membuat Origin dan Host cocok dengan sendirinya - penahan CSRF bawaan
+    // Next jadi selalu lolos, untuk situs mana pun. Biarkan Next yang memutus.
     return NextResponse.next();
   }
 

@@ -161,8 +161,8 @@ export function susunDaftarPengingat({
   };
 }
 
-/** Daftar berbintang, dipotong di `BATAS_NAMA_PER_PESAN` dengan sisanya disebut. */
-function daftarBerbintang(baris: string[]): string[] {
+/** Daftar berbutir, dipotong di `BATAS_NAMA_PER_PESAN` dengan sisanya disebut. */
+function daftarButir(baris: string[]): string[] {
   if (baris.length <= BATAS_NAMA_PER_PESAN) return baris.map((b) => `• ${b}`);
   const tampil = baris.slice(0, BATAS_NAMA_PER_PESAN).map((b) => `• ${b}`);
   tampil.push(`_...dan ${baris.length - BATAS_NAMA_PER_PESAN} pegawai lainnya_`);
@@ -202,7 +202,7 @@ export function pesanCheckin({
     `*Gajihub • ${tanggalTeks}*`,
     "",
     "👤 *Belum melakukan Check-in:*",
-    ...daftarBerbintang(d.belumCheckin),
+    ...daftarButir(d.belumCheckin),
     "",
     `⏰ *Batas Check-in: ${batasJam} WIB*`,
     "",
@@ -227,7 +227,7 @@ export function pesanCheckout({
     `*Gajihub • ${tanggalTeks}*`,
     "",
     "👤 *Belum melakukan Check-out:*",
-    ...daftarBerbintang(d.belumCheckout.map((b) => `${b.nama} — *${b.bolehPulang} WIB*`)),
+    ...daftarButir(d.belumCheckout.map((b) => `${b.nama} — *${b.bolehPulang} WIB*`)),
     "",
     "🕐 *Jam boleh pulang* tercantum di samping nama masing-masing.",
     "",

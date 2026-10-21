@@ -71,6 +71,29 @@ export function GridAdkHarian({
                   </th>
                 );
               })}
+              {denganJam ? (
+                <>
+                  <th
+                    className="border-l-2 border-line bg-surface-2 px-2 py-1.5 text-center font-bold text-ink"
+                    title="Total jam lembur hari kerja"
+                  >
+                    HK
+                  </th>
+                  <th
+                    className="border-l border-line/60 bg-surface-2 px-2 py-1.5 text-center font-bold text-red"
+                    title="Total jam lembur hari libur"
+                  >
+                    HL
+                  </th>
+                </>
+              ) : (
+                <th
+                  className="border-l-2 border-line bg-surface-2 px-2 py-1.5 text-center font-bold text-ink"
+                  title="Total hari kehadiran"
+                >
+                  Jml
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -97,6 +120,20 @@ export function GridAdkHarian({
                     </td>
                   );
                 })}
+                {denganJam ? (
+                  <>
+                    <td className="border-l-2 border-line bg-surface-2/60 px-2 py-1 text-center font-mono font-bold text-ink">
+                      {String(baris[baris.length - 2] ?? 0)}
+                    </td>
+                    <td className="border-l border-line/60 bg-surface-2/60 px-2 py-1 text-center font-mono font-bold text-red">
+                      {String(baris[baris.length - 1] ?? 0)}
+                    </td>
+                  </>
+                ) : (
+                  <td className="border-l-2 border-line bg-surface-2/60 px-2 py-1 text-center font-mono font-bold text-ink">
+                    {String(baris[baris.length - 1] ?? 0)}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

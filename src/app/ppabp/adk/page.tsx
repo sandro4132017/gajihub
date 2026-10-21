@@ -10,6 +10,7 @@ import { kelompokkanPerBank } from "../../../business-logic/rekeningPegawai";
 import { dataUangMakanHarian } from "./dataUangMakanHarian";
 import { dataUangLemburHarian } from "./dataUangLemburHarian";
 import { PratinjauAdkUangMakan } from "./PratinjauAdkUangMakan";
+import { PratinjauAdkUangLembur } from "./PratinjauAdkUangLembur";
 import {
   TAMPILKAN_ADK_LEMBUR,
   TAMPILKAN_NOMINAL_LEMBUR,
@@ -212,73 +213,56 @@ export default async function ExportAdkPage({
             })
           ).map((r) => r.pegawai);
 
-  // 6. TTE SPTJM PPK DOKUMEN PER JENIS (Defensif fallback null jika tabel belum dimigrasi)
-  const [tteTukin, tteUangMakan, tteLembur] = await Promise.all([
-    prisma.dokumenTte
-      .findFirst({
-        where: {
-          jenisDokumen: "SPTJM_TUKIN",
-          periodeBulan: bln,
-          periodeTahun: thn,
-          ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
-        },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          status: true,
-          nomorDokumen: true,
-          fileSignedPath: true,
-          signedAt: true,
-          penandatanganNama: true,
-        },
-      })
-      .catch(() => null),
-    prisma.dokumenTte
-      .findFirst({
-        where: {
-          jenisDokumen: "SPTJM_UANG_MAKAN",
-          periodeBulan: bln,
-          periodeTahun: thn,
-          ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
-        },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          status: true,
-          nomorDokumen: true,
-          fileSignedPath: true,
-          signedAt: true,
-          penandatanganNama: true,
-        },
-      })
-      .catch(() => null),
-    prisma.dokumenTte
-      .findFirst({
-        where: {
-          jenisDokumen: "SPTJM_LEMBUR",
-          periodeBulan: bln,
-          periodeTahun: thn,
-          ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
-        },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          status: true,
-          nomorDokumen: true,
-          fileSignedPath: true,
-          signedAt: true,
-          penandatanganNama: true,
-        },
-      })
-      .catch(() => null),
-  ]);
+  // 6. TTE SPTJM PPK DOKUMEN PER JENIS & DAFTAR PER UNIT (Defensif fallback kosong jika tabel belum dimigrasi)
+  const semuaDokumenTtePeriode = await prisma.dokumenTte
+    .findMany({
+      where: {
+        periodeBulan: bln,
+        periodeTahun: thn,
+        ...(satkerTerpilih ? { satuanKerja: satkerTerpilih } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        jenisDokumen: true,
+        satuanKerja: true,
+        status: true,
+        nomorDokumen: true,
+        fileDraftPath: true,
+        fileSignedPath: true,
+        signedAt: true,
+        penandatanganNama: true,
+      },
+    })
+    .catch(() => []);
 
-  const dokumenTteDipilih =
-    adkDipilih === "tukin"
-      ? tteTukin
-      : adkDipilih === "uang-makan"
-      ? tteUangMakan
-      : tteLembur;
+  const ambilTerbaruPerSatker = (jenisTarget: string) => {
+    const mapSatker = new Map<string, (typeof semuaDokumenTtePeriode)[number]>();
+    for (const d of semuaDokumenTtePeriode) {
+      if (d.jenisDokumen !== jenisTarget) continue;
+      if (!mapSatker.has(d.satuanKerja)) {
+        mapSatker.set(d.satuanKerja, d);
+      }
+    }
+    return Array.from(mapSatker.values()).map((d) => ({
+      id: d.id,
+      status: d.status,
+      nomorDokumen: d.nomorDokumen,
+      satuanKerja: d.satuanKerja,
+      fileDraftPath: d.fileDraftPath,
+      fileSignedPath: d.fileSignedPath,
+      signedAt: d.signedAt ? d.signedAt.toISOString() : null,
+      penandatanganNama: d.penandatanganNama,
+    }));
+  };
+
+  const daftarSptjmTukin = ambilTerbaruPerSatker("SPTJM_TUKIN");
+  const daftarSptjmUangMakan = ambilTerbaruPerSatker("SPTJM_UANG_MAKAN");
+  const daftarSptjmLembur = ambilTerbaruPerSatker("SPTJM_LEMBUR");
+
+  const tteTukin = daftarSptjmTukin[0] || null;
+  const tteUangMakan = daftarSptjmUangMakan[0] || null;
+  const tteLembur = daftarSptjmLembur[0] || null;
 
   // HELPER UNTUK URL UNDUH
   const hrefBerkas = (format: "xlsx" | "txt", bankKode?: string, jenisOverride?: JenisBerkasAdk) => {
@@ -755,15 +739,9 @@ export default async function ExportAdkPage({
             periodeBulan={bln}
             periodeTahun={thn}
             adkAktif="tukin"
-            satuanKerja={satkerTerpilih || "Biro Keuangan dan BMN"}
-            dokumenTteAwal={
-              tteTukin
-                ? {
-                    ...tteTukin,
-                    signedAt: tteTukin.signedAt ? tteTukin.signedAt.toISOString() : null,
-                  }
-                : null
-            }
+            satuanKerja={satkerTerpilih ?? ""}
+            dokumenTteAwal={tteTukin}
+            daftarSptjmUnit={daftarSptjmTukin}
           />
         </div>
       )}
@@ -869,15 +847,9 @@ export default async function ExportAdkPage({
             periodeBulan={bln}
             periodeTahun={thn}
             adkAktif="uang-makan"
-            satuanKerja={satkerTerpilih || "Biro Keuangan dan BMN"}
-            dokumenTteAwal={
-              tteUangMakan
-                ? {
-                    ...tteUangMakan,
-                    signedAt: tteUangMakan.signedAt ? tteUangMakan.signedAt.toISOString() : null,
-                  }
-                : null
-            }
+            satuanKerja={satkerTerpilih ?? ""}
+            dokumenTteAwal={tteUangMakan}
+            daftarSptjmUnit={daftarSptjmUangMakan}
           />
         </div>
       )}
@@ -985,20 +957,35 @@ export default async function ExportAdkPage({
             </div>
           )}
 
+          {/* Pratinjau Grid Jam Lembur Harian */}
+          {pratinjauLembur.pegawai.length > 0 && (
+            <details className="group rounded-2xl border border-line bg-surface p-4 shadow-2xs">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-bold text-sm text-ink">
+                <span>Pratinjau Grid Jam Lembur Harian</span>
+                <span className="text-xs font-semibold text-teal-deep underline">
+                  <span className="group-open:hidden">Buka pratinjau</span>
+                  <span className="hidden group-open:inline">Tutup</span>
+                </span>
+              </summary>
+              <div className="mt-4 border-t border-line-2 pt-4">
+                <PratinjauAdkUangLembur
+                  data={pratinjauLembur}
+                  periodeBulan={bln}
+                  periodeTahun={thn}
+                  terbuka={true}
+                />
+              </div>
+            </details>
+          )}
+
           {/* Panel TTE SPTJM PPK (Uang Lembur) */}
           <PanelTteSptjmPpk
             periodeBulan={bln}
             periodeTahun={thn}
             adkAktif="uang-lembur"
-            satuanKerja={satkerTerpilih || "Biro Keuangan dan BMN"}
-            dokumenTteAwal={
-              tteLembur
-                ? {
-                    ...tteLembur,
-                    signedAt: tteLembur.signedAt ? tteLembur.signedAt.toISOString() : null,
-                  }
-                : null
-            }
+            satuanKerja={satkerTerpilih ?? ""}
+            dokumenTteAwal={tteLembur}
+            daftarSptjmUnit={daftarSptjmLembur}
           />
         </div>
       )}

@@ -4,10 +4,14 @@ import { AksesDitolak } from "../../AksesDitolak";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { ambilAksesUnit } from "../access";
 import { SatkerPicker } from "../SatkerPicker";
+import { SearchableSelect } from "../../SearchableSelect";
 import { PencarianDebounce } from "../../PencarianDebounce";
 import { Paginasi, hitungPaginasi } from "../../Paginasi";
+import { SumberAcuan } from "../../SumberAcuan";
+import { BadgePejabatEselon } from "../../BadgePejabatEselon";
 import Link from "next/link";
 import { HALAMAN } from "../../layoutHalaman";
+import { FiEdit2, FiUsers, FiUserCheck, FiUserX, FiSearch } from "react-icons/fi";
 
 export const dynamic = "force-dynamic";
 
@@ -23,17 +27,26 @@ export default async function RosterPegawaiUnitPage({
   }
   const { authUser, satkerEfektif } = akses;
 
+  const satuanKerjaRows = await prisma.pegawai.findMany({
+    distinct: ["satuanKerja"],
+    select: { satuanKerja: true },
+    orderBy: { satuanKerja: "asc" },
+  });
+  const satuanKerjaList = resolveSatuanKerjaListUntukFilter(
+    authUser,
+    satuanKerjaRows.map((r) => r.satuanKerja)
+  );
+
   if (!satkerEfektif) {
-    const satuanKerjaRows = await prisma.pegawai.findMany({
-      distinct: ["satuanKerja"],
-      select: { satuanKerja: true },
-      orderBy: { satuanKerja: "asc" },
-    });
     return (
-      <main className={HALAMAN}>
-        <h1 className="text-xl font-extrabold tracking-tight text-ink">Pegawai Unit</h1>
-        <p className="mt-1 text-sm text-muted">Pilih satuan kerja dulu.</p>
-        <SatkerPicker satuanKerjaList={resolveSatuanKerjaListUntukFilter(authUser, satuanKerjaRows.map((r) => r.satuanKerja))} />
+      <main className={`${HALAMAN} space-y-6`}>
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">Pegawai Unit</h1>
+          <p className="mt-1 text-sm text-biru">
+            Pilih satuan kerja terlebih dahulu untuk melihat daftar pegawai unit.
+          </p>
+        </div>
+        <SatkerPicker satuanKerjaList={satuanKerjaList} />
       </main>
     );
   }
@@ -49,7 +62,7 @@ export default async function RosterPegawaiUnitPage({
   // ada tombol "Tampilkan yang sudah tidak aktif" di bawah, supaya tidak ada
   // pegawai yang lenyap tanpa jejak dari sudut pandang Kasubag TU.
   const tampilkanNonaktif = nonaktif === "1";
-  const [pegawaiList, jumlahNonaktif] = await Promise.all([
+  const [pegawaiList, jumlahAktifTotal, jumlahNonaktif, jumlahTanpaKelas] = await Promise.all([
     prisma.pegawai.findMany({
       where: {
         satuanKerja: satkerEfektif,
@@ -59,13 +72,18 @@ export default async function RosterPegawaiUnitPage({
               OR: [
                 { nama: { contains: q, mode: "insensitive" } },
                 { nip: { contains: q } },
+                { jabatan: { contains: q, mode: "insensitive" } },
               ],
             }
           : {}),
       },
       orderBy: { nama: "asc" },
     }),
+    prisma.pegawai.count({ where: { satuanKerja: satkerEfektif, statusPegawai: "AKTIF" } }),
     prisma.pegawai.count({ where: { satuanKerja: satkerEfektif, statusPegawai: { not: "AKTIF" } } }),
+    prisma.pegawai.count({
+      where: { satuanKerja: satkerEfektif, statusPegawai: "AKTIF", kelasJabatan: null },
+    }),
   ]);
 
   // PAGINASI. Unit terbesar di data ini berisi 227 pegawai (Balai Bekasi),
@@ -86,114 +104,285 @@ export default async function RosterPegawaiUnitPage({
   // akan ditolak, bukan soal keamanan.
   const bolehEdit = canEditDataPegawai(authUser, satkerEfektif);
 
-  return (
-    <main className={HALAMAN}>
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Pegawai Unit</h1>
-      <p className="mt-1 text-sm text-muted">
-        {satkerEfektif} - {pegawaiList.length} pegawai
-        {tampilkanNonaktif ? " (termasuk yang sudah tidak aktif)" : " aktif"}
-      </p>
+  const urlHanyaAktif = `/kasubag/pegawai?satker=${encodeURIComponent(satkerEfektif)}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+  const urlSemuaStatus = `/kasubag/pegawai?satker=${encodeURIComponent(satkerEfektif)}&nonaktif=1${q ? `&q=${encodeURIComponent(q)}` : ""}`;
 
-      <form method="get" className="card mt-4 flex flex-wrap items-end gap-3 p-4">
-        <input type="hidden" name="satker" value={satkerEfektif} />
-        {tampilkanNonaktif && <input type="hidden" name="nonaktif" value="1" />}
-        <div className="flex-1 min-w-[200px]">
-          <label className="field-label">Cari nama atau NIP</label>
-          <PencarianDebounce defaultValue={q} placeholder="Cari..." />
+  return (
+    <main className={`${HALAMAN} space-y-6`}>
+      {/* ====================================================================
+          1. KEPALA HALAMAN
+          ==================================================================== */}
+      <div className="gj-masuk flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
+              Pegawai Unit
+              <SumberAcuan
+                judulKeterangan="Tentang Roster Pegawai Unit"
+                keterangan={[
+                  "Daftar pegawai yang terdaftar pada satuan kerja ini sebagai dasar perhitungan Tunjangan Kinerja, Uang Makan, dan Uang Lembur.",
+                  "Secara bawaan hanya menampilkan pegawai berstatus AKTIF.",
+                  "Pegawai yang sudah pensiun/berhenti sengaja tidak dihapus dari database agar histori pembayaran bulan sebelumnya tetap utuh.",
+                  "Perubahan kelas jabatan, golongan, atau pemindahan unit kerja dilakukan melalui halaman Data Pegawai.",
+                ]}
+                acuan={[
+                  { aturan: "Data Master SIAP", tentang: "Identitas NIP, nama, jabatan, dan golongan pegawai" },
+                  { aturan: "SK Grading / Kelas Jabatan", tentang: "Penentu tarif Tukin Pokok (Kelas 1 s.d. 17)" },
+                ]}
+              />
+            </h1>
+            <span className="chip chip-navy text-xs font-semibold">{satkerEfektif}</span>
+          </div>
+          <p className="mt-0.5 text-sm font-bold text-ink">
+            Roster Kepegawaian Satuan Kerja &middot; {jumlahAktifTotal} Pegawai Aktif
+          </p>
+          <p className="mt-1.5 text-sm text-biru">
+            Pantau daftar pegawai aktif, jabatan, golongan, dan kelengkapan kelas jabatan di unit kerja Anda.
+          </p>
         </div>
-        <button type="submit" className="btn btn-primary">
-          Cari
+
+        {bolehEdit && (
+          <Link
+            href={`/pegawai?satker=${encodeURIComponent(satkerEfektif)}`}
+            className="btn btn-secondary inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold shadow-2xs"
+          >
+            <FiEdit2 className="size-3.5" />
+            <span>Kelola Data Pegawai</span>
+          </Link>
+        )}
+      </div>
+
+      {/* ====================================================================
+          2. METRIK RINGKASAN ROSTER UNIT
+          ==================================================================== */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+        <a
+          href={urlHanyaAktif}
+          className={`flex items-center justify-between rounded-2xl border p-4 shadow-2xs transition ${
+            !tampilkanNonaktif
+              ? "border-navy bg-surface ring-2 ring-navy/10"
+              : "border-line bg-surface hover:border-biru"
+          }`}
+        >
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Pegawai Aktif</p>
+            <p className="mt-1 font-mono text-2xl font-black text-ink">
+              {jumlahAktifTotal.toLocaleString("id-ID")}{" "}
+              <span className="text-xs font-semibold text-muted">orang</span>
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted">Ikut dalam siklus kalkulasi</p>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-xl bg-teal-tint text-navy">
+            <FiUserCheck className="size-5" />
+          </div>
+        </a>
+
+        <div
+          className={`flex items-center justify-between rounded-2xl border p-4 shadow-2xs ${
+            jumlahTanpaKelas > 0
+              ? "border-amber-300 bg-gold-tint/40 dark:border-amber-800"
+              : "border-line bg-surface"
+          }`}
+        >
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Kelengkapan Kelas Jabatan</p>
+            <p className="mt-1 font-mono text-2xl font-black text-ink">
+              {(jumlahAktifTotal - jumlahTanpaKelas).toLocaleString("id-ID")}{" "}
+              <span className="text-xs font-semibold text-muted">/ {jumlahAktifTotal}</span>
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted">
+              {jumlahTanpaKelas > 0 ? (
+                <span className="font-semibold text-gold-deep">
+                  {jumlahTanpaKelas} pegawai aktif belum punya kelas jabatan
+                </span>
+              ) : (
+                "Seluruh pegawai aktif memiliki kelas jabatan"
+              )}
+            </p>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-xl bg-surface-2 text-ink-2">
+            <FiUsers className="size-5" />
+          </div>
+        </div>
+
+        <a
+          href={tampilkanNonaktif ? urlHanyaAktif : urlSemuaStatus}
+          className={`flex items-center justify-between rounded-2xl border p-4 shadow-2xs transition ${
+            tampilkanNonaktif
+              ? "border-navy bg-surface ring-2 ring-navy/10"
+              : "border-line bg-surface hover:border-biru"
+          }`}
+        >
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Pensiun / Nonaktif</p>
+            <p className="mt-1 font-mono text-2xl font-black text-ink">
+              {jumlahNonaktif.toLocaleString("id-ID")}{" "}
+              <span className="text-xs font-semibold text-muted">orang</span>
+            </p>
+            <p className="mt-0.5 text-[11px] font-semibold text-teal-deep underline">
+              {tampilkanNonaktif ? "Sembunyikan dari tabel" : "Klik untuk tampilkan di tabel"}
+            </p>
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-xl bg-surface-2 text-muted">
+            <FiUserX className="size-5" />
+          </div>
+        </a>
+      </div>
+
+      {/* ====================================================================
+          3. FILTER & PENCARIAN
+          ==================================================================== */}
+      <form
+        method="get"
+        className="rounded-2xl border border-line bg-surface p-4 shadow-2xs flex flex-wrap items-end gap-3"
+      >
+        {satuanKerjaList.length > 1 ? (
+          <div className="min-w-[240px]">
+            <label className="field-label">Satuan kerja</label>
+            <SearchableSelect
+              name="satker"
+              className="w-full"
+              options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
+              defaultValue={satkerEfektif}
+            />
+          </div>
+        ) : (
+          <input type="hidden" name="satker" value={satkerEfektif} />
+        )}
+
+        {tampilkanNonaktif && <input type="hidden" name="nonaktif" value="1" />}
+
+        <div className="min-w-[220px] flex-1">
+          <label className="field-label">Cari nama, NIP, atau jabatan</label>
+          <PencarianDebounce defaultValue={q} placeholder="Ketik nama, NIP, atau jabatan..." />
+        </div>
+
+        <button type="submit" className="btn btn-primary inline-flex items-center gap-1.5">
+          <FiSearch className="size-4" />
+          <span>Cari</span>
         </button>
+
+        {q && (
+          <a
+            href={tampilkanNonaktif ? urlSemuaStatus.replace(`&q=${encodeURIComponent(q)}`, "") : `/kasubag/pegawai?satker=${encodeURIComponent(satkerEfektif)}`}
+            className="btn btn-ghost text-xs font-semibold"
+          >
+            Reset
+          </a>
+        )}
       </form>
 
-      {jumlahNonaktif > 0 && (
-        <p className="mt-2 text-xs text-muted">
-          {tampilkanNonaktif ? (
-            <>
-              Termasuk {jumlahNonaktif} pegawai yang sudah pensiun/berhenti.{" "}
-              <a
-                href={`/kasubag/pegawai?satker=${encodeURIComponent(satkerEfektif)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                className="font-semibold text-teal-deep underline"
-              >
-                Sembunyikan
-              </a>
-            </>
-          ) : (
-            <>
-              {jumlahNonaktif} pegawai unit ini sudah pensiun/berhenti dan tidak ditampilkan. Datanya sengaja tidak
-              dihapus - mereka tetap berhak atas tukin bulan yang sudah dikerjakan.{" "}
-              <a
-                href={`/kasubag/pegawai?satker=${encodeURIComponent(satkerEfektif)}&nonaktif=1${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                className="font-semibold text-teal-deep underline"
-              >
-                Tampilkan
-              </a>
-            </>
-          )}
-        </p>
-      )}
-
-      <div className="card mt-4 overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
-              <th className="col-nama px-4 py-2.5">Nama</th>
-              <th className="px-4 py-2.5">NIP</th>
-              <th className="px-4 py-2.5">Jabatan</th>
-              <th className="px-4 py-2.5">Golongan</th>
-              <th className="px-4 py-2.5">Kelas</th>
-              <th className="px-4 py-2.5">Status</th>
-              {bolehEdit && <th className="px-4 py-2.5">Tindakan</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {pegawaiList.length === 0 && (
-              <tr>
-                <td colSpan={bolehEdit ? 7 : 6} className="px-4 py-6 text-center text-muted">
-                  Tidak ada pegawai yang cocok.
-                </td>
-              </tr>
-            )}
-            {pegawaiHalamanIni.map((p) => (
-              <tr key={p.id} className="border-b border-line-2">
-                <td className="col-nama px-4 py-2.5 font-semibold text-ink">{p.nama}</td>
-                <td className="px-4 py-2.5 font-mono text-xs text-muted">{p.nip}</td>
-                <td className="px-4 py-2.5 text-ink-2">{p.jabatan ?? "-"}</td>
-                <td className="px-4 py-2.5 text-ink-2">{p.golongan ?? "-"}</td>
-                <td className="px-4 py-2.5 font-mono text-ink-2">{p.kelasJabatan ?? "-"}</td>
-                <td className="px-4 py-2.5">
-                  <span className={`chip ${p.statusPegawai === "AKTIF" ? "chip-navy" : "chip-wait"}`}>
-                    {p.statusPegawai}
-                  </span>
-                </td>
-                {bolehEdit && (
-                  <td className="px-4 py-2.5">
-                    {/* Menuju /pegawai - SATU-SATUNYA tempat data pegawai
-                        diubah. Halaman ini sengaja tetap baca-saja: form
-                        sunting yang disalin ke dua tempat cepat atau lambat
-                        berbeda aturannya. */}
-                    <Link
-                      href={`/pegawai?pegawaiId=${p.id}`}
-                      className="text-xs font-semibold text-biru hover:underline"
-                    >
-                      Edit data
-                    </Link>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* ====================================================================
+          4. TABEL ROSTER PEGAWAI UNIT
+          ==================================================================== */}
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-extrabold tracking-tight text-navy">
+            Daftar Pegawai {satkerEfektif}
+          </h2>
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <span>
+              Menampilkan <strong className="text-ink">{pegawaiList.length}</strong> pegawai
+              {tampilkanNonaktif ? " (termasuk nonaktif/pensiun)" : " aktif"}
+            </span>
+          </div>
         </div>
-        <div className="border-t border-line-2 px-4 py-3 sm:px-6">
-          <Paginasi
-            basePath="/kasubag/pegawai"
-            params={paramPaginasi}
-            info={paginasi}
-            totalBaris={pegawaiList.length}
-            labelBaris="pegawai"
-          />
+
+        <div className="card mt-3 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+                  <th className="col-nama px-4 py-3 text-left">Pegawai</th>
+                  <th className="px-4 py-3 text-left">Jabatan</th>
+                  <th className="px-4 py-3 text-left">Golongan</th>
+                  <th className="px-4 py-3 text-center">Kelas Jabatan</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  {bolehEdit && <th className="px-4 py-3 text-right">Aksi</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line-2">
+                {pegawaiList.length === 0 && (
+                  <tr>
+                    <td colSpan={bolehEdit ? 6 : 5} className="px-4 py-8 text-center text-muted">
+                      Tidak ada pegawai yang cocok dengan pencarian ini.
+                    </td>
+                  </tr>
+                )}
+                {pegawaiHalamanIni.map((p) => (
+                  <tr key={p.id} className="transition-colors hover:bg-surface-2/50">
+                    <td className="col-nama px-4 py-3">
+                      <div className="font-semibold text-ink">
+                        {p.nama}
+                        <BadgePejabatEselon kelasJabatan={p.kelasJabatan} />
+                      </div>
+                      <span className="mt-0.5 block font-mono text-xs text-muted">{p.nip}</span>
+                    </td>
+                    <td className="px-4 py-3 text-ink-2">
+                      {p.jabatan ? (
+                        <span className="line-clamp-2 max-w-md text-xs sm:text-sm">{p.jabatan}</span>
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-ink-2">
+                      {p.golongan ? (
+                        <span className="inline-flex rounded-md border border-line bg-surface-2 px-2 py-0.5">
+                          {p.golongan}
+                        </span>
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center font-mono">
+                      {p.kelasJabatan !== null && p.kelasJabatan !== undefined ? (
+                        <span className="inline-flex items-center justify-center rounded-lg bg-teal-tint/60 px-2.5 py-0.5 text-xs font-bold text-navy">
+                          Kelas {p.kelasJabatan}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-md bg-gold-tint px-2 py-0.5 text-[11px] font-semibold text-gold-deep">
+                          Belum diisi
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`chip ${
+                          p.statusPegawai === "AKTIF" ? "chip-ok" : "chip-wait"
+                        }`}
+                      >
+                        {p.statusPegawai}
+                      </span>
+                    </td>
+                    {bolehEdit && (
+                      <td className="px-4 py-3 text-right">
+                        {/* Menuju /pegawai - SATU-SATUNYA tempat data pegawai
+                            diubah. Halaman ini sengaja tetap baca-saja: form
+                            sunting yang disalin ke dua tempat cepat atau lambat
+                            berbeda aturannya. */}
+                        <Link
+                          href={`/pegawai?pegawaiId=${p.id}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-teal-deep shadow-2xs transition hover:border-teal-deep hover:bg-teal-tint/30"
+                        >
+                          <FiEdit2 className="size-3" />
+                          <span>Edit</span>
+                        </Link>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-line-2 px-4 py-3 sm:px-6">
+            <Paginasi
+              basePath="/kasubag/pegawai"
+              params={paramPaginasi}
+              info={paginasi}
+              totalBaris={pegawaiList.length}
+              labelBaris="pegawai"
+            />
+          </div>
         </div>
       </div>
     </main>

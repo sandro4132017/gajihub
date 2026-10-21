@@ -92,16 +92,21 @@ export async function verifikasiTokenSesi(token: string): Promise<SessionPayload
   const [payloadB64, signatureB64] = token.split(".");
   if (!payloadB64 || !signatureB64) return null;
 
+  // getSecretKey() SENGAJA dipanggil DI LUAR try di bawah: kunci yang belum
+  // diatur adalah salah konfigurasi server, bukan cookie yang cacat, jadi harus
+  // tetap melempar supaya penyebabnya terbaca - bukan diam-diam jadi "tidak
+  // ada sesi".
   const key = await getHmacKey();
-  const valid = await crypto.subtle.verify(
-    "HMAC",
-    key,
-    base64UrlDecode(signatureB64) as BufferSource,
-    new TextEncoder().encode(payloadB64)
-  );
-  if (!valid) return null;
 
   try {
+    const valid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      base64UrlDecode(signatureB64) as BufferSource,
+      new TextEncoder().encode(payloadB64)
+    );
+    if (!valid) return null;
+
     const payload = JSON.parse(
       new TextDecoder().decode(base64UrlDecode(payloadB64))
     ) as SessionPayloadTersimpan;
@@ -109,6 +114,11 @@ export async function verifikasiTokenSesi(token: string): Promise<SessionPayload
     const { exp: _exp, ...sisanya } = payload;
     return sisanya;
   } catch {
+    // Cookie yang tidak bisa diurai BUKAN sesi - titik. Sebelumnya `atob` di
+    // dalam base64UrlDecode melempar "Invalid character" dan lemparan itu
+    // menembus sampai ke middleware, tempat satu lemparan berarti HTTP 500
+    // untuk SELURUH halaman; korbannya bahkan tidak bisa membuka /login untuk
+    // membuang cookie-nya.
     return null;
   }
 }

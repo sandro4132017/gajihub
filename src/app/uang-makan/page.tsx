@@ -5,11 +5,15 @@ import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewApproverDashboard } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
 import { AksesDitolak } from "../AksesDitolak";
-import { StatusBadge } from "../StatusBadge";
-import { RincianUangMakan } from "../RincianUangMakan";
+import { TombolRincianUangMakan } from "./TombolRincianUangMakan";
 import { PratinjauAdkUangMakan } from "../ppabp/adk/PratinjauAdkUangMakan";
 import { dataUangMakanHarian } from "../ppabp/adk/dataUangMakanHarian";
 import { HALAMAN } from "../layoutHalaman";
+import { SumberAcuan } from "../SumberAcuan";
+import { Paginasi, hitungPaginasi } from "../Paginasi";
+import { NAMA_BULAN } from "../bulan";
+import { periodePunyaUangMakan, resolvePeriode } from "../periodeDefault";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +23,10 @@ const formatRupiah = (nilai: number) =>
 export default async function UangMakanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bulan?: string; tahun?: string; satker?: string }>;
+  searchParams: Promise<{ bulan?: string; tahun?: string; satker?: string; hal?: string; per?: string }>;
 }) {
-  const { bulan, tahun, satker } = await searchParams;
+  const { bulan, tahun, satker, hal, per } = await searchParams;
 
-  // Guard sama dengan Dashboard Tukin (lihat src/app/tukin/page.tsx) -
-  // KASUBAG_TU discope ke unit kerjanya sendiri, PEGAWAI diarahkan ke
-  // dashboard self-service (/saya).
   const akun = await getSessionAccount();
   const authUser = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canViewApproverDashboard(authUser)) {
@@ -39,6 +40,8 @@ export default async function UangMakanPage({
       <AksesDitolak pesan="Role kamu tidak berwenang melihat data kalkulasi payroll." />
     );
   }
+
+  const satkerWajib = authUser.role === "KASUBAG_TU" ? authUser.satuanKerja : null;
   const satkerEfektif = resolveSatkerEfektif(authUser, satker);
 
   const satuanKerjaRows = await prisma.pegawai.findMany({
@@ -51,31 +54,41 @@ export default async function UangMakanPage({
     satuanKerjaRows.map((r) => r.satuanKerja)
   );
 
+  // Satu periode teresolusi otomatis (konsisten dengan /tukin dan /uang-lembur)
+  const { bulan: periodeBulan, tahun: periodeTahun } = resolvePeriode(
+    bulan,
+    tahun,
+    await periodePunyaUangMakan()
+  );
+
   const kalkulasiList = await prisma.uangMakan.findMany({
     where: {
-      periodeBulan: bulan ? Number(bulan) : undefined,
-      periodeTahun: tahun ? Number(tahun) : undefined,
+      periodeBulan,
+      periodeTahun,
       pegawai: satkerEfektif ? { satuanKerja: satkerEfektif } : undefined,
     },
     include: { pegawai: true },
-    orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }, { pegawai: { nama: "asc" } }],
+    orderBy: { pegawai: { nama: "asc" } },
   });
 
-  // Status baris sekarang datang dari PENGIRIMAN UNIT, bukan dari
-  // ApprovalLog per baris. Approval berjenjang dihapus 2026-09-02 - yang
-  // menggantikannya satu keputusan Kasubag TU per unit per periode, dan
-  // keputusan itulah yang juga menentukan isi berkas ADK.
-  //
-  // Diambil per PERIODE YANG DITAMPILKAN, bukan per baris: satu query untuk
-  // seluruh halaman, dan hasilnya tidak berubah dari baris ke baris dalam
-  // satu unit.
+  // Paginasi URL
+  const paginasi = hitungPaginasi(kalkulasiList.length, hal, per);
+  const halamanIni = kalkulasiList.slice(paginasi.mulai, paginasi.selesai);
+  const paramPaginasi = new URLSearchParams();
+  paramPaginasi.set("bulan", String(periodeBulan));
+  paramPaginasi.set("tahun", String(periodeTahun));
+  if (satkerEfektif) paramPaginasi.set("satker", satkerEfektif);
+
   const pengirimanPeriode = await prisma.pengirimanUnit.findMany({
     where: {
-      OR: kalkulasiList.map((k) => ({
-        satuanKerja: k.pegawai.satuanKerja,
-        periodeBulan: k.periodeBulan,
-        periodeTahun: k.periodeTahun,
-      })),
+      OR:
+        halamanIni.length > 0
+          ? halamanIni.map((k) => ({
+              satuanKerja: k.pegawai.satuanKerja,
+              periodeBulan: k.periodeBulan,
+              periodeTahun: k.periodeTahun,
+            }))
+          : [{ satuanKerja: "__none__", periodeBulan, periodeTahun }],
     },
     select: { satuanKerja: true, periodeBulan: true, periodeTahun: true, status: true },
   });
@@ -83,15 +96,16 @@ export default async function UangMakanPage({
     pengirimanPeriode.map((p) => [`${p.satuanKerja}|${p.periodeBulan}|${p.periodeTahun}`, p.status])
   );
 
-  // Bahan rincian "kenapa segini". Diambil sekali untuk seluruh daftar lalu
-  // dipetakan per pegawai+periode - bukan satu query per kartu.
   const rekapSemua = await prisma.rekapPresensiPeriode.findMany({
     where: {
-      OR: kalkulasiList.map((k) => ({
-        pegawaiId: k.pegawaiId,
-        periodeBulan: k.periodeBulan,
-        periodeTahun: k.periodeTahun,
-      })),
+      OR:
+        halamanIni.length > 0
+          ? halamanIni.map((k) => ({
+              pegawaiId: k.pegawaiId,
+              periodeBulan: k.periodeBulan,
+              periodeTahun: k.periodeTahun,
+            }))
+          : [{ pegawaiId: "__none__", periodeBulan, periodeTahun }],
     },
     select: {
       pegawaiId: true,
@@ -111,118 +125,175 @@ export default async function UangMakanPage({
     rekapSemua.map((r) => [kunciRekap(r.pegawaiId, r.periodeBulan, r.periodeTahun), r])
   );
 
-  // --- Pratinjau isi ADK Uang Makan ---------------------------------------
-  //
-  // HANYA kalau bulan DAN tahun sudah dipilih. Berkas ADK selalu milik satu
-  // periode; tanpa periode yang pasti tidak ada yang bisa dipratinjau, dan
-  // menebak "periode terbaru di daftar" akan menampilkan isi berkas yang bukan
-  // yang sedang dilihat orangnya.
-  //
-  // Discope ke `satkerEfektif` supaya pratinjaunya tidak memperlihatkan unit
-  // lain di halaman yang seluruh isinya sudah disaring - untuk PPABP nilainya
-  // null, jadi dia tetap melihat seluruh isi berkas.
-  const periodeAdk = bulan && tahun ? { bulan: Number(bulan), tahun: Number(tahun) } : null;
-  const pratinjauAdk = periodeAdk
-    ? await dataUangMakanHarian(periodeAdk.bulan, periodeAdk.tahun, satkerEfektif)
-    : null;
+  const pratinjauAdk = await dataUangMakanHarian(periodeBulan, periodeTahun, satkerEfektif);
 
   return (
     <main className={HALAMAN}>
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Uang Makan</h1>
-      <p className="mt-1 text-sm text-muted">
-        Hasil kalkulasi uang makan per pegawai, siap diperiksa sebelum rekapnya dikirim ke PPABP.
+      <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
+        Uang Makan
+        <SumberAcuan
+          judulKeterangan="Tentang uang makan"
+          keterangan={[
+            "Uang makan diberikan berdasarkan kehadiran kerja per hari kerja efektif (WFO/WFH/WFA).",
+            "Pegawai yang sedang melaksanakan perjalanan dinas luar, cuti, tugas belajar/diklat, atau alpha tidak diberikan uang makan.",
+            "Besaran tarif harian ditentukan berdasarkan golongan ruang pegawai.",
+            ...(satkerWajib ? [`Data yang ditampilkan hanya pegawai ${satkerWajib}.`] : []),
+          ]}
+          acuan={[
+            {
+              aturan: "SBM 2026 item 22.1 (PMK 32/2025)",
+              tentang: "Tarif uang makan ASN per hari: Gol I & II Rp35.000, Gol III Rp37.000, Gol IV Rp41.000",
+            },
+            {
+              aturan: "PMK Nomor 72/PMK.05/2016",
+              tentang: "Ketentuan pembayaran uang makan bagi Pegawai Aparatur Sipil Negara",
+            },
+          ]}
+          catatan="Angka di halaman ini adalah nilai tersimpan hasil kalkulasi bulanan. Berkas ADK Uang Makan memuat fakta tanggal kehadiran harian untuk dihitung oleh Web Gaji Kemenkeu."
+        />
+      </h1>
+      <p className="mt-0.5 text-sm font-bold text-ink">
+        Di luar Tunjangan Kinerja &middot; dibayar berdasarkan hari kehadiran
+      </p>
+      <p className="mt-2 text-sm text-biru">
+        Pantau hasil kalkulasi uang makan per pegawai berdasarkan rekap kehadiran bulanan dan tarif SBM.
       </p>
 
-      <FilterBar satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satkerEfektif} />
+      <FilterBar
+        wajibPeriode
+        satuanKerjaList={satuanKerjaList}
+        bulan={String(periodeBulan)}
+        tahun={String(periodeTahun)}
+        satker={satkerEfektif}
+      />
 
-      {/* Pratinjau isi ADK - RUMAHNYA di sini, bukan di halaman Export ADK.
-          Yang memeriksa isinya orang yang mengurus uang makan, dan dia bekerja
-          di menu ini.
+      <PratinjauAdkUangMakan
+        data={pratinjauAdk}
+        periodeBulan={periodeBulan}
+        periodeTahun={periodeTahun}
+        satuanKerja={satkerEfektif}
+      />
 
-          TERTUTUP seperti di halaman Export ADK: gridnya 31 kolom kali 25
-          baris, dan kalau terbuka sendiri ia mendorong daftar pegawai - isi
-          utama halaman ini - keluar layar. Judul ringkasannya sudah menyebut
-          jumlah baris & pegawai, jadi yang tidak perlu membukanya tetap dapat
-          angkanya. */}
-      {periodeAdk && pratinjauAdk && (
-        <PratinjauAdkUangMakan
-          data={pratinjauAdk}
-          periodeBulan={periodeAdk.bulan}
-          periodeTahun={periodeAdk.tahun}
-          satuanKerja={satkerEfektif}
-        />
-      )}
-      {!periodeAdk && (
-        <p className="mt-4 text-xs text-muted">
-          Pilih <strong>bulan dan tahun</strong> di filter untuk melihat pratinjau isi ADK Uang Makan periode itu.
-        </p>
-      )}
+      <div className="mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-extrabold tracking-tight text-navy">
+            Uang Makan {satkerEfektif ?? "Seluruh Satuan Kerja"}{" "}
+            {NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} {periodeTahun}
+          </h2>
+          <span className="text-xs text-muted">{kalkulasiList.length} pegawai</span>
+        </div>
 
-      <div className="mt-8 space-y-4">
-        {kalkulasiList.length === 0 && (
-          <p className="card p-6 text-sm text-muted">
-            Belum ada hasil kalkulasi untuk filter ini. Coba ubah periode atau satuan kerjanya.
-          </p>
-        )}
-
-        {kalkulasiList.map((kalkulasi) => {
-          const keadaanKirim = keadaanKirimBaris(
-            petaKirim.get(
-              `${kalkulasi.pegawai.satuanKerja}|${kalkulasi.periodeBulan}|${kalkulasi.periodeTahun}`
-            )
-          );
-
-          return (
-            <div key={kalkulasi.id} className="card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-bold text-ink">{kalkulasi.pegawai.nama}</p>
-                  <p className="text-sm text-muted">
-                    NIP {kalkulasi.pegawai.nip} - Periode {kalkulasi.periodeBulan}/{kalkulasi.periodeTahun}
-                  </p>
-                  <p className="text-xs text-muted/80">
-                    Dibayar {kalkulasi.jumlahHariDibayar} hari x {formatRupiah(kalkulasi.tarifHarian)} - hadir{" "}
-                    {kalkulasi.jumlahHariHadir} dari {kalkulasi.jumlahHariKerja} hari kerja
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="font-mono font-bold text-ink">{formatRupiah(kalkulasi.totalUangMakan)}</p>
-                  <BadgeStatusKirim keadaan={keadaanKirim} />
-                </div>
-              </div>
-
-              {kalkulasi.catatanAnomali && (
-                <p className="mt-2 rounded-lg bg-gold-tint px-2.5 py-1.5 text-xs font-medium text-gold-deep">
-                  Catatan validasi: {kalkulasi.catatanAnomali}
-                </p>
-              )}
-
-              {(() => {
-                const rekap = petaRekap.get(
-                  kunciRekap(kalkulasi.pegawaiId, kalkulasi.periodeBulan, kalkulasi.periodeTahun)
-                );
-                if (!rekap) {
-                  // Jujur soal batasnya: rekap bulanan cuma ada untuk periode
-                  // yang ditarik/diupload. Tanpa itu rinciannya memang tidak
-                  // bisa direkonstruksi - dan itu dikatakan, bukan dikosongkan.
-                  return (
-                    <p className="mt-3 text-xs text-muted">
-                      Rincian per status kehadiran tidak tersedia - presensi periode ini belum ditarik.
-                    </p>
+        <div className="card mt-3 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
+                  <th className="col-nama px-3 py-2.5 text-left">Pegawai</th>
+                  <th className="px-3 py-2.5">Golongan &amp; Tarif</th>
+                  <th className="px-3 py-2.5">Hari Kerja</th>
+                  <th className="px-3 py-2.5">Hari Hadir</th>
+                  <th className="px-3 py-2.5">Hari Dibayar</th>
+                  <th className="px-3 py-2.5">Nominal</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {halamanIni.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-3 py-6 text-center text-muted">
+                      Belum ada hasil kalkulasi untuk filter ini. Coba ubah periode atau satuan kerjanya.
+                    </td>
+                  </tr>
+                )}
+                {halamanIni.map((kalkulasi) => {
+                  const keadaanKirim = keadaanKirimBaris(
+                    petaKirim.get(
+                      `${kalkulasi.pegawai.satuanKerja}|${kalkulasi.periodeBulan}|${kalkulasi.periodeTahun}`
+                    )
                   );
-                }
-                return (
-                  <RincianUangMakan
-                    input={{ golongan: kalkulasi.pegawai.golongan, ...rekap }}
-                    nilaiTersimpan={kalkulasi.totalUangMakan}
-                    hariDibayarTersimpan={kalkulasi.jumlahHariDibayar}
-                  />
-                );
-              })()}
+                  const rekap = petaRekap.get(
+                    kunciRekap(kalkulasi.pegawaiId, kalkulasi.periodeBulan, kalkulasi.periodeTahun)
+                  );
 
-            </div>
-          );
-        })}
+                  return (
+                    <tr key={kalkulasi.id} className="border-b border-line-2">
+                      <td className="col-nama px-3 py-2.5">
+                        <Link
+                          href={`/tukin/presensi/${kalkulasi.pegawai.nip}?bulan=${kalkulasi.periodeBulan}&tahun=${kalkulasi.periodeTahun}`}
+                          className="font-semibold text-teal-deep underline"
+                        >
+                          {kalkulasi.pegawai.nama}
+                        </Link>
+                        <span className="block font-mono text-xs text-muted">
+                          {kalkulasi.pegawai.nip}
+                        </span>
+                        {!satkerEfektif && (
+                          <span className="block text-[11px] text-muted">
+                            {kalkulasi.pegawai.satuanKerja}
+                          </span>
+                        )}
+                        {kalkulasi.catatanAnomali && (
+                          <span className="mt-1 block max-w-md whitespace-normal rounded-lg bg-gold-tint px-2 py-1 text-[11px] font-medium text-gold-deep">
+                            Catatan validasi: {kalkulasi.catatanAnomali}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-ink-2">
+                        <span className="font-semibold text-ink">
+                          {kalkulasi.pegawai.golongan || "-"}
+                        </span>
+                        <span className="block font-mono text-xs text-muted">
+                          {formatRupiah(kalkulasi.tarifHarian)} / hari
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-ink-2">
+                        {kalkulasi.jumlahHariKerja} hari
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-ink-2">
+                        {kalkulasi.jumlahHariHadir} hari
+                      </td>
+                      <td className="px-3 py-2.5 font-mono font-semibold text-ink">
+                        {kalkulasi.jumlahHariDibayar} hari
+                      </td>
+                      <td className="px-3 py-2.5 font-mono font-semibold text-ink">
+                        {formatRupiah(kalkulasi.totalUangMakan)}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <BadgeStatusKirim keadaan={keadaanKirim} />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {rekap ? (
+                          <TombolRincianUangMakan
+                            nama={kalkulasi.pegawai.nama}
+                            nip={kalkulasi.pegawai.nip}
+                            satuanKerja={kalkulasi.pegawai.satuanKerja}
+                            periodeBulan={kalkulasi.periodeBulan}
+                            periodeTahun={kalkulasi.periodeTahun}
+                            input={{ golongan: kalkulasi.pegawai.golongan, ...rekap }}
+                            nilaiTersimpan={kalkulasi.totalUangMakan}
+                            hariDibayarTersimpan={kalkulasi.jumlahHariDibayar}
+                          />
+                        ) : (
+                          <span className="text-xs text-muted">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-line-2 px-4 py-3 sm:px-6">
+            <Paginasi
+              basePath="/uang-makan"
+              params={paramPaginasi}
+              info={paginasi}
+              totalBaris={kalkulasiList.length}
+              labelBaris="pegawai"
+            />
+          </div>
+        </div>
       </div>
     </main>
   );

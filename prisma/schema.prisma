@@ -27,6 +27,17 @@ model Pegawai {
   id            String    @id @default(uuid())
   nip           String    @unique
   nama          String
+
+  /// Gelar dari SIAP (PEGAWAI.GELARDEPAN / GELARBELAKANG), DIPISAH dari
+  /// `nama` karena di sana pun terpisah - kolom `nama` tidak pernah memuat
+  /// gelar. Naskah dinas memakai bentuk lengkapnya, jadi menyusunnya butuh
+  /// ketiga kolom ini. Lihat src/business-logic/namaPegawai.ts.
+  ///
+  /// Bentuknya di SIAP TIDAK seragam ("Prof. Ir", "dr", "M.M. , S.Sos."),
+  /// jadi disimpan apa adanya dan dirapikan saat dicetak - bukan saat
+  /// disimpan, supaya nilai aslinya tidak hilang.
+  gelarDepan    String?   @map("gelar_depan")
+  gelarBelakang String?   @map("gelar_belakang")
   unitKerja     String    @map("unit_kerja")
   satuanKerja   String    @map("satuan_kerja") // untuk filter per satker saat pilot
   statusPegawai String    @map("status_pegawai") // AKTIF, CUTI, MUTASI, PENSIUN, dst
@@ -1810,6 +1821,18 @@ model DokumenTte {
   idDokumenBsre String?   @map("id_dokumen_bsre")
   signedAt      DateTime? @map("signed_at")
   signingTimeMs Int?      @map("signing_time_ms")
+
+  /// SHA-256 berkas yang SUDAH ditandatangani, heksadesimal 64 karakter.
+  ///
+  /// Menjawab pertanyaan yang BERBEDA dari "document_integrity" milik BSrE:
+  /// yang ini membuktikan berkas yang dipegang seseorang sama persis dengan
+  /// yang dicatat Gajihub, dan bisa diperiksa sendiri dengan perintah
+  /// sha256sum tanpa menyentuh layanan BSrE sama sekali.
+  /// Lihat src/lib/tte/hashBerkas.ts.
+  ///
+  /// Nullable: dokumen yang ditandatangani sebelum kolom ini ada belum punya
+  /// nilainya - diisi menyusul dari berkas di disk oleh npm run isi:hash-tte.
+  hashBerkas String? @map("hash_berkas")
 
   // Data Penandatangan (User yang melakukan TTE)
   penandatanganId String? @map("penandatangan_id")

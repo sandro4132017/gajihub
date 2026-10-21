@@ -154,6 +154,15 @@ export async function periodePunyaUangLembur(): Promise<Periode[]> {
   return rows.map((r) => ({ bulan: r.periodeBulan, tahun: r.periodeTahun }));
 }
 
+/** Periode yang punya kalkulasi Uang Makan - dipakai halaman /uang-makan. */
+export async function periodePunyaUangMakan(): Promise<Periode[]> {
+  const rows = await prisma.uangMakan.findMany({
+    distinct: ["periodeBulan", "periodeTahun"],
+    select: { periodeBulan: true, periodeTahun: true },
+  });
+  return rows.map((r) => ({ bulan: r.periodeBulan, tahun: r.periodeTahun }));
+}
+
 /** Periode yang punya kalkulasi Tukin - dipakai halaman export ADK. */
 export async function periodePunyaTukin(): Promise<Periode[]> {
   const rows = await prisma.tukinCalculation.findMany({

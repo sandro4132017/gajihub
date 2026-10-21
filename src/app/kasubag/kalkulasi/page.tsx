@@ -194,6 +194,14 @@ export default async function KalkulasiUnitPage({
       },
     },
   });
+  // Jenis SPTJM yang ditandatangani SEBELUM rekapnya dikembalikan - dipakai
+  // satu banner di seksi TTE, menggantikan kalimat yang dulu diulang per kartu.
+  const sptjmPerluTteUlang: string[] = [];
+
+  // "A", "A dan B", "A, B, dan C" - tiga jenis SPTJM, jadi bentuk tiga butir
+  // itu yang paling sering muncul.
+  const daftarTeksSptjm = (b: readonly string[]): string =>
+    b.length <= 1 ? (b[0] ?? "") : b.length === 2 ? `${b[0]} dan ${b[1]}` : `${b.slice(0, -1).join(", ")}, dan ${b[b.length - 1]}`;
   const kirimStatus = statusUnit(barisPengiriman);
 
   // Centang "sudah saya periksa" per tabel. Dibaca dari database - sumber yang
@@ -458,6 +466,20 @@ export default async function KalkulasiUnitPage({
       .catch(() => null),
   ]);
 
+
+  {
+    const dikembalikan = barisPengiriman?.dikembalikanPada ?? null;
+    if (dikembalikan) {
+      const basi = (d: { status: string; signedAt: Date | null } | null, label: string) => {
+        if (d?.status === "TERTANDATANGANI" && d.signedAt && d.signedAt < dikembalikan) {
+          sptjmPerluTteUlang.push(label);
+        }
+      };
+      basi(tteTukin, "Tukin");
+      basi(tteUangMakan, "Uang Makan");
+      basi(tteLembur, "Uang Lembur");
+    }
+  }
   // Pemeriksaan kelengkapan SEBELUM tombol Hitung. Yang dikecualikan sudah
   // keluar lewat `pegawaiAktif` di atas - lihat alasannya di
   // src/business-logic/kesiapanKalkulasi.ts.
@@ -1399,9 +1421,35 @@ export default async function KalkulasiUnitPage({
               Pengesahan SPTJM digital via BSrE BSSN untuk 3 berkas (Tunjangan Kinerja, Uang Makan, dan Uang Lembur) sebelum dikirim ke PPABP.
             </p>
           </div>
+          {/* SATU peringatan untuk ketiga kartu, bukan diulang di masing-masing.
+
+              Kalimatnya panjang dan identik; diulang tiga kali ia memakan
+              ruang tanpa menambah keterangan, dan mendesak tombol aksinya
+              sampai menumpuk. Di kartunya cukup penanda ringkas. */}
+          {sptjmPerluTteUlang.length > 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-gold/40 bg-gold-tint px-3 py-2.5 text-xs text-gold-deep">
+              <span aria-hidden className="mt-px shrink-0 font-bold">!</span>
+              <span>
+                <strong className="font-bold">
+                  SPTJM perlu ditandatangani ulang
+                </strong>{" "}
+                - rekap periode ini dikembalikan PPABP setelah
+                {" "}
+                {daftarTeksSptjm(sptjmPerluTteUlang)} ditandatangani. Perbaiki
+                hitungannya, periksa ulang ketiga tabel, lalu tanda tangani
+                lagi. Tanda tangan yang lama membenarkan angka yang sudah
+                berubah.
+              </span>
+            </div>
+          )}
           <div className="space-y-2.5">
             <PanelTteSptjm
               jenisDokumen="SPTJM_TUKIN"
+              dikembalikanPada={
+                barisPengiriman?.dikembalikanPada
+                  ? barisPengiriman.dikembalikanPada.toISOString()
+                  : null
+              }
               periodeBulan={periodeBulan}
               periodeTahun={periodeTahun}
               satuanKerja={satkerEfektif}
@@ -1418,6 +1466,11 @@ export default async function KalkulasiUnitPage({
             />
             <PanelTteSptjm
               jenisDokumen="SPTJM_UANG_MAKAN"
+              dikembalikanPada={
+                barisPengiriman?.dikembalikanPada
+                  ? barisPengiriman.dikembalikanPada.toISOString()
+                  : null
+              }
               periodeBulan={periodeBulan}
               periodeTahun={periodeTahun}
               satuanKerja={satkerEfektif}
@@ -1434,6 +1487,11 @@ export default async function KalkulasiUnitPage({
             />
             <PanelTteSptjm
               jenisDokumen="SPTJM_LEMBUR"
+              dikembalikanPada={
+                barisPengiriman?.dikembalikanPada
+                  ? barisPengiriman.dikembalikanPada.toISOString()
+                  : null
+              }
               periodeBulan={periodeBulan}
               periodeTahun={periodeTahun}
               satuanKerja={satkerEfektif}

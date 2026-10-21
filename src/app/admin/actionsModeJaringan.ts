@@ -40,21 +40,40 @@ export async function ubahModeJaringanAction(
   // 1. Update di memori proses server secara real-time (tanpa perlu restart)
   process.env.NETWORK_MODE = modeBaru;
 
-  // 2. Simpan ke berkas .env agar tetap bertahan saat server di-restart
+  // 2. Simpan ke berkas .env agar tetap bertahan saat server di-restart.
+  //
+  // DITULIS ATOMIK - berkas sementara lalu `rename`, BUKAN menimpa .env
+  // langsung. Berkas itu memuat SELURUH kredensial aplikasi: DATABASE_URL,
+  // SIAP, e-Presensi, BSrE, SESSION_SECRET. Penulisan langsung yang terputus
+  // di tengah (proses dibunuh, disk penuh) meninggalkan .env TERPOTONG, dan
+  // aplikasinya tidak bisa hidup lagi sampai seseorang menyusunnya dari nol.
+  // `rename` pada filesystem yang sama bersifat atomik: entah berhasil utuh,
+  // entah berkas lamanya tetap apa adanya.
+  //
+  // KEGAGALANNYA DILAPORKAN, TIDAK DITELAN. Tanpa ini Admin melihat
+  // "berhasil" padahal modenya hanya berubah di memori proses, lalu kembali
+  // sendiri begitu pm2 me-restart - gejala yang nyaris mustahil ditebak
+  // sebabnya karena tidak ada satu pun pesan galat yang muncul.
+  let peringatan = "";
+  const envPath = path.join(process.cwd(), ".env");
   try {
-    const envPath = path.join(process.cwd(), ".env");
-    const envRaw = await fs.readFile(envPath, "utf8").catch(() => "");
-    if (envRaw) {
-      let envUpdated: string;
-      if (/^NETWORK_MODE\s*=/m.test(envRaw)) {
-        envUpdated = envRaw.replace(/^NETWORK_MODE\s*=.*$/m, `NETWORK_MODE="${modeBaru}"`);
-      } else {
-        envUpdated = `${envRaw.trimEnd()}\nNETWORK_MODE="${modeBaru}"\n`;
-      }
-      await fs.writeFile(envPath, envUpdated, "utf8");
+    const envRaw = await fs.readFile(envPath, "utf8");
+    let envUpdated: string;
+    if (/^NETWORK_MODE\s*=/m.test(envRaw)) {
+      envUpdated = envRaw.replace(/^NETWORK_MODE\s*=.*$/m, `NETWORK_MODE="${modeBaru}"`);
+    } else {
+      // Akhiran baris mengikuti berkasnya - .env ber-CRLF tidak boleh
+      // disisipi satu baris ber-LF tunggal.
+      const akhiran = envRaw.includes("\r\n") ? "\r\n" : "\n";
+      envUpdated = `${envRaw.trimEnd()}${akhiran}NETWORK_MODE="${modeBaru}"${akhiran}`;
     }
+    const tmpPath = `${envPath}.tmp-${process.pid}`;
+    await fs.writeFile(tmpPath, envUpdated, "utf8");
+    await fs.rename(tmpPath, envPath);
   } catch {
-    // Jika filesystem read-only, perubahan tetap berlaku di memori proses saat ini
+    peringatan =
+      " PERINGATAN: gagal menyimpan ke .env, jadi mode ini HANYA berlaku sampai" +
+      " server di-restart. Setel NETWORK_MODE secara manual di .env.";
   }
 
   // 3. Catat ke AuditTrail
@@ -81,9 +100,9 @@ export async function ubahModeJaringanAction(
     ok: true,
     mode: modeBaru,
     pesan:
-      modeBaru === "INTERNAL"
+      (modeBaru === "INTERNAL"
         ? "Mode Jaringan Internal (Intranet / VPN) diaktifkan. Redirect publik dinonaktifkan & login NIP internal dibuka."
-        : "Mode Akses Publik (gajihub.kemnaker.go.id) diaktifkan. Redirect publik & penguncian SSO Kemnaker berlaku kembali.",
+        : "Mode Akses Publik (gajihub.kemnaker.go.id) diaktifkan. Redirect publik & penguncian SSO Kemnaker berlaku kembali.") +
+      peringatan,
   };
 }
-

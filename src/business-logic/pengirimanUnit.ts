@@ -43,6 +43,17 @@ export interface StatusUnit {
  * "belum pernah kirim" dan "sudah kirim lalu dikembalikan" adalah dua
  * keadaan yang berbeda dan berbeda pula tindak lanjutnya.
  */
+/**
+ * "A", "A dan B", "A, B, dan C" - bukan "A dan B dan C".
+ *
+ * Tiga tabel wajib diperiksa, jadi bentuk tiga butir itu yang paling sering
+ * muncul dan paling janggal kalau disambung dengan "dan" berulang.
+ */
+function daftarTeks(butir: readonly string[]): string {
+  if (butir.length <= 1) return butir[0] ?? "";
+  if (butir.length === 2) return `${butir[0]} dan ${butir[1]}`;
+  return `${butir.slice(0, -1).join(", ")}, dan ${butir[butir.length - 1]}`;
+}
 export function statusUnit(baris: BarisPengiriman | null): StatusUnit {
   if (baris === null) {
     return { keadaan: "BELUM_KIRIM", terkunci: false, alasanKembali: null };
@@ -186,9 +197,17 @@ export function cekBolehKirim(k: KesiapanKirim, status: StatusUnit): HasilCekKir
     if (kurang.length > 0) {
       return {
         boleh: false,
-        alasan: `Belum diperiksa: ${kurang
-          .map((t) => LABEL_TABEL_KALKULASI[t])
-          .join(" dan ")}. Centang setelah memeriksanya - itu yang membuka tombol kirim.`,
+        // NAMA TABELNYA TETAP DISEBUT. Daftar syarat di sebelahnya cuma
+        // menghitung ("0 dari 3") - ia tidak menjawab tabel MANA, dan
+        // checklist-nya berada di kolom lain yang di layar sempit jauh
+        // dari sini.
+        //
+        // Ekornya ("itu yang membuka tombol kirim") dibuang: terlalu kasual
+        // untuk layar yang menahan pengiriman pembayaran, dan pembacanya
+        // sudah paham maksud daftar syarat.
+        alasan: `Belum diperiksa: ${daftarTeks(
+          kurang.map((t) => LABEL_TABEL_KALKULASI[t])
+        )}. Centang setelah memeriksanya.`,
       };
     }
   }

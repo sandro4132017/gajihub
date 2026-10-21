@@ -293,10 +293,10 @@ export function TabelPemeriksaanLembur({
             <thead>
               <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
                 <th className="col-nama px-4 py-2.5">Nama</th>
-                <th className="px-4 py-2.5">Hari kerja</th>
-                <th className="px-4 py-2.5">Hari libur</th>
-                <th className="px-4 py-2.5">Total Tersimpan</th>
-                <th className="px-4 py-2.5">Hitungan Harian</th>
+                <th className="px-4 py-2.5">Lembur Hari Kerja</th>
+                <th className="px-4 py-2.5">Lembur Hari Libur</th>
+                <th className="px-4 py-2.5">Total Lembur</th>
+                <th className="px-4 py-2.5">Hasil Perhitungan</th>
                 <th className="px-4 py-2.5">Status SPL</th>
                 <th className="px-4 py-2.5 text-right">Aksi</th>
               </tr>
@@ -341,7 +341,7 @@ export function TabelPemeriksaanLembur({
                         </span>
                       ) : (
                         <span className="chip chip-neutral text-xs text-muted">
-                          Hitungan Mesin ({b.rincianHari.length} hari)
+                          Perhitungan Otomatis   ({b.rincianHari.length} hari)
                         </span>
                       )}
                     </td>
@@ -406,25 +406,25 @@ export function TabelPemeriksaanLembur({
             {/* Ringkasan Akumulasi */}
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="card bg-surface-2/60 p-3">
-                <span className="block text-[11px] font-medium text-muted">Jam Hari Kerja</span>
+                <span className="block text-[11px] font-medium text-muted">Lembur Hari Kerja</span>
                 <span className="text-sm font-bold font-mono text-ink">
                   {lemburTeks(pegawaiAktifModal.jamHariKerja ?? 0)}
                 </span>
               </div>
               <div className="card bg-surface-2/60 p-3">
-                <span className="block text-[11px] font-medium text-muted">Jam Hari Libur</span>
+                <span className="block text-[11px] font-medium text-muted">Lembur Hari Libur</span>
                 <span className="text-sm font-bold font-mono text-ink">
                   {lemburTeks(pegawaiAktifModal.jamHariLibur ?? 0)}
                 </span>
               </div>
               <div className="card bg-surface-2/60 p-3">
-                <span className="block text-[11px] font-medium text-muted">Total Tersimpan</span>
+                <span className="block text-[11px] font-medium text-muted">Total Lembur</span>
                 <span className="text-sm font-bold font-mono text-ink">
                   {lemburTeks(pegawaiAktifModal.totalTersimpan ?? 0)}
                 </span>
               </div>
               <div className="card bg-surface-2/60 p-3">
-                <span className="block text-[11px] font-medium text-muted">Total Rincian Harian</span>
+                <span className="block text-[11px] font-medium text-muted">Hasil Perhitungan</span>
                 <span className="text-sm font-bold font-mono text-teal-deep">
                   {lemburTeks(pegawaiAktifModal.jamHarian)}
                 </span>

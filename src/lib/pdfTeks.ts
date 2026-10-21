@@ -14,13 +14,16 @@ import { getDocumentProxy } from "unpdf";
 import type { HalamanPdf, ItemTeksPdf } from "../business-logic/presensiPdf";
 
 /**
- * pdfjs versi baru memanggil Math.sumPrecise (Node 22+). Di Node 20 - versi
- * yang dipakai VPS testing - fungsi itu belum ada, dan pdfjs memuntahkan
- * "Warning: TypeError: Math.sumPrecise is not a function" tiap halaman.
- * Ekstraksi teksnya tetap jalan, tapi warning-nya membanjiri log server, jadi
- * ditambal di sini. Hapus kalau runtime-nya sudah Node 22+.
+ * pdfjs versi baru memanggil Math.sumPrecise. Fungsi itu BELUM ADA di Node
+ * mana pun yang dipakai proyek ini - diukur langsung di Node 24.19.0:
+ * masih undefined. Tanpa tambalan ini pdfjs memuntahkan
+ * "Warning: TypeError: Math.sumPrecise is not a function" tiap halaman;
+ * ekstraksi teksnya tetap jalan, tapi warningnya membanjiri log server.
+ *
+ * JANGAN dihapus karena mengira Node-nya sudah cukup baru. Periksa dulu:
+ * node -e "console.log(typeof Math.sumPrecise)" harus mencetak 'function'.
  */
-function tambalMathSumPrecise() {
+export function tambalMathSumPrecise() {
   const M = Math as unknown as { sumPrecise?: (nilai: Iterable<number>) => number };
   if (typeof M.sumPrecise !== "function") {
     M.sumPrecise = (nilai) => {

@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   cekStatusTteAction,
   buatDraftSptjmAction,
-  signSptjmPpkAction,
+  signSptjmUnitAction,
+  hapusDraftSptjmAction,
 } from "../../tte/actions";
 import type { JenisSptjm } from "../../../lib/tte/sptjmTypes";
 
@@ -37,14 +38,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(res);
     }
 
+    if (action === "hapus-draft") {
+      // Membersihkan draft SPTJM supaya bisa disusun ulang. Aksinya sendiri
+      // MENOLAK dokumen yang sudah TERTANDATANGANI - lihat hapusDraftSptjmAction.
+      const res = await hapusDraftSptjmAction({
+        jenis: (body.jenis as JenisSptjm) || "SPTJM_TUKIN",
+        bulan: Number(body.bulan),
+        tahun: Number(body.tahun),
+      });
+      return NextResponse.json(res);
+    }
+
     if (action === "sign") {
+      // HANYA FIELD INI YANG DITERIMA DARI KLIEN.
+      //
+      // Sebelumnya SELURUH isi JSON disalin ke FormData apa adanya, jadi
+      // penyerang bisa menitipkan satuanKerja, namaPenandatangan,
+      // nipPenandatangan, atau jabatanPenandatangan dan menandatangani SPTJM
+      // unit orang lain atas nama orang lain. Keempatnya sekarang diturunkan
+      // di server dari sesi (lihat signSptjmUnitAction), dan daftar putih ini
+      // memastikan tidak ada field baru yang lolos hanya karena ditambahkan
+      // di sisi klien.
+      const FIELD_DIIZINKAN = [
+        "jenis",
+        "bulan",
+        "tahun",
+        "nomorDokumen",
+        "nik",
+        "passphrase",
+      ] as const;
       const formData = new FormData();
-      for (const [k, v] of Object.entries(body)) {
-        if (k !== "action" && v !== undefined && v !== null) {
-          formData.set(k, String(v));
-        }
+      for (const k of FIELD_DIIZINKAN) {
+        const v = (body as Record<string, unknown>)[k];
+        if (v !== undefined && v !== null) formData.set(k, String(v));
       }
-      const res = await signSptjmPpkAction({}, formData);
+      const res = await signSptjmUnitAction({}, formData);
       return NextResponse.json(res);
     }
 

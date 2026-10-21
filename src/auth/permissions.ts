@@ -216,6 +216,35 @@ export function canViewRekapUnitKerja(user: AuthUser, targetSatuanKerja: string)
 }
 
 /**
+ * Menandatangani SPTJM unit dengan Tanda Tangan Elektronik BSrE.
+ *
+ * SPTJM adalah Surat Pernyataan Tanggung Jawab Mutlak - lampiran yang
+ * menyatakan hitungan kalkulasi unit sudah benar. Jadi yang menandatangani
+ * harus orang yang memang bertanggung jawab atas unit itu, dan itulah sebabnya
+ * fungsi ini MENCOCOKKAN SATUAN KERJA, bukan cuma role.
+ *
+ * ADMIN SENGAJA TIDAK DIIZINKAN di sini - satu-satunya izin di berkas ini yang
+ * menutup pintu ADMIN. Keputusan user 2026-10-20: "Kasubag TU unit itu saja".
+ * Alasannya masuk akal untuk dokumen jenis ini: tanda tangan elektronik
+ * melekat pada sertifikat milik ORANG, dan membuka jalur yang bisa
+ * menandatangani SPTJM seluruh unit meniadakan arti "tanggung jawab mutlak"
+ * yang jadi nama dokumennya. Kalau ini mau diubah, ubah di sini saja -
+ * jangan menambah jalur alternatif di Server Action atau Route Handler.
+ *
+ * HIBAH `satuanKerjaTambahan` TIDAK IKUT memberi wewenang ini. Hibah itu izin
+ * MELIHAT (lihat `canLihatSatker`); menandatangani pernyataan tanggung jawab
+ * atas unit yang bukan miliknya adalah hal yang berbeda jenis.
+ */
+export function canTandatanganiSptjmUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+  if (!user.aktif) return false;
+  // Satuan kerja kosong tidak boleh lolos jadi "cocok dengan kosong". Akun
+  // KASUBAG_TU ber-satuanKerja NULL memang ada (lihat labelRole), dan tanpa
+  // penjagaan ini dia bisa menandatangani dokumen ber-unit kosong.
+  if (!targetSatuanKerja || !user.satuanKerja) return false;
+  return user.role === "KASUBAG_TU" && user.satuanKerja === targetSatuanKerja;
+}
+
+/**
  * Unduh rekap presensi / Tunjangan Kinerja unit sebagai berkas Excel.
  *
  * KOMPOSISI dari izin yang sudah ada, BUKAN aturan baru: siapa pun yang boleh

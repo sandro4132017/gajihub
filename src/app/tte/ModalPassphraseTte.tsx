@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { TteActionResult } from "./actions";
 import {
@@ -8,6 +8,7 @@ import {
   BULAN_ROMAWI,
   DEFAULT_NOMOR_AGENDA_SPTJM,
   generateNomorSptjmDefault,
+  generateNamaFileSptjm,
   parseNomorSptjm,
 } from "@/lib/tte/sptjmTypes";
 import { Modal } from "@/app/Modal";
@@ -48,8 +49,13 @@ export function ModalPassphraseTte({
   satuanKerja = "Biro Keuangan dan BMN",
   defaultNomorDokumen,
   defaultNik = "0803202100007062",
-  namaPenandatanganDefault = "Alpha Sandro Adithyaswara, S.Sos., M.M.",
-  nipPenandatanganDefault = "19870323 201503 1 002",
+  // Dikosongkan, bukan diisi nama siapa pun. Identitas penanda tangan
+  // ditentukan SERVER dari sesi (signSptjmUnitAction) dan empat field
+  // tersembunyi di bawah sudah tidak lagi dipercaya. Nama yang muncul di
+  // modal harus datang dari ppkDefault - kalau di-hardcode, layar
+  // menjanjikan satu orang sementara yang tercetak orang lain.
+  namaPenandatanganDefault = "",
+  nipPenandatanganDefault = "",
   jabatanPenandatanganDefault = "Pejabat Pembuat Komitmen",
   onSukses,
 }: ModalPassphraseTteProps) {
@@ -60,6 +66,7 @@ export function ModalPassphraseTte({
     defaultNik === "0803202100007062" ? "Bsre2026.#!" : ""
   );
   const [nik, setNik] = useState(defaultNik);
+  const wasTerbukaRef = useRef(false);
 
   const romawi =
     BULAN_ROMAWI[Math.max(0, Math.min(11, periodeBulan - 1))] || "X";
@@ -155,9 +162,12 @@ export function ModalPassphraseTte({
     periksaStatusNik(demoNik);
   };
 
+  // Reset form HANYA saat modal baru dibuka (transisi terbuka: false -> true),
+  // BUKAN saat defaultNomorDokumen berubah setelah TTE berhasil (yang sebelumnya me-reset pop-up sukses!)
   useEffect(() => {
-    if (terbuka) {
+    if (terbuka && !wasTerbukaRef.current) {
       setState(INITIAL_STATE);
+      setDraftError(null);
       const baru =
         defaultNomorDokumen ||
         generateNomorSptjmDefault(jenisDokumen, periodeBulan, periodeTahun);
@@ -172,6 +182,7 @@ export function ModalPassphraseTte({
         setPassphrase("Bsre2026.#!");
       }
     }
+    wasTerbukaRef.current = terbuka;
   }, [terbuka, jenisDokumen, periodeBulan, periodeTahun, defaultNomorDokumen]);
 
   // Cek status sertifikat saat modal terbuka atau NIK berubah (debounced 250ms agar tidak memicu double request)
@@ -189,7 +200,6 @@ export function ModalPassphraseTte({
   }, [terbuka, nik, defaultNik]);
 
   const handleTutup = () => {
-    setPassphrase("");
     setState(INITIAL_STATE);
     onTutup();
   };
@@ -200,6 +210,13 @@ export function ModalPassphraseTte({
       : jenisDokumen === "SPTJM_UANG_MAKAN"
       ? "Uang Makan"
       : "Uang Lembur";
+
+  const namaFileResmi = generateNamaFileSptjm(
+    jenisDokumen,
+    periodeBulan,
+    periodeTahun,
+    satuanKerja
+  );
 
   const handlePratinjauDraft = async () => {
     setDraftError(null);
@@ -273,48 +290,99 @@ export function ModalPassphraseTte({
   return (
     <Modal
       terbuka={terbuka}
-      judul={`Tanda Tangan Elektronik SPTJM PPK - ${labelJenis}`}
+      judul={
+        state.success
+          ? `SPTJM ${labelJenis} Berhasil Ditandatangani!`
+          : `Tanda Tangan Elektronik SPTJM PPK - ${labelJenis}`
+      }
       nada={state.success ? "sukses" : state.error ? "bahaya" : "netral"}
       onTutup={pending ? null : handleTutup}
       aksi={
         state.success ? (
-          <div className="flex w-full items-center justify-between gap-2">
-            <a
-              href={state.downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary btn-sm flex items-center gap-1.5"
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {state.downloadUrl && (
+                <>
+                  <a
+                    href={state.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs"
+                  >
+                    <FiEye className="size-3.5 text-biru" /> Lihat PDF Hasil TTE
+                  </a>
+                  <a
+                    href={state.downloadUrl}
+                    download={namaFileResmi}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs"
+                  >
+                    <FiDownload className="size-3.5" /> Unduh PDF SPTJM TTE
+                  </a>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleTutup}
+              className="btn btn-secondary btn-sm text-xs font-bold"
             >
-              <FiDownload className="size-4" /> Unduh PDF SPTJM TTE
-            </a>
-            <button type="button" onClick={handleTutup} className="btn btn-ghost btn-sm">
-              Selesai
+              Selesai &amp; Tutup
             </button>
           </div>
         ) : null
       }
     >
       {state.success ? (
-        <div className="space-y-3 py-2">
-          <div className="rounded-xl border border-green/30 bg-green/10 p-3.5 text-ink-2">
-            <p className="flex items-center gap-2 text-sm font-bold text-green">
-              <FiCheckCircle className="size-4 shrink-0" /> SPTJM Berhasil Ditandatangani
-            </p>
-            <p className="mt-1.5 text-xs text-ink">
-              Dokumen <strong>{labelJenis}</strong> periode {periodeBulan}/{periodeTahun}{" "}
-              telah disahkan secara elektronik dengan nomor <strong>{nomorDokumen}</strong>.
-            </p>
-            {state.isSimulasi && (
-              <p className="mt-1 text-[11px] text-muted italic">
-                *Tanda tangan digital dibubuhkan dalam mode simulasi dev (siap masuk SAKTI).
-              </p>
-            )}
-            <div className="mt-3 rounded-lg bg-surface p-2.5 font-mono text-[11px] text-muted">
-              <div>
-                ID Dokumen BSrE:{" "}
-                <span className="font-bold text-ink">{state.idDokumenBsre}</span>
+        <div className="space-y-3 py-1">
+          <div className="rounded-xl border border-green/30 bg-green/10 p-4 text-ink-2">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-green/20 p-2 text-green shrink-0">
+                <FiCheckCircle className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold text-green">
+                  Tanda Tangan Elektronik (TTE) Selesai!
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-ink">
+                  Dokumen <strong>SPTJM {labelJenis}</strong> periode{" "}
+                  <strong>
+                    {periodeBulan}/{periodeTahun}
+                  </strong>{" "}
+                  telah berhasil disahkan secara elektronik menggunakan sertifikat BSrE BSSN.
+                </p>
               </div>
             </div>
+
+            <div className="mt-3.5 space-y-1.5 rounded-lg border border-line-2 bg-surface p-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted">Nomor Surat:</span>
+                <span className="font-mono font-bold text-ink">NOMOR {nomorDokumen}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted">Nama Berkas:</span>
+                <span className="font-mono text-[11px] font-semibold text-biru truncate">
+                  {namaFileResmi}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted">Penandatangan:</span>
+                <span className="font-semibold text-ink">{namaPenandatanganDefault}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted">ID Dokumen BSrE:</span>
+                <span className="font-mono text-[11px] font-bold text-green">
+                  {state.idDokumenBsre}
+                </span>
+              </div>
+            </div>
+
+            {state.isSimulasi && (
+              <p className="mt-2 text-[11px] text-muted italic">
+                *Tanda tangan digital dibubuhkan dalam mode simulasi internal (siap masuk SAKTI).
+              </p>
+            )}
           </div>
         </div>
       ) : (

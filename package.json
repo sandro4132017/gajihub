@@ -16,9 +16,11 @@
     "test:watch": "vitest",
     "sync:pegawai": "tsx src/jobs/importPegawaiSiap.ts",
     "sync:presensi": "tsx src/jobs/importPresensiEpresensi.ts",
+    "cek:tte": "tsx src/jobs/cekTteSptjm.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "isi:hash-tte": "tsx src/jobs/isiHashDokumenTte.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

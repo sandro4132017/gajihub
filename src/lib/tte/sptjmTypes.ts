@@ -6,7 +6,7 @@ export interface DataSptjmUniversal {
   periodeBulan: number;
   periodeTahun: number;
   tanggalDokumen?: string;
-  // Data Penandatangan PPK
+  // Data Penandatangan - Kasubag TU unit yang bersangkutan
   namaPenandatangan?: string;
   nipPenandatangan?: string;
   jabatanPenandatangan?: string;
@@ -87,4 +87,29 @@ export function parseNomorSptjm(
   }
   return { nomorUrut: cleaned, isKustom: true };
 }
+
+/**
+ * Menghasilkan nama file PDF SPTJM sesuai format standar:
+ * - SPTJM - Lembur Agustus 2026 Nama Unit.pdf
+ * - SPTJM - TUNKIN September 2026 Nama Unit.pdf
+ * - SPTJM - UM Agustus 2026 Nama Unit.pdf
+ */
+export function generateNamaFileSptjm(
+  jenis: JenisSptjm,
+  bulan: number,
+  tahun: number,
+  satuanKerja?: string
+): string {
+  const labelJenis =
+    jenis === "SPTJM_LEMBUR"
+      ? "Lembur"
+      : jenis === "SPTJM_TUKIN"
+      ? "TUNKIN"
+      : "UM";
+  const namaBulan = NAMA_BULAN[Math.max(0, Math.min(11, bulan - 1))] || "September";
+  const unitRaw = (satuanKerja || "Biro Keuangan dan BMN").trim();
+  const unitClean = unitRaw.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+  return `SPTJM - ${labelJenis} ${namaBulan} ${tahun} ${unitClean}.pdf`;
+}
+
 
