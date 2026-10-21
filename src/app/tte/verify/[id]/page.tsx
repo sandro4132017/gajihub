@@ -280,7 +280,10 @@ export default async function VerifyTtePage({
 
         {dokumen.fileSignedPath && (
           <a
-            href={dokumen.fileSignedPath}
+            /* LEWAT RUTE, BUKAN /uploads/ LANGSUNG. Middleware mencegat .pdf
+               dan mengalihkan pengunjung tanpa sesi ke /login - lihat
+               berkas/route.ts. */
+            href={`/tte/verify/${dokumen.id}/berkas`}
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary mt-3 w-full text-xs"
