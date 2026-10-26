@@ -18,6 +18,7 @@ export function FilterBar({
   tahun,
   satker,
   ringkas = false,
+  pil = false,
   satkerTerkunci = false,
   tanpaKartu = false,
   wajibPeriode = false,
@@ -34,6 +35,15 @@ export function FilterBar({
    * pencarian, karena di sana label "Bulan"/"Tahun"/"Satuan kerja" membantu.
    */
   ringkas?: boolean;
+  /**
+   * Bentuk dashboard: kendali sebaris di layar >= xl, dropdown satuan kerja
+   * menyerap sisa lebar, tombol Terapkan membulat. TANPA wadah pembungkus
+   * (keputusan user 2026-10-22). Hanya berlaku bersama `ringkas`.
+   *
+   * SearchableSelect TIDAK diubah bentuknya - komponen itu dipakai seluruh
+   * form di aplikasi, termasuk yang tidak ada hubungannya dengan dashboard.
+   */
+  pil?: boolean;
   /**
    * Satuan kerja ditentukan sistem, bukan dipilih pemakainya (lihat
    * satkerTerkunciUntukAkun). Dropdown-nya diganti input tersembunyi supaya
@@ -95,10 +105,29 @@ export function FilterBar({
       // ada untuk memberi jarak dari label di atasnya; di sini labelnya memang
       // tidak ada, dan sisa 4px-nya membuat field jadi turun sendiri terhadap
       // tombol Terapkan di sebelahnya.
-      <form method="get" className="flex flex-wrap items-center gap-2 [&_input]:mt-0">
+      // Varian pil SEBARIS di layar >= xl (permintaan user 2026-10-22: filter
+      // & tombol aksi "jadi 1 jajar, jangan 2 baris"). `flex-1 min-w-0`
+      // membuat wadahnya mengisi sisa baris, dan dropdown satuan kerja yang
+      // menyerap lebarnya - bukan dropdown bulan/tahun yang isinya pendek.
+      //
+      // Di bawah xl isinya SECARA FISIK tidak muat sebaris (~870px kontrol
+      // lawan ~700px ruang), jadi tetap boleh turun baris.
+      //
+      // TANPA WADAH (permintaan user 2026-10-22: "hilangkan card-nya,
+      // langsung filter aja"). Kendali berdiri langsung di latar halaman;
+      // tiap kotak isian sudah punya garis sendiri.
+      <form
+        method="get"
+        className={`flex flex-wrap items-center gap-2 [&_input]:mt-0 ${
+          // Tinggi TETAP h-10 (40px) - sama dengan tombol aksi di sebelahnya
+          // (DashboardLintasUnit). Dari padding saja, isian jadi 38px dan
+          // tombol 36-42px: deret sebaris yang tingginya tidak rata.
+          pil ? "min-w-0 flex-1 xl:flex-nowrap [&_.field-input]:h-10" : ""
+        }`}
+      >
         <SearchableSelect
           name="bulan"
-          className="w-36"
+          className="w-36 shrink-0"
           options={bulanOpsi}
           defaultValue={bulan ?? ""}
           emptyLabel="Semua bulan"
@@ -106,7 +135,9 @@ export function FilterBar({
 
         <SearchableSelect
           name="tahun"
-          className="w-28"
+          // w-32, bukan w-28: "Semua tahun" + panah dropdown terpotong jadi
+          // "Semua tahu" di lebar 112px.
+          className="w-32 shrink-0"
           options={tahunOpsi.map((t) => ({ value: String(t), label: String(t) }))}
           defaultValue={tahun ?? ""}
           emptyLabel="Semua tahun"
@@ -117,14 +148,14 @@ export function FilterBar({
         ) : (
           <SearchableSelect
             name="satker"
-            className="min-w-[220px]"
+            className={pil ? "min-w-[180px] flex-1" : "min-w-[220px]"}
             options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
             defaultValue={satker ?? ""}
             emptyLabel="Semua satuan kerja"
           />
         )}
 
-        <button type="submit" className="btn btn-primary">
+        <button type="submit" className={`btn btn-primary ${pil ? "h-10 shrink-0 whitespace-nowrap rounded-full px-4 py-0" : ""}`}>
           Terapkan
         </button>
       </form>

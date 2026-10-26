@@ -399,8 +399,10 @@ sistem mengerjakan sesuatu - bukan sekadar menata ulang tampilan.
 
 ## Font & tipografi
 
-Dimuat `next/font` di `layout.tsx` (di-host sendiri), BUKAN `@import` ke
-`fonts.googleapis.com`. Sebabnya bukan kecepatan: VPS Gajihub cuma terjangkau
+Dimuat lewat `@font-face` di `src/app/globals.css`, berkasnya di-host sendiri
+di `public/fonts/*.woff2` (Manrope + JetBrains Mono), BUKAN `@import` ke
+`fonts.googleapis.com` dan BUKAN `next/font` - diperiksa 2026-10-22, tidak ada
+satu pun `next/font` di `src/`. Sebabnya bukan kecepatan: VPS Gajihub cuma terjangkau
 lewat jaringan kantor/VPN, jadi browser yang tidak tembus internet jatuh
 DIAM-DIAM ke Segoe UI tanpa tanda apa pun.
 

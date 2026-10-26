@@ -17,7 +17,18 @@ export const dynamic = "force-dynamic";
 export default async function PimpinanDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bulan?: string; tahun?: string; satker?: string }>;
+  searchParams: Promise<{
+    bulan?: string;
+    tahun?: string;
+    satker?: string;
+    // Milik TABEL monitoring di dashboard, bukan filter halaman - lihat
+    // TabelMonitoringSatker.tsx. Harus ikut disebut di sini, kalau tidak
+    // nilainya tidak pernah sampai ke komponennya.
+    q?: string;
+    status?: string;
+    hal?: string;
+    per?: string;
+  }>;
 }) {
   const params = await searchParams;
   const akun = await getSessionAccount();
@@ -28,5 +39,13 @@ export default async function PimpinanDashboardPage({
     return <AksesDitolak pesan="Halaman ini khusus PPABP/Pimpinan/Admin." />;
   }
 
-  return <DashboardLintasUnit searchParams={params} authUser={authUser} readOnly={true} nama={akun.nama} />;
+  return (
+    <DashboardLintasUnit
+      searchParams={params}
+      authUser={authUser}
+      readOnly={true}
+      nama={akun.nama}
+      basePath="/pimpinan"
+    />
+  );
 }

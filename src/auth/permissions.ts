@@ -691,13 +691,20 @@ export function canMonitorUbahStatusLintasUnit(user: AuthUser, targetSatuanKerja
   return cekPpabpAtauAdmin(user, targetSatuanKerja);
 }
 
-/** Lihat status rekonsiliasi LINTAS satker (dalam kewenangannya). */
+/**
+ * Lihat status rekonsiliasi LINTAS satker (dalam kewenangannya). Dipakai juga
+ * halaman Monitoring Banding yang kini memuat keputusan pembayaran; yang
+ * memutuskan ditulis lewat putuskanPembayaranAction (canMonitorUbahStatusLintasUnit).
+ */
 export function canViewRekonsiliasiLintasSatker(user: AuthUser, targetSatuanKerja?: string): boolean {
   return cekPpabpAtauAdmin(user, targetSatuanKerja);
 }
 
 /**
- * TEMBUSAN banding yang sudah lolos verifikasi Kasubag TU (jenjang 1).
+ * TEMBUSAN banding. PPABP kini melihat banding sejak DIAJUKAN (ditandai belum
+ * diverifikasi Kasubag TU), bukan hanya yang sudah lolos jenjang 1. Tetap
+ * TIDAK memutuskan banding; yang ia putuskan adalah PEMBAYARANNYA lewat
+ * putuskanPembayaranAction (src/app/ppabp/banding/actions.ts).
  *
  * MELIHAT SAJA - PPABP TIDAK punya keputusan di alur banding, dan itu
  * disengaja (keputusan user 2026-09-29). Yang memutuskan koreksi data tetap

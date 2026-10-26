@@ -73,6 +73,25 @@ export function bacaJenisPegawai(nilai: string | null | undefined): JenisPegawai
   return JENIS_PEGAWAI_ADK.find((j) => j.kode === nilai)?.kode ?? null;
 }
 
+/**
+ * Kelompok berkas ADK dari nilai APA ADANYA di data
+ * (`IdentitasWebGaji.jenisPegawai`: "PNS", "CPNS", "PPPK", "P3K").
+ *
+ * BEDA DARI `bacaJenisPegawai` di atas, dan bedanya gampang tertukar:
+ * yang itu membaca KODE pilihan dari query string (`?jenis=P3K`), yang ini
+ * membaca NILAI dari berkas Kemenkeu. "CPNS" sah di sini dan tidak sah di
+ * sana; "P3K" sah di dua-duanya tapi lewat jalan berbeda.
+ *
+ * Null kalau nilainya kosong atau di luar daftar - pemanggil WAJIB
+ * menampilkannya sebagai "belum diketahui", bukan menjatuhkannya ke PNS.
+ * Lihat alasannya di kepala berkas ini.
+ */
+export function kelompokDariNilaiData(nilai: string | null | undefined): JenisPegawaiAdk | null {
+  if (!nilai) return null;
+  const bersih = nilai.trim().toUpperCase();
+  return JENIS_PEGAWAI_ADK.find((j) => j.nilaiDiData.includes(bersih))?.kode ?? null;
+}
+
 export function labelJenisPegawai(jenis: JenisPegawaiAdk | null): string {
   if (!jenis) return "Semua pegawai";
   return JENIS_PEGAWAI_ADK.find((j) => j.kode === jenis)?.label ?? "Semua pegawai";

@@ -48,3 +48,25 @@ Sistem Gajihub terhubung ke **Esign Client Service v2.2.2** (`http://192.168.221
 - **Akun Dummy Penandatangan**: NIK `0803202100007062`, Passphrase `Bsre2026.#!`.
 - Jangan pernah hardcode kredensial produksi ke dalam git repository.
 
+
+## Akun demo di kode - DISENGAJA selama pengembangan (keputusan user 2026-10-22)
+
+Dua hal berikut ditandai pemindai `tools/check-sensitive.mjs` dan oleh review,
+tapi **dipertahankan atas keputusan user**: fitur TTE masih dikembangkan dan
+butuh akun demo BSrE untuk diuji.
+
+1. `src/app/tte/ModalPassphraseTte.tsx` - NIK demo jadi nilai bawaan, dan
+   passphrase demo terisi otomatis kalau NIK-nya NIK demo.
+2. `src/app/tte/actions.ts` (dua tempat: `nikTarget || TEST_BSRE_NIK || <NIK demo>`)
+   - NIK kosong jatuh ke akun demo.
+
+**Jangan "dibereskan" atas inisiatif sendiri**, dan jangan dilaporkan ulang
+sebagai temuan baru - keputusannya sudah diambil.
+
+**WAJIB DICABUT SEBELUM TTE DIPAKAI MENANDATANGANI DOKUMEN SUNGGUHAN**
+(paling lambat go-live 1 Januari 2027), karena keduanya bertentangan dengan
+Kriteria BSrE V & VIII di atas:
+- passphrase demo tidak boleh ada di bundle klien sama sekali;
+- NIK kosong harus DITOLAK dengan pesan yang menyebut sebabnya, bukan
+  dijatuhkan ke akun demo - kalau tidak, dokumen produksi bisa
+  tertandatangani atas nama akun uji coba tanpa ada yang menyadarinya.

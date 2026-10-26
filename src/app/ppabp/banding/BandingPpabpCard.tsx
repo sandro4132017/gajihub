@@ -110,6 +110,14 @@ function StepIcon({ step }: { step: TrackerStep }) {
 }
 
 function StatusPill({ status }: { status: string }) {
+  if (status === "DIAJUKAN") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-xs font-extrabold text-ink-2 ring-1 ring-line">
+        <span className="size-2 rounded-full bg-muted" />
+        Belum diverifikasi Kasubag TU
+      </span>
+    );
+  }
   if (status === "DISETUJUI") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-green-tint px-3 py-1 text-xs font-extrabold text-green">
@@ -139,11 +147,17 @@ export function BandingPpabpCard({
   logs,
   pembayaran,
   defaultOpen = false,
+  keputusan = null,
 }: {
   banding: BandingPpabpItem;
   logs: ApprovalLogItem[];
   pembayaran: StatusKalkulasiPembayaran[];
   defaultOpen?: boolean;
+  /**
+   * Keputusan pembayaran pasangan (pegawai, periode) banding ini, yang
+   * tampil di bagian atas halaman. `anchor` null = tidak ada tautan.
+   */
+  keputusan?: { teks: string; anchor: string | null } | null;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [previewBerkas, setPreviewBerkas] = useState<BerkasLampiran | null>(null);
@@ -161,7 +175,7 @@ export function BandingPpabpCard({
 
   return (
     <>
-      <article className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_2px_12px_rgba(19,65,107,0.06)] transition-all hover:border-biru/40">
+      <article id={`banding-${banding.id}`} className="scroll-mt-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_2px_12px_rgba(19,65,107,0.06)] transition-all hover:border-biru/40">
       {/* 1. KEPALA VERIFIKASI (COLLAPSIBLE HEADER): Hirarki Bersih (Utama, Sekunder, Status) */}
       <div
         role="button"
@@ -329,7 +343,7 @@ export function BandingPpabpCard({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>
-                  <strong>Peran PPABP:</strong> Halaman ini bersifat <em>read-only</em> tembusan pengawasan. PPABP memantau dampak pembayaran agar kalkulasi yang telah lolos/terkirim dapat direkonsiliasi.
+                  <strong>Peran PPABP:</strong> Banding ini <em>read-only</em> bagi PPABP &mdash; keputusannya ada pada Kasubag TU dan OSDMA. Yang diputuskan PPABP adalah pembayarannya, di bagian keputusan pembayaran pada bagian atas halaman ini.
                 </span>
               </div>
               {sumber && (
@@ -550,18 +564,21 @@ export function BandingPpabpCard({
                       <p className="text-xs text-ink-2 leading-relaxed">
                         Data pembayaran sudah disahkan (<em>APPROVED</em>/<em>DIKIRIM</em>). Jika OSDMA menyetujui banding, tindak lanjut penyesuaian dana perlu melalui mekanisme tahan atau susulan.
                       </p>
-                      <div className="mt-2 flex justify-end">
-                        <Link
-                          href="/ppabp/rekonsiliasi"
-                          className="btn btn-warning btn-sm inline-flex items-center gap-1.5 font-bold"
-                        >
-                          Buka Menu Rekonsiliasi PPABP &rarr;
-                        </Link>
-                      </div>
                     </div>
                   ) : (
                     <p className="mt-2 text-[11px] text-muted">
                       Kalkulasi belum dikirim ke ADK/Web Gaji. Penyesuaian data dapat langsung tercakup pada siklus kalkulasi berikutnya.
+                    </p>
+                  )}
+                  {keputusan && (
+                    <p className="mt-2 text-xs font-semibold text-ink">
+                      {keputusan.anchor ? (
+                        <Link href={`#${keputusan.anchor}`} className="text-biru hover:underline">
+                          {keputusan.teks} &darr;
+                        </Link>
+                      ) : (
+                        keputusan.teks
+                      )}
                     </p>
                   )}
                 </div>

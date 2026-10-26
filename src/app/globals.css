@@ -96,6 +96,68 @@
   --color-line: #dbe2ef;
   --color-line-2: #e9eef6;
 
+  /* --------------------------------------------------------------------
+     WARNA SERI GRAFIK - dipisah dari token halaman DENGAN SENGAJA.
+     --------------------------------------------------------------------
+     Token halaman dipilih untuk teks & panel; sebagai isian grafik dua di
+     antaranya gagal: navy #13416B terlalu gelap (L 0,37, di luar pita
+     0,43-0,77) dan terbaca abu-abu (kroma 0,087 < 0,1), sementara pasangan
+     navy + biru #3F72AF cuma terpisah dE 11,5 - di bawah ambang 15, artinya
+     sulit dibedakan bahkan oleh mata yang normal warnanya.
+
+     Ketiga warna di bawah DIUKUR, bukan dikira-kira (validator palet, mode
+     terang, 2026-10-22): pita terang LULUS, kroma LULUS, pemisahan buta
+     warna LULUS (terburuk dE 22,3 deutan antara seri-1 dan seri-2),
+     pemisahan mata normal LULUS (dE 22,4).
+
+     SATU CATATAN YANG MENGIKAT: kontras seri-2 (dan ramp-1) ke latar di
+     bawah 3:1. Uji palet mengizinkannya HANYA kalau nilainya terbaca sebagai
+     teks. Diagram batang & donat nilai kalkulasi memenuhinya dengan angka
+     yang selalu tampil. Ketiga pie komposisi pegawai TIDAK lagi punya
+     legenda permanen (keputusan user 2026-10-22, demi ruang kartu) - angkanya
+     muncul saat grafik disorot/diketuk/difokus (DonatInteraktif.tsx). Itu
+     pemenuhan separuh: angkanya ada, tapi tidak tampil sampai dicari. Kalau
+     suatu saat ada keluhan warna pie sulit dibedakan, inilah sebabnya.
+
+     Warna mengikuti ENTITASNYA, bukan urutan besar-kecil - pembaca yang
+     sudah hafal "PPPK itu teal" tersesat begitu urutannya berubah bulan
+     depan:
+       PNS            seri-1 (navy)   - pie PNS/PPPK
+       PPPK           seri-4 (teal)   - pie PNS/PPPK DAN pie golongan
+       belum diketahui seri-3 (emas)  - di pie mana pun
+       Gol I-IV PNS   ramp-1..4       - pie golongan
+       Laki-laki / Perempuan  seri-2 / seri-5 - pie jenis kelamin
+       Kantor Pusat / UPT Daerah  seri-6 / seri-7 - pie instansi
+         (ungu + oranye + emas LULUS kelimanya: CVD dE 14,1 protan,
+         mata normal dE 16,8; kontras oranye 2,85:1, di bawah 3:1)
+
+     PPPK PINDAH dari seri-2 ke seri-4 (2026-10-22) supaya warnanya sama di
+     pie PNS/PPPK dan pie golongan. Diuji: navy + teal + emas LULUS kelimanya
+     (CVD terburuk dE 14,9 deutan, mata normal dE 19,2, kontras >= 3:1).
+     Biru muda + mawar untuk jenis kelamin juga LULUS (CVD dE 14,3), dengan catatan
+     kontras biru muda 2,58:1 di atas.
+
+     YANG GAGAL dan karena itu tidak dipakai: enam warna kategori yang
+     semuanya berbeda hue untuk pie golongan. Magenta dan teal melebur jadi
+     satu warna bagi deuteranopia (dE 1,1). Golongan PNS diberi gradasi satu
+     hue - urutannya memang berurutan - dan lulus uji ordinal. */
+  --color-seri-1: #2a5f93;
+  --color-seri-2: #58a6dd;
+  --color-seri-3: #8f5f13;
+  --color-seri-4: #2a9d8f;
+  --color-seri-5: #c0507e;
+  --color-seri-6: #7a5cc2;
+  --color-seri-7: #d9822b;
+
+  /* Gradasi golongan PNS I (terang) -> IV (gelap). Satu hue (sebaran 5
+     derajat), terangnya turun monoton, tiap langkah >= 0,06 - lulus uji
+     ordinal. ramp-3 sengaja SAMA dengan seri-1: golongan III adalah sebagian
+     besar PNS, jadi potongan terbesarnya memakai warna PNS. */
+  --color-ramp-1: #8fb0d8;
+  --color-ramp-2: #5b86bd;
+  --color-ramp-3: #2a5f93;
+  --color-ramp-4: #173f6e;
+
   --color-green: #2e7d52;
   --color-green-tint: #e6f2ec;
   --color-red: #c0492f;
@@ -123,6 +185,140 @@
      jelas justru kebalikannya. Navy-di-atas-navy-muda cuma 2:1. */
   --color-nav-active: #ffffff;
   --color-nav-active-text: #13416b;
+}
+
+/* ===========================================================================
+   CAHAYA KARTU BERCAHAYA - nilai bawaan. Lihat KartuKpi.tsx.
+
+   Ditaruh di :root sebagai variabel biasa (bukan di @theme) karena bukan
+   token Tailwind - tidak ada kelas yang dibuat darinya, cuma dibaca lewat
+   var() di gaya inline. Tema halaman boleh menimpanya.
+   =========================================================================== */
+:root {
+  --cahaya-1-latar: rgba(240, 180, 190, 0.38);
+  --cahaya-1-ikon-latar: #fbeaed;
+  --cahaya-1-ikon-warna: #a8475c;
+  --cahaya-2-latar: rgba(160, 214, 186, 0.38);
+  --cahaya-2-ikon-latar: #e4f4ec;
+  --cahaya-2-ikon-warna: #2e7d52;
+  --cahaya-3-latar: rgba(170, 190, 236, 0.4);
+  --cahaya-3-ikon-latar: #e7ecfa;
+  --cahaya-3-ikon-warna: #3f72af;
+  --cahaya-4-latar: rgba(244, 200, 140, 0.42);
+  --cahaya-4-ikon-latar: #fdf0dd;
+  --cahaya-4-ikon-warna: #8f5f13;
+}
+
+/* ===========================================================================
+   TEMA PALET 2026 - UJI COBA DI SATU HALAMAN (dashboard PPABP)
+   ===========================================================================
+   Permintaan user 2026-10-22: palet baru (primer #123B5D / #3473A7 / #F6F6F6,
+   aksen #FFD52E / #FFCD5F / #9BC264 / #00BFA6 / #FFFFFF) dicoba di SATU
+   halaman dulu sebelum dipakai seluruh aplikasi.
+
+   CARANYA: blok ini MENIMPA variabel token di dalam pembungkus
+   `[data-tema="palet-2026"]`. Tailwind v4 membaca token lewat var(), jadi
+   setiap kelas di dalam pembungkus ikut berganti tanpa satu komponen pun
+   disentuh. Yang di luar pembungkus - sidebar, halaman lain, dan dashboard
+   Pimpinan yang memakai komponen YANG SAMA - tetap memakai token lama.
+   Pembungkusnya dipasang di src/app/ppabp/page.tsx.
+
+   MEMBAWANYA KE SELURUH APLIKASI nanti cukup memindahkan nilai di bawah ke
+   @theme di atas, lalu mencabut atribut pembungkusnya.
+
+   HUE DARI PALET, TERANG-GELAPNYA DIUKUR. Tiga warna aksen palet tidak bisa
+   dipakai apa adanya:
+     - Kuning #FFD52E, amber #FFCD5F, hijau #9BC264 terlalu terang untuk TEKS
+       (hijau di putih cuma 1,99:1). Token status dipakai sebagai teks DAN
+       isian sekaligus, jadi yang dipasang langkah gelap dari hue yang sama;
+       warna terang paletnya hidup di latar tipis (-tint) dan di grafik.
+     - Palet ini TIDAK PUNYA MERAH. "Dikembalikan" tetap merah - warna itu
+       yang memberi tahu unit bahwa kirimannya ditolak.
+
+   KONTRAS TEKS - diukur, semuanya >= 4,5:1 (WCAG AA teks kecil):
+     ink #123B5D di latar #F6F6F6 ............ 10,74:1
+     ink-2 #34536F di latar .................. 7,44:1
+     muted #5E6B78 di latar .................. 5,05:1
+     tautan #0D2C46 di putih ................. 14,33:1
+     putih di tombol utama #123B5D ........... 11,61:1
+     green #4A7A1C di green-tint #EDF5E1 ..... 4,58:1  (pil "Terkirim")
+     gold-deep #8A6400 di gold-tint #FFF5CC .. 4,91:1  (pil "Belum Dikirim")
+     red #B8432A di red-tint #FBEAE6 ......... 4,65:1  (pil "Dikembalikan")
+   Merah pil "Dikembalikan" yang LAMA (#C0492F) cuma 4,25:1 - di bawah batas,
+   dan itu berlaku di seluruh aplikasi, bukan cuma di sini. Di tema ini sudah
+   digelapkan; di luar tema belum.
+
+   WARNA GRAFIK - diuji validator palet, per pie, semuanya tanpa GAGAL:
+     Pegawai Aktif  PNS #3473A7 / PPPK #00BFA6 / belum diketahui #8F5F13
+                    (CVD terburuk dE 21,2, mata normal dE 22,5)
+     Instansi       Pusat #1F5C8F / UPT #9BC264 / belum diketahui #8F5F13
+                    (CVD dE 23,6, mata normal dE 26,4)
+     Jenis Kelamin  L #D9A60E / P #00BFA6 / tidak tercatat #8F5F13
+                    (CVD dE 13,7, mata normal dE 20,8)
+     Kalkulasi      Tukin #3473A7 / Uang Makan #D9A60E (CVD dE 28,3)
+     Golongan PNS   gradasi #8FB1D4 -> #123B5D, lulus uji ordinal
+   #D9A60E = kuning palet #FFD52E diturunkan satu langkah: versi aslinya
+   terlalu terang untuk isian grafik (L 0,79, batasnya 0,77).
+   Hijau #9BC264 & kuning tua TIDAK PERNAH dipasang di pie yang sama: bagi
+   deuteranopia keduanya melebur (dE 4,8).
+   =========================================================================== */
+[data-tema="palet-2026"] {
+  --color-navy: #123b5d;
+  --color-navy-deep: #0d2c46;
+  --color-navy-soft: #1f5c8f;
+  --color-navy-line: #2b6196;
+  --color-teal: #123b5d;
+  --color-teal-deep: #0d2c46;
+  --color-teal-tint: #e6eef5;
+  --color-biru: #3473a7;
+  --color-biru-deep: #285c87;
+
+  --color-bg: #f6f6f6;
+  --color-surface: #ffffff;
+  --color-surface-2: #fafafa;
+  --color-ink: #123b5d;
+  --color-ink-2: #34536f;
+  --color-muted: #5e6b78;
+  --color-line: #e1e5ea;
+  --color-line-2: #eceff2;
+
+  --color-green: #4a7a1c;
+  --color-green-tint: #edf5e1;
+  --color-gold: #d9a60e;
+  --color-gold-deep: #8a6400;
+  --color-gold-tint: #fff5cc;
+  --color-red: #b8432a;
+  --color-red-tint: #fbeae6;
+
+  --color-seri-1: #3473a7;
+  --color-seri-2: #d9a60e;
+  --color-seri-3: #8f5f13;
+  --color-seri-4: #00bfa6;
+  --color-seri-5: #00bfa6;
+  --color-seri-6: #1f5c8f;
+  --color-seri-7: #9bc264;
+  --color-ramp-1: #8fb1d4;
+  --color-ramp-2: #5d8fc0;
+  --color-ramp-3: #3473a7;
+  --color-ramp-4: #123b5d;
+
+  /* Empat kartu pie, kiri ke kanan, menyapu aksen palet berurutan: biru,
+     teal, hijau, kuning. Warna ikon di atas latar bulatnya >= 4,3:1. */
+  --cahaya-1-latar: rgba(52, 115, 167, 0.22);
+  --cahaya-1-ikon-latar: #e6eef5;
+  --cahaya-1-ikon-warna: #3473a7;
+  --cahaya-2-latar: rgba(0, 191, 166, 0.22);
+  --cahaya-2-ikon-latar: #ddf5f1;
+  --cahaya-2-ikon-warna: #007f6f;
+  --cahaya-3-latar: rgba(155, 194, 100, 0.3);
+  --cahaya-3-ikon-latar: #edf5e1;
+  --cahaya-3-ikon-warna: #4a7a1c;
+  --cahaya-4-latar: rgba(255, 213, 46, 0.32);
+  --cahaya-4-ikon-latar: #fff5cc;
+  --cahaya-4-ikon-warna: #8a6400;
+
+  background: var(--color-bg);
+  color: var(--color-ink);
 }
 
 body {

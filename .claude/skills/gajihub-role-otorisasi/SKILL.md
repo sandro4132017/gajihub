@@ -513,6 +513,7 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
   Verifikasi ini PURE READ-ONLY (tidak submit form apapun), jadi TIDAK
   ADA mutasi data yang perlu di-revert kali ini - beda dengan verifikasi
   OSDMA/PPABP/Admin sebelumnya.
+- **Catatan 2026-10-22**: kartu "Status Dokumen & Anggaran" di Dashboard Lintas Unit (komponen shared `DashboardLintasUnit.tsx`, termasuk tampilan PIMPINAN) sudah DICABUT atas keputusan user (opsi a). Pimpinan kini tidak lagi melihat kartu/angka Anggaran di dashboard ini. Uraian Anggaran di atas dipertahankan sebagai riwayat.
 
 **Detail authorization layer (langkah 3)**:
 - Fungsi baru per role sesuai tabel di bawah: KASUBAG_TU (9 fungsi scope

@@ -3,6 +3,7 @@ import {
   JENIS_PEGAWAI_ADK,
   SEMUA_NILAI_JENIS,
   bacaJenisPegawai,
+  kelompokDariNilaiData,
   labelJenisPegawai,
   wherePegawaiJenis,
   wherePegawaiTanpaJenis,
@@ -78,5 +79,35 @@ describe("wherePegawaiTanpaJenis", () => {
   it("menolak yang jenisnya dikenali - sisanya yang terhitung", () => {
     const w = wherePegawaiTanpaJenis() as { NOT: { identitasWebGaji: { jenisPegawai: { in: string[] } } } };
     expect(w.NOT.identitasWebGaji.jenisPegawai.in).toEqual([...SEMUA_NILAI_JENIS]);
+  });
+});
+
+describe("kelompokDariNilaiData", () => {
+  it("nilai berkas Kemenkeu dipetakan ke kelompok berkasnya", () => {
+    expect(kelompokDariNilaiData("PNS")).toBe("PNS");
+    expect(kelompokDariNilaiData("CPNS")).toBe("PNS");
+    expect(kelompokDariNilaiData("PPPK")).toBe("P3K");
+    expect(kelompokDariNilaiData("P3K")).toBe("P3K");
+  });
+
+  it("CPNS diterima DI SINI tapi tidak di bacaJenisPegawai - dua pertanyaan berbeda", () => {
+    // Yang satu membaca nilai di data, yang satu membaca kode pilihan di
+    // query string. Menukar keduanya membuat `?jenis=CPNS` seolah sah, atau
+    // membuat 2 CPNS di data terbuang dari berkas PNS.
+    expect(kelompokDariNilaiData("CPNS")).toBe("PNS");
+    expect(bacaJenisPegawai("CPNS")).toBeNull();
+  });
+
+  it("berkas Kemenkeu berpadding & berhuruf kecil tetap terbaca", () => {
+    expect(kelompokDariNilaiData(" pppk ")).toBe("P3K");
+    expect(kelompokDariNilaiData("Pns")).toBe("PNS");
+  });
+
+  it("yang di luar daftar jadi null - TIDAK dijatuhkan ke PNS", () => {
+    // Menebaknya PNS berarti pegawai non-ASN ikut masuk berkas ADK PNS.
+    expect(kelompokDariNilaiData("HONORER")).toBeNull();
+    expect(kelompokDariNilaiData("")).toBeNull();
+    expect(kelompokDariNilaiData(null)).toBeNull();
+    expect(kelompokDariNilaiData(undefined)).toBeNull();
   });
 });
