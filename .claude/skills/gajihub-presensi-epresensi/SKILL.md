@@ -12,6 +12,22 @@ description: Use whenever touching presensi - sinkronisasi e-Presensi, Epresensi
 `SELECT`, dan menambah index BUKAN pilihan. Dari e-Presensi diambil **FAKTA**
 (tanggal, status, jam), **TIDAK PERNAH angka potongannya**.
 
+> **DICABUT 2026-10-27 (keputusan user): "Cara lain mengisi presensi"** - upload
+> PDF "Laporan Detail Presensi Harian" (`UploadPresensiPdfForm.tsx`,
+> `actionsPdf.ts`) dan template Excel rekap presensi (`UploadPresensiForm.tsx`,
+> `actions.ts`, route `/tukin/presensi/template`) DIHAPUS dari kode. Bagian
+> skill ini yang membahas keduanya (mis. "Upload PDF presensi e-Presensi",
+> kolom template) sekarang RIWAYAT, bukan fitur yang ada.
+> - Akibat yang disetujui user: **menit meninggalkan kantor & tidak ikut
+>   upacara tidak bisa dimasukkan lagi** (template satu-satunya jalannya), jadi
+>   komponen potongan Pasal 13 itu selalu 0.
+> - Jalur manual saat e-Presensi bermasalah (Pasal 10 ayat (2)) tinggal tandai
+>   kendala + koreksi jam per hari (`/tukin/presensi/kendala`).
+> - Mesin rekap PDF (`presensiPdf.ts`, `presensiPdfKeRekap.ts`) & parser template
+>   (`rekapPresensi.ts` `parseRekapPresensi`) TETAP ada: tipe & mesinnya dipakai
+>   rekonsiliasi rekap absensi petugas. `parsePdfPresensi` & `parseRekapPresensi`
+>   sekarang hanya dipakai test-nya sendiri.
+
 ---
 
 ### Halaman Rekonsiliasi rekap absensi petugas (`/tukin/presensi/rekonsiliasi`)

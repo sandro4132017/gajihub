@@ -4,12 +4,6 @@
 // DIPAKAI BARENG oleh dua jalur tarik dari e-Presensi:
 //   - tombol "Tarik data presensi" di /tukin/presensi (Server Action)
 //   - src/jobs/importPresensiEpresensi.ts (CLI)
-//
-// Jalur upload PDF (actionsPdf.ts) menulis dengan cara yang SAMA PERSIS, cuma
-// belum diarahkan ke sini karena dia menulis banyak pegawai dalam SATU
-// transaksi besar per file. TODO(confirm): kalau nanti disatukan, pastikan
-// perilaku transaksinya tidak berubah - bukan sekadar memanggil fungsi ini
-// dalam loop.
 // ============================================================================
 
 import type { PrismaClient } from "@prisma/client";

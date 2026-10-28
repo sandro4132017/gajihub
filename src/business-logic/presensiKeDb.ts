@@ -1,13 +1,13 @@
 // ============================================================================
 // Pemetaan hasil rekap presensi -> bentuk yang disimpan di database.
 //
-// DIEKSTRAK dari src/app/tukin/presensi/actionsPdf.ts supaya dipakai BARENG
-// oleh dua jalur masuk yang sekarang ada:
-//   1. upload PDF export e-Presensi  (actionsPdf.ts)
-//   2. tarik langsung dari database e-Presensi (src/jobs/importPresensiEpresensi.ts)
+// Satu-satunya tempat pemetaan ini, dipakai jalur tarik langsung dari
+// database e-Presensi (tombol di /tukin/presensi dan
+// src/jobs/importPresensiEpresensi.ts). Jalur upload PDF yang dulu ikut
+// memakainya sudah dicabut (keputusan user 2026-10-27).
 //
-// Kalau pemetaan ini disalin dua kali, cepat atau lambat keduanya berbeda -
-// dan bedanya baru ketahuan setelah ada pegawai yang statusnya salah tercatat.
+// Kalau pemetaan ini disalin, cepat atau lambat salinannya berbeda - dan
+// bedanya baru ketahuan setelah ada pegawai yang statusnya salah tercatat.
 // PURE: tidak ada I/O di sini.
 // ============================================================================
 

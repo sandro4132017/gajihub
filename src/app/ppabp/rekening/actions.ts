@@ -5,7 +5,13 @@ import { read, utils } from "xlsx";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canKelolaGajiInduk, type AuthUser } from "../../../auth/permissions";
-import { parseRekeningPegawai, kelompokkanPerBank } from "../../../business-logic/rekeningPegawai";
+import {
+  REKENING_GAJI_DITERIMA,
+  parseRekeningBerkas,
+  kelompokkanPerBank,
+  type SheetRekening,
+} from "../../../business-logic/rekeningPegawai";
+import { ringkasMasalahBasisDataGaji } from "../../../business-logic/basisDataGaji";
 
 /**
  * Upload daftar rekening penerima pembayaran, per jenis (TUKIN / GAJI).
@@ -27,6 +33,10 @@ export interface UploadRekeningFormState {
     perBank: { kodeBankSpan: string; namaBank: string; jumlah: number }[];
   };
   dilewati?: { alasan: string; jumlah: number; contohNip: string[] }[];
+  /** Yang dirapikan sistem (nama/kode bank) - sudah tersimpan dalam bentuk rapi. */
+  dirapikan?: string[];
+  /** Yang TIDAK diubah tapi perlu diperiksa manusia, mis. panjang nomor rekening janggal. */
+  perluDiperiksa?: string[];
 }
 
 function kelompokkanAlasan(items: { nip: string | null; alasan: string }[]) {
@@ -64,6 +74,9 @@ export async function uploadRekeningAction(
     if (jenisPembayaran !== "TUKIN" && jenisPembayaran !== "GAJI") {
       return { error: "Jenis pembayaran wajib dipilih (Tukin atau Gaji)." };
     }
+    if (jenisPembayaran === "GAJI" && !REKENING_GAJI_DITERIMA) {
+      return { error: "Rekening gaji belum diterima - menyusul setelah Gajihub terinterkoneksi." };
+    }
 
     const file = formData.get("file");
     if (!(file instanceof File) || file.size === 0) {
@@ -73,17 +86,21 @@ export async function uploadRekeningAction(
       return { error: `Ukuran file ${(file.size / 1024 / 1024).toFixed(1)} MB melebihi batas 8 MB.` };
     }
 
-    let matriks: unknown[][];
+    // SELURUH sheet dibaca - berkas rekening lazim dipisah "PNS" dan "PPPK",
+    // dan sheet kedua yang terlewat tidak memberi tanda apa pun.
+    let sheets: SheetRekening[];
     try {
       const wb = read(Buffer.from(await file.arrayBuffer()), { type: "buffer" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      if (!sheet) return { error: "File tidak punya sheet yang bisa dibaca." };
-      matriks = utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: null });
+      sheets = wb.SheetNames.map((nama) => ({
+        nama,
+        matriks: utils.sheet_to_json<unknown[]>(wb.Sheets[nama], { header: 1, raw: false, defval: null }),
+      }));
+      if (sheets.length === 0) return { error: "File tidak punya sheet yang bisa dibaca." };
     } catch {
       return { error: "File tidak bisa dibaca. Pastikan formatnya .xlsx, .xls, atau .csv." };
     }
 
-    const hasil = parseRekeningPegawai(matriks);
+    const hasil = parseRekeningBerkas(sheets);
     if (hasil.error) return { error: hasil.error };
     if (hasil.baris.length === 0) {
       return { error: "Tidak ada baris rekening yang bisa diproses.", dilewati: kelompokkanAlasan(hasil.dilewati) };
@@ -146,20 +163,32 @@ export async function uploadRekeningAction(
           jenisPembayaran,
           jumlahBarisTersimpan: siapSimpan.length,
           jumlahBarisDilewati: dilewati.length,
+          perSheet: hasil.perSheet,
         },
       },
     });
 
     revalidatePath("/ppabp/rekening");
     revalidatePath("/ppabp/adk");
+    // Peringatan rekening DITAMPILKAN, tidak cuma dihitung. Nomor yang
+    // panjangnya janggal tidak pernah ditambal (lihat bankSpan.ts), jadi satu-
+    // satunya jalan ia diperiksa adalah kalau orang yang mengunggah melihatnya.
+    // Kalimatnya sama dengan halaman Basis Data Gaji - dua pintu ke tabel yang
+    // sama melaporkan cacat yang sama dengan cara yang sama.
+    const { dirapikan, perluDiperiksa } = ringkasMasalahBasisDataGaji(hasil.masalah);
+    const rincianSheet = hasil.perSheet
+      .map((s) => (s.dilewatiKarena ? `${s.nama}: dilewati (${s.dilewatiKarena})` : `${s.nama}: ${s.jumlah}`))
+      .join(", ");
     return {
-      success: `${siapSimpan.length} rekening ${jenisPembayaran} tersimpan dari "${file.name}".`,
+      success: `${siapSimpan.length} rekening ${jenisPembayaran} tersimpan dari "${file.name}" (${rincianSheet}).`,
       ringkasan: {
         jenisPembayaran,
         jumlahTersimpan: siapSimpan.length,
         perBank: kelompokkanPerBank(siapSimpan),
       },
       dilewati: dilewati.length > 0 ? kelompokkanAlasan(dilewati) : undefined,
+      dirapikan: dirapikan.length > 0 ? dirapikan : undefined,
+      perluDiperiksa: perluDiperiksa.length > 0 ? perluDiperiksa : undefined,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };

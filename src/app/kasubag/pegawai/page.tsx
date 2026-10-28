@@ -15,6 +15,18 @@ import { FiEdit2, FiUsers, FiUserCheck, FiUserX, FiSearch } from "react-icons/fi
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Kolom Jenis: CPNS / PNS / PPPK dari SIAP (PEGAWAI.STATUSPEGAWAIID), lihat
+ * src/business-logic/jenisPegawai.ts. Data kepegawaian diambil dari SIAP,
+ * bukan dari berkas basis data gaji (keputusan user 2026-10-27). Kosong
+ * berarti sinkronisasi pegawai belum dijalankan sejak kolomnya ada - TIDAK
+ * ditebak dari golongan.
+ */
+function JenisPegawai({ nilai }: { nilai: string | null }) {
+  if (!nilai) return <span className="text-xs text-muted">Belum disinkronkan</span>;
+  return <span className="chip chip-navy text-xs font-semibold">{nilai}</span>;
+}
+
 export default async function RosterPegawaiUnitPage({
   searchParams,
 }: {
@@ -293,18 +305,19 @@ export default async function RosterPegawaiUnitPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
-                  <th className="col-nama px-4 py-3 text-left">Pegawai</th>
-                  <th className="px-4 py-3 text-left">Jabatan</th>
-                  <th className="px-4 py-3 text-left">Golongan</th>
-                  <th className="px-4 py-3 text-center">Kelas Jabatan</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                  {bolehEdit && <th className="px-4 py-3 text-right">Aksi</th>}
+                  <th className="col-nama px-4 py-3">Pegawai</th>
+                  <th className="px-4 py-3">NIP</th>
+                  <th className="px-4 py-3">Jabatan</th>
+                  <th className="px-4 py-3">Jenis</th>
+                  <th className="px-4 py-3">Golongan</th>
+                  <th className="px-4 py-3">Kelas</th>
+                  {bolehEdit && <th className="px-4 py-3">Aksi</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-2">
                 {pegawaiList.length === 0 && (
                   <tr>
-                    <td colSpan={bolehEdit ? 6 : 5} className="px-4 py-8 text-center text-muted">
+                    <td colSpan={bolehEdit ? 7 : 6} className="px-4 py-8 text-center text-muted">
                       Tidak ada pegawai yang cocok dengan pencarian ini.
                     </td>
                   </tr>
@@ -313,17 +326,31 @@ export default async function RosterPegawaiUnitPage({
                   <tr key={p.id} className="transition-colors hover:bg-surface-2/50">
                     <td className="col-nama px-4 py-3">
                       <div className="font-semibold text-ink">
-                        {p.nama}
+                        <Link
+                          href={`/tukin/presensi/${encodeURIComponent(p.nip)}?dari=pegawai&satker=${encodeURIComponent(satkerEfektif)}`}
+                          className="underline-offset-4 hover:text-biru hover:underline"
+                        >
+                          {p.nama}
+                        </Link>
                         <BadgePejabatEselon kelasJabatan={p.kelasJabatan} />
                       </div>
-                      <span className="mt-0.5 block font-mono text-xs text-muted">{p.nip}</span>
+                      {/* Kolom Status dicabut (permintaan user 2026-10-27).
+                          Statusnya tetap terlihat untuk yang TIDAK aktif -
+                          muncul saat "Pensiun / Nonaktif" ditampilkan. */}
+                      {p.statusPegawai !== "AKTIF" && (
+                        <span className="chip chip-wait mt-1 text-[11px]">{p.statusPegawai}</span>
+                      )}
                     </td>
+                    <td className="px-4 py-3 font-mono text-xs text-ink-2">{p.nip}</td>
                     <td className="px-4 py-3 text-ink-2">
                       {p.jabatan ? (
                         <span className="line-clamp-2 max-w-md text-xs sm:text-sm">{p.jabatan}</span>
                       ) : (
                         <span className="text-muted">-</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <JenisPegawai nilai={p.jenisPegawai} />
                     </td>
                     <td className="px-4 py-3 font-mono text-xs font-semibold text-ink-2">
                       {p.golongan ? (
@@ -345,17 +372,8 @@ export default async function RosterPegawaiUnitPage({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`chip ${
-                          p.statusPegawai === "AKTIF" ? "chip-ok" : "chip-wait"
-                        }`}
-                      >
-                        {p.statusPegawai}
-                      </span>
-                    </td>
                     {bolehEdit && (
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3">
                         {/* Menuju /pegawai - SATU-SATUNYA tempat data pegawai
                             diubah. Halaman ini sengaja tetap baca-saja: form
                             sunting yang disalin ke dua tempat cepat atau lambat

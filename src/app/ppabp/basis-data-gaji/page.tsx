@@ -91,15 +91,21 @@ export default async function BasisDataGajiPage({
 
   return (
     <main className={HALAMAN}>
+      {/* Tautan kembali & kepala halaman berpola sama dengan Predikat Kinerja. */}
       <Link
         href="/ppabp"
-        className="text-sm font-semibold text-teal-deep hover:underline"
+        className="inline-flex items-center gap-2 text-sm font-bold text-teal-deep transition hover:text-biru"
       >
-        &larr; Kembali ke Dashboard PPABP
+        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        <span className="underline underline-offset-2">Kembali ke Dashboard PPABP</span>
       </Link>
-      <h1 className="mt-2 text-xl font-extrabold tracking-tight text-ink">
-        Basis Data Gaji (Web Gaji Kemenkeu)
-      </h1>
+      <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">Basis Data Gaji</h1>
+      <p className="mt-0.5 text-sm font-bold text-ink">Identitas pembayaran menurut Web Gaji Kemenkeu</p>
+      <p className="mt-2 text-sm text-biru">
+        Kelola nama, jenis pegawai, dan rekening pegawai sesuai yang tercatat di Web Gaji.
+      </p>
       <p className="mt-1 max-w-3xl text-sm text-muted">
         Nama pegawai di berkas <strong>ADK</strong> diambil dari sini, bukan
         dari SIAP. Penulisan di Web Gaji berbeda (umumnya karena gelar), dan

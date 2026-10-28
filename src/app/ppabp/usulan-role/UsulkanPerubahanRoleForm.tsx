@@ -20,7 +20,7 @@ export function UsulkanPerubahanRoleForm({
   const [state, formAction, pending] = useActionState(usulkanPerubahanRoleAction, INITIAL_STATE);
 
   return (
-    <form action={formAction} className="card mt-4 grid gap-3 p-4 sm:grid-cols-2">
+    <form action={formAction} className="card mt-2 grid gap-3 p-4 sm:grid-cols-2">
       <div>
         <label className="field-label">Akun</label>
         <SearchableSelect

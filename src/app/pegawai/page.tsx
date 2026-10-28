@@ -95,7 +95,7 @@ export default async function DataPegawaiPage({
   if (authUser.role === "KASUBAG_TU" && !satkerWajib) {
     return (
       <main className={HALAMAN}>
-        <h1 className="text-xl font-extrabold tracking-tight text-ink">Data Pegawai</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">Data Pegawai</h1>
         <div className="card mt-4 border-l-4 border-l-gold p-5">
           <p className="font-bold text-ink">Akun kamu belum punya unit kerja</p>
           <p className="mt-1 text-sm text-muted">
@@ -170,9 +170,13 @@ export default async function DataPegawaiPage({
 
   return (
     <main className={HALAMAN}>
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Data Pegawai</h1>
+      {/* Kepala halaman berpola sama dengan Presensi & Predikat Kinerja. */}
+      <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">Data Pegawai</h1>
+      <p className="mt-0.5 text-sm font-bold text-ink">Data pokok kepegawaian</p>
+      <p className="mt-2 text-sm text-biru">
+        Perbaiki nama, jabatan, golongan, kelas jabatan, dan status pegawai, lalu tetapkan satuan kerjanya.
+      </p>
       <p className="mt-1 text-sm text-muted">
-        Perbaiki data pokok pegawai (nama, jabatan, golongan, kelas jabatan, status) dan tetapkan satuan kerjanya.
         Satuan kerja menentukan pegawai ini muncul di dashboard unit yang mana - kalau salah/kosong, datanya seolah
         &quot;hilang&quot; dari semua rekap.
         {satkerWajib && (

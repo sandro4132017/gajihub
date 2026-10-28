@@ -95,11 +95,12 @@ function BarisProgres({
  * ditangani" TETAP ditampilkan buat Pimpinan, cuma tidak jadi tautan, supaya
  * visibilitasnya utuh sesuai role matrix "dashboard yang SAMA".
  *
- * BENTUKNYA MENGIKUTI DASHBOARD KASUBAG TU (permintaan user 2026-09-10):
- * sapaan + lencana keadaan, baris filter ringkas, kartu KPI ber-ikon dengan
- * angka yang naik, lalu panel-panel ber-kepala bergaris. Baris pintasan yang
- * dulu menemani filter sudah dicabut dari KEDUA dashboard (2026-09-16) -
- * keseragaman itu disengaja, jangan dikembalikan sebelah saja.
+ * BENTUKNYA TIDAK LAGI SERAGAM DENGAN DASHBOARD KASUBAG TU. Yang masih
+ * seragam tinggal baris filter ringkas dan tidak adanya baris pintasan (dicabut
+ * dari KEDUA dashboard 2026-09-16; jangan dikembalikan sebelah saja). Kasubag
+ * TU punya kartu sambutan dan stepper tutup bulan yang khusus unit - dashboard
+ * lintas unit tidak punya "langkah" yang bisa dikerjakan, jadi tidak
+ * menirunya.
  *
  * ANGKA ANGGARAN TIDAK DITAMPILKAN DI SINI (keputusan user 2026-10-22, untuk
  * PPABP maupun Pimpinan). Pagu & realisasi punya halamannya sendiri di

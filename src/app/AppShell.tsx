@@ -187,8 +187,10 @@ const MENU_PPABP = [
       { href: "/pegawai", label: "Data Pegawai" },
       { href: "/ppabp/rekening", label: "Rekening Pegawai" },
       { href: "/ppabp/basis-data-gaji", label: "Basis Data Gaji" },
-      { href: "/ppabp/gaji-induk", label: "Riwayat Gaji Pegawai" },
-      { href: "/ppabp/anggaran", label: "Anggaran & Realisasi" },
+      // "Riwayat Gaji Pegawai" (/ppabp/gaji-induk) dan "Anggaran & Realisasi"
+      // (/ppabp/anggaran) dicabut dari menu atas permintaan user 2026-10-26.
+      // Halamannya TETAP ada dan bisa dibuka lewat alamatnya - data gaji induk
+      // masih dipakai slip gaji & kolom Kode Satker di Export ADK Tukin.
     ],
   },
 

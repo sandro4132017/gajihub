@@ -75,6 +75,7 @@ import sql from "mssql";
 import { bukaPoolSiap, konfigurasiSiap, labelSumberSiap } from "../lib/siapConfig";
 import { kunciSidikNik, normalkanNik, sidikNik } from "../auth/sidikNik";
 import { judulkanNama } from "../business-logic/namaPegawai";
+import { jenisPegawaiDariKodeSiap } from "../business-logic/jenisPegawai";
 
 // Prisma memuat .env sendiri buat DATABASE_URL, tapi variabel SIAP_* di
 // bawah dibaca langsung dari process.env - jadi .env perlu dimuat eksplisit.
@@ -104,6 +105,8 @@ interface BarisSiap {
   kelasJabatan: string | null;
   statusKawin: string | null;
   jenisKelamin: string | null;
+  /** PEGAWAI.STATUSPEGAWAIID mentah - jadi `jenisPegawai` lewat jenisPegawaiDariKodeSiap(). */
+  statusPegawaiId: string | null;
   jumlahAnakTanggungan: number | null;
   sumberKelasJabatan: string | null;
   /**
@@ -178,6 +181,7 @@ async function ambilDariSiap(prefixSatker: string | null): Promise<BarisSiap[]> 
         LTRIM(RTRIM(p.NIK))                AS nik,
         LTRIM(RTRIM(p.STATUSKAWIN))        AS statusKawin,
         LTRIM(RTRIM(p.JENISKELAMIN))       AS jenisKelamin,
+        LTRIM(RTRIM(p.STATUSPEGAWAIID))    AS statusPegawaiId,
         ISNULL(anakTgg.n, 0)               AS jumlahAnakTanggungan,
         COALESCE(
           NULLIF(LTRIM(RTRIM(mf.JOBGRADE)), ''),
@@ -657,6 +661,9 @@ export async function terapkanSinkronPegawai(
           // dikenal alih-alih menebaknya jadi TK/0.
           statusKawin: b.statusKawin ? b.statusKawin.trim() : null,
           jenisKelamin: b.jenisKelamin ? b.jenisKelamin.trim() : null,
+          // CPNS / PNS / PPPK dari SIAP - sumber jenis kepegawaian, bukan
+          // berkas basis data gaji (keputusan user 2026-10-27).
+          jenisPegawai: jenisPegawaiDariKodeSiap(b.statusPegawaiId),
           jumlahAnakTanggungan: b.jumlahAnakTanggungan ?? 0,
           sourceSyncedAt: waktuSync,
           // Sengaja ikut di-set walau null: kalau NIK seseorang di SIAP

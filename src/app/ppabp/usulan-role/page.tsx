@@ -25,13 +25,27 @@ export default async function UsulanPerubahanRolePage() {
 
   return (
     <main className={HALAMAN}>
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Usulan Perubahan Role</h1>
-      <p className="mt-1 text-sm text-muted">PPABP mengusulkan, eksekusi final ada di Admin.</p>
+      {/* Kepala halaman berpola sama dengan Presensi & Predikat Kinerja:
+          judul navy, satu baris lingkup, satu baris deskripsi. */}
+      <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">Usulan Perubahan Role</h1>
+      <p className="mt-0.5 text-sm font-bold text-ink">Hak akses akun Gajihub</p>
+      <p className="mt-2 text-sm text-biru">
+        PPABP mengusulkan perubahan role; eksekusinya tetap di tangan Admin.
+      </p>
 
+      <h2 className="mt-6 text-sm font-bold uppercase tracking-wide text-muted">Ajukan usulan</h2>
       <UsulkanPerubahanRoleForm userList={userList} />
 
-      <div className="mt-6 space-y-3">
-        {usulanList.length === 0 && <p className="card p-6 text-sm text-muted">Belum ada usulan perubahan role.</p>}
+      <h2 className="mt-8 text-sm font-bold uppercase tracking-wide text-muted">
+        Riwayat usulan (<span className="font-mono">{usulanList.length}</span>)
+      </h2>
+      <div className="mt-2 space-y-3">
+        {usulanList.length === 0 && (
+          <p className="card p-6 text-sm text-muted">
+            Belum ada usulan perubahan role. Usulan yang diajukan lewat form di atas muncul di sini sampai Admin
+            mengeksekusi atau menolaknya.
+          </p>
+        )}
         {usulanList.map((u) => (
           <div key={u.id} className="card p-4">
             <div className="flex items-start justify-between gap-3">

@@ -6,6 +6,7 @@ import { AksesDitolak } from "../../AksesDitolak";
 import { UploadRekeningForm } from "./UploadRekeningForm";
 import { PencarianDebounce } from "../../PencarianDebounce";
 import { HALAMAN } from "../../layoutHalaman";
+import { REKENING_GAJI_DITERIMA } from "../../../business-logic/rekeningPegawai";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function RekeningPage({
     return <AksesDitolak pesan="Role kamu tidak berwenang mengelola data rekening pegawai." />;
   }
 
-  const jenisAktif = jenis === "GAJI" ? "GAJI" : "TUKIN";
+  const jenisAktif = jenis === "GAJI" && REKENING_GAJI_DITERIMA ? "GAJI" : "TUKIN";
   const where = {
     jenisPembayaran: jenisAktif,
     ...(q?.trim()
@@ -41,7 +42,7 @@ export default async function RekeningPage({
       : {}),
   };
 
-  const [perBank, jumlah, list, totalPegawai] = await Promise.all([
+  const [perKodeNama, jumlah, list, totalPegawai] = await Promise.all([
     prisma.rekeningPegawai.groupBy({
       by: ["kodeBankSpan", "namaBank"],
       where: { jenisPembayaran: jenisAktif },
@@ -58,13 +59,41 @@ export default async function RekeningPage({
     prisma.pegawai.count(),
   ]);
 
+  // Dikelompokkan per KODE bank, bukan per pasangan kode + nama. Satu kode
+  // bisa tersimpan dengan beberapa penulisan nama (baris lama yang masuk
+  // sebelum nama bank dibakukan) - dikelompokkan per pasangan, BRI tampil dua
+  // baris dengan angka terbelah. Nama yang ditampilkan adalah penulisan
+  // terbanyak; penulisan lain DISEBUT, karena itu tanda ada baris yang belum
+  // dirapikan.
+  const perBank = [
+    ...perKodeNama
+      .reduce((peta, b) => {
+        const ada = peta.get(b.kodeBankSpan) ?? { kodeBankSpan: b.kodeBankSpan, nama: [] as { nama: string; jumlah: number }[], jumlah: 0 };
+        ada.nama.push({ nama: b.namaBank, jumlah: b._count._all });
+        ada.jumlah += b._count._all;
+        return peta.set(b.kodeBankSpan, ada);
+      }, new Map<string, { kodeBankSpan: string; nama: { nama: string; jumlah: number }[]; jumlah: number }>())
+      .values(),
+  ]
+    .map((b) => {
+      const urut = [...b.nama].sort((x, y) => y.jumlah - x.jumlah);
+      return { kodeBankSpan: b.kodeBankSpan, namaBank: urut[0].nama, namaLain: urut.slice(1), jumlah: b.jumlah };
+    })
+    .sort((a, b) => b.jumlah - a.jumlah);
+
   return (
     <main className={HALAMAN}>
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Rekening Pegawai</h1>
+      {/* Kepala halaman berpola sama dengan Presensi & Predikat Kinerja. */}
+      <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">Rekening Pegawai</h1>
+      <p className="mt-0.5 text-sm font-bold text-ink">
+        {REKENING_GAJI_DITERIMA ? "Rekening penerima Tunjangan Kinerja & Gaji" : "Rekening penerima Tunjangan Kinerja"}
+      </p>
+      <p className="mt-2 text-sm text-biru">
+        Kelola rekening tujuan transfer yang dibutuhkan Web Gaji untuk memproses pembayaran.
+      </p>
       <p className="mt-1 text-sm text-muted">
-        Rekening penerima pembayaran, dibutuhkan Web Gaji untuk memproses pembayaran. Disimpan{" "}
-        <strong>terpisah per jenis</strong> - sudah dibuktikan dari data asli bahwa tukin dan gaji lewat bank yang
-        berbeda, dan tidak ada satu pun rekening yang sama.
+        Disimpan <strong className="text-ink">terpisah per jenis</strong> - tukin dan gaji lewat rekening yang berbeda.
+        {!REKENING_GAJI_DITERIMA && " Rekening gaji menyusul setelah Gajihub terinterkoneksi."}
       </p>
 
       <UploadRekeningForm />
@@ -72,7 +101,7 @@ export default async function RekeningPage({
       <div className="card mt-6 p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-muted">Sebaran bank per jenis pembayaran</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {(["TUKIN", "GAJI"] as const).map((j) => (
+          {(REKENING_GAJI_DITERIMA ? (["TUKIN", "GAJI"] as const) : (["TUKIN"] as const)).map((j) => (
             <Link
               key={j}
               href={`/ppabp/rekening?jenis=${j}`}
@@ -92,13 +121,26 @@ export default async function RekeningPage({
             {perBank.map((b) => (
               <li key={b.kodeBankSpan}>
                 {b.namaBank} <span className="font-mono text-xs text-muted">({b.kodeBankSpan})</span>:{" "}
-                <span className="font-semibold text-ink">{b._count._all} pegawai</span>
+                <span className="font-semibold text-ink">
+                  <span className="font-mono">{b.jumlah}</span> pegawai
+                </span>
+                {b.namaLain.length > 0 && (
+                  // Kode & nama bank yang tidak sepakat menentukan BERKAS mana
+                  // rekeningnya masuk (ADK dipisah per kode), jadi ini warning,
+                  // bukan catatan ejaan.
+                  <span className="mt-0.5 block border-l-2 border-gold pl-2 text-xs text-gold-deep">
+                    Kode dan nama bank tidak sepakat:{" "}
+                    {b.namaLain.map((n) => `${n.jumlah} baris bernama "${n.nama}"`).join(", ")}. Di Export ADK
+                    baris itu ikut berkas kode {b.kodeBankSpan}. Unggah ulang berkas rekening unitnya - perapian
+                    sekarang menetapkan kode mengikuti panjang nomor rekening.
+                  </span>
+                )}
               </li>
             ))}
           </ul>
         )}
         <p className="mt-2 text-xs text-muted">
-          Total {perBank.reduce((a, b) => a + b._count._all, 0)} dari {totalPegawai} pegawai punya rekening {jenisAktif}.
+          Total {perBank.reduce((a, b) => a + b.jumlah, 0)} dari {totalPegawai} pegawai punya rekening {jenisAktif}.
         </p>
       </div>
 

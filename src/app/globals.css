@@ -210,18 +210,19 @@
 }
 
 /* ===========================================================================
-   TEMA PALET 2026 - UJI COBA DI SATU HALAMAN (dashboard PPABP)
+   TEMA PALET 2026 - UJI COBA DI DUA HALAMAN (dashboard PPABP & Kasubag TU)
    ===========================================================================
    Permintaan user 2026-10-22: palet baru (primer #123B5D / #3473A7 / #F6F6F6,
-   aksen #FFD52E / #FFCD5F / #9BC264 / #00BFA6 / #FFFFFF) dicoba di SATU
-   halaman dulu sebelum dipakai seluruh aplikasi.
+   aksen #FFD52E / #FFCD5F / #9BC264 / #00BFA6 / #FFFFFF) dicoba di DUA
+   halaman dulu - /ppabp dan /kasubag - sebelum dipakai seluruh aplikasi.
 
    CARANYA: blok ini MENIMPA variabel token di dalam pembungkus
    `[data-tema="palet-2026"]`. Tailwind v4 membaca token lewat var(), jadi
    setiap kelas di dalam pembungkus ikut berganti tanpa satu komponen pun
    disentuh. Yang di luar pembungkus - sidebar, halaman lain, dan dashboard
-   Pimpinan yang memakai komponen YANG SAMA - tetap memakai token lama.
-   Pembungkusnya dipasang di src/app/ppabp/page.tsx.
+   Pimpinan yang memakai komponen YANG SAMA dengan PPABP - tetap memakai token
+   lama. Pembungkusnya dipasang di src/app/ppabp/page.tsx dan
+   src/app/kasubag/page.tsx.
 
    MEMBAWANYA KE SELURUH APLIKASI nanti cukup memindahkan nilai di bawah ke
    @theme di atas, lalu mencabut atribut pembungkusnya.

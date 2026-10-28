@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { uploadRekeningAction, type UploadRekeningFormState } from "./actions";
 import { SearchableSelect } from "../../SearchableSelect";
+import { REKENING_GAJI_DITERIMA } from "../../../business-logic/rekeningPegawai";
 
 const INITIAL_STATE: UploadRekeningFormState = {};
 
@@ -14,25 +15,29 @@ export function UploadRekeningForm() {
     <div className="card mt-4 p-4">
       <h2 className="text-sm font-bold text-ink">Upload daftar rekening</h2>
       <p className="mt-1 text-sm text-muted">
-        Untuk <strong>Tukin</strong>, file ADK tukin yang sudah kamu punya bisa dipakai langsung - kolom NIP, Kode Bank
-        SPAN, Nama Bank, Nomor Rekening, dan Nama Rekening di file itu sudah cukup. Untuk <strong>Gaji</strong>, pakai
-        file ADK gaji dari GPP.
+        File ADK tukin yang sudah kamu punya bisa dipakai langsung - kolom NIP, Kode Bank SPAN, Nama Bank, Nomor
+        Rekening, dan Nama Rekening di file itu sudah cukup.
+        {!REKENING_GAJI_DITERIMA && " Rekening gaji menyusul setelah Gajihub terinterkoneksi."}
       </p>
 
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="field-label">Jenis pembayaran</label>
-          <SearchableSelect
-            name="jenisPembayaran"
-            className="w-44"
-            options={[
-              { value: "TUKIN", label: "Tunjangan Kinerja" },
-              { value: "GAJI", label: "Gaji" },
-            ]}
-            defaultValue="TUKIN"
-            required
-          />
-        </div>
+        {REKENING_GAJI_DITERIMA ? (
+          <div>
+            <label className="field-label">Jenis pembayaran</label>
+            <SearchableSelect
+              name="jenisPembayaran"
+              className="w-44"
+              options={[
+                { value: "TUKIN", label: "Tunjangan Kinerja" },
+                { value: "GAJI", label: "Gaji" },
+              ]}
+              defaultValue="TUKIN"
+              required
+            />
+          </div>
+        ) : (
+          <input type="hidden" name="jenisPembayaran" value="TUKIN" />
+        )}
         <div className="min-w-[240px] flex-1">
           <label className="field-label">File daftar rekening</label>
           <input
@@ -65,6 +70,28 @@ export function UploadRekeningForm() {
                 {b.namaBank} <span className="font-mono text-xs text-muted">({b.kodeBankSpan})</span>:{" "}
                 <span className="font-semibold">{b.jumlah} pegawai</span>
               </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {state.perluDiperiksa && (
+        <div className="mt-3 border-l-4 border-gold bg-gold-tint px-3 py-2">
+          <p className="text-xs font-bold uppercase tracking-wide text-gold-deep">Perlu diperiksa - tidak diubah sistem</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-4 text-sm text-ink-2">
+            {state.perluDiperiksa.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {state.dirapikan && (
+        <div className="mt-3 border-l-4 border-line px-3 py-2">
+          <p className="text-xs font-bold uppercase tracking-wide text-muted">Dirapikan otomatis</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-4 text-sm text-ink-2">
+            {state.dirapikan.map((p) => (
+              <li key={p}>{p}</li>
             ))}
           </ul>
         </div>

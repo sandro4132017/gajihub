@@ -19,6 +19,7 @@ import { BantuanRincianTukin } from "./BantuanRincianTukin";
 import { SumberAcuan } from "../../SumberAcuan";
 import { ambilSumberData, keSumberAcuan } from "../../sumberData";
 import { periksaKesiapanKalkulasi } from "../../../business-logic/kesiapanKalkulasi";
+import { sebabPerluHitungUlang } from "../../../business-logic/kalkulasiBasi";
 import { KoreksiLemburForm } from "./KoreksiLemburForm";
 import { Paginasi, hitungPaginasi } from "../../Paginasi";
 import { BadgePejabatEselon } from "../../BadgePejabatEselon";
@@ -524,42 +525,13 @@ export default async function KalkulasiUnitPage({
   const perluHitungUlang = (p: (typeof pegawaiAktif)[number]): string | null => {
     const t = p.tukinCalc[0];
     if (!t) return null;
-    const sebab: string[] = [];
-
-    // SUMBER YANG HILANG DICEK LEBIH DULU, dan ini bukan kelengkapan.
-    //
-    // Versi pertama cuma membandingkan CAP WAKTU baris yang masih ada. Kalau
-    // predikatnya DIHAPUS, `p.predikatKinerja[0]` jadi undefined - tidak ada
-    // yang dibandingkan, jadi tidak ada sebab yang dilaporkan, sementara
-    // baris Tukin-nya tetap berdiri dengan angka hasil hitungan dari predikat
-    // yang sudah tidak ada.
-    //
-    // Terjadi betulan 2026-09-02: predikat CHAERUNNISA dihapus, Tukin-nya
-    // Rp 2.415.155 tetap tersimpan, dan yang muncul di layar cuma "presensi
-    // berubah" - sebab yang benar tidak pernah disebut.
-    if (p.predikatKinerja.length === 0) sebab.push("predikat kinerja dihapus");
-    if (p.rekapPresensi.length === 0) sebab.push("rekap presensi dihapus");
-
-    if (p.rekapPresensi[0] && p.rekapPresensi[0].diunggahPada > t.calculatedAt)
-      sebab.push("presensi berubah");
-    if (
-      p.predikatKinerja[0] &&
-      p.predikatKinerja[0].sourceSyncedAt > t.calculatedAt
-    )
-      sebab.push("predikat kinerja berubah");
-
-    // DATA KEPEGAWAIAN - ditambahkan 2026-09-24, dan sebelumnya memang tidak
-    // ada. Kelas jabatan menentukan SELURUH tarif tukin pokok, jadi kelas
-    // yang bergeser setelah kalkulasi membuat angka tersimpan salah tanpa
-    // satu pun kolom lain ikut berubah.
-    //
-    // Sumbernya daftar perubahan, BUKAN `Pegawai.sourceSyncedAt`: kolom itu
-    // distempel ulang pada setiap baris di tiap sinkronisasi, berubah atau
-    // tidak. Begitu sync dijadwalkan harian, membandingkannya dengan
-    // calculatedAt akan menyalakan peringatan untuk seluruh roster setiap
-    // hari - dan peringatan yang selalu menyala berhenti dibaca.
-    const perubahanData = petaPerubahanTerbaru.get(p.nip);
-    if (perubahanData && perubahanData > t.calculatedAt) sebab.push("data kepegawaian berubah");
+    // Aturan & alasannya ada di business-logic/kalkulasiBasi.ts.
+    const sebab = sebabPerluHitungUlang({
+      calculatedAt: t.calculatedAt,
+      rekapDiunggahPada: p.rekapPresensi[0]?.diunggahPada ?? null,
+      predikatSyncedAt: p.predikatKinerja[0]?.sourceSyncedAt ?? null,
+      perubahanDataTerakhir: petaPerubahanTerbaru.get(p.nip) ?? null,
+    });
 
     return sebab.length > 0 ? sebab.join(" & ") : null;
   };

@@ -224,6 +224,43 @@ describe("asalPublik", () => {
       delete process.env.TEST_NETWORK_MODE;
     }
   });
+
+  it("mode INTERNAL lewat proxy Pusdatik TANPA X-Forwarded-Proto: domain tetap https, bukan http (mixed content)", () => {
+    // Kasus nyata 2026-10-26: browser membuka https://gajihub.kemnaker.go.id,
+    // proxy meneruskan ke VPS sebagai http tanpa X-Forwarded-Proto, dan
+    // pengalihan /login -> /ppabp menunjuk ke http://... yang diblokir browser.
+    process.env.TEST_NETWORK_MODE = "INTERNAL";
+    try {
+      const h = new Headers({ host: "gajihub.kemnaker.go.id" });
+      expect(asalPublik(h, "http://gajihub.kemnaker.go.id/login")).toBe("https://gajihub.kemnaker.go.id");
+    } finally {
+      delete process.env.TEST_NETWORK_MODE;
+    }
+  });
+
+  it("X-Forwarded-Proto tetap menang atas tebakan https", () => {
+    process.env.TEST_NETWORK_MODE = "INTERNAL";
+    try {
+      const h = new Headers({ host: "gajihub.kemnaker.go.id", "x-forwarded-proto": "http" });
+      expect(asalPublik(h, "http://gajihub.kemnaker.go.id/login")).toBe("http://gajihub.kemnaker.go.id");
+    } finally {
+      delete process.env.TEST_NETWORK_MODE;
+    }
+  });
+
+  it("akses IP langsung & rokeubmn tetap http - memang dilayani tanpa TLS", () => {
+    process.env.TEST_NETWORK_MODE = "INTERNAL";
+    try {
+      expect(asalPublik(new Headers({ host: "192.168.221.44:3002" }), "http://192.168.221.44:3002/login")).toBe(
+        "http://192.168.221.44:3002"
+      );
+      expect(asalPublik(new Headers({ host: "gajihub.rokeubmn.id" }), "http://gajihub.rokeubmn.id/login")).toBe(
+        "http://gajihub.rokeubmn.id"
+      );
+    } finally {
+      delete process.env.TEST_NETWORK_MODE;
+    }
+  });
 });
 
 describe("ringkasFieldInfo - bentuk field", () => {

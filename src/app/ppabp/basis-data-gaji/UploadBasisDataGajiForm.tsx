@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { uploadBasisDataGajiAction, type UploadBasisDataGajiFormState } from "./actions";
+import { REKENING_GAJI_DITERIMA } from "../../../business-logic/rekeningPegawai";
 
 const INITIAL_STATE: UploadBasisDataGajiFormState = {};
 
@@ -43,7 +44,7 @@ export function UploadBasisDataGajiForm() {
           <Tile label="Baris terbaca" nilai={r.dibaca} />
           <Tile label="Identitas tersimpan" nilai={r.identitasTersimpan} />
           <Tile label="Rekening Tukin" nilai={r.rekeningTukin} />
-          <Tile label="Rekening Gaji" nilai={r.rekeningGaji} />
+          {REKENING_GAJI_DITERIMA && <Tile label="Rekening Gaji" nilai={r.rekeningGaji} />}
         </div>
       )}
 

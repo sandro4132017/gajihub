@@ -26,6 +26,14 @@ import { rapikanRekening, type MasalahRekening } from "./bankSpan";
 
 export type JenisPembayaran = "TUKIN" | "GAJI";
 
+/**
+ * Rekening GAJI BELUM DITERIMA (keputusan user 2026-10-27): rekening gaji
+ * menyusul begitu Gajihub sudah terinterkoneksi. Sampai saat itu tidak ada
+ * jalur unggah yang menulis rekening GAJI, dan tampilannya disembunyikan.
+ * Tipe & kolomnya sengaja dibiarkan supaya membukanya cukup mengubah ini.
+ */
+export const REKENING_GAJI_DITERIMA = false;
+
 export interface BarisRekening {
   nip: string;
   kodeBankSpan: string;
@@ -58,10 +66,31 @@ function teks(nilai: unknown): string | null {
   return s === "" ? null : s;
 }
 
-/** Cari indeks kolom dari kandidat nama header (case-insensitive, sebagian). */
+/**
+ * Judul kolom dibakukan: huruf kecil, garis bawah dibaca sebagai spasi.
+ * Ekspor aplikasi (mis. "nama_bank", "nama_rekening") dan ketikan manusia
+ * ("Nama Bank") menyebut kolom yang sama - tanpa ini, berkas ekspor ditolak
+ * dengan "Kolom wajib tidak ditemukan: Nama Bank" padahal kolomnya ada.
+ */
+function teksJudul(nilai: unknown): string | null {
+  return teks(nilai)?.toLowerCase().replace(/_+/g, " ").replace(/\s+/g, " ").trim() ?? null;
+}
+
+/**
+ * Cari indeks kolom dari kandidat nama header.
+ *
+ * Kecocokan PERSIS didahulukan atas kecocokan sebagian. "rekening" juga
+ * terkandung di "nama rekening"; tanpa urutan ini, berkas yang menaruh kolom
+ * Nama Rekening sebelum kolom Rekening akan mengisi nomor rekening dengan
+ * nama orang.
+ */
 function cariKolom(header: (string | null)[], ...kandidat: string[]): number {
   for (const kata of kandidat) {
-    const idx = header.findIndex((h) => h?.toLowerCase().includes(kata.toLowerCase()));
+    const idx = header.findIndex((h) => h === kata);
+    if (idx >= 0) return idx;
+  }
+  for (const kata of kandidat) {
+    const idx = header.findIndex((h) => h?.includes(kata));
     if (idx >= 0) return idx;
   }
   return -1;
@@ -75,7 +104,7 @@ function cariKolom(header: (string | null)[], ...kandidat: string[]): number {
  */
 export function parseRekeningPegawai(matriks: unknown[][]): HasilParseRekening {
   const idxHeader = matriks.findIndex((baris) => {
-    const sel = baris.map((s) => teks(s)?.toLowerCase() ?? "");
+    const sel = baris.map((s) => teksJudul(s) ?? "");
     return sel.some((s) => s === "nip") && sel.some((s) => s.includes("rekening"));
   });
   if (idxHeader < 0) {
@@ -87,10 +116,10 @@ export function parseRekeningPegawai(matriks: unknown[][]): HasilParseRekening {
     };
   }
 
-  const header = matriks[idxHeader].map((s) => teks(s));
-  const kolNip = header.findIndex((h) => h?.toLowerCase() === "nip");
+  const header = matriks[idxHeader].map((s) => teksJudul(s));
+  const kolNip = header.findIndex((h) => h === "nip");
   const kolKode = cariKolom(header, "kode bank span", "kdbankspan");
-  const kolNamaBank = cariKolom(header, "nama bank", "nmbankspan", "nm_bank");
+  const kolNamaBank = cariKolom(header, "nama bank", "nmbankspan", "nm bank");
   const kolRek = cariKolom(header, "nomor rekening", "rekening");
   const kolNamaRek = cariKolom(header, "nama rekening", "nmrek");
 
@@ -149,6 +178,79 @@ export function parseRekeningPegawai(matriks: unknown[][]): HasilParseRekening {
   }
 
   return { baris, dilewati, masalah };
+}
+
+export interface SheetRekening {
+  nama: string;
+  matriks: unknown[][];
+}
+
+export interface HasilParseRekeningBerkas extends HasilParseRekening {
+  /** Jumlah baris terbaca per sheet, termasuk sheet yang tidak berisi daftar rekening (0). */
+  perSheet: { nama: string; jumlah: number; dilewatiKarena?: string }[];
+}
+
+/**
+ * Parse SELURUH sheet sebuah berkas rekening, bukan cuma yang pertama.
+ *
+ * Berkas rekening lazim dipisah per jenis pegawai (sheet "PNS" dan "PPPK").
+ * Membaca sheet pertama saja membuat seluruh PPPK hilang tanpa satu pun
+ * peringatan - unggahan terlihat berhasil.
+ *
+ * - Sheet tanpa baris judul NIP + rekening (catatan, rekap) DILEWATI dan
+ *   disebut di `perSheet`, bukan menggagalkan berkasnya.
+ * - Sheet yang punya judul tapi kolom wajibnya kurang MENGGAGALKAN berkas:
+ *   itu daftar rekening yang rusak, dan menyimpan sebagian sheet saja lebih
+ *   berbahaya daripada menolak semuanya.
+ * - NIP yang muncul lebih dari sekali dengan rekening YANG SAMA disimpan
+ *   sekali. Dengan rekening BERBEDA, semua kemunculannya dilewati: dua tujuan
+ *   transfer untuk satu orang tidak boleh diputuskan oleh urutan baris.
+ */
+export function parseRekeningBerkas(sheets: SheetRekening[]): HasilParseRekeningBerkas {
+  const perSheet: HasilParseRekeningBerkas["perSheet"] = [];
+  const semua: BarisRekening[] = [];
+  const dilewati: BarisRekeningDilewati[] = [];
+  const masalah: MasalahRekening[] = [];
+
+  for (const sheet of sheets) {
+    const hasil = parseRekeningPegawai(sheet.matriks);
+    if (hasil.error) {
+      if (hasil.error.startsWith("Baris header tidak ketemu")) {
+        perSheet.push({ nama: sheet.nama, jumlah: 0, dilewatiKarena: "tidak ada kolom NIP & rekening" });
+        continue;
+      }
+      return { baris: [], dilewati: [], masalah: [], perSheet, error: `Sheet "${sheet.nama}": ${hasil.error}` };
+    }
+    perSheet.push({ nama: sheet.nama, jumlah: hasil.baris.length });
+    semua.push(...hasil.baris);
+    dilewati.push(...hasil.dilewati);
+    masalah.push(...hasil.masalah);
+  }
+
+  if (perSheet.every((s) => s.dilewatiKarena)) {
+    return {
+      baris: [],
+      dilewati: [],
+      masalah: [],
+      perSheet,
+      error: 'Baris header tidak ketemu di sheet mana pun - file harus punya kolom "NIP" dan kolom nomor rekening.',
+    };
+  }
+
+  const kunciRek = (b: BarisRekening) => `${b.kodeBankSpan}|${b.nomorRekening}`;
+  const perNip = new Map<string, BarisRekening[]>();
+  for (const b of semua) perNip.set(b.nip, [...(perNip.get(b.nip) ?? []), b]);
+
+  const baris: BarisRekening[] = [];
+  for (const [nip, daftar] of perNip) {
+    if (new Set(daftar.map(kunciRek)).size > 1) {
+      dilewati.push({ nomorBaris: 0, nip, alasan: "NIP muncul lebih dari sekali dengan rekening berbeda" });
+      continue;
+    }
+    baris.push(daftar[0]);
+  }
+
+  return { baris, dilewati, masalah, perSheet };
 }
 
 /**

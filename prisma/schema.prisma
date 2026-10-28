@@ -41,6 +41,16 @@ model Pegawai {
   unitKerja     String    @map("unit_kerja")
   satuanKerja   String    @map("satuan_kerja") // untuk filter per satker saat pilot
   statusPegawai String    @map("status_pegawai") // AKTIF, CUTI, MUTASI, PENSIUN, dst
+
+  /// Jenis kepegawaian dari SIAP (PEGAWAI.STATUSPEGAWAIID): '1' -> "CPNS",
+  /// '2' -> "PNS", '23' -> "PPPK". Data kepegawaian diambil dari SIAP;
+  /// basis data gaji Kemenkeu hanya untuk data gaji pokok (keputusan user
+  /// 2026-10-27).
+  ///
+  /// Null = belum pernah disinkronkan sejak kolom ini ada. Pegawai yang
+  /// kemudian tidak aktif menyimpan jenis terakhirnya (sinkronisasi hanya
+  /// mengisinya untuk pegawai aktif). Tidak ditebak dari format golongan.
+  jenisPegawai  String?   @map("jenis_pegawai")
   jabatan       String?
   golongan      String?
   // Dipakai buat lookup tukinPokokKelasJabatan (src/business-logic/tarifTukinPokok.ts).

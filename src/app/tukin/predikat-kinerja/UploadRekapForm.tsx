@@ -113,8 +113,7 @@ export function UploadRekapForm() {
         tempatnya: di balik lipatan, bukan memakan baris tetap di kartu yang
         justru ingin dibuat pendek.
 
-        Pakai <details> bawaan HTML supaya tetap jalan tanpa JavaScript, pola
-        yang sama dengan "Cara lain mengisi presensi" di /tukin/presensi.
+        Pakai <details> bawaan HTML supaya tetap jalan tanpa JavaScript.
       */}
       <details className="group mt-1.5">
         <summary className="cursor-pointer list-none text-xs font-semibold text-teal-deep underline underline-offset-2">

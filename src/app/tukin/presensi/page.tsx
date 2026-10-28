@@ -16,8 +16,6 @@ import { AksesDitolak } from "../../AksesDitolak";
 import { NAMA_BULAN, daftarTahunPeriode } from "../../bulan";
 import { SearchableSelect } from "../../SearchableSelect";
 import { periodePunyaRekapPresensi, resolvePeriode } from "../../periodeDefault";
-import { UploadPresensiForm } from "./UploadPresensiForm";
-import { UploadPresensiPdfForm } from "./UploadPresensiPdfForm";
 import { SinkronisasiPresensi } from "./SinkronisasiPresensi";
 import { ambilSumberData, keSumberAcuan } from "../../sumberData";
 import { PencarianDebounce } from "../../PencarianDebounce";
@@ -605,84 +603,6 @@ export default async function PresensiTukinPage({
         </div>
       )}
 
-      {/* ------------------------------------------------------------------
-          CARA CADANGAN - dipakai kalau jalur utama tidak bisa
-          ------------------------------------------------------------------ */}
-      <div className="mt-10 border-t border-line pt-5">
-        <p className="text-sm font-bold text-ink">Cara lain mengisi presensi</p>
-        <p className="mt-0.5 text-xs text-muted">
-          Keduanya <strong>cadangan</strong>, jarang dipakai. Selama panel Sinkronisasi di atas berhasil menarik data,
-          tidak perlu membuka bagian ini.
-        </p>
-
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm font-semibold text-teal-deep">
-            Upload PDF &quot;Laporan Detail Presensi Harian&quot; dari e-Presensi
-          </summary>
-          <div className="card mt-2 border-l-4 border-l-line p-4">
-            <p className="text-sm font-bold text-ink">Kapan ini dipakai?</p>
-            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-muted">
-              <li>
-                <strong>Server e-Presensi tidak terjangkau</strong> dari mesin ini (jaringan/VPN bermasalah, atau
-                aplikasinya dijalankan di luar jaringan kantor) - PDF-nya masih bisa diunduh sendiri lewat web
-                e-Presensi lalu diunggah ke sini.
-              </li>
-              <li>
-                <strong>Perlu satu-dua pegawai saja</strong>, bukan satu periode penuh - mis. memeriksa ulang satu
-                orang tanpa menarik ribuan baris.
-              </li>
-              <li>
-                <strong>Isinya sama</strong> dengan tarikan langsung: PDF diubah jadi rekap lewat aturan Pasal 13 yang{" "}
-                <em>sama persis</em>, jadi angkanya tidak bisa berbeda dari jalur sinkronisasi.
-              </li>
-            </ul>
-            <p className="mt-2 text-xs text-muted">
-              Periode diambil dari ISI berkas, jadi satu unggahan boleh berisi beberapa periode sekaligus.
-            </p>
-          </div>
-          <UploadPresensiPdfForm />
-        </details>
-
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm font-semibold text-teal-deep">
-            Isi template Excel sendiri (buat koreksi angka yang tidak ada di e-Presensi)
-          </summary>
-          <div className="card mt-2 border-l-4 border-l-line p-4">
-            <p className="text-sm text-muted">
-              Dipakai buat angka yang <strong>memang tidak tercatat di e-Presensi</strong> - menit meninggalkan kantor
-              dan jumlah tidak ikut upacara. Keduanya selalu 0 lewat jalur sinkronisasi maupun PDF, karena datanya tidak
-              ada di sumber manapun.
-            </p>
-          </div>
-          <UploadPresensiForm defaultBulan={periodeBulan} defaultTahun={periodeTahun} />
-
-          <div className="card mt-4 border-l-4 border-l-gold p-4">
-            <p className="text-sm font-bold text-ink">Aturan pengisian kolom lembur</p>
-            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-muted">
-              <li>
-                <strong>Hari WFH/WFA tidak dihitung lembur</strong> - walau jam absen keluarnya melewati jam kerja. Jam
-                lembur yang diisi harus sudah mengecualikan hari-hari itu.
-              </li>
-              <li>
-                <strong>Di hari kerja, lembur dihitung sejak jam kerja berakhir</strong> - pukul 16.00 (Jumat 16.30),
-                tanpa jeda. Pulang pukul 20.00 berarti 4 jam lembur; jam 16.00-17.00 sudah ikut terhitung. Pegawai yang
-                pulang tepat pukul 16.00 mendapat 0 jam lembur. Di hari libur tidak ada jam pulang wajib - dihitung
-                penuh sejak jam masuk.
-              </li>
-              <li>
-                <strong>Jam lembur hari libur / tanggal merah diisi di kolom terpisah</strong> - tarifnya dibayar 2x
-                tarif per jam biasa.
-              </li>
-              <li>
-                <strong>Hari makan lembur</strong> = jumlah hari yang lemburnya mencapai 2 jam{" "}
-                <em>berturut-turut</em> (SBM 2026 hal. 51, penjelasan item 23.2), paling banyak 1 kali per hari. Lembur
-                1 jam pagi + 1 jam sore TIDAK memenuhi syarat walau totalnya 2 jam. <strong>Diukur dari jam pulang
-                wajib</strong> - pulang pukul 17.00 berarti 1 jam lembur dan belum berhak; berhak mulai pukul 18.00.
-              </li>
-            </ul>
-          </div>
-        </details>
-      </div>
     </main>
   );
 }

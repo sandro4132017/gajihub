@@ -20,6 +20,34 @@ function isAlamatLokal(host: string): boolean {
 }
 
 /**
+ * Protokol yang dipakai BROWSER untuk host ini.
+ *
+ * Urutannya: `X-Forwarded-Proto` kalau proxy mengirimnya; kalau tidak, host
+ * bernama domain tanpa port (bukan alamat lokal) dianggap HTTPS; sisanya
+ * protokol permintaan yang diterima server.
+ *
+ * KENAPA DOMAIN DIANGGAP HTTPS: proxy Pusdatik di depan
+ * gajihub.kemnaker.go.id menerima HTTPS dari browser, meneruskannya ke VPS
+ * sebagai HTTP, dan TIDAK mengirim `X-Forwarded-Proto`. Protokol permintaan
+ * yang dilihat server jadi "http:", lalu setiap pengalihan dari middleware
+ * menunjuk ke http://gajihub.kemnaker.go.id/... - yang diblokir browser
+ * sebagai mixed content. Alamat lokal (IP 192.168.x, localhost,
+ * *.rokeubmn.id) memang dilayani lewat HTTP, jadi tetap mengikuti
+ * permintaannya.
+ */
+function protokolUntuk(host: string, proto: string | undefined, asalPermintaan: string): string {
+  if (proto) return proto;
+  // Port eksplisit (mis. :8080) berarti diakses langsung, bukan lewat proxy
+  // TLS di 443 - protokolnya tidak ditebak.
+  if (!isAlamatLokal(host) && !host.includes(":")) return "https";
+  try {
+    return new URL(asalPermintaan).protocol.replace(/:$/, "");
+  } catch {
+    return "http";
+  }
+}
+
+/**
  * Alamat PUBLIK / INTERNAL aplikasi ini - yang dilihat browser, bukan yang dilihat server.
  *
  * Mengikuti toggle Mode Jaringan (`NETWORK_MODE` = "INTERNAL" | "PUBLIC"):
@@ -44,13 +72,7 @@ export function asalPublik(headers: Headers, asalPermintaan: string): string {
   // 2. Jika Mode Jaringan INTERNAL aktif ATAU host merupakan alamat lokal/intranet,
   // pertahankan alamat yang sedang diakses browser agar tidak terlempar ke domain publik yang mati.
   if (host && (isModeInternal() || isAlamatLokal(host))) {
-    if (proto) return `${proto}://${host}`;
-    try {
-      const reqProto = new URL(asalPermintaan).protocol;
-      return `${reqProto}//${host}`;
-    } catch {
-      return `http://${host}`;
-    }
+    return `${protokolUntuk(host, proto, asalPermintaan)}://${host}`;
   }
 
   // 3. Di server produksi di balik reverse proxy domain publik:
@@ -66,12 +88,7 @@ export function asalPublik(headers: Headers, asalPermintaan: string): string {
 
   // 4. Header dari proxy
   if (host) {
-    if (proto) return `${proto}://${host}`;
-    try {
-      return `${new URL(asalPermintaan).protocol}//${host}`;
-    } catch {
-      /* jatuh ke bawah */
-    }
+    return `${protokolUntuk(host, proto, asalPermintaan)}://${host}`;
   }
 
   // 5. Fallback terakhir ke URL asal permintaan

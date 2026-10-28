@@ -619,8 +619,8 @@ export function canKembalikanRekapUnit(user: AuthUser, targetSatuanKerja?: strin
 
 /**
  * Melihat papan progres pengiriman seluruh unit (siapa sudah kirim, siapa
- * belum). PPABP & PIMPINAN lintas unit; Kasubag TU melihatnya juga supaya
- * tahu posisi unitnya sendiri terhadap yang lain.
+ * belum). PPABP & PIMPINAN lintas unit. KASUBAG_TU TIDAK: scope-nya hanya
+ * unitnya sendiri (keputusan user 2026-10-28, mencabut keputusan 2026-09-02).
  *
  * Read-only murni - tidak ada aksi yang bergantung pada fungsi ini.
  */
@@ -629,7 +629,6 @@ export function canLihatProgresPengiriman(user: AuthUser): boolean {
     user.aktif &&
     (user.role === "PPABP" ||
       user.role === "PIMPINAN" ||
-      user.role === "KASUBAG_TU" ||
       user.role === "ADMIN")
   );
 }

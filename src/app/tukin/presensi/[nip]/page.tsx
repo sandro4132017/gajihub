@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
-import { canBukaHalamanPredikatKinerja, canUploadRekapPresensi, type AuthUser } from "../../../../auth/permissions";
+import {
+  canBukaHalamanPredikatKinerja,
+  canEditDataPegawai,
+  canUploadRekapPresensi,
+  type AuthUser,
+} from "../../../../auth/permissions";
 import { AksesDitolak } from "../../../AksesDitolak";
 import { NAMA_BULAN } from "../../../bulan";
 import { SearchableSelect } from "../../../SearchableSelect";
@@ -69,6 +74,106 @@ function SelJam({
   );
 }
 
+const formatTanggal = (tanggal: Date) =>
+  new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "long", year: "numeric" }).format(tanggal);
+
+/**
+ * Profil singkat pegawai di atas rincian presensi, supaya Kasubag TU yang
+ * membuka seseorang dari Pegawai Unit atau Kalkulasi langsung tahu siapa
+ * orangnya. Baca-saja; data diubah di /pegawai.
+ *
+ * SENGAJA TANPA rekening, status kawin, dan PTKP: data pribadi yang tidak
+ * dibutuhkan untuk memeriksa presensi.
+ */
+function ProfilPegawai({
+  pegawai,
+  hrefUbah,
+}: {
+  pegawai: {
+    jabatan: string | null;
+    golongan: string | null;
+    kelasJabatan: number | null;
+    unitKerja: string;
+    satuanKerja: string;
+    statusPegawai: string;
+    jenisKelamin: string | null;
+    tmtSkTerakhir: Date | null;
+    nomorSk: string | null;
+    tanggalSk: Date | null;
+    sourceSyncedAt: Date;
+  };
+  hrefUbah: string | null;
+}) {
+  const kosong = <span className="font-medium text-muted">-</span>;
+  const butir: { label: string; isi: React.ReactNode }[] = [
+    { label: "Jabatan", isi: pegawai.jabatan ?? kosong },
+    { label: "Golongan", isi: pegawai.golongan ? <span className="font-mono">{pegawai.golongan}</span> : kosong },
+    {
+      label: "Kelas jabatan",
+      isi:
+        pegawai.kelasJabatan !== null ? (
+          <span className="font-mono">{pegawai.kelasJabatan}</span>
+        ) : (
+          <span className="text-gold-deep">Belum diisi</span>
+        ),
+    },
+    {
+      label: "Status",
+      isi: (
+        <span className={`chip ${pegawai.statusPegawai === "AKTIF" ? "chip-ok" : "chip-wait"}`}>
+          {pegawai.statusPegawai}
+        </span>
+      ),
+    },
+    { label: "Unit kerja", isi: pegawai.unitKerja },
+    { label: "Satuan kerja", isi: pegawai.satuanKerja },
+    {
+      label: "Jenis kelamin",
+      isi: pegawai.jenisKelamin === "L" ? "Laki-laki" : pegawai.jenisKelamin === "P" ? "Perempuan" : kosong,
+    },
+    {
+      label: "TMT SK terakhir",
+      isi: pegawai.tmtSkTerakhir ? <span className="font-mono">{formatTanggal(pegawai.tmtSkTerakhir)}</span> : kosong,
+    },
+    {
+      label: "Nomor SK kelas jabatan",
+      isi: pegawai.nomorSk ? (
+        <span className="font-mono">
+          {pegawai.nomorSk}
+          {pegawai.tanggalSk && <span className="text-muted"> ({formatTanggal(pegawai.tanggalSk)})</span>}
+        </span>
+      ) : (
+        <span className="text-gold-deep">Belum diisi</span>
+      ),
+    },
+  ];
+
+  return (
+    <section className="card mt-4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-2 pb-3">
+        <p className="text-sm font-bold text-ink">Profil pegawai</p>
+        {hrefUbah && (
+          <Link href={hrefUbah} className="text-xs font-semibold text-biru underline-offset-4 hover:underline">
+            Ubah data
+          </Link>
+        )}
+      </div>
+      <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+        {butir.map((b) => (
+          <div key={b.label} className="min-w-0">
+            <dt className="text-[11px] font-bold uppercase tracking-wider text-muted">{b.label}</dt>
+            <dd className="mt-0.5 text-sm font-semibold text-ink">{b.isi}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3 text-xs text-muted">
+        Sumber SIAP, terakhir disinkronkan <span className="font-mono">{formatTanggal(pegawai.sourceSyncedAt)}</span>.
+        Nomor SK diisi petugas di Data Pegawai.
+      </p>
+    </section>
+  );
+}
+
 export default async function RincianPresensiPegawaiPage({
   params,
   searchParams,
@@ -97,7 +202,22 @@ export default async function RincianPresensiPegawaiPage({
 
   const pegawai = await prisma.pegawai.findUnique({
     where: { nip },
-    select: { id: true, nip: true, nama: true, satuanKerja: true, jabatan: true, golongan: true, kelasJabatan: true },
+    select: {
+      id: true,
+      nip: true,
+      nama: true,
+      satuanKerja: true,
+      unitKerja: true,
+      statusPegawai: true,
+      jenisKelamin: true,
+      jabatan: true,
+      golongan: true,
+      kelasJabatan: true,
+      tmtSkTerakhir: true,
+      nomorSk: true,
+      tanggalSk: true,
+      sourceSyncedAt: true,
+    },
   });
   if (!pegawai) {
     return <AksesDitolak pesan={`Pegawai dengan NIP ${nip} tidak ditemukan.`} />;
@@ -237,7 +357,12 @@ export default async function RincianPresensiPegawaiPage({
   });
 
   const asal =
-    dari === "kalkulasi"
+    dari === "pegawai"
+      ? {
+          label: "Kembali ke Pegawai Unit",
+          href: `/kasubag/pegawai?satker=${encodeURIComponent(satker ?? pegawai.satuanKerja)}`,
+        }
+      : dari === "kalkulasi"
       ? {
           label: "Kembali ke Kalkulasi Unit",
           href:
@@ -302,10 +427,13 @@ export default async function RincianPresensiPegawaiPage({
         <h1 className="text-xl font-extrabold tracking-tight text-ink">{pegawai.nama}</h1>
         <BadgePejabatEselon kelasJabatan={pegawai.kelasJabatan} />
       </div>
-      <p className="mt-1 text-sm text-muted">
-        <span className="font-mono">{pegawai.nip}</span> - {pegawai.jabatan} - {pegawai.satuanKerja} - Golongan{" "}
-        {pegawai.golongan}
-      </p>
+      <p className="mt-1 font-mono text-sm text-muted">{pegawai.nip}</p>
+
+      <ProfilPegawai
+        pegawai={pegawai}
+        hrefUbah={canEditDataPegawai(authUser, pegawai.satuanKerja) ? `/pegawai?pegawaiId=${pegawai.id}` : null}
+      />
+
       <p className="mt-1 text-sm text-ink-2">
         Rincian presensi{" "}
         <strong>

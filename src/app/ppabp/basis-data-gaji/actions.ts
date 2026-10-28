@@ -13,6 +13,7 @@ import {
   ringkasMasalahBasisDataGaji,
   type BarisBasisDataGaji,
 } from "../../../business-logic/basisDataGaji";
+import { REKENING_GAJI_DITERIMA } from "../../../business-logic/rekeningPegawai";
 
 /**
  * Unggah "basis data gaji Kemnaker" - berkas identitas pembayaran dari Web
@@ -171,9 +172,11 @@ export async function uploadBasisDataGajiAction(
             },
           }),
         ];
+        // Blok GAJI dilewati selama rekening gaji belum diterima - lihat
+        // REKENING_GAJI_DITERIMA.
         for (const [jenis, rek] of [
           ["TUKIN", b.tukin],
-          ["GAJI", b.gaji],
+          ["GAJI", REKENING_GAJI_DITERIMA ? b.gaji : null],
         ] as const) {
           if (!rek) continue;
           if (jenis === "TUKIN") rekeningTukin++;

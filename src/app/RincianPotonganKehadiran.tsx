@@ -10,29 +10,63 @@ const persen = (pecahan: number, desimal = 2) =>
   new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: desimal }).format(pecahan * 100) +
   "%";
 
+/** Lebar panel tanggal (px) - dipakai menjepit posisinya di dalam layar. */
+const LEBAR_PANEL = 260;
+
+/**
+ * Panel daftar tanggal kejadian.
+ *
+ * `position: fixed`, BUKAN `absolute`: ikonnya ada di dalam tabel yang
+ * dibungkus `overflow-x: auto`. Panel `absolute` ikut dihitung sebagai isi
+ * wadah gulir itu, jadi begitu terbuka area gulirnya melebar dan tabelnya
+ * bergeser. Panel `fixed` berada di luar alur tata letak - tabel tidak
+ * berubah ukuran sama sekali. Posisinya dihitung dari letak tombol saat
+ * dibuka, dan panel ditutup saat halaman digulir atau ukuran jendela berubah
+ * supaya tidak tertinggal di tempat yang salah.
+ */
 function InfoTanggalPopover({ tanggalList }: { tanggalList: string[] }) {
-  const [buka, setBuka] = useState(false);
+  const [posisi, setPosisi] = useState<{ top: number; left: number } | null>(null);
+  const buka = posisi !== null;
   const popoverRef = useRef<HTMLDivElement>(null);
+  const tombolRef = useRef<HTMLButtonElement>(null);
+
+  function alihkan() {
+    if (buka) {
+      setPosisi(null);
+      return;
+    }
+    const r = tombolRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const tengah = r.left + r.width / 2 - LEBAR_PANEL / 2;
+    const left = Math.min(Math.max(8, tengah), window.innerWidth - LEBAR_PANEL - 8);
+    setPosisi({ top: r.bottom + 6, left });
+  }
 
   useEffect(() => {
+    if (!buka) return;
     function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setBuka(false);
-      }
+      const t = event.target as Node;
+      if (!popoverRef.current?.contains(t) && !tombolRef.current?.contains(t)) setPosisi(null);
     }
-    if (buka) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
+    const tutup = () => setPosisi(null);
+    document.addEventListener("mousedown", handleClickOutside);
+    // capture: gulir di wadah tabel (bukan cuma jendela) juga harus menutup.
+    window.addEventListener("scroll", tutup, true);
+    window.addEventListener("resize", tutup);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", tutup, true);
+      window.removeEventListener("resize", tutup);
     };
   }, [buka]);
 
   return (
-    <div className="relative inline-flex items-center ml-1.5 align-middle" ref={popoverRef}>
+    <div className="relative inline-flex items-center ml-1.5 align-middle">
       <button
+        ref={tombolRef}
         type="button"
-        onClick={() => setBuka((prev) => !prev)}
+        aria-expanded={buka}
+        onClick={alihkan}
         className="inline-flex size-4 items-center justify-center rounded-full text-teal-deep hover:bg-teal-tint/70 transition-colors focus:outline-none"
         title="Klik untuk melihat rincian tanggal kejadian"
         aria-label="Lihat rincian tanggal kejadian"
@@ -46,13 +80,17 @@ function InfoTanggalPopover({ tanggalList }: { tanggalList: string[] }) {
         </svg>
       </button>
 
-      {buka && (
-        <div className="absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 rounded-xl border border-line bg-surface p-3 shadow-xl ring-1 ring-black/5 whitespace-normal min-w-[220px] max-w-xs text-left">
+      {posisi && (
+        <div
+          ref={popoverRef}
+          style={{ top: posisi.top, left: posisi.left, width: LEBAR_PANEL }}
+          className="fixed z-50 rounded-xl border border-line bg-surface p-3 shadow-xl ring-1 ring-black/5 whitespace-normal text-left"
+        >
           <div className="flex items-center justify-between pb-1.5 border-b border-line">
             <p className="text-xs font-bold text-ink">Tanggal Kejadian</p>
             <button
               type="button"
-              onClick={() => setBuka(false)}
+              onClick={() => setPosisi(null)}
               className="text-muted hover:text-ink text-xs font-semibold px-1"
               aria-label="Tutup"
             >
