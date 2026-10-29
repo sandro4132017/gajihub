@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { uploadRekeningAction, type UploadRekeningFormState } from "./actions";
-import { SearchableSelect } from "../../SearchableSelect";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 import { REKENING_GAJI_DITERIMA } from "../../../business-logic/rekeningPegawai";
 
 const INITIAL_STATE: UploadRekeningFormState = {};

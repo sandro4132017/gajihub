@@ -8,7 +8,7 @@ import { buatSpesimenQr, ambilTemplateSpesimen } from "@/lib/tte/spesimenTte";
 import { prisma } from "@/lib/prisma";
 import { ambilUserSesi } from "@/auth/getSessionAccount";
 import {
-  canLihatSatker,
+  canLihatDokumenSptjm,
   canTandatanganiSptjmUnit,
   type AuthUser,
 } from "@/auth/permissions";
@@ -23,6 +23,13 @@ import {
 import { idDokumenSimulasi } from "@/lib/tte/simulasiTte";
 import { namaCetakPegawai } from "@/business-logic/namaPegawai";
 import { kunciSidikNik, sidikNik } from "@/auth/sidikNik";
+import {
+  folderPeriode,
+  jalurAman,
+  kunciDraftTte,
+  kunciPratinjauTte,
+  kunciSignedTte,
+} from "@/lib/storage/berkasPrivat";
 import fs from "fs/promises";
 import path from "path";
 
@@ -38,10 +45,25 @@ export interface TteActionResult {
   isSimulasi?: boolean;
 }
 
-const STORAGE_DIR = path.join(process.cwd(), "public", "uploads", "tte");
+/**
+ * Menulis berkas TTE ke penyimpanan privat pada `kunci` (`tte/<unit>/<periode>/...`).
+ * Jalur diturunkan lewat resolver yang sama dengan pembaca, jadi tidak mungkin
+ * menulis di luar folder `tte/`.
+ */
+async function tulisBerkasTte(kunci: string, isi: Uint8Array): Promise<void> {
+  const jalur = jalurAman(kunci, "tte");
+  if (!jalur) throw new Error("Lokasi penyimpanan berkas TTE tidak sah.");
+  await fs.mkdir(path.dirname(jalur), { recursive: true });
+  await fs.writeFile(jalur, isi);
+}
 
-async function pastikanDirektoriStorage() {
-  await fs.mkdir(STORAGE_DIR, { recursive: true });
+function periodeSah(bulan: number, tahun: number): boolean {
+  try {
+    folderPeriode(tahun, bulan);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -167,10 +189,14 @@ export async function buatDraftSptjmAction(params: {
     aktif: user.aktif,
   };
   // Draft-nya MEMUAT AGREGASI NOMINAL unit itu, jadi gerbangnya izin MELIHAT
-  // unit - bukan izin menandatangani. PPABP memang lintas unit; KASUBAG_TU
-  // terkunci ke unitnya sendiri.
-  if (!canLihatSatker(authUserDraft, satker)) {
-    return { error: "Kamu tidak berwenang melihat data satuan kerja ini." };
+  // dokumen SPTJM unit - bukan izin menandatangani, dan bukan sekadar "satu
+  // unit" (`canLihatSatker` tidak memeriksa role, jadi PEGAWAI se-unit lolos).
+  // Kasubag TU unit itu, PPABP, dan ADMIN.
+  if (!canLihatDokumenSptjm(authUserDraft, satker)) {
+    return { error: "Kamu tidak berwenang melihat dokumen SPTJM satuan kerja ini." };
+  }
+  if (!periodeSah(Number(params.bulan), Number(params.tahun))) {
+    return { error: "Periode tidak sah." };
   }
 
   const pegawaiDraft = await prisma.pegawai.findUnique({
@@ -181,8 +207,6 @@ export async function buatDraftSptjmAction(params: {
     params.nomorDokumen || generateNomorSptjmDefault(params.jenis, params.bulan, params.tahun);
 
   try {
-    await pastikanDirektoriStorage();
-
     const pdfBuffer = await generateDraftSptjm({
       jenis: params.jenis,
       nomorDokumen,
@@ -207,13 +231,24 @@ export async function buatDraftSptjmAction(params: {
       params.tahun,
       satker
     );
-    const tempFileName = `Draft - ${namaResmi}`;
-    const tempFilePath = path.join(STORAGE_DIR, tempFileName);
-    await fs.writeFile(tempFilePath, pdfBuffer);
+    await tulisBerkasTte(
+      kunciPratinjauTte(satker, params.tahun, params.bulan, namaResmi),
+      pdfBuffer
+    );
+
+    // Pratinjau tidak punya baris di database, jadi rutenya menghitung ulang
+    // letak berkas dari parameter ini (bukan dari nama berkas di URL).
+    const q = new URLSearchParams({
+      jenis: params.jenis,
+      bulan: String(params.bulan),
+      tahun: String(params.tahun),
+      satker,
+      t: String(Date.now()),
+    });
 
     return {
       success: true,
-      downloadUrl: `/uploads/tte/${encodeURIComponent(tempFileName)}?t=${Date.now()}`,
+      downloadUrl: `/berkas/tte-pratinjau?${q.toString()}`,
       nomorDokumen,
     };
   } catch (err: any) {
@@ -225,14 +260,6 @@ export interface HapusDraftSptjmResult {
   success?: boolean;
   error?: string;
   pesan?: string;
-}
-
-/** `/uploads/tte/nama%20berkas.pdf?v=abc` -> jalur di disk. */
-function jalurDiskDariUrl(urlPublik: string): string {
-  const tanpaQuery = urlPublik.split("?")[0];
-  let relatif = decodeURIComponent(tanpaQuery);
-  while (relatif.startsWith("/")) relatif = relatif.slice(1);
-  return path.join(process.cwd(), "public", relatif);
 }
 
 /**
@@ -277,7 +304,7 @@ export async function hapusDraftSptjmAction(params: {
 
   const bulan = Number(params.bulan);
   const tahun = Number(params.tahun);
-  if (!Number.isInteger(bulan) || bulan < 1 || bulan > 12 || !Number.isInteger(tahun)) {
+  if (!periodeSah(bulan, tahun)) {
     return { error: "Periode tidak sah." };
   }
 
@@ -345,11 +372,18 @@ export async function hapusDraftSptjmAction(params: {
   const kandidat = baris.map((b) => b.fileDraftPath).filter((v): v is string => Boolean(v));
   // Berkas pratinjau tidak punya baris di database - namanya diturunkan dari
   // periode & unit, jadi dicari langsung.
-  const namaPratinjau = `Draft - ${generateNamaFileSptjm(params.jenis, bulan, tahun, satker)}`;
-  for (const jalur of [
-    ...kandidat.map(jalurDiskDariUrl),
-    path.join(STORAGE_DIR, namaPratinjau),
-  ]) {
+  const jalurHapus = kandidat
+    .map((k) => jalurAman(k, "tte"))
+    .filter((j): j is string => j !== null);
+  const kunciPratinjau = kunciPratinjauTte(
+    satker,
+    tahun,
+    bulan,
+    generateNamaFileSptjm(params.jenis, bulan, tahun, satker)
+  );
+  const jalurPratinjau = jalurAman(kunciPratinjau, "tte");
+  if (jalurPratinjau) jalurHapus.push(jalurPratinjau);
+  for (const jalur of jalurHapus) {
     try {
       await fs.unlink(jalur);
       berkasTerhapus++;
@@ -414,6 +448,11 @@ export async function signSptjmUnitAction(
       error:
         "Hanya Kasubag TU satuan kerja ini yang berwenang menandatangani SPTJM-nya.",
     };
+  }
+  // Periode membentuk letak berkas; divalidasi SEBELUM ada baris dokumen atau
+  // pemanggilan BSrE supaya periode cacat tidak meninggalkan dokumen yatim.
+  if (!periodeSah(bulan, tahun)) {
+    return { error: "Periode tidak sah." };
   }
 
   // IDENTITAS PENANDA TANGAN DIAMBIL DARI TABEL PEGAWAI, bukan dari form.
@@ -529,8 +568,6 @@ export async function signSptjmUnitAction(
   }
 
   try {
-    await pastikanDirektoriStorage();
-
     // 1. Generate Draft PDF
     const draftPdfBuffer = await generateDraftSptjm({
       jenis,
@@ -564,13 +601,12 @@ export async function signSptjmUnitAction(
       },
     });
 
-    const draftFileName = `draft_${recordDokumen.id}.pdf`;
-    const draftFilePath = path.join(STORAGE_DIR, draftFileName);
-    await fs.writeFile(draftFilePath, draftPdfBuffer);
+    const kunciDraft = kunciDraftTte(satker, tahun, bulan, recordDokumen.id);
+    await tulisBerkasTte(kunciDraft, draftPdfBuffer);
 
     await prisma.dokumenTte.update({
       where: { id: recordDokumen.id },
-      data: { fileDraftPath: `/uploads/tte/${draftFileName}` },
+      data: { fileDraftPath: kunciDraft },
     });
 
     // 3. Panggil Server Esign Client BSrE
@@ -729,24 +765,19 @@ export async function signSptjmUnitAction(
     // Nama dasarnya tetap nama resmi supaya tampil benar saat diunduh;
     // atribut `download` di panel juga sudah menyetelnya sendiri.
     const namaResmiSigned = generateNamaFileSptjm(jenis, bulan, tahun, satker);
-    const dirDokumen = path.join(STORAGE_DIR, recordDokumen.id);
-    await fs.mkdir(dirDokumen, { recursive: true });
-    const signedFilePath = path.join(dirDokumen, namaResmiSigned);
-    await fs.writeFile(signedFilePath, signedPdfFinal);
+    const kunciSigned = kunciSignedTte(satker, tahun, bulan, recordDokumen.id, namaResmiSigned);
+    await tulisBerkasTte(kunciSigned, signedPdfFinal);
 
     // Sidik diambil dari bita yang BENAR-BENAR ditulis ke disk, bukan dari
     // draft sebelum ditandatangani - yang dibandingkan orang nanti adalah
     // berkas yang mereka unduh dari sini.
     const hashBerkas = hitungHashBerkas(signedPdfFinal);
-    const signedPublicUrl = `/uploads/tte/${recordDokumen.id}/${encodeURIComponent(
-      namaResmiSigned
-    )}`;
 
     await prisma.dokumenTte.update({
       where: { id: recordDokumen.id },
       data: {
         status: "TERTANDATANGANI",
-        fileSignedPath: signedPublicUrl,
+        fileSignedPath: kunciSigned,
         idDokumenBsre: idDokumenBsreFinal,
         // JANGAN mengarang lama penandatanganan. Nilai bawaan 120 ms dulu
         // dipakai juga saat simulasi - angka yang terlihat masuk akal untuk
@@ -764,7 +795,8 @@ export async function signSptjmUnitAction(
       success: true,
       dokumenId: recordDokumen.id,
       idDokumenBsre: idDokumenBsreFinal ?? undefined,
-      downloadUrl: signedPublicUrl,
+      // Rute berizin, bukan letak di disk (yang tidak pernah sampai ke klien).
+      downloadUrl: `/berkas/tte/${recordDokumen.id}`,
       nomorDokumen,
       penandatanganNama: namaPenandatangan,
       isSimulasi: isSimulasiMode,

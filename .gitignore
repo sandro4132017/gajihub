@@ -1,9 +1,13 @@
 node_modules/
 dist/
 .next/
+coverage/
 
 .env
 .env.*
+# Contoh variabel TANPA nilai rahasia boleh dilacak.
+!.env.example
+!.env.*.example
 .claude/settings.local.json
 *.tsbuildinfo
 
@@ -19,8 +23,16 @@ docs/
 
 rekap-presensi-*
 log-sync/
-public/uploads/*
+# Isi unggahan TIDAK dilacak; folder & .gitkeep-nya dilacak supaya struktur
+# direktorinya ikut ter-clone. (Pola lama `public/uploads/*` mengabaikan
+# subfolder, jadi pengecualian .gitkeep di dalamnya tidak pernah berlaku.)
+public/uploads/**
+!public/uploads/**/
 !public/uploads/**/.gitkeep
+
+# Penyimpanan privat unggahan (bukti dukung, PDF SPTJM) - disajikan hanya lewat
+# Route Handler berizin; JANGAN dilacak.
+storage/
 
 *.dump
 *.backup
@@ -38,3 +50,8 @@ public/uploads/*
 # Akun demo lokal
 seed-akun-demo*.json
 
+# Artefak OS & editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

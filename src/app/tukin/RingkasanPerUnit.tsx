@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BadgeStatusKirim, keadaanKirimBaris } from "../StatusKirimBaris";
+import { BadgeStatusKirim, keadaanKirimBaris } from "../../components/feedback/StatusKirimBaris";
 
 /**
  * Ringkasan kalkulasi Tukin PER SATUAN KERJA - tampilan Dashboard Tukin waktu

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { lemburTeks } from "../../presensiTampilan";
+import { lemburTeks } from "../../../lib/format/presensiTampilan";
 import { BantuanTabel, BarisSumber } from "./BantuanTabel";
 import {
   koreksiJamLemburHarianAction,

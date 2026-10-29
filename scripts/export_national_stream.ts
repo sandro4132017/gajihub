@@ -3,6 +3,18 @@ import pg from 'pg';
 import path from 'path';
 import fs from 'fs';
 
+// Kredensial HANYA dari .env - tidak ada nilai cadangan di kode (repo ini publik).
+try {
+  (process as NodeJS.Process & { loadEnvFile?: (p?: string) => void }).loadEnvFile?.();
+} catch {
+  // .env tidak ada - wajibEnv() di bawah yang melapor.
+}
+function wajibEnv(nama: string): string {
+  const nilai = process.env[nama];
+  if (!nilai) throw new Error(`${nama} belum diisi di .env`);
+  return nilai;
+}
+
 async function exportYear(tahun: number, startMonth: number, endMonth: number, outFileName: string) {
   const startTime = Date.now();
   console.log(`\n=== EXPORT TAHUN ${tahun} (Bulan ${startMonth} s.d. ${endMonth}) -> ${outFileName} ===`);
@@ -11,13 +23,16 @@ async function exportYear(tahun: number, startMonth: number, endMonth: number, o
     host: process.env.EPRESENSI_HOST || '192.168.221.96',
     port: Number(process.env.EPRESENSI_PORT || 4020),
     database: process.env.EPRESENSI_DB || 'presensi_kemnaker',
-    user: process.env.EPRESENSI_USER || 'biro_keu',
-    password: process.env.EPRESENSI_PASSWORD || 'K3mN@ker#2026!Db',
+    user: wajibEnv("EPRESENSI_USER"),
+    password: wajibEnv("EPRESENSI_PASSWORD"),
     connectionTimeoutMillis: 15000,
   });
   await client.connect();
 
-  const outPath = path.join(process.cwd(), 'Excel', outFileName);
+  // Hasil ekspor berisi data presensi pegawai: disimpan di storage/exports (di-ignore git,
+  // di luar public/) - JANGAN ke public/, yang disajikan lewat URL.
+  fs.mkdirSync(path.join(process.cwd(), 'storage', 'exports'), { recursive: true });
+  const outPath = path.join(process.cwd(), 'storage', 'exports', outFileName);
   const wb = new ExcelJS.stream.xlsx.WorkbookWriter({
     filename: outPath,
     useStyles: true,
@@ -91,8 +106,6 @@ async function exportYear(tahun: number, startMonth: number, endMonth: number, o
   await wb.commit();
   await client.end();
 
-  const pubPath = path.join(process.cwd(), 'public', 'downloads', outFileName);
-  fs.copyFileSync(outPath, pubPath);
 
   const stats = fs.statSync(outPath);
   console.log(`Selesai ${outFileName}: ${(stats.size / 1024 / 1024).toFixed(2)} MB, total ${totalBaris.toLocaleString('id-ID')} baris dalam ${((Date.now() - startTime) / 1000).toFixed(1)}s.`);

@@ -65,25 +65,33 @@ describe("wherePegawaiJenis", () => {
     expect(wherePegawaiJenis(null)).toEqual({});
   });
 
-  it("PNS menyaring lewat identitas Web Gaji, bukan golongan", () => {
-    // Golongan salah pada 14 orang (terukur 2026-09-02) - lihat catatan di
-    // jenisPegawaiAdk.ts. Test ini yang menahan siapa pun yang tergoda
+  it("PNS menyaring lewat jenis kepegawaian SIAP, bukan golongan", () => {
+    // Golongan salah pada belasan orang (terukur 2026-09-02) - lihat catatan
+    // di jenisPegawaiAdk.ts. Test ini yang menahan siapa pun yang tergoda
     // "menyederhanakannya" jadi penurunan dari golongan.
-    const w = wherePegawaiJenis("PNS") as { identitasWebGaji: { jenisPegawai: { in: string[] } } };
-    expect(w.identitasWebGaji.jenisPegawai.in).toEqual(["PNS", "CPNS"]);
+    const w = wherePegawaiJenis("PNS") as { jenisPegawai: { in: string[] } };
+    expect(w.jenisPegawai.in).toEqual(["PNS", "CPNS"]);
     expect(JSON.stringify(w)).not.toContain("golongan");
+    expect(JSON.stringify(w)).not.toContain("identitasWebGaji");
   });
 });
 
 describe("wherePegawaiTanpaJenis", () => {
-  it("menolak yang jenisnya dikenali - sisanya yang terhitung", () => {
-    const w = wherePegawaiTanpaJenis() as { NOT: { identitasWebGaji: { jenisPegawai: { in: string[] } } } };
-    expect(w.NOT.identitasWebGaji.jenisPegawai.in).toEqual([...SEMUA_NILAI_JENIS]);
+  it("menghitung yang jenisnya kosong DAN yang di luar daftar", () => {
+    // `notIn` saja tidak menangkap NULL di SQL - tanpa cabang `null`, pegawai
+    // yang belum tersinkron lolos dari hitungan "belum terpetakan".
+    const w = wherePegawaiTanpaJenis() as { AND: [{ OR: [{ jenisPegawai: null }, { jenisPegawai: { notIn: string[] } }] }] };
+    expect(w.AND[0].OR[0]).toEqual({ jenisPegawai: null });
+    expect(w.AND[0].OR[1].jenisPegawai.notIn).toEqual([...SEMUA_NILAI_JENIS]);
+  });
+
+  it("tidak memakai OR di tingkat atas - aman disebar ke where yang punya OR", () => {
+    expect(Object.keys(wherePegawaiTanpaJenis())).toEqual(["AND"]);
   });
 });
 
 describe("kelompokDariNilaiData", () => {
-  it("nilai berkas Kemenkeu dipetakan ke kelompok berkasnya", () => {
+  it("nilai jenis dipetakan ke kelompok berkasnya", () => {
     expect(kelompokDariNilaiData("PNS")).toBe("PNS");
     expect(kelompokDariNilaiData("CPNS")).toBe("PNS");
     expect(kelompokDariNilaiData("PPPK")).toBe("P3K");
@@ -98,7 +106,7 @@ describe("kelompokDariNilaiData", () => {
     expect(bacaJenisPegawai("CPNS")).toBeNull();
   });
 
-  it("berkas Kemenkeu berpadding & berhuruf kecil tetap terbaca", () => {
+  it("nilai berpadding & berhuruf kecil tetap terbaca", () => {
     expect(kelompokDariNilaiData(" pppk ")).toBe("P3K");
     expect(kelompokDariNilaiData("Pns")).toBe("PNS");
   });

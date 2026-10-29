@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { jamDariMenit, type BarisRincianJamKerja } from "../../../../business-logic/rincianJamKerjaHarian";
-import { lemburTeks } from "../../../presensiTampilan";
+import { lemburTeks } from "../../../../lib/format/presensiTampilan";
 
 /**
  * Tabel rincian JAM KERJA harian - bentuk yang selama ini direkap petugas di

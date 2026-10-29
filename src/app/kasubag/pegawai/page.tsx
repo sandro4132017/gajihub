@@ -1,16 +1,16 @@
 import { prisma } from "../../../lib/prisma";
 import { canViewRekapUnitKerja, canEditDataPegawai } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { ambilAksesUnit } from "../access";
 import { SatkerPicker } from "../SatkerPicker";
-import { SearchableSelect } from "../../SearchableSelect";
-import { PencarianDebounce } from "../../PencarianDebounce";
-import { Paginasi, hitungPaginasi } from "../../Paginasi";
-import { SumberAcuan } from "../../SumberAcuan";
-import { BadgePejabatEselon } from "../../BadgePejabatEselon";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
+import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
+import { Paginasi, hitungPaginasi } from "../../../components/tables/Paginasi";
+import { SumberAcuan } from "../../../components/shared/SumberAcuan";
+import { BadgePejabatEselon } from "../../../components/shared/BadgePejabatEselon";
 import Link from "next/link";
-import { HALAMAN } from "../../layoutHalaman";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { FiEdit2, FiUsers, FiUserCheck, FiUserX, FiSearch } from "react-icons/fi";
 
 export const dynamic = "force-dynamic";

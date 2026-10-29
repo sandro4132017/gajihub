@@ -1,12 +1,24 @@
 import pg from 'pg';
 
+// Kredensial HANYA dari .env - tidak ada nilai cadangan di kode (repo ini publik).
+try {
+  (process as NodeJS.Process & { loadEnvFile?: (p?: string) => void }).loadEnvFile?.();
+} catch {
+  // .env tidak ada - wajibEnv() di bawah yang melapor.
+}
+function wajibEnv(nama: string): string {
+  const nilai = process.env[nama];
+  if (!nilai) throw new Error(`${nama} belum diisi di .env`);
+  return nilai;
+}
+
 async function main() {
   const client = new pg.Client({
-    host: '192.168.221.96',
-    port: 4020,
-    database: 'presensi_kemnaker',
-    user: 'biro_keu',
-    password: 'K3mN@ker#2026!Db'
+    host: wajibEnv("EPRESENSI_HOST"),
+    port: Number(wajibEnv("EPRESENSI_PORT")),
+    database: wajibEnv("EPRESENSI_DB"),
+    user: wajibEnv("EPRESENSI_USER"),
+    password: wajibEnv("EPRESENSI_PASSWORD")
   });
   await client.connect();
 

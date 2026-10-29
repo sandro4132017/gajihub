@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma";
-import { NAMA_BULAN } from "./bulan";
-import type { BarisSumber } from "./SumberAcuan";
+import { NAMA_BULAN } from "../lib/format/bulan";
+import type { BarisSumber } from "../components/shared/SumberAcuan";
 
 /**
  * Asal-usul tiap data yang dipakai menghitung, beserta KAPAN diambilnya.

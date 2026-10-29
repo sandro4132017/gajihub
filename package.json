@@ -23,7 +23,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "preisi:hash-tte": "prisma generate",
-    "isi:hash-tte": "tsx src/jobs/isiHashDokumenTte.ts"
+    "isi:hash-tte": "tsx src/jobs/isiHashDokumenTte.ts",
+    "prepindah:unggahan": "prisma generate",
+    "pindah:unggahan": "tsx src/jobs/pindahUnggahanPrivat.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

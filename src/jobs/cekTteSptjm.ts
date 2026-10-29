@@ -85,7 +85,14 @@ async function main() {
       continue;
     }
 
-    const jalur = jalurDisk(d.fileSignedPath);
+    let jalur: string;
+    try {
+      jalur = jalurDisk(d.fileSignedPath);
+    } catch {
+      console.log("  verifikasi    : GAGAL - referensi berkas tidak sah");
+      bedaPendapat++;
+      continue;
+    }
     console.log(`  berkas        : ${path.basename(jalur)}`);
     let buf: Buffer;
     try {

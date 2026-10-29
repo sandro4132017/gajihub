@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import type { Role, User } from "@prisma/client";
 import { ubahAssignmentRoleAction, type UbahAssignmentRoleFormState } from "./actions";
 import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
-import { SearchableSelect } from "../../SearchableSelect";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 
 const INITIAL_STATE: UbahAssignmentRoleFormState = {};
 const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
@@ -33,16 +33,34 @@ export function AssignmentRow({
   // relevan begitu KASUBAG_TU ada di role utama ATAU role tambahan.
   const butuhSatuanKerja = role === "KASUBAG_TU" || rolesTambahan.includes("KASUBAG_TU");
   const unitKosong = butuhSatuanKerja && !user.satuanKerja;
+  const tambahanTerpilih = rolesTambahan.filter((r) => r !== role);
+  const unitLabel = user.satuanKerja ?? satuanKerjaPegawai;
 
   return (
-    <form action={formAction} className="border-b border-line-2 p-4">
+    <form action={formAction} className="p-4 sm:p-5">
       <input type="hidden" name="targetUserId" value={user.id} />
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-[180px] flex-1">
-          <p className="font-semibold text-ink">{user.nama}</p>
-          <p className="text-xs text-muted">NIP {user.nip}</p>
+
+      {/* Identitas akun + keadaan role saat ini */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-ink">{user.nama}</p>
+          <p className="font-mono text-xs text-muted">{user.nip}</p>
         </div>
-        <div className="w-[150px]">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="chip chip-navy text-[11px] font-semibold">{labelRole(user.role, user.satuanKerja)}</span>
+          {(user.rolesTambahan ?? []).map((r) => (
+            <span key={r} className="chip chip-draft text-[11px]">
+              + {labelRole(r, user.satuanKerja)}
+            </span>
+          ))}
+          {!user.aktif && <span className="chip chip-danger text-[11px]">Nonaktif</span>}
+        </div>
+      </div>
+
+      {/* Ubah */}
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <div className="w-full sm:w-44">
+          <label className="field-label">Role utama</label>
           <SearchableSelect
             name="role"
             options={SEMUA_ROLE.map((r) => ({ value: r, label: LABEL_ROLE[r] }))}
@@ -52,7 +70,8 @@ export function AssignmentRow({
           />
         </div>
         {butuhSatuanKerja && (
-          <div className="w-[260px]">
+          <div className="w-full sm:w-72">
+            <label className="field-label">Satuan kerja</label>
             <SearchableSelect
               name="satuanKerja"
               options={satuanKerjaList.map((s) => ({ value: s, label: s }))}
@@ -64,49 +83,65 @@ export function AssignmentRow({
             />
           </div>
         )}
-        <label className="flex items-center gap-1.5 text-xs font-semibold text-ink-2">
+        <label className="flex h-10 items-center gap-2 text-sm font-semibold text-ink-2">
           <input type="checkbox" name="aktif" defaultChecked={user.aktif} className="size-4" />
-          Aktif
+          Akun aktif
         </label>
-        <button type="submit" disabled={pending} className="btn btn-primary btn-sm">
-          {pending ? "..." : "Simpan"}
+        <button type="submit" disabled={pending} className="btn btn-primary h-10 py-0 sm:ml-auto">
+          {pending ? "Menyimpan..." : "Simpan"}
         </button>
       </div>
 
       {unitKosong && (
-        <p className="mt-2 text-xs font-semibold text-gold-deep">
-          Akun ini ber-role Kasubag TU tapi unitnya masih kosong - tanpa unit, semua halaman unit tampil kosong buat
-          dia. Pilih satuan kerjanya lalu Simpan.
+        <p className="mt-3 border-l-2 border-gold bg-gold-tint/40 py-1.5 pl-3 pr-2 text-xs font-semibold text-gold-deep">
+          Kasubag TU tanpa unit - semua halaman unit tampil kosong untuknya. Pilih satuan kerja lalu Simpan.
         </p>
       )}
 
-      <div className="mt-3 rounded-lg bg-surface-2 p-3">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-muted">
+      {/* Role tambahan dilipat: jarang diubah, dan delapan centang terbuka di
+          tiap baris membuat daftar sulit disapu. Centangnya tetap di DOM, jadi
+          ikut terkirim walau terlipat. */}
+      <details className="group mt-3 rounded-xl bg-surface-2 px-3 py-2">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-ink-2 marker:hidden [&::-webkit-details-marker]:hidden">
+          <span className="mr-1 inline-block transition group-open:rotate-90">›</span>
           Role tambahan
+          {tambahanTerpilih.length > 0 ? (
+            <span className="ml-1 font-mono text-muted">({tambahanTerpilih.length} dipilih)</span>
+          ) : (
+            <span className="ml-1 text-muted">(tidak ada)</span>
+          )}
+        </summary>
+        <p className="mt-2 text-[11px] text-muted">
+          Pemilik akun bisa berpindah sudut pandang lewat tombol akun di sidebar tanpa logout. Role utama tetap jadi
+          bawaan saat login.
         </p>
-        <p className="mt-0.5 text-[11px] text-muted">
-          Akun bisa ganti sudut pandang sendiri lewat tombol akun di sidebar - tanpa logout. Role utama di atas tetap
-          jadi role default waktu login.
-        </p>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
-          {SEMUA_ROLE.filter((r) => r !== role).map((r) => (
-            <label key={r} className="flex items-center gap-1.5 text-xs font-semibold text-ink-2">
-              <input
-                type="checkbox"
-                name="rolesTambahan"
-                value={r}
-                checked={rolesTambahan.includes(r)}
-                onChange={() => toggleRoleTambahan(r)}
-                className="size-4"
-              />
-              {labelRole(r, user.satuanKerja ?? satuanKerjaPegawai)}
-            </label>
-          ))}
+        <div className="mt-2 flex flex-wrap gap-2 pb-1">
+          {SEMUA_ROLE.filter((r) => r !== role).map((r) => {
+            const dipilih = rolesTambahan.includes(r);
+            return (
+              <label
+                key={r}
+                className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-biru ${
+                  dipilih ? "border-navy bg-navy text-white" : "border-line bg-surface text-ink-2 hover:border-biru"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  name="rolesTambahan"
+                  value={r}
+                  checked={dipilih}
+                  onChange={() => toggleRoleTambahan(r)}
+                  className="sr-only"
+                />
+                {labelRole(r, unitLabel)}
+              </label>
+            );
+          })}
         </div>
-      </div>
+      </details>
 
-      {state.success && <p className="mt-2 text-xs font-semibold text-green">{state.success}</p>}
-      {state.error && <p className="mt-2 text-xs font-medium text-red">{state.error}</p>}
+      {state.success && <p className="mt-3 text-xs font-semibold text-green">{state.success}</p>}
+      {state.error && <p className="mt-3 text-xs font-medium text-red">{state.error}</p>}
     </form>
   );
 }

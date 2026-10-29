@@ -1,0 +1,13 @@
+{
+  // Skrip operasional di folder ini tidak termasuk tsconfig utama (yang hanya
+  // mencakup src/), jadi tanpa berkas ini editor memeriksanya tanpa tipe Node
+  // dan menandai `process`, `console` dst. sebagai galat. Berkas ini hanya
+  // untuk editor & `npx tsc -p scripts`; `npm run typecheck` dan build tidak
+  // berubah.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../src/**/*"]
+}

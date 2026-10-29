@@ -3,13 +3,13 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canKelolaGajiInduk, type AuthUser } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
-import { NAMA_BULAN } from "../../bulan";
-import { SearchableSelect } from "../../SearchableSelect";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 import { UploadGajiIndukForm } from "./UploadGajiIndukForm";
 import { HonorariumForm } from "./HonorariumForm";
-import { PencarianDebounce } from "../../PencarianDebounce";
-import { HALAMAN } from "../../layoutHalaman";
+import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

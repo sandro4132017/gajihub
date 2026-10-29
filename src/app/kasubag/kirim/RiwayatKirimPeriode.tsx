@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cacahPeriode } from "../../../business-logic/pengirimanUnit";
 import type { KeadaanPeriode, PeriodeUnit } from "../../../business-logic/pengirimanUnit";
-import { NAMA_BULAN } from "../../bulan";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
 
 /**
  * Riwayat pengiriman rekap SATU unit di SELURUH periode yang datanya ada.

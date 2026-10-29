@@ -2,10 +2,10 @@ import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canKelolaGajiInduk, type AuthUser } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
-import { PencarianDebounce } from "../../PencarianDebounce";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
+import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
 import { UploadBasisDataGajiForm } from "./UploadBasisDataGajiForm";
-import { HALAMAN } from "../../layoutHalaman";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

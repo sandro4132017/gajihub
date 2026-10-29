@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { prisma } from "../../lib/prisma";
 import { canViewDashboardUnit, canExportRekapUnit } from "../../auth/permissions";
-import { AksesDitolak } from "../AksesDitolak";
-import { FilterBar } from "../FilterBar";
+import { AksesDitolak } from "../../components/feedback/AksesDitolak";
+import { FilterBar } from "../../components/forms/FilterBar";
 import { resolveSatuanKerjaListUntukFilter, satkerTerkunciUntukAkun } from "../dashboardScope";
 import {
   riwayatPengirimanPeriode,
@@ -13,14 +13,14 @@ import {
 import { RiwayatKirimPeriode } from "./kirim/RiwayatKirimPeriode";
 import { periodePunyaRekapPresensi, resolvePeriode } from "../periodeDefault";
 import { ambilAksesUnit } from "./access";
-import { AngkaNaik } from "../AngkaNaik";
-import { persenTeks } from "../KitGrafik";
+import { AngkaNaik } from "./AngkaNaik";
+import { persenTeks } from "../../components/charts/KitGrafik";
 import { daftarKartuKomponen, daftarLangkahTutupBulan, ringkasLangkah } from "../../business-logic/langkahTutupBulan";
 import { sebabPerluHitungUlang } from "../../business-logic/kalkulasiBasi";
 import { bulanSebelumnyaDalamTahun, deltaPersen } from "../../business-logic/deltaPeriode";
-import { tinggiBatangPersen } from "../tinggiBatang";
-import { TAMPILKAN_MENU_LEMBUR, TAMPILKAN_NOMINAL_LEMBUR } from "../tampilUangLembur";
-import { HALAMAN } from "../layoutHalaman";
+import { tinggiBatangPersen } from "./tinggiBatang";
+import { TAMPILKAN_MENU_LEMBUR, TAMPILKAN_NOMINAL_LEMBUR } from "../../lib/format/tampilUangLembur";
+import { HALAMAN } from "../../components/layout/layoutHalaman";
 import { KartuSambutanUnit } from "./KartuSambutanUnit";
 import { StepperTutupBulan } from "./StepperTutupBulan";
 import { qPeriodeUnit } from "./tautanLangkah";
@@ -323,7 +323,7 @@ export default async function KasubagDashboardPage({
   const nominalUmTotal = trendUm.find((t) => t.periodeBulan === periodeBulan)?._sum.totalUangMakan ?? 0;
   const nominalLemburTotal = trendLembur.find((t) => t.periodeBulan === periodeBulan)?._sum.totalUangLembur ?? 0;
   // Uang lembur dikeluarkan dari total selama angkanya belum ditampilkan -
-  // lihat src/app/tampilUangLembur.ts. Total yang memuat komponen tak
+  // lihat src/lib/format/tampilUangLembur.ts. Total yang memuat komponen tak
   // terlihat tidak bisa dicocokkan pembacanya dan terbaca sebagai salah hitung.
   const totalNominalPeriode =
     nominalTukinTotal + nominalUmTotal + (TAMPILKAN_NOMINAL_LEMBUR ? nominalLemburTotal : 0);

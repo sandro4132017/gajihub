@@ -1,7 +1,7 @@
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewDashboardLintasUnit, type AuthUser } from "../../auth/permissions";
-import { AksesDitolak } from "../AksesDitolak";
-import { DashboardLintasUnit } from "../DashboardLintasUnit";
+import { AksesDitolak } from "../../components/feedback/AksesDitolak";
+import { DashboardLintasUnit } from "../../components/dashboard/DashboardLintasUnit";
 
 export const dynamic = "force-dynamic";
 

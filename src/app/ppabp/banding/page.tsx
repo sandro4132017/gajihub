@@ -1,10 +1,10 @@
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canLihatTembusanBanding, type AuthUser } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
-import { FilterBar } from "../../FilterBar";
-import { SumberAcuan } from "../../SumberAcuan";
+import { FilterBar } from "../../../components/forms/FilterBar";
+import { SumberAcuan } from "../../../components/shared/SumberAcuan";
 import { BandingPpabpCard, type BandingPpabpItem } from "./BandingPpabpCard";
 import {
   KeputusanPembayaranCard,
@@ -19,7 +19,7 @@ import {
   STATUS_MENUNGGU_KEPUTUSAN,
   type PembayaranInput,
 } from "./keputusanPembayaran";
-import { HALAMAN } from "../../layoutHalaman";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

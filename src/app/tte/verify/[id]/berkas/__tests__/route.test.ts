@@ -11,8 +11,9 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("fs/promises", () => ({
-  default: { readFile },
+  default: { readFile, realpath: async (p: string) => p },
   readFile,
+  realpath: async (p: string) => p,
 }));
 
 import { GET } from "../route";
@@ -106,6 +107,26 @@ describe("GET /tte/verify/[id]/berkas", () => {
     expect(((await res.json()) as { error: string }).error).toMatch(
       /lingkungan lain/i
     );
+  });
+
+  it("referensi berkas tak sah -> 404, disk tidak dibaca", async () => {
+    findUnique.mockResolvedValue({
+      status: "TERTANDATANGANI",
+      fileSignedPath: "/uploads/tte/../bukti-dukung/a.pdf",
+    });
+    const res = await GET(permintaan(), konteks());
+    expect(res.status).toBe(404);
+    expect(readFile).not.toHaveBeenCalled();
+  });
+
+  it("kunci baru berfolder unit+periode tetap terbuka untuk yang tertandatangani", async () => {
+    findUnique.mockResolvedValue({
+      status: "TERTANDATANGANI",
+      fileSignedPath: "tte/Biro Umum/2026-08/abc/SPTJM - UM.pdf",
+    });
+    readFile.mockResolvedValue(Buffer.from("%PDF"));
+    const res = await GET(permintaan(), konteks());
+    expect(res.status).toBe(200);
   });
 
   it("database bermasalah tidak membuat rute melempar", async () => {

@@ -2,10 +2,10 @@ import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canUpdateSkPegawaiStrukturalFungsional, type AuthUser } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { UpdateSkForm } from "./UpdateSkForm";
-import { PencarianDebounce } from "../../PencarianDebounce";
-import { HALAMAN } from "../../layoutHalaman";
+import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { GrDocumentUser } from "react-icons/gr";
 import { FiArrowLeft, FiSearch, FiCheckCircle, FiUserCheck, FiRotateCcw, FiArrowRight } from "react-icons/fi";
 

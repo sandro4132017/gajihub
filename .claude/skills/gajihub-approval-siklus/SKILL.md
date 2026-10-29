@@ -5,6 +5,19 @@ description: Use whenever touching approval - the jenjang 1 / jenjang final flow
 
 # Gajihub - approval & siklus perhitungan
 
+> **SUPERSEDED 2026-10-28 - modul approval berjenjang SUDAH DIHAPUS.**
+> `src/approval/` (`approvalEngine.ts` / `evaluasiApproval`,
+> `approvalTukinService`, `approvalUangMakanService`, `approvalUangLemburService`)
+> dihapus atas permintaan user karena tidak dipanggil aplikasi maupun job lagi.
+> Pemanggilnya (`ApprovalForm`, `ApprovalMassalForm`, `actionsApprovalMassal.ts`,
+> `src/app/actions.ts`) sudah dicabut di commit `2112e0a`, saat alurnya diganti
+> **Kasubag TU kirim rekap -> PPABP** (`src/app/kasubag/kirim/`). Gerbang export
+> ADK sekarang "satker sudah mengirim" (`src/app/ppabp/adk/satkerTerkirim.ts`),
+> bukan `status: "APPROVED"`. `ApprovalLog` masih ditulis alur BANDING.
+> Isi di bawah dipertahankan sebagai catatan alasan, BUKAN peta kode yang
+> berlaku - kalau approval berjenjang dihidupkan lagi, kodenya ada di riwayat git
+> (terakhir di commit `2bc02a7`).
+
 > Diekstrak **verbatim** dari `CLAUDE.md` (baris 1174-1264) saat pemecahan skill
 > 2026-08-31.
 

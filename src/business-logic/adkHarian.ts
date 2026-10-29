@@ -28,7 +28,7 @@
 /**
  * Nama bulan untuk judul di sheet "depan" (mis. "Uang_Lembur_Juni_2026",
  * persis pola di template). Sengaja dideklarasikan lokal, bukan di-import dari
- * `src/app/bulan.ts` - modul business-logic tidak boleh bergantung pada
+ * `src/lib/format/bulan.ts` - modul business-logic tidak boleh bergantung pada
  * lapisan aplikasi.
  */
 const NAMA_BULAN = [

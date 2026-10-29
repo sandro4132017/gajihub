@@ -1,4 +1,4 @@
-import { SearchableSelect } from "../SearchableSelect";
+import { SearchableSelect } from "../../components/forms/SearchableSelect";
 
 /**
  * Picker satuan kerja SAJA (tanpa bulan/tahun) - dipakai di halaman

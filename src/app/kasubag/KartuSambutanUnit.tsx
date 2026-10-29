@@ -12,8 +12,8 @@ import { FaClock, FaUtensils } from "react-icons/fa6";
 import type { IconType } from "react-icons";
 import type { KartuKomponen, KodeKomponen, KodeLangkah, LangkahPeriode } from "../../business-logic/langkahTutupBulan";
 import type { KeadaanPeriode } from "../../business-logic/pengirimanUnit";
-import { KartuBercahaya } from "../KartuKpi";
-import { sapaanNama } from "../sapaan";
+import { KartuBercahaya } from "../../components/shared/KartuKpi";
+import { sapaanNama } from "../../components/shared/sapaan";
 import { LABEL_TOMBOL_LANGKAH, tautanLangkah } from "./tautanLangkah";
 
 // ============================================================================

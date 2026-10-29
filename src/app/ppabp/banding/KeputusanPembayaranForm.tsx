@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Modal } from "../../Modal";
+import { Modal } from "../../../components/feedback/Modal";
 import { putuskanPembayaranAction, type PutuskanPembayaranFormState } from "./actions";
 import {
   CATATAN_ADK_BELUM_MENAHAN,

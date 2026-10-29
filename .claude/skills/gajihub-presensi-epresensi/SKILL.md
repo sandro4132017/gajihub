@@ -670,7 +670,7 @@ tanpa label di atas tiap field, lalu satu paragraf keterangan.
   "apa yang terjadi kalau tombol ini ditekan".
 - Ikon unduh di tombolnya **dicabut lagi** - tidak ada di mockup.
 
-**Dasar hukum pindah ke ikon "i" di samping judul** (`src/app/SumberAcuan.tsx`,
+**Dasar hukum pindah ke ikon "i" di samping judul** (`src/components/shared/SumberAcuan.tsx`,
 BARU). Deskripsi pembuka dulu memuat "sebagai dasar potongan Pasal 13
 Permenaker 15/2024" dan jadi dua baris; nomor pasal itu penting saat
 DIPERIKSA (auditor/Itjen/pegawai yang protes), bukan tiap halaman dibuka.

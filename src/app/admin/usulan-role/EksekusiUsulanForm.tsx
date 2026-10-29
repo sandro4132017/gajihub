@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SearchableSelect } from "../../SearchableSelect";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 
 export function EksekusiUsulanForm({
   usulanId,

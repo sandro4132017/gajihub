@@ -3,10 +3,13 @@ import { canUploadRekapPresensi, type AuthUser } from '../src/auth/permissions';
 import { satkerTerkunciUntukAkun } from '../src/app/dashboardScope';
 
 async function main() {
+  const nipTarget = process.argv[2]?.trim();
+  // NIP diberikan saat dijalankan - JANGAN ditulis di kode (repo ini publik).
+  if (!nipTarget) throw new Error('Pakai: npx tsx scripts/test_role_perms.ts <NIP>');
   const sandro = await prisma.user.findFirst({
-    where: { nip: '198703232015031002' }
+    where: { nip: nipTarget }
   });
-  if (!sandro) throw new Error('Sandro not found');
+  if (!sandro) throw new Error('Akun tidak ditemukan');
 
   const roles = ['ADMIN', 'KASUBAG_TU', 'OSDMA', 'PPABP', 'PEGAWAI'] as const;
   for (const role of roles) {

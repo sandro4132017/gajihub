@@ -166,4 +166,43 @@ describe("jalurDisk", () => {
   it("nama berkas ber-spasi yang ter-encode dikembalikan utuh", () => {
     expect(jalurDisk("/uploads/tte/x/SPTJM%20Tukin.pdf")).toContain("SPTJM Tukin.pdf");
   });
+
+  it("format lama dipetakan ke penyimpanan privat, bukan public/", () => {
+    const j = jalurDisk("/uploads/tte/x/a.pdf");
+    expect(j).toMatch(/storage[\\/]uploads[\\/]tte[\\/]x[\\/]a\.pdf$/);
+    expect(j).not.toMatch(/public/);
+  });
+
+  it("format lama di root tte/ (signed_<id>.pdf, SPTJM - ....pdf)", () => {
+    expect(jalurDisk("/uploads/tte/signed_abc.pdf")).toMatch(/tte[\\/]signed_abc\.pdf$/);
+    expect(jalurDisk("/uploads/tte/SPTJM%20-%20UM%20Agustus.pdf")).toContain("SPTJM - UM Agustus.pdf");
+  });
+
+  it("kunci baru berfolder unit dan periode terbaca utuh", () => {
+    expect(jalurDisk("tte/Biro Umum/2026-08/abc/SPTJM - UM.pdf")).toMatch(
+      /tte[\\/]Biro Umum[\\/]2026-08[\\/]abc[\\/]SPTJM - UM\.pdf$/
+    );
+  });
+
+  it("MELEMPAR untuk traversal, jenis lain, dan URL luar", () => {
+    expect(() => jalurDisk("/uploads/tte/../bukti-dukung/a.pdf")).toThrow();
+    expect(() => jalurDisk("/uploads/tte/..%2F..%2Fx.pdf")).toThrow();
+    expect(() => jalurDisk("bukti-dukung/a.pdf")).toThrow();
+    expect(() => jalurDisk("https://placeholder.local/a.pdf")).toThrow();
+  });
+});
+
+describe("periksaKeBsre dengan referensi tak sah", () => {
+  it("TIDAK_BISA_DIPERIKSA, berkas tidak dibaca", async () => {
+    let dibaca = false;
+    const h = await periksaKeBsre("tak-sah", "tte/../x.pdf", {
+      bacaBerkas: async () => {
+        dibaca = true;
+        return Buffer.from("%PDF");
+      },
+      verifikasi: async () => ({ success: true, summary: "VALID" }),
+    });
+    expect(h.vonis).toBe("TIDAK_BISA_DIPERIKSA");
+    expect(dibaca).toBe(false);
+  });
 });

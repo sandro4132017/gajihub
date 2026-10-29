@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { uploadGajiIndukAction, type UploadGajiIndukFormState } from "./actions";
-import { NAMA_BULAN } from "../../bulan";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
 
 const INITIAL_STATE: UploadGajiIndukFormState = {};
 

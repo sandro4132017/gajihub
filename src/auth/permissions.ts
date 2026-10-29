@@ -192,6 +192,25 @@ export function canLihatStatusBandingSendiri(user: AuthUser, banding: TargetBand
   return user.aktif && user.nip === banding.pengajuNip;
 }
 
+/**
+ * Melihat / mengunduh berkas bukti dukung sebuah banding. Berkasnya dokumen
+ * pribadi pegawai (SK, surat sakit), jadi izinnya DISUSUN dari izin yang sudah
+ * dipakai halaman banding masing-masing pihak - bukan aturan baru yang bisa
+ * bergeser dari apa yang memang tampil di layar mereka:
+ *   - pengaju sendiri            (canLihatStatusBandingSendiri)
+ *   - Kasubag TU unit pegawai    (canVerifikasiBandingJenjang1; ADMIN ikut)
+ *   - OSDMA, approver final      (canApproveBandingFinal)
+ *   - PPABP, tembusan            (canLihatTembusanBanding)
+ */
+export function canLihatBuktiDukung(user: AuthUser, banding: TargetBanding): boolean {
+  return (
+    canLihatStatusBandingSendiri(user, banding) ||
+    canVerifikasiBandingJenjang1(user, banding) ||
+    canApproveBandingFinal(user) ||
+    canLihatTembusanBanding(user, banding.satuanKerjaPegawai)
+  );
+}
+
 /** Cetak/download slip gaji sendiri - format PLACEHOLDER, lihat TODO(confirm) di CLAUDE.md. */
 export function canCetakSlipGajiSendiri(user: AuthUser, targetNip: string): boolean {
   return user.aktif && user.nip === targetNip;
@@ -265,6 +284,23 @@ export function canTandatanganiSptjmUnit(user: AuthUser, targetSatuanKerja: stri
 export function canExportRekapUnit(user: AuthUser, targetSatuanKerja: string): boolean {
   if (canViewRekapUnitKerja(user, targetSatuanKerja)) return true;
   return cekPpabpAtauAdmin(user, targetSatuanKerja);
+}
+
+/**
+ * Melihat / mengunduh dokumen SPTJM (draft maupun bertanda tangan) sebuah unit.
+ *
+ * Isinya agregasi nominal unit, jadi siapa pun yang boleh mengunduh rekap unit
+ * itu (`canExportRekapUnit`) boleh melihat SPTJM-nya: Kasubag TU unit itu
+ * sendiri, PPABP, dan ADMIN. PEGAWAI dan PIMPINAN tidak - PIMPINAN dibatasi ke
+ * dashboard agregat. Hibah `satuanKerjaTambahan` tidak ikut, sama seperti
+ * pengunduhan rekap.
+ *
+ * Satuan kerja kosong ditolak: dokumen tanpa unit tidak punya pemilik yang bisa
+ * dicocokkan.
+ */
+export function canLihatDokumenSptjm(user: AuthUser, targetSatuanKerja: string): boolean {
+  if (!targetSatuanKerja) return false;
+  return canExportRekapUnit(user, targetSatuanKerja);
 }
 
 /** Verifikasi (jenjang 1) banding yang masuk dari pegawai di unitnya sendiri. */

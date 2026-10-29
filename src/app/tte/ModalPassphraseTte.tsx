@@ -11,7 +11,7 @@ import {
   generateNamaFileSptjm,
   parseNomorSptjm,
 } from "@/lib/tte/sptjmTypes";
-import { Modal } from "@/app/Modal";
+import { Modal } from "@/components/feedback/Modal";
 import {
   FiCheckCircle,
   FiLock,

@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { catatSkGradeAction, hapusSkGradeAction, type SkGradeFormState } from "./actionsSkGrade";
-import { tglTampil } from "../tanggalTampil";
+import { tglTampil } from "../../lib/format/tanggalTampil";
 
 const AWAL: SkGradeFormState = {};
 

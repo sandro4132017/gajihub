@@ -8,7 +8,7 @@ import {
   canKelolaKendalaSeKementerian,
   type AuthUser,
 } from "../../../../auth/permissions";
-import { tglTampil } from "../../../tanggalTampil";
+import { tglTampil } from "../../../../lib/format/tanggalTampil";
 
 export interface KendalaFormState {
   error?: string;

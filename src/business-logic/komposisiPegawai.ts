@@ -6,13 +6,13 @@
 // TIGA KEPUTUSAN YANG MENENTUKAN ANGKANYA, dan semuanya sengaja TIDAK
 // diputuskan di sini melainkan diambil dari tempat yang sudah memutuskannya:
 //
-// 1. PNS vs P3K diambil dari `IdentitasWebGaji.jenisPegawai` (lewat
-//    `kelompokDariNilaiData` di src/app/ppabp/adk/jenisPegawaiAdk.ts), BUKAN
-//    dari format golongan. Berkas ADK dipisah dengan dasar itu, jadi kalau
-//    panel ini memakai dasar lain, dashboard dan berkas yang dikirim akan
-//    menyebut dua angka berbeda untuk pertanyaan yang sama. Diukur
-//    2026-10-22 pada 5.062 pegawai aktif: dasar golongan keliru pada 13 orang
-//    (identitas Web Gaji menyebut PPPK, golongannya berformat PNS).
+// 1. PNS vs PPPK diambil dari SIAP (`Pegawai.jenisPegawai`, dari
+//    PEGAWAI.STATUSPEGAWAIID - src/business-logic/jenisPegawai.ts), BUKAN
+//    dari format golongan. Data kepegawaian bersumber dari SIAP (keputusan
+//    user 2026-10-27); sebelumnya dari `IdentitasWebGaji.jenisPegawai`.
+//    CATATAN: pemisahan berkas ADK PNS/P3K masih membaca identitas Web Gaji
+//    (src/app/ppabp/adk/jenisPegawaiAdk.ts), jadi angka panel ini dan isi
+//    berkas ADK bisa berbeda sampai keduanya memakai dasar yang sama.
 //
 // 2. Ruang golongan PNS dibaca `golonganRomawi()` dan jenjang PPPK dibaca dari
 //    `PADANAN_GOLONGAN_PPPK` - dua-duanya milik tarifSbm.ts, yang sudah
@@ -25,9 +25,7 @@
 //    kalau aturan status kawin yang sah suatu saat berubah.
 //
 // YANG TIDAK DIKETAHUI PUNYA WADAHNYA SENDIRI, tidak dibagi rata ke kelompok
-// terdekat. Pegawai tanpa identitas Web Gaji bukan "PNS yang datanya kurang" -
-// dia pegawai yang KELUAR dari berkas ADK begitu penyaringan jenis dipakai,
-// dan itu justru yang perlu terlihat sebelum berkasnya dikirim.
+// terdekat - jenis yang belum tercatat tidak ditebak dari golongannya.
 // ============================================================================
 
 import { golonganRomawi, PADANAN_GOLONGAN_PPPK } from "./tarifSbm";
@@ -38,10 +36,9 @@ export type KelompokAdk = "PNS" | "P3K";
 
 export interface BarisKomposisi {
   /**
-   * Jenis menurut identitas Web Gaji, SUDAH dipetakan ke kelompok berkas ADK
-   * oleh pemanggil. `null` berarti belum punya identitas Web Gaji, atau
-   * jenisnya di luar daftar yang dikenali - dua-duanya berakibat sama
-   * (keluar dari berkas), jadi tidak dipisah.
+   * Jenis kepegawaian dari SIAP, SUDAH dipetakan pemanggil: CPNS & PNS ->
+   * "PNS", PPPK -> "P3K". `null` = belum tercatat (sinkronisasi pegawai belum
+   * mengisinya).
    */
   kelompok: KelompokAdk | null;
   golongan: string | null;
@@ -68,7 +65,8 @@ export interface KomposisiPegawai {
   /** Jumlah per kelompok berkas ADK. Ketiganya SALING LEPAS dan berjumlah `total`. */
   pns: number;
   p3k: number;
-  tanpaIdentitasWebGaji: number;
+  /** Jenis kepegawaian belum tercatat dari SIAP. */
+  jenisTidakDiketahui: number;
 
   /** Ketiganya SALING LEPAS dan berjumlah `total`. */
   lelaki: number;
@@ -172,7 +170,7 @@ export function hitungKomposisiPegawai(baris: readonly BarisKomposisi[]): Kompos
     total: baris.length,
     pns: 0,
     p3k: 0,
-    tanpaIdentitasWebGaji: 0,
+    jenisTidakDiketahui: 0,
     lelaki: 0,
     perempuan: 0,
     jenisKelaminTidakTercatat: 0,
@@ -190,7 +188,7 @@ export function hitungKomposisiPegawai(baris: readonly BarisKomposisi[]): Kompos
   for (const b of baris) {
     if (b.kelompok === "PNS") k.pns++;
     else if (b.kelompok === "P3K") k.p3k++;
-    else k.tanpaIdentitasWebGaji++;
+    else k.jenisTidakDiketahui++;
 
     const jk = (b.jenisKelamin ?? "").trim().toUpperCase();
     if (jk === "L") k.lelaki++;

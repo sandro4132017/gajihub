@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { IoMdCheckmark, IoMdRemove } from "react-icons/io";
 import { RiErrorWarningLine } from "react-icons/ri";
 import { kirimRekapUnitAction, type KirimFormState } from "./actions";
-import { Modal } from "../../Modal";
+import { Modal } from "../../../components/feedback/Modal";
 
 const INITIAL_STATE: KirimFormState = {};
 

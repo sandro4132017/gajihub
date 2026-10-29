@@ -79,7 +79,7 @@ predikat = periode terbaru yang benar-benar bisa dihitung.
 13 unit test, termasuk penjagaan bahwa periode pilihan user tidak dipindahkan
 dan bahwa database kosong tidak membuat halaman gagal dibuka.
 
-### Paginasi tabel (`src/app/Paginasi.tsx`)
+### Paginasi tabel (`src/components/tables/Paginasi.tsx`)
 
 Tabel Rincian Tukin di `/kasubag/kalkulasi` menampilkan seluruh roster unit
 (±80 baris, dan jauh lebih banyak buat PPABP/ADMIN lintas satker) dalam satu
@@ -143,7 +143,7 @@ identik, di layar yang gunanya justru membedakan unit. Tabel singkatan manual
 juga ikut basi tiap reorganisasi. Yang dipakai: nama penuh + `truncate` CSS +
 `title` berisi teks lengkap. 6 unit test menjaga semua aturan di atas.
 
-### Pencarian debounce (`src/app/PencarianDebounce.tsx`)
+### Pencarian debounce (`src/components/forms/PencarianDebounce.tsx`)
 
 Semua kotak "Cari nama atau NIP" (8 halaman: `/pegawai`, `/kasubag/pegawai`,
 `/admin/role-assignment`, `/osdma/update-sk`, `/ppabp/rekening`,
@@ -172,7 +172,7 @@ Nomor halaman (`?hal=`) ikut di-reset tiap pencarian berubah - hasil baru
 hampir selalu lebih pendek, dan bertahan di "halaman 5" berarti mendarat di
 tabel kosong yang terlihat seperti "tidak ada hasil".
 
-### Dropdown searchable (`src/app/SearchableSelect.tsx`)
+### Dropdown searchable (`src/components/forms/SearchableSelect.tsx`)
 
 SEMUA `<select>` di aplikasi diganti komponen ini (grep `<select` sekarang
 cuma menemukan komentar + string fallback di file komponennya sendiri) -
@@ -385,7 +385,7 @@ Kinerja, Uang Makan, dan Uang Lembur - dari Presensi sampai ADK"*. Kata
 datang dari Web Gaji lewat upload, pembayarannya di SAKTI, jadi menyebutnya
 overclaim dan akan ditagih di forum yang salah.
 
-**`src/app/GajihubLogo.tsx` (BARU)** - mark-nya diekstrak dari `AppShell.tsx`
+**`src/components/layout/GajihubLogo.tsx` (BARU)** - mark-nya diekstrak dari `AppShell.tsx`
 begitu pemakainya jadi dua. Lambang merek yang disalin ke dua berkas pasti
 berbeda cepat atau lambat, dan bedanya baru kelihatan waktu keduanya terbuka
 berdampingan. Dua rupa, dan bedanya BUKAN selera - keduanya soal latar:

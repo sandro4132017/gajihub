@@ -564,7 +564,7 @@ kali **18** hari — aritmatikanya tidak bisa diperiksa dari layar, dan selisih 
 hari itu tidak punya tempat untuk dijelaskan.
 
 `src/business-logic/rincianUangMakan.ts` (PURE, 13 unit test) +
-`src/app/RincianUangMakan.tsx`, dipasang di `/uang-makan` (per kartu) dan
+`src/components/shared/RincianUangMakan.tsx`, dipasang di `/uang-makan` (per kartu) dan
 `/saya`. **Tidak ada migrasi** — `jumlahHariDibayar`, `tarifHarian`, dan
 golongan semuanya sudah tersimpan; yang belum ada cuma penjelasannya.
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { uploadRekapPredikatAction, type UploadRekapPredikatFormState } from "./actions";
-import { NAMA_BULAN } from "../../bulan";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { RiErrorWarningLine } from "react-icons/ri";
 import { IoMdCheckmark } from "react-icons/io";
 

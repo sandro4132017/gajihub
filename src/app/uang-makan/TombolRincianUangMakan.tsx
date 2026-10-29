@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Modal } from "../Modal";
-import { RincianUangMakan } from "../RincianUangMakan";
+import { Modal } from "../../components/feedback/Modal";
+import { RincianUangMakan } from "../../components/shared/RincianUangMakan";
 import type { InputRincianUangMakan } from "../../business-logic/rincianUangMakan";
 
 interface TombolRincianUangMakanProps {

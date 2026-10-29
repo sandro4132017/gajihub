@@ -7,15 +7,15 @@ import {
   canUploadRekapPresensi,
   type AuthUser,
 } from "../../../../auth/permissions";
-import { AksesDitolak } from "../../../AksesDitolak";
-import { NAMA_BULAN } from "../../../bulan";
-import { SearchableSelect } from "../../../SearchableSelect";
+import { AksesDitolak } from "../../../../components/feedback/AksesDitolak";
+import { NAMA_BULAN } from "../../../../lib/format/bulan";
+import { SearchableSelect } from "../../../../components/forms/SearchableSelect";
 import { periodePunyaPresensiHarian, resolvePeriode } from "../../../periodeDefault";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../../business-logic/tarifTukinPokok";
-import { RincianPotonganKehadiran } from "../../../RincianPotonganKehadiran";
+import { RincianPotonganKehadiran } from "../../../../components/shared/RincianPotonganKehadiran";
 import { dikecualikanPotonganKehadiran } from "../../../../business-logic/pejabatPimpinanTinggi";
-import { BadgePejabatEselon } from "../../../BadgePejabatEselon";
-import { LABEL_STATUS, NAMA_HARI, jamTeks, lemburTeks } from "../../../presensiTampilan";
+import { BadgePejabatEselon } from "../../../../components/shared/BadgePejabatEselon";
+import { LABEL_STATUS, NAMA_HARI, jamTeks, lemburTeks } from "../../../../lib/format/presensiTampilan";
 import { KoreksiJamForm } from "./KoreksiJamForm";
 import { TabelRincianJamKerja, type BarisTabelRincianJamKerja } from "./TabelRincianJamKerja";
 import { TabelBandingEpresensi } from "./TabelBandingEpresensi";
@@ -28,7 +28,7 @@ import {
   potonganHarianPersen,
   rincianJamKerjaHari,
 } from "../../../../business-logic/rincianJamKerjaHarian";
-import { HALAMAN } from "../../../layoutHalaman";
+import { HALAMAN } from "../../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

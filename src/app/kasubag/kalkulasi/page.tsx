@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { canAjukanKalkulasiTukinMassalUnit, canExportRekapUnit } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
-import { FilterBar } from "../../FilterBar";
-import { InfoIkon } from "../../InfoIkon";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
+import { FilterBar } from "../../../components/forms/FilterBar";
+import { InfoIkon } from "./InfoIkon";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
-import { NAMA_BULAN } from "../../bulan";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { periodePunyaPredikatKinerja, resolvePeriode } from "../../periodeDefault";
 import { ambilAksesUnit } from "../access";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../business-logic/tarifTukinPokok";
@@ -16,15 +16,15 @@ import { LABEL_PREDIKAT } from "../../tukin/predikat-kinerja/predikat";
 import { KalkulasiMassalForm } from "./KalkulasiMassalForm";
 import { PanelKesiapan } from "./PanelKesiapan";
 import { BantuanRincianTukin } from "./BantuanRincianTukin";
-import { SumberAcuan } from "../../SumberAcuan";
+import { SumberAcuan } from "../../../components/shared/SumberAcuan";
 import { ambilSumberData, keSumberAcuan } from "../../sumberData";
 import { periksaKesiapanKalkulasi } from "../../../business-logic/kesiapanKalkulasi";
 import { sebabPerluHitungUlang } from "../../../business-logic/kalkulasiBasi";
 import { KoreksiLemburForm } from "./KoreksiLemburForm";
-import { Paginasi, hitungPaginasi } from "../../Paginasi";
-import { BadgePejabatEselon } from "../../BadgePejabatEselon";
-import { TAMPILKAN_NOMINAL_LEMBUR } from "../../tampilUangLembur";
-import { lemburTeks } from "../../presensiTampilan";
+import { Paginasi, hitungPaginasi } from "../../../components/tables/Paginasi";
+import { BadgePejabatEselon } from "../../../components/shared/BadgePejabatEselon";
+import { TAMPILKAN_NOMINAL_LEMBUR } from "../../../lib/format/tampilUangLembur";
+import { lemburTeks } from "../../../lib/format/presensiTampilan";
 import { PengecualianForm, BatalPengecualianForm } from "./PengecualianForm";
 import {
   alasanDariKode,
@@ -42,7 +42,7 @@ import { VerifikasiTabelPanel } from "../kirim/VerifikasiTabelPanel";
 import { TabelPemeriksaanLembur } from "./TabelPemeriksaanLembur";
 import { TabelPerubahanPegawai } from "./TabelPerubahanPegawai";
 import { PanelTteSptjm } from "./PanelTteSptjm";
-import { HALAMAN } from "../../layoutHalaman";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 
 export const dynamic = "force-dynamic";

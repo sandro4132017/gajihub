@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { tglTampil } from "../../../tanggalTampil";
+import { tglTampil } from "../../../../lib/format/tanggalTampil";
 import {
   koreksiJamPresensiAction,
   hapusKoreksiJamAction,

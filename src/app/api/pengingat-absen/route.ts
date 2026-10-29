@@ -6,8 +6,8 @@ import {
   pesanCheckout,
   susunDaftarPengingat,
 } from "../../../business-logic/pengingatAbsen";
-import { NAMA_BULAN } from "../../bulan";
-import { NAMA_HARI } from "../../presensiTampilan";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
+import { NAMA_HARI } from "../../../lib/format/presensiTampilan";
 
 export const dynamic = "force-dynamic";
 

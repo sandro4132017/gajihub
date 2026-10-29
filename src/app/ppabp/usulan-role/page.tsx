@@ -1,11 +1,11 @@
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canUsulkanPerubahanRole, type AuthUser } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
-import { StatusBadge } from "../../StatusBadge";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
+import { StatusBadge } from "../../../components/feedback/StatusBadge";
 import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
 import { UsulkanPerubahanRoleForm } from "./UsulkanPerubahanRoleForm";
-import { HALAMAN } from "../../layoutHalaman";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

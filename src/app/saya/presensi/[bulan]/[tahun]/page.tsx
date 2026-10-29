@@ -2,10 +2,10 @@ import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
 import { getSessionAccount } from "../../../../../auth/getSessionAccount";
 import { canViewDataSendiri } from "../../../../../auth/permissions";
-import { AksesDitolak } from "../../../../AksesDitolak";
-import { NAMA_BULAN } from "../../../../bulan";
-import { jamTeks, labelStatus, lemburTeks, namaHari, tanggalTeks } from "../../../../presensiTampilan";
-import { HALAMAN } from "../../../../layoutHalaman";
+import { AksesDitolak } from "../../../../../components/feedback/AksesDitolak";
+import { NAMA_BULAN } from "../../../../../lib/format/bulan";
+import { jamTeks, labelStatus, lemburTeks, namaHari, tanggalTeks } from "../../../../../lib/format/presensiTampilan";
+import { HALAMAN } from "../../../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

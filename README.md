@@ -149,9 +149,17 @@ gajihub/
 │   ├── approval/               # Engine evaluasi approval berjenjang digital
 │   ├── auth/                   # Autentikasi sesi, RBAC permissions, dan Naco SSO
 │   ├── business-logic/         # Pure functions kalkulasi Tukin, UM, Lembur, SBM
-│   ├── db/                     # Helper koneksi database & audit logging
+│   ├── components/             # Komponen UI yang dipakai lintas role
+│   │   ├── charts/             # KitGrafik, DonatInteraktif
+│   │   ├── dashboard/          # Dashboard lintas unit (PPABP & Pimpinan)
+│   │   ├── feedback/           # Modal, AksesDitolak, StatusBadge
+│   │   ├── forms/              # FilterBar, SearchableSelect, PencarianDebounce
+│   │   ├── layout/             # AppShell, AccountMenu, PanelKabar, logo
+│   │   ├── shared/             # SumberAcuan, BadgePejabatEselon, rincian potongan
+│   │   └── tables/             # Paginasi
 │   ├── jobs/                   # Scheduler & job runner sinkronisasi data
-│   ├── lib/                    # Prisma client singleton & utilities
+│   ├── lib/                    # Prisma client, konfigurasi SIAP, TTE, utilities
+│   │   └── format/             # Format tampilan: bulan, tanggal, presensi, lembur
 │   ├── types/                  # Definisi TypeScript domain types
 │   ├── validation/             # Validation gate anomali data sebelum approval
 │   └── middleware.ts           # Route protection & session guard

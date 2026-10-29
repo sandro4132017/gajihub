@@ -278,7 +278,7 @@ export function PanelTteSptjm({
             <>
               <span className="hidden sm:inline-block h-4 w-px bg-line-2" />
               <a
-                href={dokumen.fileSignedPath}
+                href={`/berkas/tte/${dokumen.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs"
@@ -286,7 +286,7 @@ export function PanelTteSptjm({
                 <FiEye className="size-3.5 text-biru" /> Lihat PDF
               </a>
               <a
-                href={dokumen.fileSignedPath}
+                href={`/berkas/tte/${dokumen.id}?unduh=1`}
                 download={namaFileResmi}
                 target="_blank"
                 rel="noopener noreferrer"

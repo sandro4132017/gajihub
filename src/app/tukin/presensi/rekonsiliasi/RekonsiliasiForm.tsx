@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { rekonsiliasiAbsensiAction, type RekonsiliasiFormState } from "./actions";
-import { NAMA_BULAN } from "../../../bulan";
+import { NAMA_BULAN } from "../../../../lib/format/bulan";
 import type { BedaHarian, HasilBandingPegawai } from "../../../../business-logic/bandingRekapPresensi";
 
 const AWAL: RekonsiliasiFormState = {};

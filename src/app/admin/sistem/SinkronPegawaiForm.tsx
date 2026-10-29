@@ -48,7 +48,7 @@ export function SinkronPegawaiForm() {
   }
 
   return (
-    <section className="card mt-4 border-l-4 border-l-navy p-4">
+    <section className="rounded-2xl border border-line border-l-4 border-l-navy bg-surface p-5 shadow-xs">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-bold text-ink">Sinkronisasi data pegawai dari SIAP</h2>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { NAMA_BULAN } from "@/app/bulan";
+import { NAMA_BULAN } from "@/lib/format/bulan";
 import { apakahHasilSimulasi } from "../../../../lib/tte/simulasiTte";
 import FormValidasiNaskah from "./FormValidasiNaskah";
 import { hashUntukDibaca } from "../../../../lib/tte/hashBerkas";

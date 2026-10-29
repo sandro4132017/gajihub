@@ -3,6 +3,18 @@ import pg from 'pg';
 import path from 'path';
 import fs from 'fs';
 
+// Kredensial HANYA dari .env - tidak ada nilai cadangan di kode (repo ini publik).
+try {
+  (process as NodeJS.Process & { loadEnvFile?: (p?: string) => void }).loadEnvFile?.();
+} catch {
+  // .env tidak ada - wajibEnv() di bawah yang melapor.
+}
+function wajibEnv(nama: string): string {
+  const nilai = process.env[nama];
+  if (!nilai) throw new Error(`${nama} belum diisi di .env`);
+  return nilai;
+}
+
 async function main() {
   console.log('=== MEMULAI EXPORT FORMAT PERSIS REFERENSI (BIRO KEUANGAN & BMN 2024-2026) ===');
   const startTime = Date.now();
@@ -11,8 +23,8 @@ async function main() {
     host: process.env.EPRESENSI_HOST || '192.168.221.96',
     port: Number(process.env.EPRESENSI_PORT || 4020),
     database: process.env.EPRESENSI_DB || 'presensi_kemnaker',
-    user: process.env.EPRESENSI_USER || 'biro_keu',
-    password: process.env.EPRESENSI_PASSWORD || 'K3mN@ker#2026!Db',
+    user: wajibEnv("EPRESENSI_USER"),
+    password: wajibEnv("EPRESENSI_PASSWORD"),
     connectionTimeoutMillis: 15000,
   });
   await client.connect();
@@ -37,7 +49,10 @@ async function main() {
   await client.end();
 
   console.log('2. Membuat berkas Excel sesuai format referensi...');
-  const outPath = path.join(process.cwd(), 'Excel', 'presensi-biro-keuangan-dan-barang-milik-negara-2024-2026.xlsx');
+  // Hasil ekspor berisi data presensi pegawai: disimpan di storage/exports (di-ignore git,
+  // di luar public/) - JANGAN ke public/, yang disajikan lewat URL.
+  fs.mkdirSync(path.join(process.cwd(), 'storage', 'exports'), { recursive: true });
+  const outPath = path.join(process.cwd(), 'storage', 'exports', 'presensi-biro-keuangan-dan-barang-milik-negara-2024-2026.xlsx');
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Sheet1', {
@@ -82,8 +97,6 @@ async function main() {
   console.log(`3. Menyimpan ke ${outPath}...`);
   await wb.xlsx.writeFile(outPath);
 
-  const pubPath = path.join(process.cwd(), 'public', 'downloads', 'presensi-biro-keuangan-dan-barang-milik-negara-2024-2026.xlsx');
-  fs.copyFileSync(outPath, pubPath);
 
   const stats = fs.statSync(outPath);
   console.log(`=== SELESAI ===`);

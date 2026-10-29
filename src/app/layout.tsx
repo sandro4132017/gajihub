@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { AppShell } from "./AppShell";
+import { AppShell } from "../components/layout/AppShell";
 import { getSessionAccount } from "../auth/getSessionAccount";
 
 export const metadata: Metadata = {

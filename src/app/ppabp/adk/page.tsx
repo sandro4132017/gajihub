@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
-import { SearchableSelect } from "../../SearchableSelect";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 import { canGenerateAdk, canKembalikanRekapUnit, type AuthUser } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
-import { NAMA_BULAN } from "../../bulan";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { periodePunyaTukin, resolvePeriode } from "../../periodeDefault";
 import { kelompokkanPerBank } from "../../../business-logic/rekeningPegawai";
 import { dataUangMakanHarian } from "./dataUangMakanHarian";
@@ -14,7 +14,7 @@ import { PratinjauAdkUangLembur } from "./PratinjauAdkUangLembur";
 import {
   TAMPILKAN_ADK_LEMBUR,
   TAMPILKAN_NOMINAL_LEMBUR,
-} from "../../tampilUangLembur";
+} from "../../../lib/format/tampilUangLembur";
 import { PapanProgres } from "../../kasubag/kirim/PapanProgres";
 import { rangkumProgres } from "../../../business-logic/pengirimanUnit";
 import {
@@ -28,8 +28,8 @@ import {
   labelJenisPegawai,
   wherePegawaiTanpaJenis,
 } from "./jenisPegawaiAdk";
-import { HALAMAN } from "../../layoutHalaman";
-import { SumberAcuan } from "../../SumberAcuan";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
+import { SumberAcuan } from "../../../components/shared/SumberAcuan";
 import { PanelTteSptjmPpk } from "./PanelTteSptjmPpk";
 import {
   FiDownload,
@@ -178,7 +178,7 @@ export default async function ExportAdkPage({
   const totalApproved = tukinPeriode.length + umIkut + pratinjauLembur.pegawai.length;
   const totalBelumApproved = tukinDraft + umDraft + lemburDraft;
 
-  // 5. PENGECEKAN IDENTITAS WEB GAJI (PNS vs PPPK)
+  // 5. PENGECEKAN JENIS KEPEGAWAIAN DARI SIAP (PNS vs PPPK)
   const whereTanpaJenis = {
     periodeBulan: bln,
     periodeTahun: thn,
@@ -725,11 +725,8 @@ export default async function ExportAdkPage({
                 {tanpaJenisBerkas.length} pegawai belum terpetakan jenisnya (PNS/PPPK)
               </p>
               <p className="mt-1 text-muted">
-                Pegawai ini tidak masuk saat filter jenis aktif. Lengkapi data jenis kepegawaiannya di menu{" "}
-                <Link href="/ppabp/basis-data-gaji" className="font-bold text-teal-deep underline">
-                  Basis Data Gaji
-                </Link>
-                , atau pilih &quot;Semua pegawai&quot; pada filter.
+                Pegawai ini tidak masuk saat filter jenis aktif. Jenis kepegawaian diambil dari SIAP - jalankan
+                sinkronisasi pegawai, atau pilih &quot;Semua pegawai&quot; pada filter.
               </p>
             </div>
           )}

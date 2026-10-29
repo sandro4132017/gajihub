@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { canAjukanSkKgb } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { ambilAksesUnit } from "../access";
 import { SatkerPicker } from "../SatkerPicker";
 import { AjukanSkKgbForm } from "./AjukanSkKgbForm";
-import { HALAMAN } from "../../layoutHalaman";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { GrDocument } from "react-icons/gr";
 import { FiClock, FiCheckCircle, FiXCircle } from "react-icons/fi";
 

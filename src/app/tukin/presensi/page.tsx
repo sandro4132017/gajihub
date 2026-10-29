@@ -12,18 +12,18 @@ import {
   canExportRekapUnit,
   type AuthUser,
 } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
-import { NAMA_BULAN, daftarTahunPeriode } from "../../bulan";
-import { SearchableSelect } from "../../SearchableSelect";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
+import { NAMA_BULAN, daftarTahunPeriode } from "../../../lib/format/bulan";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 import { periodePunyaRekapPresensi, resolvePeriode } from "../../periodeDefault";
 import { SinkronisasiPresensi } from "./SinkronisasiPresensi";
 import { ambilSumberData, keSumberAcuan } from "../../sumberData";
-import { PencarianDebounce } from "../../PencarianDebounce";
-import { Paginasi, hitungPaginasi } from "../../Paginasi";
-import { BadgePejabatEselon } from "../../BadgePejabatEselon";
+import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
+import { Paginasi, hitungPaginasi } from "../../../components/tables/Paginasi";
+import { BadgePejabatEselon } from "../../../components/shared/BadgePejabatEselon";
 import { uraiJenisCuti, LABEL_JENIS_CUTI } from "../../../business-logic/jenisCuti";
-import { SumberAcuan } from "../../SumberAcuan";
-import { HALAMAN } from "../../layoutHalaman";
+import { SumberAcuan } from "../../../components/shared/SumberAcuan";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { RiBuildingLine } from "react-icons/ri";
 import { GrGroup } from "react-icons/gr";
 

@@ -60,7 +60,7 @@ export function resolveRoleAktif(user: PemilikRole, kandidat: Role | null | unde
  *
  * Dulu login mengarahkan semua role non-PEGAWAI ke /tukin, padahal /tukin
  * bahkan tidak ada di menu OSDMA/PIMPINAN/ADMIN (lihat MENU_* di
- * src/app/AppShell.tsx) - jadi mereka mendarat di halaman yang bukan
+ * src/components/layout/AppShell.tsx) - jadi mereka mendarat di halaman yang bukan
  * "rumah"-nya. Sekarang tiap role diarahkan ke dashboard menu pertamanya.
  */
 export const LANDING_ROLE: Record<Role, string> = {

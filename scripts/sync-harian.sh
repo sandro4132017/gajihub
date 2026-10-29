@@ -15,7 +15,7 @@ fi
 NIP_OPERATOR="${GAJIHUB_SYNC_NIP:-}"
 if [ -z "$NIP_OPERATOR" ]; then
   echo "FATAL: GAJIHUB_SYNC_NIP belum diisi." >&2
-  echo "  Contoh: GAJIHUB_SYNC_NIP=198703232015031002 scripts/sync-harian.sh --dry-run" >&2
+  echo "  Contoh: GAJIHUB_SYNC_NIP=<NIP operator> scripts/sync-harian.sh --dry-run" >&2
   exit 1
 fi
 

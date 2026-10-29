@@ -4,6 +4,18 @@ import path from 'path';
 import fs from 'fs';
 import { bukaPoolSiap } from '../src/lib/siapConfig';
 
+// Kredensial HANYA dari .env - tidak ada nilai cadangan di kode (repo ini publik).
+try {
+  (process as NodeJS.Process & { loadEnvFile?: (p?: string) => void }).loadEnvFile?.();
+} catch {
+  // .env tidak ada - wajibEnv() di bawah yang melapor.
+}
+function wajibEnv(nama: string): string {
+  const nilai = process.env[nama];
+  if (!nilai) throw new Error(`${nama} belum diisi di .env`);
+  return nilai;
+}
+
 const NAMA_BULAN = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
@@ -128,8 +140,8 @@ async function main() {
     host: process.env.EPRESENSI_HOST || '192.168.221.96',
     port: Number(process.env.EPRESENSI_PORT || 4020),
     database: process.env.EPRESENSI_DB || 'presensi_kemnaker',
-    user: process.env.EPRESENSI_USER || 'biro_keu',
-    password: process.env.EPRESENSI_PASSWORD || 'K3mN@ker#2026!Db',
+    user: wajibEnv("EPRESENSI_USER"),
+    password: wajibEnv("EPRESENSI_PASSWORD"),
     connectionTimeoutMillis: 15000,
   });
   await pgClient.connect();
@@ -323,7 +335,7 @@ async function main() {
   appendSheetTahunan('Rekap Bulanan 2024', res2024.rows, 'FF475569'); // Slate
 
   // 6. Simpan File
-  const outDir = path.join(process.cwd(), 'public', 'downloads');
+  const outDir = path.join(process.cwd(), 'storage', 'exports');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
   const outFileName = 'Review_Jam_Kerja_dan_Absensi_Pegawai_Kemnaker_2024_2026.xlsx';

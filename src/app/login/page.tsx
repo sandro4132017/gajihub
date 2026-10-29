@@ -1,4 +1,4 @@
-import { GajihubLogo } from "../GajihubLogo";
+import { GajihubLogo } from "../../components/layout/GajihubLogo";
 import { LoginForm } from "./LoginForm";
 import { ssoAktif } from "../../auth/sso";
 import { getModeJaringan } from "../../auth/modeJaringan";

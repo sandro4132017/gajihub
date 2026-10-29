@@ -1,25 +1,20 @@
 // ============================================================================
 // PEMISAHAN ADK PNS vs ADK P3K.
 //
-// SUMBERNYA `IdentitasWebGaji.jenisPegawai`, BUKAN format golongan.
+// SUMBERNYA `Pegawai.jenisPegawai` DARI SIAP (PEGAWAI.STATUSPEGAWAIID, lihat
+// src/business-logic/jenisPegawai.ts), BUKAN format golongan dan BUKAN lagi
+// berkas basis data gaji Kemenkeu. Keputusan user 2026-10-27/28: data
+// kepegawaian diambil dari database SIAP; Excel hanya untuk data tertentu
+// yang tidak ada di SIAP (rekening, nomor SK grading).
 //
 // Golongan memang terlihat memisahkan keduanya - PNS berformat "III/d",
-// jenjang PPPK berupa angka Romawi telanjang "IX" - dan penurunan itu memang
-// dipakai di tempat lain (tarifSbm.ts). Tapi diukur pada data 5.302 pegawai
-// (2026-09-02) penurunan itu SALAH pada 14 orang: identitas Web Gaji menyebut
-// mereka PPPK sementara golongannya berformat PNS. Empat belas orang di berkas
-// yang keliru adalah empat belas pembayaran yang tidak akan diproses.
+// jenjang PPPK berupa angka Romawi telanjang "IX" - tapi penurunan itu
+// terbukti keliru pada belasan orang (2026-09-02), jadi tidak dipakai.
 //
-// `IdentitasWebGaji` datang dari berkas basis data gaji Kemenkeu sendiri (sheet
-// data_PNS / data_P3K), jadi ia BUKAN tebakan - itu jawaban Web Gaji sendiri
-// atas pertanyaan "orang ini masuk berkas yang mana".
-//
-// YANG TIDAK PUNYA IDENTITAS TIDAK DITEBAK. Pada data yang sama, 329 pegawai
-// belum tercakup berkas basis data gaji. Mereka TIDAK dimasukkan ke salah satu
-// bucket lewat golongannya - mereka keluar dari berkas begitu penyaringan
-// jenis dipakai, dan jumlahnya ditampilkan di layar supaya kelihatan sebelum
-// berkasnya dikirim. Menebak akan menaruh sebagian dari mereka di berkas yang
-// salah tanpa ada yang tahu.
+// YANG JENISNYA BELUM TERCATAT TIDAK DITEBAK. Mereka keluar dari berkas begitu
+// penyaringan jenis dipakai, dan jumlahnya ditampilkan di layar supaya
+// kelihatan sebelum berkasnya dikirim. Kolomnya terisi lewat sinkronisasi
+// pegawai (`npm run sync:pegawai` atau halaman Sistem admin).
 // ============================================================================
 
 export type JenisPegawaiAdk = "PNS" | "P3K";
@@ -27,10 +22,7 @@ export type JenisPegawaiAdk = "PNS" | "P3K";
 export interface PilihanJenisPegawai {
   kode: JenisPegawaiAdk;
   label: string;
-  /**
-   * Nilai `IdentitasWebGaji.jenisPegawai` yang masuk kelompok ini, apa adanya
-   * dari berkas Kemenkeu.
-   */
+  /** Nilai `Pegawai.jenisPegawai` (dari SIAP) yang masuk kelompok ini. */
   nilaiDiData: readonly string[];
 }
 
@@ -45,9 +37,8 @@ export const JENIS_PEGAWAI_ADK: readonly PilihanJenisPegawai[] = [
   {
     kode: "P3K",
     label: "ADK P3K",
-    // Dua ejaan dijaga sekaligus: berkas Kemenkeu memakai "PPPK" di kolom
-    // JENIS PEGAWAI sementara nama sheet-nya "data_P3K". Kalau suatu saat
-    // kolomnya ikut memakai "P3K", penyaringan ini tidak diam-diam kosong.
+    // SIAP menulis "PPPK"; "P3K" dijaga juga supaya ejaan lain tidak membuat
+    // penyaringan ini diam-diam kosong.
     nilaiDiData: ["PPPK", "P3K"],
   },
 ] as const;
@@ -56,8 +47,8 @@ export const JENIS_PEGAWAI_ADK: readonly PilihanJenisPegawai[] = [
 export const SEMUA_NILAI_JENIS: readonly string[] = JENIS_PEGAWAI_ADK.flatMap((j) => [...j.nilaiDiData]);
 
 /**
- * Potongan `where` untuk pegawai yang TIDAK masuk kelompok mana pun - belum
- * punya identitas Web Gaji, atau punya tapi jenisnya di luar daftar.
+ * Potongan `where` untuk pegawai yang TIDAK masuk kelompok mana pun - jenisnya
+ * belum tercatat dari SIAP, atau di luar daftar.
  *
  * Dipakai untuk MENGHITUNG, bukan menyaring berkas. Angkanya ditampilkan di
  * halaman Export ADK supaya orang yang memilih "ADK PNS" tahu berapa pegawai
@@ -65,7 +56,10 @@ export const SEMUA_NILAI_JENIS: readonly string[] = JENIS_PEGAWAI_ADK.flatMap((j
  * dari pegawai yang menelepon karena tidak dibayar.
  */
 export function wherePegawaiTanpaJenis() {
-  return { NOT: { identitasWebGaji: { jenisPegawai: { in: [...SEMUA_NILAI_JENIS] } } } };
+  // Dibungkus AND, bukan OR telanjang: hasil fungsi ini disebar (`...`) ke
+  // `where` yang bisa sudah punya `OR` sendiri (mis. pencarian nama/NIP di
+  // /pegawai) - OR telanjang akan menimpanya diam-diam.
+  return { AND: [{ OR: [{ jenisPegawai: null }, { jenisPegawai: { notIn: [...SEMUA_NILAI_JENIS] } }] }] };
 }
 
 export function bacaJenisPegawai(nilai: string | null | undefined): JenisPegawaiAdk | null {
@@ -107,5 +101,5 @@ export function labelJenisPegawai(jenis: JenisPegawaiAdk | null): string {
 export function wherePegawaiJenis(jenis: JenisPegawaiAdk | null) {
   if (!jenis) return {};
   const nilai = JENIS_PEGAWAI_ADK.find((j) => j.kode === jenis)?.nilaiDiData ?? [];
-  return { identitasWebGaji: { jenisPegawai: { in: [...nilai] } } };
+  return { jenisPegawai: { in: [...nilai] } };
 }

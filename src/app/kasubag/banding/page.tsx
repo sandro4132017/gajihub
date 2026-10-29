@@ -1,12 +1,12 @@
 import { prisma } from "../../../lib/prisma";
 import { canViewRekapUnitKerja } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { ambilAksesUnit } from "../access";
-import { FilterBar } from "../../FilterBar";
-import { SumberAcuan } from "../../SumberAcuan";
+import { FilterBar } from "../../../components/forms/FilterBar";
+import { SumberAcuan } from "../../../components/shared/SumberAcuan";
 import { BandingKasubagCard, type BandingKasubagItem } from "./BandingKasubagCard";
-import { HALAMAN } from "../../layoutHalaman";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canUploadRekapPresensi, type AuthUser } from "../../../../auth/permissions";
-import { AksesDitolak } from "../../../AksesDitolak";
-import { SumberAcuan } from "../../../SumberAcuan";
+import { AksesDitolak } from "../../../../components/feedback/AksesDitolak";
+import { SumberAcuan } from "../../../../components/shared/SumberAcuan";
 import { RekonsiliasiForm } from "./RekonsiliasiForm";
-import { HALAMAN } from "../../../layoutHalaman";
+import { HALAMAN } from "../../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

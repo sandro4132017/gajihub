@@ -1,10 +1,10 @@
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canViewRekonsiliasiLintasSatker, type AuthUser } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
-import { StatusBadge } from "../../StatusBadge";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
+import { StatusBadge } from "../../../components/feedback/StatusBadge";
 import { PutuskanRekonsiliasiForm } from "./PutuskanRekonsiliasiForm";
-import { HALAMAN } from "../../layoutHalaman";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

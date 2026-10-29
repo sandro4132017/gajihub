@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { SinkronPresensiFormState } from "./actionsSync";
-import { NAMA_BULAN } from "../../bulan";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { PilihPeriode } from "./PilihPeriode";
 
 const INITIAL_STATE: SinkronPresensiFormState = {};

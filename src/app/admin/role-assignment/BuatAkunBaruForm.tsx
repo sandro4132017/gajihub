@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import type { Role } from "@prisma/client";
 import { buatAkunBaruAction, type BuatAkunBaruFormState } from "./actions";
 import { LABEL_ROLE } from "../../../auth/roleLabel";
-import { SearchableSelect } from "../../SearchableSelect";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 
 const INITIAL_STATE: BuatAkunBaruFormState = {};
 const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
@@ -20,11 +20,14 @@ export function BuatAkunBaruForm({
   const [role, setRole] = useState<Role>("PEGAWAI");
 
   if (state.success) {
-    return <p className="card mt-4 p-4 text-sm font-semibold text-green">{state.success}</p>;
+    return <p className="p-4 text-sm font-semibold text-green">{state.success}</p>;
   }
 
   return (
-    <form action={formAction} className="card mt-4 grid gap-3 p-4 sm:grid-cols-2">
+    <form action={formAction} className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+      <p className="text-sm text-ink-2 sm:col-span-2">
+        Pegawai ini belum punya akun. Pilih role-nya untuk membuat akun baru.
+      </p>
       <input type="hidden" name="pegawaiId" value={pegawai.id} />
       <div className="sm:col-span-2">
         <label className="field-label">Role</label>

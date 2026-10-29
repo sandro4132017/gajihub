@@ -4,10 +4,10 @@ import { getSessionAccount } from "../../../../../auth/getSessionAccount";
 import { canCetakSlipGajiSendiri } from "../../../../../auth/permissions";
 import { hitungTotalPenghasilanSlip } from "../../../../../business-logic/gajiInduk";
 import { getEselon1 } from "../../../../../business-logic/strukturEselon";
-import { AksesDitolak } from "../../../../AksesDitolak";
-import { NAMA_BULAN } from "../../../../bulan";
+import { AksesDitolak } from "../../../../../components/feedback/AksesDitolak";
+import { NAMA_BULAN } from "../../../../../lib/format/bulan";
 import { PrintButton } from "../../../PrintButton";
-import { TAMPILKAN_NOMINAL_LEMBUR } from "../../../../tampilUangLembur";
+import { TAMPILKAN_NOMINAL_LEMBUR } from "../../../../../lib/format/tampilUangLembur";
 
 export const dynamic = "force-dynamic";
 
@@ -127,7 +127,7 @@ export default async function SlipGajiPage({
     gajiBersih: gaji?.gajiBersih ?? 0,
     tunjanganKinerja: tukin?.tukinBersih ?? 0,
     uangMakan: uangMakan?.totalUangMakan ?? 0,
-    // Lihat src/app/tampilUangLembur.ts. Sekali slip tercetak, keterangan
+    // Lihat src/lib/format/tampilUangLembur.ts. Sekali slip tercetak, keterangan
     // "angka ini belum final" tidak ikut tercetak bersamanya.
     uangLembur: TAMPILKAN_NOMINAL_LEMBUR ? uangLembur?.totalUangLembur ?? 0 : 0,
     honorarium: gaji?.honorarium ?? 0,

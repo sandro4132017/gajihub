@@ -74,10 +74,6 @@ const nextConfig = {
             value: "max-age=31536000; includeSubDomains; preload",
           },
           {
-            key: "X-Frame-Options",
-            value: "DENY",
-          },
-          {
             key: "X-Content-Type-Options",
             value: "nosniff",
           },
@@ -94,6 +90,17 @@ const nextConfig = {
             value: "on",
           },
         ],
+      },
+      // X-Frame-Options dipisah per jalur: berkas privat (`/berkas/...`) boleh
+      // dibingkai halaman Gajihub sendiri untuk pratinjau PDF; selain itu DENY.
+      // Harus sama dengan nilaiXFrameOptions() di src/middleware.ts.
+      {
+        source: "/((?!berkas/).*)",
+        headers: [{ key: "X-Frame-Options", value: "DENY" }],
+      },
+      {
+        source: "/berkas/:path*",
+        headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }],
       },
     ];
   },

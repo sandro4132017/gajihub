@@ -12,20 +12,20 @@ import {
 } from "../../auth/permissions";
 import { daftarRoleTersedia } from "../../auth/roleAktif";
 import { labelRole } from "../../auth/roleLabel";
-import { AksesDitolak } from "../AksesDitolak";
-import { NAMA_BULAN } from "../bulan";
+import { AksesDitolak } from "../../components/feedback/AksesDitolak";
+import { NAMA_BULAN } from "../../lib/format/bulan";
 import { SkGradeForm } from "./SkGradeForm";
 import { PegawaiEditForm } from "./PegawaiEditForm";
-import { PencarianDebounce } from "../PencarianDebounce";
-import { Paginasi, hitungPaginasi } from "../Paginasi";
+import { PencarianDebounce } from "../../components/forms/PencarianDebounce";
+import { Paginasi, hitungPaginasi } from "../../components/tables/Paginasi";
 import {
   JENIS_PEGAWAI_ADK,
   bacaJenisPegawai,
   wherePegawaiJenis,
   wherePegawaiTanpaJenis,
 } from "../ppabp/adk/jenisPegawaiAdk";
-import { SearchableSelect } from "../SearchableSelect";
-import { HALAMAN } from "../layoutHalaman";
+import { SearchableSelect } from "../../components/forms/SearchableSelect";
+import { HALAMAN } from "../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 

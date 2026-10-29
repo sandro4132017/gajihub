@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "../../../../lib/prisma";
 import { ambilUserSesi } from "../../../../auth/getSessionAccount";
 import { canUploadRekapPresensi, type AuthUser } from "../../../../auth/permissions";
-import { tglTampil } from "../../../tanggalTampil";
+import { tglTampil } from "../../../../lib/format/tanggalTampil";
 
 /**
  * KOREKSI JAM PRESENSI SATU HARI - Pasal 10 ayat (2) Permenaker 15/2024.

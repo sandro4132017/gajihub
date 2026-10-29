@@ -56,8 +56,8 @@ satu batch pekerjaan, sebelum ganti chat.**
 - `src/validation/` - validation gate (Tukin, Uang Makan, Uang Lembur)
 - `src/jobs/` - job scheduler (Tukin, Uang Makan, Uang Lembur), sudah
   ditest jalan terhadap Postgres asli
-- `src/approval/` - approval digital berjenjang (Tukin, Uang Makan, Uang
-  Lembur), jumlah jenjang masih default sementara (lihat item 8)
+- ~~`src/approval/` - approval digital berjenjang~~ DIHAPUS 2026-10-28: sudah
+  diganti alur kirim rekap ke PPABP (lihat `gajihub-approval-siklus`)
 - `src/app/` - dashboard Next.js (Tukin, Uang Makan, Uang Lembur) + filter
   periode/satuan kerja
 - `src/auth/` - login SEMENTARA khusus approver (lihat model `AkunApprover`

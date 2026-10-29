@@ -1,21 +1,21 @@
 import { prisma } from "../../lib/prisma";
-import { FilterBar } from "../FilterBar";
-import { BadgeStatusKirim, keadaanKirimBaris } from "../StatusKirimBaris";
+import { FilterBar } from "../../components/forms/FilterBar";
+import { BadgeStatusKirim, keadaanKirimBaris } from "../../components/feedback/StatusKirimBaris";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewApproverDashboard } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
-import { AksesDitolak } from "../AksesDitolak";
+import { AksesDitolak } from "../../components/feedback/AksesDitolak";
 import {
   ALASAN_UANG_LEMBUR_DISEMBUNYIKAN,
   CATATAN_UANG_LEMBUR_BELUM_FINAL,
   TAMPILKAN_MENU_LEMBUR,
   TAMPILKAN_NOMINAL_LEMBUR_PEMANTAUAN,
-} from "../tampilUangLembur";
-import { HALAMAN } from "../layoutHalaman";
-import { SumberAcuan } from "../SumberAcuan";
-import { lemburTeks } from "../presensiTampilan";
-import { Paginasi, hitungPaginasi } from "../Paginasi";
-import { NAMA_BULAN } from "../bulan";
+} from "../../lib/format/tampilUangLembur";
+import { HALAMAN } from "../../components/layout/layoutHalaman";
+import { SumberAcuan } from "../../components/shared/SumberAcuan";
+import { lemburTeks } from "../../lib/format/presensiTampilan";
+import { Paginasi, hitungPaginasi } from "../../components/tables/Paginasi";
+import { NAMA_BULAN } from "../../lib/format/bulan";
 import { periodePunyaUangLembur, resolvePeriode } from "../periodeDefault";
 import { dataUangLemburHarian } from "../ppabp/adk/dataUangLemburHarian";
 import { PratinjauAdkUangLembur } from "../ppabp/adk/PratinjauAdkUangLembur";

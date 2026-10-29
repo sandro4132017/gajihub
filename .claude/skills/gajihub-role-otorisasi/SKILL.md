@@ -109,7 +109,7 @@ di CLAUDE.md buat gap yang masih terbuka.
   + Uang Makan + Uang Lembur + Total, tombol Cetak (`PrintButton.tsx`,
   `window.print()`, BUKAN generate PDF - belum ada library PDF, dan
   formatnya memang belum final jadi sengaja tidak invest ke situ dulu).
-  `src/app/AppShell.tsx` ditambah class `print:hidden` di sidebar/topbar
+  `src/components/layout/AppShell.tsx` ditambah class `print:hidden` di sidebar/topbar
   mobile supaya halaman ini bisa dicetak bersih tanpa chrome nav.
 - **TIDAK ADA** perubahan skema/model baru di langkah ini - murni UI di
   atas data yang sudah diseed. Upload bukti dukung banding TETAP belum ada
@@ -157,7 +157,7 @@ butuh filter bulan/tahun):
     `status`→"DRAFT" + `approvedAt`/`approvedBy`→null + refresh
     `calculatedAt` (siklus approval lama otomatis dianggap basi, harus
     approval ulang) - INI KONSISTEN dengan konvensi yang sudah ada
-    (`src/approval/approvalTukinService.ts`), TAPI berarti Kasubag TU
+    (`src/approval/approvalTukinService.ts`, modulnya sudah dihapus 2026-10-28), TAPI berarti Kasubag TU
     TIDAK BOLEH asal klik "Hitung sekarang" untuk pegawai yang datanya
     sudah APPROVED kalau tidak ada perubahan data presensi/kinerja -
     tombol ini akan mem-buka-lagi siklus approval yang sudah selesai.
@@ -209,7 +209,7 @@ butuh filter bulan/tahun):
   user supaya asumsi ini tidak "hilang" jadi keputusan diam-diam.
   `jenisHukuman` input bebas teks (bukan dropdown/enum), konsisten dengan
   schema.
-- `src/app/AppShell.tsx` - `MENU_KASUBAG` baru (Dashboard Unit, Pegawai
+- `src/components/layout/AppShell.tsx` - `MENU_KASUBAG` baru (Dashboard Unit, Pegawai
   Unit, Kalkulasi, 3 dashboard approver Tukin/UM/Lembur yang sudah ada,
   Verifikasi Banding, SK KGB, SK Hukuman Disiplin, Data Saya). Link "Data
   Saya" SEKARANG ditambahkan buat KASUBAG_TU (item yang sengaja ditunda
@@ -273,7 +273,7 @@ halaman-halaman ini:
   `ApprovalForm.tsx` (Tukin/UM/Lembur) yang punya tombol "Minta revisi"
   juga, karena Banding/SK KGB/SK Hukdis model-nya cuma
   `DISETUJUI`/`DITOLAK`, tidak ada siklus revisi terpisah.
-- `src/app/AppShell.tsx` - `MENU_OSDMA` baru (Dashboard OSDMA, Approval
+- `src/components/layout/AppShell.tsx` - `MENU_OSDMA` baru (Dashboard OSDMA, Approval
   Final Banding, SK KGB, SK Hukuman Disiplin, Update SK Pegawai, Data
   Saya). TIDAK ikut 3 dashboard approver Tukin/UM/Lembur (`MENU_APPROVER`)
   - itu domain Kasubag TU (jenjang 1) + PPABP (jenjang final), bukan OSDMA.
@@ -443,7 +443,7 @@ bypass otorisasi (`cekRoleAtauAdmin` dkk) yang sudah ada sejak langkah 3:
   fungsional, karena tidak ada adapter alternatif (non-Mock) buat
   di-switch ke situ sampai akses API resmi tersedia (lihat CLAUDE.md item
   open #5).
-- `src/app/AppShell.tsx` - `MENU_ADMIN` baru (Dashboard Admin, Kelola
+- `src/components/layout/AppShell.tsx` - `MENU_ADMIN` baru (Dashboard Admin, Kelola
   Assignment Role, Eksekusi Usulan Role, Konfigurasi & Kesehatan Sistem,
   Data Saya) - SENGAJA TIDAK mencantumkan link ke `/kasubag`/`/osdma`/
   `/ppabp`/dashboard approver di sidebar (biar tidak jadi gabungan 5 menu
@@ -470,7 +470,7 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
 "read-only, tanpa approval/ubah data apapun"):
 - **Refactor besar sebelum nulis halaman baru**: konten dashboard
   `/ppabp/page.tsx` (langkah 4d) di-extract jadi komponen shared
-  `src/app/DashboardLintasUnit.tsx` (`DashboardLintasUnit({searchParams,
+  `src/components/dashboard/DashboardLintasUnit.tsx` (`DashboardLintasUnit({searchParams,
   authUser, readOnly})`) - SATU-SATUNYA cara menghindari duplikasi logic
   query+tally yang sama persis, karena role matrix eksplisit bilang
   dashboard Pimpinan "SAMA seperti PPABP". `/ppabp/page.tsx` SEKARANG
@@ -501,7 +501,7 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
   histori approval SAMA seperti sebelumnya, TAPI TIDAK LAGI lihat tombol
   aksi apapun. INI FIX UNTUK UX/KONSISTENSI ROLE MATRIX, BUKAN celah
   keamanan yang baru ditemukan (guard server-side sudah benar dari awal).
-- `src/app/AppShell.tsx` - `MENU_PIMPINAN` baru, CUMA 2 item (Dashboard
+- `src/components/layout/AppShell.tsx` - `MENU_PIMPINAN` baru, CUMA 2 item (Dashboard
   Lintas Unit, Data Saya) - paling ringkas dari semua role, sesuai
   cakupan fitur Pimpinan yang memang paling sempit.
 - Diverifikasi manual (PIMPINAN Wisnu Purnomo): Dashboard Lintas Unit
@@ -535,7 +535,7 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
   lihat data diri sendiri - sudah diverifikasi manual (KASUBAG_TU Ayu
   Puspita Sari bisa buka `/saya` lewat URL langsung, data miliknya
   sendiri tampil benar). Link nav ke `/saya` buat role selain PEGAWAI
-  BELUM ditambahkan (`src/app/AppShell.tsx` masih nampilin menu approver
+  BELUM ditambahkan (`src/components/layout/AppShell.tsx` masih nampilin menu approver
   vs "Data Saya" secara eksklusif) - itu keputusan UI, sengaja ditunda ke
   langkah 4.
 - **ADMIN "privilege semua role"** diimplementasikan lewat helper eksplisit
@@ -767,7 +767,7 @@ ganti balik (sudah diverifikasi manual - lihat di bawah).
   yang sedang ganti role tetap dinilai dengan role lamanya. **Kalau nanti
   nulis action baru, pakai `ambilUserSesi()`, JANGAN `prisma.user.findUnique`
   by nip lagi.**
-- **UI**: `src/app/AccountMenu.tsx` (BARU) - tombol akun jadi popover berisi
+- **UI**: `src/components/layout/AccountMenu.tsx` (BARU) - tombol akun jadi popover berisi
   daftar "Ganti role" (role aktif ditandai centang & tidak bisa diklik) +
   Logout. Menu "Ganti role" cuma muncul kalau akun punya >1 role. Tombol
   Logout yang dulu berdiri sendiri di kaki sidebar DAN di topbar mobile

@@ -1,7 +1,7 @@
 import { prisma } from "../../lib/prisma";
-import { FilterBar } from "../FilterBar";
+import { FilterBar } from "../../components/forms/FilterBar";
 import { periodePunyaTukin, resolvePeriode } from "../periodeDefault";
-import { BadgeStatusKirim, keadaanKirimBaris } from "../StatusKirimBaris";
+import { BadgeStatusKirim, keadaanKirimBaris } from "../../components/feedback/StatusKirimBaris";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import {
   canViewApproverDashboard,
@@ -9,17 +9,17 @@ import {
   canLihatKalkulasiSebelumDikirim,
 } from "../../auth/permissions";
 import { resolveSatkerEfektif, resolveSatuanKerjaListUntukFilter } from "../dashboardScope";
-import { AksesDitolak } from "../AksesDitolak";
-import { StatusBadge } from "../StatusBadge";
+import { AksesDitolak } from "../../components/feedback/AksesDitolak";
+import { StatusBadge } from "../../components/feedback/StatusBadge";
 import { SumberDataTukin } from "./SumberDataTukin";
-import { BadgePejabatEselon } from "../BadgePejabatEselon";
+import { BadgePejabatEselon } from "../../components/shared/BadgePejabatEselon";
 import { RingkasanPerUnit, type BarisRingkasanUnit } from "./RingkasanPerUnit";
 import { TabelRincianUnit, type BarisRincianTukin } from "./TabelRincianUnit";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
 import { kelasJabatanEfektif } from "../../business-logic/kelasJabatanEfektif";
-import { SumberAcuan } from "../SumberAcuan";
-import { HALAMAN } from "../layoutHalaman";
-import { NAMA_BULAN } from "../bulan";
+import { SumberAcuan } from "../../components/shared/SumberAcuan";
+import { HALAMAN } from "../../components/layout/layoutHalaman";
+import { NAMA_BULAN } from "../../lib/format/bulan";
 
 export const dynamic = "force-dynamic";
 

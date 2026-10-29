@@ -58,6 +58,8 @@ import {
   canKelolaHariLibur,
   canLihatKendalaEpresensi,
   canLihatHariLibur,
+  canLihatBuktiDukung,
+  canLihatDokumenSptjm,
   type AuthUser,
 } from "../permissions";
 
@@ -753,6 +755,90 @@ describe("canLihat* kendala & hari libur - MELIHAT dipisah dari MENGUBAH", () =>
   it("akun nonaktif ditolak, sama seperti jalur mengubah", () => {
     expect(canLihatKendalaEpresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM, aktif: false }))).toBe(false);
     expect(canLihatHariLibur(buatUser({ role: "PPABP", aktif: false }))).toBe(false);
+  });
+});
+
+describe("canLihatBuktiDukung - berkas pribadi pegawai di banding", () => {
+  const NIP_PENGAJU = "199001010000000001"; // sensitive-ok
+  const NIP_LAIN = "199001010000000002"; // sensitive-ok
+  const banding = { pengajuNip: NIP_PENGAJU, satuanKerjaPegawai: BIRO_UMUM };
+  const user = (o: Partial<AuthUser>) => buatUser({ nip: NIP_LAIN, ...o });
+
+  it("pemilik (pengaju) boleh, apa pun rolenya", () => {
+    for (const role of SEMUA_ROLE) {
+      expect(canLihatBuktiDukung(buatUser({ nip: NIP_PENGAJU, role }), banding)).toBe(true);
+    }
+  });
+
+  it("pegawai lain DITOLAK, termasuk yang satu unit", () => {
+    expect(canLihatBuktiDukung(user({ role: "PEGAWAI", satuanKerja: BIRO_UMUM }), banding)).toBe(false);
+  });
+
+  it("PIMPINAN DITOLAK - hanya pembaca dashboard agregat", () => {
+    expect(canLihatBuktiDukung(user({ role: "PIMPINAN", satuanKerja: BIRO_UMUM }), banding)).toBe(false);
+  });
+
+  it("Kasubag TU unit pegawai boleh; Kasubag TU unit lain DITOLAK", () => {
+    expect(canLihatBuktiDukung(user({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }), banding)).toBe(true);
+    expect(canLihatBuktiDukung(user({ role: "KASUBAG_TU", satuanKerja: SETJEN }), banding)).toBe(false);
+  });
+
+  it("hibah satuanKerjaTambahan tidak membuka bukti dukung", () => {
+    expect(
+      canLihatBuktiDukung(
+        user({ role: "KASUBAG_TU", satuanKerja: SETJEN, satuanKerjaTambahan: [BIRO_UMUM] }),
+        banding
+      )
+    ).toBe(false);
+  });
+
+  it("OSDMA, PPABP, dan ADMIN boleh lintas unit", () => {
+    for (const role of ["OSDMA", "PPABP", "ADMIN"] as const) {
+      expect(canLihatBuktiDukung(user({ role, satuanKerja: SETJEN }), banding)).toBe(true);
+    }
+  });
+
+  it("akun nonaktif DITOLAK, termasuk pemilik dan approver", () => {
+    expect(canLihatBuktiDukung(buatUser({ nip: NIP_PENGAJU, aktif: false }), banding)).toBe(false);
+    expect(canLihatBuktiDukung(user({ role: "OSDMA", aktif: false }), banding)).toBe(false);
+    expect(canLihatBuktiDukung(user({ role: "ADMIN", aktif: false }), banding)).toBe(false);
+  });
+});
+
+describe("canLihatDokumenSptjm - SPTJM memuat agregasi nominal unit", () => {
+  it("Kasubag TU unit itu, PPABP, dan ADMIN boleh", () => {
+    expect(canLihatDokumenSptjm(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(true);
+    expect(canLihatDokumenSptjm(buatUser({ role: "PPABP" }), BIRO_UMUM)).toBe(true);
+    expect(canLihatDokumenSptjm(buatUser({ role: "ADMIN" }), BIRO_UMUM)).toBe(true);
+  });
+
+  it("PEGAWAI se-unit DITOLAK - celah draft SPTJM yang ditutup", () => {
+    expect(canLihatDokumenSptjm(buatUser({ role: "PEGAWAI", satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(false);
+  });
+
+  it("PIMPINAN dan OSDMA DITOLAK", () => {
+    expect(canLihatDokumenSptjm(buatUser({ role: "PIMPINAN", satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(false);
+    expect(canLihatDokumenSptjm(buatUser({ role: "OSDMA", satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(false);
+  });
+
+  it("Kasubag TU unit lain DITOLAK, juga dengan hibah satuanKerjaTambahan", () => {
+    expect(canLihatDokumenSptjm(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }), BIRO_UMUM)).toBe(false);
+    expect(
+      canLihatDokumenSptjm(
+        buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN, satuanKerjaTambahan: [BIRO_UMUM] }),
+        BIRO_UMUM
+      )
+    ).toBe(false);
+  });
+
+  it("akun nonaktif DITOLAK", () => {
+    expect(canLihatDokumenSptjm(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM, aktif: false }), BIRO_UMUM)).toBe(false);
+    expect(canLihatDokumenSptjm(buatUser({ role: "PPABP", aktif: false }), BIRO_UMUM)).toBe(false);
+  });
+
+  it("satuan kerja kosong DITOLAK untuk semua", () => {
+    expect(canLihatDokumenSptjm(buatUser({ role: "ADMIN" }), "")).toBe(false);
+    expect(canLihatDokumenSptjm(buatUser({ role: "KASUBAG_TU", satuanKerja: "" }), "")).toBe(false);
   });
 });
 

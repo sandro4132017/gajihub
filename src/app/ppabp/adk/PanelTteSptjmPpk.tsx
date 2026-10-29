@@ -98,7 +98,11 @@ export function PanelTteSptjmPpk({
   // Buka PDF Viewer untuk dokumen yang sudah ada URL-nya, atau buat pratinjau draft otomatis
   const handleBukaViewerUtama = async () => {
     setViewerError(null);
-    const existingUrl = dokumen?.fileSignedPath || dokumen?.fileDraftPath;
+    // Berkas dibuka lewat rute berizin; kolom path hanya penanda "sudah ada".
+    const existingUrl =
+      dokumen?.id && (dokumen.fileSignedPath || dokumen.fileDraftPath)
+        ? `/berkas/tte/${dokumen.id}`
+        : null;
     if (existingUrl) {
       setViewerData({
         url: existingUrl,
@@ -147,8 +151,8 @@ export function PanelTteSptjmPpk({
   };
 
   const handleBukaViewerItem = (item: ItemDokumenSptjm) => {
-    const url = item.fileSignedPath || item.fileDraftPath;
-    if (!url) return;
+    if (!(item.fileSignedPath || item.fileDraftPath)) return;
+    const url = `/berkas/tte/${item.id}`;
     const satkerItem = item.satuanKerja || satuanKerja;
     setViewerError(null);
     setViewerLoading(false);
@@ -268,7 +272,7 @@ export function PanelTteSptjmPpk({
 
           {isSudahTte && dokumen?.fileSignedPath ? (
             <a
-              href={dokumen.fileSignedPath}
+              href={`/berkas/tte/${dokumen.id}?unduh=1`}
               download={namaFileUtama}
               target="_blank"
               rel="noopener noreferrer"
@@ -317,7 +321,7 @@ export function PanelTteSptjmPpk({
                     periodeTahun,
                     satkerItem
                   );
-                  const urlItem = item.fileSignedPath || item.fileDraftPath;
+                  const urlItem = item.fileSignedPath || item.fileDraftPath ? `/berkas/tte/${item.id}?unduh=1` : null;
                   const sudahTteItem = item.status === "TERTANDATANGANI";
 
                   return (

@@ -64,7 +64,7 @@ penurunan kelas jabatan, perubahan tarif tidak boleh terjadi diam-diam.
 diturunkan jabatannya karena hukuman disiplin memang tidak lagi memegang
 jabatan yang dikompensasi itu.
 
-**`src/app/BadgePejabatEselon.tsx`** - ikon ★ kecil di samping nama, diklik
+**`src/components/shared/BadgePejabatEselon.tsx`** - ikon ★ kecil di samping nama, diklik
 memunculkan keterangan (jenjang, kelas jabatan, apa yang dikecualikan, dan
 bahwa dasar hukumnya masih ditunggu). Terpasang di tabel `/kasubag/kalkulasi`
 (lewat `NamaPegawai`, jadi ketiga tabelnya sekaligus), dashboard `/tukin`,
@@ -289,7 +289,7 @@ pelanggaran (jenis, dasar hukum, jumlah, satuan, tarif, total) — tapi grep
 `rincianPotonganKehadiran` cuma menemukan engine, test, dan definisi tipe.
 **Nol tempat di UI.** Angka itu dihitung tiap kalkulasi lalu dibuang.
 
-`src/app/RincianPotonganKehadiran.tsx` (BARU) menampilkannya sebagai tabel di
+`src/components/shared/RincianPotonganKehadiran.tsx` (BARU) menampilkannya sebagai tabel di
 dua tempat: `/saya` (pegawai menjawab sendiri "kenapa tukin saya segini") dan
 `/tukin/presensi/[nip]` (Kasubag TU/PPABP menelusuri satu orang).
 

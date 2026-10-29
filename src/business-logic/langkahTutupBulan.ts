@@ -12,9 +12,8 @@
  *   predikat  (70%)  ─┘
  *
  * Menghitung sebelum kedua bahan lengkap menghasilkan angka yang nanti harus
- * dihitung ulang - dan menghitung ulang **mereset seluruh siklus approval unit
- * ke DRAFT** (lihat `evaluasiApproval`: log sebelum `calculatedAt` dianggap
- * basi). Di Biro Keuangan periode 7/2026 itu benar-benar terjadi: 278 baris
+ * dihitung ulang - dan menghitung ulang **mereset status kalkulasi ke DRAFT**
+ * sehingga semua yang sudah diperiksa harus diperiksa ulang. Di Biro Keuangan periode 7/2026 itu benar-benar terjadi: 278 baris
  * ApprovalLog untuk 47 pegawai, siklusnya terulang sekitar tiga kali.
  *
  * Karena itu fungsi ini TIDAK PERNAH menyarankan "hitung" selama masih ada

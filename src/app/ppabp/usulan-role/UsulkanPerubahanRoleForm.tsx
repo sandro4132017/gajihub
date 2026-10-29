@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import type { Role } from "@prisma/client";
 import { usulkanPerubahanRoleAction, type UsulkanPerubahanRoleFormState } from "./actions";
 import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
-import { SearchableSelect } from "../../SearchableSelect";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 
 const INITIAL_STATE: UsulkanPerubahanRoleFormState = {};
 const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];

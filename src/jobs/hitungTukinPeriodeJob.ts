@@ -182,8 +182,8 @@ export async function jalankanTukinPeriodeJob(
         potonganPph: hasilKalkulasi.potonganPph,
         tukinBersih: hasilKalkulasi.tukinBersih,
         status: "DRAFT",
-        // Recalculation harus refresh calculatedAt - modul approval memakai
-        // timestamp ini sebagai batas siklus approval (lihat src/approval/).
+        // Recalculation harus refresh calculatedAt - timestamp ini yang dipakai
+        // menandai angka basi (src/business-logic/kalkulasiBasi.ts).
         calculatedAt: new Date(),
         approvedAt: null,
         approvedBy: null,

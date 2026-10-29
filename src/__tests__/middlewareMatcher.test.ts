@@ -30,6 +30,9 @@ describe("matcher middleware - halaman yang WAJIB tetap terkunci", () => {
     ["kelola role", "/admin/role-assignment"],
     ["akar situs", "/"],
     ["halaman login itu sendiri", "/login"],
+    ["bukti dukung banding (berkas privat)", "/berkas/bukti-dukung/3f2b8c1e-5d4a-4e7b-9c1d-0a1b2c3d4e5f"],
+    ["PDF SPTJM (berkas privat)", "/berkas/tte/3f2b8c1e-5d4a-4e7b-9c1d-0a1b2c3d4e5f"],
+    ["pratinjau draft SPTJM", "/berkas/tte-pratinjau"],
   ])("%s tetap lewat middleware", (_nama, path) => {
     expect(lewatMiddleware(path)).toBe(true);
   });
@@ -106,3 +109,32 @@ describe("header keamanan middleware", () => {
   });
 });
 
+describe("X-Frame-Options per jalur", () => {
+  it("berkas privat SAMEORIGIN (pratinjau iframe di halaman sendiri), selain itu DENY", async () => {
+    const { nilaiXFrameOptions } = await import("../middleware");
+    expect(nilaiXFrameOptions("/berkas/tte/abc")).toBe("SAMEORIGIN");
+    expect(nilaiXFrameOptions("/berkas/bukti-dukung/abc")).toBe("SAMEORIGIN");
+    expect(nilaiXFrameOptions("/")).toBe("DENY");
+    expect(nilaiXFrameOptions("/kasubag/kalkulasi")).toBe("DENY");
+    expect(nilaiXFrameOptions("/berkasku")).toBe("DENY");
+    expect(nilaiXFrameOptions("/tte/verify/abc/berkas")).toBe("DENY");
+  });
+
+  it("next.config: rule DENY tidak berlaku untuk /berkas/, rule SAMEORIGIN hanya untuk /berkas/", async () => {
+    const konfig = (await import("../../next.config.mjs")).default as {
+      headers: () => Promise<{ source: string; headers: { key: string; value: string }[] }[]>;
+    };
+    const aturan = await konfig.headers();
+    const xfo = aturan.filter((a) => a.headers.some((h) => h.key === "X-Frame-Options"));
+    expect(xfo).toHaveLength(2);
+    const deny = xfo.find((a) => a.headers[0].value === "DENY")!;
+    const same = xfo.find((a) => a.headers[0].value === "SAMEORIGIN")!;
+    expect(same.source).toBe("/berkas/:path*");
+    // Pola Next "/((?!berkas/).*)" - diuji sebagai regex padanan.
+    const re = new RegExp("^/((?!berkas/).*)$");
+    expect(deny.source).toBe("/((?!berkas/).*)");
+    expect(re.test("/")).toBe(true);
+    expect(re.test("/kasubag")).toBe(true);
+    expect(re.test("/berkas/tte/x")).toBe(false);
+  });
+});

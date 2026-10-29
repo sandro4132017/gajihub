@@ -3,19 +3,19 @@ import { prisma } from "../../lib/prisma";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewDataSendiri } from "../../auth/permissions";
 import { hitungTotalPenghasilanSlip } from "../../business-logic/gajiInduk";
-import { AksesDitolak } from "../AksesDitolak";
-import { RincianPotonganKehadiran } from "../RincianPotonganKehadiran";
-import { RincianUangMakan } from "../RincianUangMakan";
+import { AksesDitolak } from "../../components/feedback/AksesDitolak";
+import { RincianPotonganKehadiran } from "../../components/shared/RincianPotonganKehadiran";
+import { RincianUangMakan } from "../../components/shared/RincianUangMakan";
 import { RincianPendapatan } from "./RincianPendapatan";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
 import { dikecualikanPotonganKehadiran } from "../../business-logic/pejabatPimpinanTinggi";
-import { BadgePejabatEselon } from "../BadgePejabatEselon";
+import { BadgePejabatEselon } from "../../components/shared/BadgePejabatEselon";
 import { BandingForm, type SasaranBanding } from "./BandingForm";
 import { BandingTracker } from "./BandingTracker";
 import { labelReferensiBanding } from "../../business-logic/bandingData";
-import { NAMA_BULAN } from "../bulan";
-import { SearchableSelect } from "../SearchableSelect";
-import { labelStatus } from "../presensiTampilan";
+import { NAMA_BULAN } from "../../lib/format/bulan";
+import { SearchableSelect } from "../../components/forms/SearchableSelect";
+import { labelStatus } from "../../lib/format/presensiTampilan";
 import { keteranganTidakPresensiHari, rincianJamKerjaHari } from "../../business-logic/rincianJamKerjaHarian";
 import { muatHariLiburPeriode } from "../../lib/hariLibur";
 import {
@@ -26,8 +26,8 @@ import {
 } from "../../business-logic/ptkp";
 import { TAB_SAYA, resolveTabSaya } from "./tabs";
 import { kunciPeriode, pilihPeriode, type PeriodeSaya } from "./periodeSaya";
-import { TAMPILKAN_NOMINAL_LEMBUR } from "../tampilUangLembur";
-import { HALAMAN } from "../layoutHalaman";
+import { TAMPILKAN_NOMINAL_LEMBUR } from "../../lib/format/tampilUangLembur";
+import { HALAMAN } from "../../components/layout/layoutHalaman";
 import { FiUser } from "react-icons/fi";
 import { RiCalendarCheckLine, RiScalesLine } from "react-icons/ri";
 import { BsBarChartFill } from "react-icons/bs";
@@ -495,7 +495,7 @@ export default async function DataSayaPage({
     tunjanganKinerja: tukinTerbaru?.tukinBersih ?? 0,
     uangMakan: umTerbaru?.totalUangMakan ?? 0,
     // Uang lembur belum ikut selama angkanya belum disetujui - lihat
-    // src/app/tampilUangLembur.ts. Slip gaji diperlakukan sama persis,
+    // src/lib/format/tampilUangLembur.ts. Slip gaji diperlakukan sama persis,
     // supaya Total di sini dan Total Penghasilan di slip tetap sepadan.
     uangLembur: TAMPILKAN_NOMINAL_LEMBUR ? lemburTerbaru?.totalUangLembur ?? 0 : 0,
     honorarium: gajiTerbaru?.honorarium ?? 0,

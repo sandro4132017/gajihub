@@ -3,9 +3,9 @@
 import { useEffect } from "react";
 
 export interface BerkasLampiran {
-  id?: string;
+  /** Id baris BuktiDukung - dipakai membentuk /berkas/bukti-dukung/[id]. */
+  id: string;
   namaFile: string;
-  fileUrl: string;
   ukuranByte?: number | null;
   tipeMime?: string | null;
 }
@@ -44,15 +44,17 @@ export function ModalPreviewBerkas({ berkas, onClose }: ModalPreviewBerkasProps)
 
   if (!berkas) return null;
 
+  // Berkas hanya dibuka lewat rute berizin; lokasi di disk tidak pernah sampai
+  // ke klien. Jenis berkas dibaca dari nama aslinya.
+  const urlBerkas = `/berkas/bukti-dukung/${encodeURIComponent(berkas.id)}`;
+
   const isPdf =
     berkas.tipeMime?.toLowerCase().includes("pdf") ||
-    berkas.fileUrl.toLowerCase().endsWith(".pdf") ||
     berkas.namaFile.toLowerCase().endsWith(".pdf");
 
   const isGambar =
     berkas.tipeMime?.toLowerCase().startsWith("image/") ||
-    /\.(png|jpe?g|webp|gif|svg)$/i.test(berkas.fileUrl) ||
-    /\.(png|jpe?g|webp|gif|svg)$/i.test(berkas.namaFile);
+    /\.(png|jpe?g|webp)$/i.test(berkas.namaFile);
 
   return (
     <div
@@ -102,7 +104,7 @@ export function ModalPreviewBerkas({ berkas, onClose }: ModalPreviewBerkasProps)
           {/* AKSI: BUKA TAB BARU & TUTUP */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <a
-              href={berkas.fileUrl}
+              href={urlBerkas}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2 shadow-xs transition hover:border-biru hover:text-biru"
@@ -132,14 +134,14 @@ export function ModalPreviewBerkas({ berkas, onClose }: ModalPreviewBerkasProps)
           {isPdf ? (
             <div className="w-full h-full flex flex-col">
               <iframe
-                src={berkas.fileUrl}
+                src={urlBerkas}
                 title={berkas.namaFile}
                 className="w-full h-[65vh] sm:h-[72vh] rounded-xl border border-line bg-white shadow-xs"
               />
               <p className="mt-2 text-center text-[11px] text-muted">
                 Jika dokumen PDF tidak muncul secara otomatis, Anda dapat{" "}
                 <a
-                  href={berkas.fileUrl}
+                  href={urlBerkas}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-bold text-biru underline hover:text-biru-deep"
@@ -151,7 +153,7 @@ export function ModalPreviewBerkas({ berkas, onClose }: ModalPreviewBerkasProps)
           ) : isGambar ? (
             <div className="flex flex-col items-center justify-center max-w-full">
               <img
-                src={berkas.fileUrl}
+                src={urlBerkas}
                 alt={berkas.namaFile}
                 className="max-h-[68vh] sm:max-h-[75vh] w-auto max-w-full rounded-xl object-contain border border-line bg-white shadow-md"
               />
@@ -168,7 +170,7 @@ export function ModalPreviewBerkas({ berkas, onClose }: ModalPreviewBerkasProps)
                 Pratinjau langsung tidak tersedia untuk tipe berkas ini.
               </p>
               <a
-                href={berkas.fileUrl}
+                href={urlBerkas}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-biru px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-biru-deep transition"

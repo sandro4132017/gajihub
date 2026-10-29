@@ -332,8 +332,8 @@ async function main() {
     row.getCell(9).numFmt = '#,##0.0';
   }
 
-  // 3. Simpan file Excel ke folder public/downloads/
-  const outputDir = path.join(process.cwd(), 'public', 'downloads');
+  // 3. Simpan file Excel ke storage/exports (bukan public/).
+  const outputDir = path.join(process.cwd(), 'storage', 'exports');
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }

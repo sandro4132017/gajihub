@@ -2,10 +2,10 @@ import Link from "next/link";
 import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { canKelolaKendalaEpresensi, type AuthUser } from "../../../../auth/permissions";
-import { AksesDitolak } from "../../../AksesDitolak";
-import { HALAMAN } from "../../../layoutHalaman";
-import { NAMA_BULAN } from "../../../bulan";
-import { SearchableSelect } from "../../../SearchableSelect";
+import { AksesDitolak } from "../../../../components/feedback/AksesDitolak";
+import { HALAMAN } from "../../../../components/layout/layoutHalaman";
+import { NAMA_BULAN } from "../../../../lib/format/bulan";
+import { SearchableSelect } from "../../../../components/forms/SearchableSelect";
 import { periodePunyaRekapPresensi, resolvePeriode } from "../../../periodeDefault";
 import {
   deteksiTanggalJanggal,
@@ -14,7 +14,7 @@ import {
   type StatistikTanggal,
 } from "../../../../business-logic/kendalaEpresensi";
 import { TandaiKendalaForm, CabutKendalaForm } from "./KendalaForms";
-import { tglTampil } from "../../../tanggalTampil";
+import { tglTampil } from "../../../../lib/format/tanggalTampil";
 
 export const dynamic = "force-dynamic";
 

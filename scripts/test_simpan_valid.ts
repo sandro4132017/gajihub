@@ -3,21 +3,24 @@ import { simpanHasilPresensi } from '../src/jobs/simpanRekapPresensi';
 import { tarikPresensiPeriode } from '../src/adapters/EpresensiAdapter';
 
 async function main() {
+  const nipTarget = process.argv[2]?.trim();
+  // NIP diberikan saat dijalankan - JANGAN ditulis di kode (repo ini publik).
+  if (!nipTarget) throw new Error('Pakai: npx tsx scripts/test_simpan_valid.ts <NIP>');
   const sandro = await prisma.user.findFirst({
-    where: { nip: '198703232015031002' }
+    where: { nip: nipTarget }
   });
-  if (!sandro) throw new Error('Sandro not found');
+  if (!sandro) throw new Error('Akun tidak ditemukan');
 
   const peg = await prisma.pegawai.findFirst({
-    where: { nip: '198703232015031002' }
+    where: { nip: nipTarget }
   });
-  if (!peg) throw new Error('Pegawai Sandro not found');
+  if (!peg) throw new Error('Pegawai tidak ditemukan');
 
   const tarikan = await tarikPresensiPeriode(10, 2026);
-  const sandroTarikan = tarikan.pegawai.find(p => p.nip === '198703232015031002');
-  if (!sandroTarikan) throw new Error('Sandro tarikan not found');
+  const sandroTarikan = tarikan.pegawai.find(p => p.nip === nipTarget);
+  if (!sandroTarikan) throw new Error('Pegawai tidak ada di tarikan e-Presensi');
 
-  console.log('Testing simpanHasilPresensi for Sandro with diunggahOlehId = sandro.id...');
+  console.log('Menguji simpanHasilPresensi untuk satu pegawai...');
   await simpanHasilPresensi(prisma, {
     pegawaiId: peg.id,
     periodeBulan: 10,

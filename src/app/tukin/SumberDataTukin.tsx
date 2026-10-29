@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NAMA_BULAN } from "../bulan";
+import { NAMA_BULAN } from "../../lib/format/bulan";
 
 /**
  * Panel "sumber data kalkulasi" di Dashboard Tukin - menyatukan dua komponen

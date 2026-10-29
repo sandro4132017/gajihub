@@ -23,7 +23,7 @@ import {
 } from "../../../business-logic/tarifSbm";
 import { statusUnit } from "../../../business-logic/pengirimanUnit";
 import { muatHariLiburPeriode } from "../../../lib/hariLibur";
-import { tglTampil } from "../../tanggalTampil";
+import { tglTampil } from "../../../lib/format/tanggalTampil";
 import type { Prisma } from "@prisma/client";
 
 const HARI_KERJA_DEFAULT = 21;

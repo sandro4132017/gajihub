@@ -2,7 +2,7 @@ import type React from "react";
 import { KembalikanRekapForm } from "./KembalikanRekapForm";
 import type { KeadaanPengiriman, ProgresUnit } from "../../../business-logic/pengirimanUnit";
 import { cacahProgres } from "../../../business-logic/pengirimanUnit";
-import { irisanDonat } from "../../irisanDonat";
+import { irisanDonat } from "./irisanDonat";
 
 const LABEL: Record<ProgresUnit["keadaan"], string> = {
   TERKIRIM: "Terkirim",

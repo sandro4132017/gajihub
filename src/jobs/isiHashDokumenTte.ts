@@ -46,10 +46,11 @@ async function main() {
 
   for (const d of daftar) {
     const label = `${d.jenisDokumen} ${d.periodeBulan}/${d.periodeTahun} - ${d.satuanKerja}`;
-    const jalur = jalurDisk(d.fileSignedPath!);
+    let jalur = "";
 
     let isi: Buffer;
     try {
+      jalur = jalurDisk(d.fileSignedPath!); // melempar bila referensi tak sah
       isi = await fs.readFile(jalur);
     } catch {
       console.log(`  LEWAT  ${label}`);

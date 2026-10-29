@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { SearchableSelect } from "../../SearchableSelect";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 import { tambahPredikatAction, type KelolaPredikatFormState } from "./actionsKelola";
 import { OPSI_PREDIKAT } from "./predikat";
 

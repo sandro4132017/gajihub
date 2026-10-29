@@ -24,12 +24,22 @@ import { hostAsalTepercaya } from "./auth/asalTepercaya";
  */
 export const RUTE_MESIN = ["/api/pengingat-absen"] as const;
 
-function terapkanHeaderKeamanan(res: NextResponse): NextResponse {
+/**
+ * Berkas privat (`/berkas/...`) boleh dibingkai OLEH HALAMAN GAJIHUB SENDIRI:
+ * pratinjau PDF SPTJM dan lampiran banding ditampilkan lewat <iframe> di
+ * halaman aplikasi. Asal lain tetap tidak bisa membingkainya (anti-clickjacking).
+ * Selain itu semua halaman tetap DENY.
+ */
+export function nilaiXFrameOptions(path: string): "DENY" | "SAMEORIGIN" {
+  return path.startsWith("/berkas/") ? "SAMEORIGIN" : "DENY";
+}
+
+function terapkanHeaderKeamanan(res: NextResponse, path = ""): NextResponse {
   res.headers.set(
     "Strict-Transport-Security",
     "max-age=31536000; includeSubDomains; preload"
   );
-  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("X-Frame-Options", nilaiXFrameOptions(path));
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
@@ -138,7 +148,7 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  return terapkanHeaderKeamanan(NextResponse.next());
+  return terapkanHeaderKeamanan(NextResponse.next(), path);
 }
 
 export const config = {

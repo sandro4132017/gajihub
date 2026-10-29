@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import type { Pegawai } from "@prisma/client";
 import { ubahDataPegawaiAction, type UbahDataPegawaiFormState } from "./actions";
-import { SearchableSelect } from "../SearchableSelect";
+import { SearchableSelect } from "../../components/forms/SearchableSelect";
 
 const INITIAL_STATE: UbahDataPegawaiFormState = {};
 

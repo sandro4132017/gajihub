@@ -9,7 +9,7 @@ import {
   HEADER_EXPORT_PRESENSI_HARIAN,
   susunExportPresensiHarian,
 } from "../../../../business-logic/exportPresensiHarian";
-import { NAMA_BULAN } from "../../../bulan";
+import { NAMA_BULAN } from "../../../../lib/format/bulan";
 
 /**
  * Unduh presensi satu unit untuk satu periode, sebagai Excel.

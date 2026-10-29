@@ -7,19 +7,19 @@ import {
   canUploadRekapPredikatKinerja,
   type AuthUser,
 } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
-import { NAMA_BULAN } from "../../bulan";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { dikecualikanPotonganKehadiran } from "../../../business-logic/pejabatPimpinanTinggi";
 import { ambilSumberData, keSumberAcuan } from "../../sumberData";
-import { SearchableSelect } from "../../SearchableSelect";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 import { UploadRekapForm } from "./UploadRekapForm";
 import { AksiBarisPredikat } from "./AksiBarisPredikat";
 import { TambahPredikatForm } from "./TambahPredikatForm";
 import { HapusPeriodeForm } from "./HapusPeriodeForm";
 import { LABEL_PREDIKAT, adalahInputManual, kelasChipPredikat, labelSumber } from "./predikat";
-import { PencarianDebounce } from "../../PencarianDebounce";
-import { SumberAcuan } from "../../SumberAcuan";
-import { HALAMAN } from "../../layoutHalaman";
+import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
+import { SumberAcuan } from "../../../components/shared/SumberAcuan";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { RiErrorWarningLine } from "react-icons/ri";
 
 export const dynamic = "force-dynamic";

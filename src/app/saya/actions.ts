@@ -8,6 +8,12 @@ import { prisma } from "../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../auth/getSessionAccount";
 import { canAjukanBanding, type AuthUser } from "../../auth/permissions";
 import {
+  akarStorage,
+  cocokTandaTangan,
+  jalurAman,
+  kunciBuktiDukung,
+} from "../../lib/storage/berkasPrivat";
+import {
   bagianDataSah,
   isReferensiBanding,
   isReferensiData,
@@ -182,18 +188,34 @@ export async function ajukanBandingAction(
         };
       }
 
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "bukti-dukung");
-      await mkdir(uploadDir, { recursive: true });
+      // Ekstensi hanya label dari pengunggah; isinya diperiksa lewat bita
+      // pertamanya supaya berkas lain tidak menyamar sebagai PDF/gambar.
+      const buffer = Buffer.from(await lampiran.arrayBuffer());
+      if (!cocokTandaTangan(buffer, ekstensi)) {
+        return {
+          error:
+            "Isi berkas lampiran tidak sesuai dengan formatnya. Pastikan berkas benar-benar PDF, PNG, JPG, atau WebP.",
+        };
+      }
 
+      // Disimpan di penyimpanan privat (di luar public/); dibaca kembali hanya
+      // lewat /berkas/bukti-dukung/[id] yang memeriksa izin.
+      // Dikelompokkan per folder unit pegawai. Kunci yang tersimpan di database
+      // adalah letak sebenarnya, jadi kalau unit pegawai berpindah kelak,
+      // berkas lama tetap ditemukan di folder lamanya.
       const namaBersih = sanitasiNamaBerkas(lampiran.name);
       const randomId = crypto.randomBytes(4).toString("hex");
       const namaFileSimpan = `${Date.now()}_${randomId}_${namaBersih}`;
-      const targetPath = path.join(uploadDir, namaFileSimpan);
+      const kunci = kunciBuktiDukung(pegawai.satuanKerja, namaFileSimpan);
+      const targetPath = jalurAman(kunci, "bukti-dukung", akarStorage());
+      if (!targetPath) {
+        return { error: "Lokasi penyimpanan lampiran tidak sah." };
+      }
+      await mkdir(path.dirname(targetPath), { recursive: true });
 
-      const buffer = Buffer.from(await lampiran.arrayBuffer());
       await writeFile(targetPath, buffer);
 
-      savedFileUrl = `/uploads/bukti-dukung/${namaFileSimpan}`;
+      savedFileUrl = kunci;
       savedFileBufferLength = buffer.length;
       savedOriginalFileName = lampiran.name;
     }

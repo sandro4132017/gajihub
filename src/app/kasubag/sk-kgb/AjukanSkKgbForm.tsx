@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { ajukanSkKgbAction, type AjukanSkKgbFormState } from "./actions";
-import { SearchableSelect } from "../../SearchableSelect";
+import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 import { GrDocument } from "react-icons/gr";
 import { FiCheckCircle, FiAlertCircle, FiSend } from "react-icons/fi";
 

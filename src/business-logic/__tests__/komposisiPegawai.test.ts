@@ -37,8 +37,8 @@ describe("hitungKomposisiPegawai - partisi", () => {
       baris({ kelompok: "P3K" }),
       baris({ kelompok: null }),
     ]);
-    expect([k.pns, k.p3k, k.tanpaIdentitasWebGaji]).toEqual([2, 1, 1]);
-    expect(k.pns + k.p3k + k.tanpaIdentitasWebGaji).toBe(k.total);
+    expect([k.pns, k.p3k, k.jenisTidakDiketahui]).toEqual([2, 1, 1]);
+    expect(k.pns + k.p3k + k.jenisTidakDiketahui).toBe(k.total);
   });
 
   it("jenis kelamin SALING LEPAS dan berjumlah total", () => {
@@ -163,7 +163,7 @@ describe("hitungKomposisiPegawai - identitas Web Gaji vs golongan", () => {
     // Tidak ada yang bisa tidak sepakat kalau salah satu pihaknya diam.
     const k = hitungKomposisiPegawai([baris({ kelompok: null, golongan: "III/a" })]);
     expect(k.bedaIdentitasDenganGolongan).toBe(0);
-    expect(k.tanpaIdentitasWebGaji).toBe(1);
+    expect(k.jenisTidakDiketahui).toBe(1);
   });
 });
 

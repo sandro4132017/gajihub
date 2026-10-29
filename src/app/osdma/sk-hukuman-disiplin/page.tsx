@@ -2,12 +2,12 @@ import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canApproveSkHukumanDisiplin, type AuthUser } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { SetujuTolakForm } from "../SetujuTolakForm";
 import { approveSkHukdisAction } from "./actions";
-import { HALAMAN } from "../../layoutHalaman";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
-import { NAMA_BULAN } from "../../bulan";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { RiFileWarningLine } from "react-icons/ri";
 import { FiArrowLeft, FiClock, FiCheckCircle, FiXCircle, FiFilter, FiAlertTriangle } from "react-icons/fi";
 

@@ -34,7 +34,7 @@ Sistem Gajihub terhubung ke **Esign Client Service v2.2.2** (`http://192.168.221
 | `src/app/tte/actions.ts` | Server Action untuk alur signing: agregasi nominal lembur satker, buat draft PDF, panggil Esign Client, simpan file ke storage, catat `DokumenTte` & `LogGagalTte`. |
 | `src/app/tte/ModalPassphraseTte.tsx` | Dialog interaktif input passphrase bertopeng (`autocomplete="off"`), pengecekan status sertifikat, dan penanganan error BSrE. |
 | `src/app/kasubag/kalkulasi/PanelTteSptjm.tsx` | Panel UI di halaman Kalkulasi Kasubag TU sebelum kirim rekap ke PPABP. |
-| `public/uploads/tte/` | Penyimpanan berkas PDF draft dan signed di server lokal. |
+| `storage/uploads/tte/<Nama Unit>/<tahun-bulan>/` | Penyimpanan PRIVAT berkas PDF draft dan signed (akar bisa ditimpa env `GAJIHUB_STORAGE_DIR`). Disajikan hanya lewat `/berkas/tte/[id]` dan `/berkas/tte-pratinjau` (izin `canLihatDokumenSptjm`); verifikasi publik lewat `/tte/verify/[id]/berkas`. Berkas lama tetap di struktur lama `tte/...` tanpa folder unit. Resolver: `src/lib/storage/berkasPrivat.ts`. |
 
 ## Model Data Prisma
 

@@ -21,9 +21,9 @@
 // hasil yang basi ikut hilang sendiri saat proses restart.
 // ============================================================================
 
-import fs from "fs/promises";
 import path from "path";
 import { verifyPdf } from "./esignClient";
+import { bacaBerkasDalamAkar, jalurAman } from "../storage/berkasPrivat";
 
 /** Berapa lama satu jawaban BSrE dianggap masih berlaku. */
 export const TTL_PERIKSA_MENIT = 15;
@@ -41,11 +41,17 @@ export interface HasilPeriksaBsre {
   diperiksaPada: Date;
 }
 
-/** `/uploads/tte/<id>/berkas.pdf?v=abc` -> path di disk. */
+/**
+ * Referensi berkas TTE (`tte/<id>/berkas.pdf`, atau bentuk lama
+ * `/uploads/tte/<id>/berkas.pdf?v=abc`) -> path di penyimpanan privat.
+ *
+ * MELEMPAR untuk referensi yang tidak sah (traversal, jenis lain, URL luar):
+ * pemanggil tidak boleh membaca disk dari nilai yang tidak lolos pemeriksaan.
+ */
 export function jalurDisk(fileSignedPath: string): string {
-  const tanpaQuery = fileSignedPath.split("?")[0];
-  const relatif = decodeURIComponent(tanpaQuery).replace(/^\/+/, "");
-  return path.join(process.cwd(), "public", relatif);
+  const jalur = jalurAman(fileSignedPath, "tte");
+  if (!jalur) throw new Error("Referensi berkas TTE tidak sah.");
+  return jalur;
 }
 
 interface Ketergantungan {
@@ -73,10 +79,13 @@ async function jalankan(
   dep: Required<Ketergantungan>
 ): Promise<HasilPeriksaBsre> {
   const diperiksaPada = new Date(dep.sekarang());
-  const jalur = jalurDisk(fileSignedPath);
+  let jalur = "";
 
   let buf: Buffer;
   try {
+    // Referensi tak sah melempar di sini dan diperlakukan sama seperti berkas
+    // yang tidak ada - tidak ada pembacaan disk dari nilai yang ditolak.
+    jalur = jalurDisk(fileSignedPath);
     buf = await dep.bacaBerkas(jalur);
   } catch {
     // Berkasnya hilang dari disk. Dilaporkan, bukan disembunyikan: dokumen
@@ -142,7 +151,7 @@ export async function periksaKeBsre(
   ketergantungan: Ketergantungan = {}
 ): Promise<HasilPeriksaBsre> {
   const dep: Required<Ketergantungan> = {
-    bacaBerkas: ketergantungan.bacaBerkas ?? ((j) => fs.readFile(j)),
+    bacaBerkas: ketergantungan.bacaBerkas ?? ((j) => bacaBerkasDalamAkar(j, "tte")),
     verifikasi: ketergantungan.verifikasi ?? verifyPdf,
     sekarang: ketergantungan.sekarang ?? (() => Date.now()),
   };

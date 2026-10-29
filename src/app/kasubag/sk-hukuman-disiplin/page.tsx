@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { canInputSkHukumanDisiplin } from "../../../auth/permissions";
-import { AksesDitolak } from "../../AksesDitolak";
+import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { ambilAksesUnit } from "../access";
 import { SatkerPicker } from "../SatkerPicker";
 import { InputSkHukdisForm } from "./InputSkHukdisForm";
-import { HALAMAN } from "../../layoutHalaman";
-import { NAMA_BULAN } from "../../bulan";
+import { HALAMAN } from "../../../components/layout/layoutHalaman";
+import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { RiFileWarningLine } from "react-icons/ri";
 import { FiClock, FiCheckCircle, FiXCircle, FiAlertTriangle } from "react-icons/fi";
 

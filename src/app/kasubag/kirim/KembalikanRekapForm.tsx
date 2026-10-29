@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { kembalikanRekapUnitAction, type KirimFormState } from "./actions";
-import { Modal } from "../../Modal";
+import { Modal } from "../../../components/feedback/Modal";
 
 const INITIAL_STATE: KirimFormState = {};
 
