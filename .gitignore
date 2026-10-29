@@ -32,7 +32,9 @@ public/uploads/**
 
 # Penyimpanan privat unggahan (bukti dukung, PDF SPTJM) - disajikan hanya lewat
 # Route Handler berizin; JANGAN dilacak.
-storage/
+# Garis miring di depan WAJIB: tanpa itu `storage/` juga mengabaikan folder kode
+# src/lib/storage/ dan kodenya tidak pernah ter-commit.
+/storage/
 
 *.dump
 *.backup
