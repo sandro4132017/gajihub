@@ -20,6 +20,7 @@ import { SumberAcuan } from "../../../components/shared/SumberAcuan";
 import { ambilSumberData, keSumberAcuan } from "../../sumberData";
 import { periksaKesiapanKalkulasi } from "../../../business-logic/kesiapanKalkulasi";
 import { sebabPerluHitungUlang } from "../../../business-logic/kalkulasiBasi";
+import { namaCetakPegawai } from "../../../business-logic/namaPegawai";
 import { KoreksiLemburForm } from "./KoreksiLemburForm";
 import { Paginasi, hitungPaginasi } from "../../../components/tables/Paginasi";
 import { BadgePejabatEselon } from "../../../components/shared/BadgePejabatEselon";
@@ -186,6 +187,18 @@ export default async function KalkulasiUnitPage({
     tahun,
     await periodePunyaPredikatKinerja(satkerEfektif)
   );
+
+  // Nama yang akan TERCETAK sebagai penanda tangan SPTJM - sumbernya sama
+  // dengan yang dipakai server saat menandatangani (data pegawai akun yang
+  // login, src/app/tte/actions.ts), supaya yang dilihat di modal tidak
+  // berbeda dengan yang tercetak.
+  const pegawaiPenandatangan = await prisma.pegawai.findUnique({
+    where: { nip: authUser.nip },
+    select: { nama: true },
+  });
+  const namaPenandatanganSptjm = pegawaiPenandatangan
+    ? namaCetakPegawai(pegawaiPenandatangan)
+    : "";
 
   // Keadaan pengiriman unit periode ini. Menentukan dua hal sekaligus:
   // spanduk di atas halaman, dan boleh-tidaknya tombol Kirim muncul.
@@ -1444,6 +1457,7 @@ export default async function KalkulasiUnitPage({
               periodeBulan={periodeBulan}
               periodeTahun={periodeTahun}
               satuanKerja={satkerEfektif}
+              namaPenandatangan={namaPenandatanganSptjm}
               dokumenTteTerbaru={
                 tteTukin
                   ? {
@@ -1465,6 +1479,7 @@ export default async function KalkulasiUnitPage({
               periodeBulan={periodeBulan}
               periodeTahun={periodeTahun}
               satuanKerja={satkerEfektif}
+              namaPenandatangan={namaPenandatanganSptjm}
               dokumenTteTerbaru={
                 tteUangMakan
                   ? {
@@ -1486,6 +1501,7 @@ export default async function KalkulasiUnitPage({
               periodeBulan={periodeBulan}
               periodeTahun={periodeTahun}
               satuanKerja={satkerEfektif}
+              namaPenandatangan={namaPenandatanganSptjm}
               dokumenTteTerbaru={
                 tteLembur
                   ? {

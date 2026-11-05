@@ -43,6 +43,8 @@ interface PanelTteSptjmProps {
   periodeBulan: number;
   periodeTahun: number;
   satuanKerja: string;
+  /** Nama cetak penanda tangan (akun yang login), ditampilkan di modal TTE. */
+  namaPenandatangan?: string;
   dokumenTteTerbaru?: {
     id: string;
     status: string;
@@ -63,6 +65,7 @@ export function PanelTteSptjm({
   periodeBulan,
   periodeTahun,
   satuanKerja,
+  namaPenandatangan = "",
   dokumenTteTerbaru,
   dikembalikanPada = null,
 }: PanelTteSptjmProps) {
@@ -308,6 +311,7 @@ export function PanelTteSptjm({
         periodeBulan={periodeBulan}
         periodeTahun={periodeTahun}
         satuanKerja={satuanKerja}
+        namaPenandatanganDefault={namaPenandatangan}
         defaultNomorDokumen={dokumen?.nomorDokumen || undefined}
         onSukses={(res) => {
           if (res.downloadUrl) {

@@ -372,7 +372,7 @@ export function ModalPassphraseTte({
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted">Penandatangan:</span>
-                <span className="font-semibold text-ink">{namaPenandatanganDefault}</span>
+                <span className="font-semibold text-ink">{namaPenandatanganDefault || "Data pegawai akun ini belum ada"}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted">ID Dokumen BSrE:</span>
@@ -424,7 +424,7 @@ export function ModalPassphraseTte({
 
             <div className="border-t border-line-2 pt-1.5 text-[11px] text-muted flex items-center justify-between">
               <span>Penandatangan (PPK):</span>
-              <span className="font-semibold text-ink">{namaPenandatanganDefault}</span>
+              <span className="font-semibold text-ink">{namaPenandatanganDefault || "Data pegawai akun ini belum ada"}</span>
             </div>
           </div>
 
