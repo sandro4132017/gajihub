@@ -22,6 +22,7 @@ import {
 import {
   bolehSimulasiTte,
   idDokumenSimulasi,
+  izinkanNikDemo,
   klasifikasiGagalBsre,
   samarkanPassphrase,
 } from "@/lib/tte/simulasiTte";
@@ -538,7 +539,12 @@ export async function signSptjmUnitAction(
   // `sync:pegawai` belum dijalankan ulang sesudah kuncinya diisi. Memblokir
   // penandatanganan karena konfigurasi yang belum lengkap akan mematikan
   // fitur yang sedang dipakai; yang dilakukan: dicatat ke log server.
-  if (pegawai.sidikNik) {
+  //
+  // Satu pengecualian: NIK demo BSrE saat sakelar TTE_IZINKAN_NIK_DEMO hidup
+  // (lihat izinkanNikDemo). Pemakaiannya dicatat tanpa NIK dan passphrase.
+  if (pegawai.sidikNik && izinkanNikDemo(nik)) {
+    console.warn("[tte] sertifikat demo BSrE dipakai oleh akun pegawai (sakelar TTE_IZINKAN_NIK_DEMO hidup).");
+  } else if (pegawai.sidikNik) {
     let sidikDiketik: string | null = null;
     try {
       sidikDiketik = sidikNik(nik, kunciSidikNik());

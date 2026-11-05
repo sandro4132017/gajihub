@@ -1,8 +1,7 @@
 import { GajihubLogo } from "../../components/layout/GajihubLogo";
 import { LoginForm } from "./LoginForm";
 import { ssoAktif } from "../../auth/sso";
-import { getModeJaringan } from "../../auth/modeJaringan";
-import { konfigPenguji } from "../../auth/akunPenguji";
+import { adaLoginKataSandi } from "../../auth/kredensialLogin";
 import { PesanSso } from "./PesanSso";
 import { SlideFitur } from "./SlideFitur";
 
@@ -15,12 +14,8 @@ export default async function LoginPage({
 }) {
   const { sso, pesan } = await searchParams;
   const adaSso = ssoAktif();
-  const modeJaringan = getModeJaringan();
-  const isInternal = modeJaringan === "INTERNAL";
-  const tampilkanFormLokal =
-    isInternal ||
-    Boolean(process.env.DEV_AUTH_USER || process.env.ALLOW_NIP_LOGIN === "true") ||
-    konfigPenguji(process.env) !== null;
+  // Form username/password hanya untuk akun uji coba atau akun penguji.
+  const tampilkanFormLokal = adaLoginKataSandi(process.env);
 
   return (
     <div className="grid h-dvh overflow-hidden lg:grid-cols-2">
@@ -62,16 +57,21 @@ export default async function LoginPage({
             </div>
           )}
 
-          {/* Form Login Lokal (Mode Jaringan Internal atau Akun Pengujian Dev/QA) */}
+          {/* Form login lokal (akun uji coba / akun penguji) */}
           {tampilkanFormLokal && (
             <div className="mt-8 border-t border-line pt-6">
               <div className="mb-4 rounded-lg bg-teal-tint/60 p-2.5 text-center text-[11px] font-semibold text-navy">
-                {isInternal
-                  ? "Jaringan kantor Kemnaker"
-                  : "Akun uji coba"}
+                Akun uji coba
               </div>
-              <LoginForm modeInternal={isInternal} />
+              <LoginForm />
             </div>
+          )}
+
+          {/* Tanpa SSO dan tanpa akun lokal, halaman tidak boleh buntu tanpa penjelasan */}
+          {!adaSso && !tampilkanFormLokal && (
+            <p role="status" className="mt-7 rounded-xl bg-line px-4 py-3 text-center text-sm font-semibold text-ink-2">
+              Masuk belum diaktifkan di server ini. Hubungi Admin Gajihub.
+            </p>
           )}
 
           <p className="mt-8 text-center text-xs text-muted">Kementerian Ketenagakerjaan Republik Indonesia</p>

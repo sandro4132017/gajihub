@@ -110,8 +110,8 @@ export interface BuatAkunBaruFormState {
  * tidak bisa dipakai buat pegawai yang belum pernah punya akun otorisasi
  * sama sekali). Dipakai kalau ada nodin/arahan Pimpinan yang perlu
  * dieksekusi langsung (mis. pegawai baru dilantik jadi Kasubag TU) tanpa
- * menunggu PPABP mengusulkan dulu. Password = NIP (konvensi login yang
- * sama dengan seedUsers.ts).
+ * menunggu PPABP mengusulkan dulu. Akun yang dibuat hanya bisa dipakai masuk
+ * lewat SSO; tidak ada kata sandi.
  */
 export async function buatAkunBaruAction(
   _state: BuatAkunBaruFormState,
@@ -163,7 +163,7 @@ export async function buatAkunBaruAction(
     });
 
     revalidatePath("/admin/role-assignment");
-    return { success: `Akun ${created.nama} (NIP ${created.nip}) dibuat dengan role ${role}. Login pakai NIP sebagai password.` };
+    return { success: `Akun ${created.nama} (NIP ${created.nip}) dibuat dengan role ${role}. Akun ini masuk lewat Akun Kemnaker (SIAP ID).` };
   } catch (err) {
     return { error: pesanGalatUntukLayar("admin.role-assignment.actions#2", err, "Terjadi kesalahan") };
   }

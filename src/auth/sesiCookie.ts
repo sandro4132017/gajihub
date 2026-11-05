@@ -3,7 +3,7 @@ import { buatTokenSesi } from "./session";
 import { LABEL_ROLE } from "./roleLabel";
 
 /**
- * Opsi cookie sesi - SATU definisi, dipakai bareng login NIP (Server Action)
+ * Opsi cookie sesi - SATU definisi, dipakai bareng login kata sandi (Server Action)
  * dan login SSO (Route Handler). Dua salinan opsi cookie pasti berbeda cepat
  * atau lambat, dan bedanya muncul sebagai "login berhasil tapi langsung
  * logout lagi" yang sangat sulit ditelusuri.
@@ -27,7 +27,7 @@ export const OPSI_COOKIE_SESI = {
  * Menerbitkan token sesi untuk satu akun `User`.
  *
  * INI TITIK PENTING DALAM PERPINDAHAN KE SSO: yang berubah waktu SSO
- * dipasang hanyalah CARA MEMBUKTIKAN IDENTITAS (password NIP vs Naco).
+ * dipasang hanyalah CARA MEMBUKTIKAN IDENTITAS (kata sandi akun uji coba vs Naco).
  * Setelah identitas terbukti, keduanya bermuara ke fungsi ini, dan seluruh
  * lapisan di atasnya - peran, otorisasi (`src/auth/permissions.ts`), scope
  * satuan kerja, multi-role - tidak berubah sama sekali.

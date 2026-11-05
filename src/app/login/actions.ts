@@ -13,7 +13,7 @@ import { getSessionAccount } from "../../auth/getSessionAccount";
 import { daftarRoleTersedia, LANDING_ROLE } from "../../auth/roleAktif";
 import { LABEL_ROLE } from "../../auth/roleLabel";
 import { pesanGalatUntukLayar } from "../../lib/koneksi/galatSumber";
-import { isModeInternal } from "../../auth/modeJaringan";
+import { ssoAktif } from "../../auth/sso";
 import { bersihkanNilaiEnv, putuskanLogin } from "../../auth/kredensialLogin";
 import { konfigPenguji } from "../../auth/akunPenguji";
 import {
@@ -23,11 +23,8 @@ import {
   cariAkunPenguji,
 } from "../../auth/akunPengujiDb";
 
-
-// TODO(legal-confirm): password = NIP itu sengaja (bukan bug) - permintaan
-// eksplisit sebagai solusi SEMENTARA sampai SSO Kemnaker tersambung. Ini
-// BUKAN otentikasi yang aman (NIP bukan rahasia) - lihat catatan panjang di
-// src/auth/session.ts. WAJIB diganti begitu SSO tersedia.
+// Login berkata sandi hanya untuk akun uji coba (DEV_AUTH_*) dan akun penguji.
+// Tidak ada login memakai NIP; pegawai masuk lewat SSO.
 
 export interface LoginFormState {
   error?: string;
@@ -40,33 +37,30 @@ export async function loginAction(
   let urlTujuan: string | null = null;
 
   try {
-    const inputUsername = String(formData.get("username") ?? formData.get("nip") ?? "").trim();
+    const inputUsername = String(formData.get("username") ?? "").trim();
     const inputPassword = String(formData.get("password") ?? "").trim();
 
     if (!inputUsername || !inputPassword) {
       return { error: "Username dan password wajib diisi." };
     }
 
-    const modeInternal = isModeInternal() || process.env.ALLOW_NIP_LOGIN === "true";
     const keputusan = putuskanLogin(
       { username: inputUsername, password: inputPassword },
       {
         devUser: bersihkanNilaiEnv(process.env.DEV_AUTH_USER),
         devPass: bersihkanNilaiEnv(process.env.DEV_AUTH_PASS),
-        modeInternal,
         penguji: konfigPenguji(process.env),
       }
     );
 
     if (!keputusan) {
       return {
-        error: modeInternal
-          ? "Username/NIP atau password salah."
-          : "Username atau password salah. Dari luar jaringan kantor, masuk memakai Akun Kemnaker (SIAP ID).",
+        error: ssoAktif()
+          ? "Username atau password salah. Pegawai masuk memakai Akun Kemnaker (SIAP ID)."
+          : "Username atau password salah.",
       };
     }
 
-    const isDevLogin = keputusan.jenis === "DEV";
     const isPenguji = keputusan.jenis === "PENGUJI";
 
     let user: User | null;
@@ -79,8 +73,7 @@ export async function loginAction(
       user = akunPenguji.user;
       pegawai = akunPenguji.pegawai;
     } else {
-      const targetNip =
-        keputusan.jenis === "DEV" ? bersihkanNilaiEnv(process.env.DEV_AUTH_NIP) : keputusan.nip;
+      const targetNip = bersihkanNilaiEnv(process.env.DEV_AUTH_NIP);
       if (!targetNip) {
         console.error("[login] DEV_AUTH_NIP kosong");
         return { error: "Akun uji coba belum siap dipakai. Laporkan ke Admin Gajihub." };
@@ -89,31 +82,16 @@ export async function loginAction(
       user = await prisma.user.findUnique({ where: { nip: targetNip } });
       pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
       if (!user) {
-        if (isDevLogin) {
-          user = await prisma.user.create({
-            data: {
-              nip: targetNip,
-              nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
-              role: "ADMIN",
-              satuanKerja: pegawai?.satuanKerja || null,
-              rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
-              aktif: true,
-            },
-          });
-        } else if (pegawai) {
-          user = await prisma.user.create({
-            data: {
-              nip: targetNip,
-              nama: pegawai.nama,
-              role: "PEGAWAI",
-              satuanKerja: pegawai.satuanKerja || null,
-              rolesTambahan: [],
-              aktif: true,
-            },
-          });
-        } else {
-          return { error: `NIP ${targetNip} tidak ditemukan di data pegawai Gajihub.` };
-        }
+        user = await prisma.user.create({
+          data: {
+            nip: targetNip,
+            nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
+            role: "ADMIN",
+            satuanKerja: pegawai?.satuanKerja || null,
+            rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
+            aktif: true,
+          },
+        });
       } else if (!user.aktif) {
         return { error: `Akun dengan NIP ${targetNip} sedang dinonaktifkan. Hubungi Admin Gajihub.` };
       }

@@ -101,7 +101,7 @@ export async function ubahModeJaringanAction(
     mode: modeBaru,
     pesan:
       (modeBaru === "INTERNAL"
-        ? "Mode Jaringan Internal (Intranet / VPN) diaktifkan. Redirect publik dinonaktifkan & login NIP internal dibuka."
+        ? "Mode Jaringan Internal (Intranet / VPN) diaktifkan. Redirect publik dinonaktifkan."
         : "Mode Akses Publik (gajihub.kemnaker.go.id) diaktifkan. Redirect publik & penguncian SSO Kemnaker berlaku kembali.") +
       peringatan,
   };

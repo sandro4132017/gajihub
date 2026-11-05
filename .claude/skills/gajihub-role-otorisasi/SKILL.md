@@ -649,14 +649,15 @@ role di `seedSimulasi.ts` (lihat catatan di bawah).
 **PENTING**: NIP di seed ini adalah NIP ASLI dari data pegawai yang sudah
 diimpor (`prisma.pegawai`, ±5.069 baris via `src/jobs/importPegawaiXlsx.ts`)
 - BUKAN pegawai fiktif baru, supaya karakter simulasi punya data kepegawaian
-konsisten dengan basis data yang sudah ada. Login pakai NIP sebagai
-username SEKALIGUS password (sama seperti pola login lain di project ini).
+konsisten dengan basis data yang sudah ada. Dulu login memakai NIP sebagai
+username sekaligus password; jalur itu sudah dihapus (2026-11-05), jadi akun
+demo masuk lewat SSO saja.
 
 13 akun lintas 6 role & 3 satuan kerja (+ 2 pimpinan lintas unit).
 
 **NIP-nya TIDAK dicantumkan di sini.** Akun demo memakai NIP pegawai ASLI, dan
-selama password masih sama dengan NIP, mencantumkannya di repo publik berarti
-menerbitkan kredensial. Daftarnya ada di `seed-akun-demo.json` (di-gitignore);
+NIP tetap pengenal pegawai asli, jadi mencantumkannya di repo publik berarti
+menerbitkan data kepegawaian. Daftarnya ada di `seed-akun-demo.json` (di-gitignore);
 kodenya membacanya lewat `nipDemo("kunci")` di `src/db/akunDemo.ts`.
 
 | Nama | Satuan kerja | Role | Skenario periode berjalan (7/2026) |
@@ -706,13 +707,10 @@ Kasubag TU/OSDMA/dst) lewat halaman Admin, BUKAN bikin akun dari nol.
   konsisten dengan konvensi skema: scoping PEGAWAI ke data sendiri lewat
   relasi NIP ke Pegawai, field `User.satuanKerja` cuma dipakai KASUBAG_TU
   (lihat komentar model `User` di schema.prisma).
-- **Konsekuensi keamanan yang perlu diketahui**: password = NIP (konvensi
-  login sementara yang sudah ada), jadi SEKARANG setiap pegawai di basis
-  data otomatis bisa login pakai NIP-nya sendiri. Disengaja buat testing
-  internal (akses cuma lewat jaringan kantor/VPN, HTTP), TAPI ini
-  memperluas permukaan dibanding sebelumnya yang cuma 13 akun - WAJIB
-  diganti begitu SSO Kemnaker tersambung, jangan dibiarkan begini kalau
-  sistem dibuka ke jaringan publik. Lihat TODO(legal-confirm) di
+- **Akses akun ini** (fakta 2026-11-05): login NIP (password = NIP) sudah
+  DIHAPUS TOTAL dari kode. Akun PEGAWAI massal tidak bisa masuk lewat kata
+  sandi; pegawai masuk HANYA lewat SSO Akun Kemnaker (padanan sidik NIK).
+  Akun-akun ini tetap ada sebagai data role. Lihat TODO(legal-confirm) di
   `src/auth/session.ts`.
 
 **Dampak ke UI "Kelola Assignment Role"** (`src/app/admin/role-assignment/`):

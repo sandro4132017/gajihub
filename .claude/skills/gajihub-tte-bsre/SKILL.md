@@ -100,3 +100,17 @@ Kriteria BSrE V & VIII di atas:
 - Beban: cache 60 detik per proses, permintaan bersamaan digabung, "Periksa ulang" hanya menembus
   cache bila umurnya > 15 detik. Jadi maksimal sekitar 1 ping per 60 detik per proses (tanpa polling di klien).
 - Sesi habis: middleware mengalihkan ke /login; komponen memperlakukan pengalihan seperti 401/403 dan menyembunyikan diri.
+
+## Sakelar NIK demo BSrE (`TTE_IZINKAN_NIK_DEMO`, 2026-11-05)
+
+Aturan dasar: NIK yang diketik saat menandatangani SPTJM harus milik pemegang
+sesi (dicocokkan lewat `Pegawai.sidikNik`, `src/app/tte/actions.ts`). Akun tanpa
+sidik NIK (mis. pegawai dummy Tim Pusdatik) tidak bisa dicocokkan, jadi lolos.
+
+Pengecualian (keputusan user): NIK demo BSrE (`NIK_DEMO_BSRE` di
+`src/lib/tte/simulasiTte.ts`) boleh dipakai akun mana pun bila
+`TTE_IZINKAN_NIK_DEMO="true"` di `.env` (bawaan mati; perlu `pm2 restart`).
+Selama hidup, SPTJM bisa mencetak nama pegawai yang login dengan tanda tangan
+sertifikat demo - **matikan sebelum SPTJM dipakai sebagai dasar pembayaran**.
+Pemakaiannya dicatat `console.warn` tanpa NIK/passphrase. NIK lain tetap
+ditolak walau sakelar hidup (ada test di `signSptjmSimulasi.test.ts`).

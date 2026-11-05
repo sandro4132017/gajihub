@@ -271,6 +271,55 @@ describe("signSptjmUnitAction - kasus tambahan", () => {
     expect(kategoriLog()).toEqual(["BSRE_ERROR"]);
   });
 
+  it("NIK demo pada akun bersidik: ditolak bila sakelar mati, lolos bila TTE_IZINKAN_NIK_DEMO=true", async () => {
+    const { sidikNik } = await import("@/auth/sidikNik");
+    const { NIK_DEMO_BSRE } = await import("@/lib/tte/simulasiTte");
+    setEnv("production", "PUBLIC");
+    vi.stubEnv("SIDIK_NIK_SECRET", "kunci-uji-sidik-nik-palsu-0123456789"); // sensitive-ok
+    m.findUniquePegawai.mockResolvedValue({
+      nama: "Nama Palsu",
+      nip: NIP,
+      jabatan: "Kasubag TU",
+      sidikNik: sidikNik(NIK_UJI, "kunci-uji-sidik-nik-palsu-0123456789"), // sensitive-ok
+    });
+    m.signPdf.mockResolvedValue({
+      success: true,
+      signedPdfBuffer: Buffer.from("%PDF-signed"),
+      idDokumen: "BSRE-ID-2",
+      signingTimeMs: 50,
+    });
+    const formDemo = () => {
+      const f = form();
+      f.set("nik", NIK_DEMO_BSRE);
+      return f;
+    };
+
+    vi.stubEnv("TTE_IZINKAN_NIK_DEMO", "");
+    const ditolak = await signSptjmUnitAction({}, formDemo());
+    expect(ditolak.error).toMatch(/bukan milik akun/);
+    expect(m.signPdf).not.toHaveBeenCalled();
+
+    vi.stubEnv("TTE_IZINKAN_NIK_DEMO", "true");
+    const lolos = await signSptjmUnitAction({}, formDemo());
+    expect(lolos.success).toBe(true);
+  });
+
+  it("sakelar NIK demo tidak membuka NIK orang lain selain NIK demo", async () => {
+    const { sidikNik } = await import("@/auth/sidikNik");
+    setEnv("production", "PUBLIC");
+    vi.stubEnv("SIDIK_NIK_SECRET", "kunci-uji-sidik-nik-palsu-0123456789"); // sensitive-ok
+    vi.stubEnv("TTE_IZINKAN_NIK_DEMO", "true");
+    m.findUniquePegawai.mockResolvedValue({
+      nama: "Nama Palsu",
+      nip: NIP,
+      jabatan: "Kasubag TU",
+      sidikNik: sidikNik("6543210987654321", "kunci-uji-sidik-nik-palsu-0123456789"), // sensitive-ok
+    });
+    const r = await jalankan();
+    expect(r.error).toMatch(/bukan milik akun/);
+    expect(m.signPdf).not.toHaveBeenCalled();
+  });
+
   it("pencatatan log gagal melempar pada penolakan sertifikat -> jawaban sama, tidak melempar", async () => {
     setEnv("production", "PUBLIC");
     m.checkUserStatus.mockResolvedValue({ success: false, statusCode: 2011, status: "NOT_REGISTERED", message: "" });

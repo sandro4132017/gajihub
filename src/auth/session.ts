@@ -1,13 +1,9 @@
 // ============================================================================
 // AUTH - session sederhana buat login berbasis model User (7 role).
 //
-// TODO(legal-confirm) - RISIKO KEAMANAN YANG DISADARI: login sekarang pakai
-// NIP sebagai username SEKALIGUS password (bukan salah ketik - ini permintaan
-// eksplisit, sementara sampai SSO Kemnaker tersambung). NIP BUKAN rahasia -
-// siapa pun yang tahu/menebak NIP orang lain bisa login SEBAGAI orang itu
-// dengan penuh hak akses role-nya. Ini WAJIB diganti begitu SSO tersedia -
-// jangan biarkan pola ini jadi permanen. Lihat loginAction di
-// src/app/login/actions.ts untuk verifikasinya.
+// Pegawai masuk lewat SSO Kemnaker. Login berkata sandi hanya untuk akun uji
+// coba (DEV_AUTH_*) dan akun penguji; NIP TIDAK PERNAH dipakai sebagai
+// username/password. Lihat src/auth/kredensialLogin.ts.
 //
 // Model AkunApprover (login approver lama) masih ada di schema tapi SUDAH
 // TIDAK DIPAKAI oleh /login lagi - digantikan alur berbasis User ini.

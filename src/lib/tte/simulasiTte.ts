@@ -86,6 +86,25 @@ export function bolehFallbackAkunDemo(
   return env.NODE_ENV !== "production";
 }
 
+/** NIK akun uji coba resmi server BSrE (sertifikat demo, bukan milik pegawai). */
+export const NIK_DEMO_BSRE = "0803202100007062"; // sensitive-ok
+
+/**
+ * Pengecualian cek "NIK harus milik pemegang sesi" untuk NIK demo BSrE.
+ * Bawaannya MATI; hidup hanya bila TTE_IZINKAN_NIK_DEMO="true". Selama hidup,
+ * akun pegawai mana pun bisa menandatangani SPTJM dengan sertifikat demo,
+ * sementara nama yang tercetak tetap nama akun yang login - jadi sakelar ini
+ * untuk masa uji, dan dimatikan sebelum SPTJM dipakai sebagai dasar
+ * pembayaran.
+ */
+export function izinkanNikDemo(
+  nik: string,
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  if (nik.trim() !== NIK_DEMO_BSRE) return false;
+  return (env.TTE_IZINKAN_NIK_DEMO ?? "").trim().replace(/^["']|["']$/g, "").toLowerCase() === "true";
+}
+
 export type KategoriGagalBsre =
   | "PASSPHRASE_SALAH"
   | "NETWORK_TIMEOUT"

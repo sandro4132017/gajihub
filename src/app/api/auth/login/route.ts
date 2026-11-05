@@ -6,7 +6,7 @@ import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../../../auth/sesiCooki
 import { LANDING_ROLE } from "../../../../auth/roleAktif";
 import { LABEL_ROLE } from "../../../../auth/roleLabel";
 import { pesanGalatUntukLayar } from "../../../../lib/koneksi/galatSumber";
-import { isModeInternal } from "../../../../auth/modeJaringan";
+import { ssoAktif } from "../../../../auth/sso";
 import { bersihkanNilaiEnv, putuskanLogin } from "../../../../auth/kredensialLogin";
 import { konfigPenguji } from "../../../../auth/akunPenguji";
 import {
@@ -19,7 +19,7 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * Route Handler untuk login dev / jaringan internal.
+ * Route Handler untuk login berkata sandi: akun uji coba dan akun penguji.
  *
  * Menggunakan standar JSON POST request biasa agar 100% kompatibel dan kebal
  * terhadap masalah CSRF Server Action, reverse proxy Pusdatik FortiWeb, maupun
@@ -41,13 +41,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Username dan password wajib diisi." }, { status: 400 });
     }
 
-    const modeInternal = isModeInternal() || process.env.ALLOW_NIP_LOGIN === "true";
     const keputusan = putuskanLogin(
       { username: inputUsername, password: inputPassword },
       {
         devUser: bersihkanNilaiEnv(process.env.DEV_AUTH_USER),
         devPass: bersihkanNilaiEnv(process.env.DEV_AUTH_PASS),
-        modeInternal,
         penguji: konfigPenguji(process.env),
       }
     );
@@ -56,15 +54,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          error: modeInternal
-            ? "Username/NIP atau password salah."
-            : "Username atau password salah. Dari luar jaringan kantor, masuk memakai Akun Kemnaker (SIAP ID).",
+          error: ssoAktif()
+            ? "Username atau password salah. Pegawai masuk memakai Akun Kemnaker (SIAP ID)."
+            : "Username atau password salah.",
         },
         { status: 401 }
       );
     }
 
-    const isDevLogin = keputusan.jenis === "DEV";
     const isPenguji = keputusan.jenis === "PENGUJI";
 
     let user: User | null;
@@ -81,8 +78,7 @@ export async function POST(req: NextRequest) {
       user = akunPenguji.user;
       pegawai = akunPenguji.pegawai;
     } else {
-      const targetNip =
-        keputusan.jenis === "DEV" ? bersihkanNilaiEnv(process.env.DEV_AUTH_NIP) : keputusan.nip;
+      const targetNip = bersihkanNilaiEnv(process.env.DEV_AUTH_NIP);
 
       if (!targetNip) {
         console.error("[login] DEV_AUTH_NIP kosong");
@@ -96,34 +92,16 @@ export async function POST(req: NextRequest) {
       pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
 
       if (!user) {
-        if (isDevLogin) {
-          user = await prisma.user.create({
-            data: {
-              nip: targetNip,
-              nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
-              role: "ADMIN",
-              satuanKerja: pegawai?.satuanKerja || null,
-              rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
-              aktif: true,
-            },
-          });
-        } else if (pegawai) {
-          user = await prisma.user.create({
-            data: {
-              nip: targetNip,
-              nama: pegawai.nama,
-              role: "PEGAWAI",
-              satuanKerja: pegawai.satuanKerja || null,
-              rolesTambahan: [],
-              aktif: true,
-            },
-          });
-        } else {
-          return NextResponse.json(
-            { ok: false, error: `NIP ${targetNip} tidak ditemukan di data pegawai Gajihub.` },
-            { status: 401 }
-          );
-        }
+        user = await prisma.user.create({
+          data: {
+            nip: targetNip,
+            nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
+            role: "ADMIN",
+            satuanKerja: pegawai?.satuanKerja || null,
+            rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
+            aktif: true,
+          },
+        });
       } else if (!user.aktif) {
         return NextResponse.json(
           { ok: false, error: `Akun dengan NIP ${targetNip} sedang dinonaktifkan. Hubungi Admin Gajihub.` },

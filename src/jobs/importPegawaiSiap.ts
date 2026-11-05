@@ -117,7 +117,7 @@ async function main() {
     if (hasil.statusDiperbarui > 0) console.log(`         ${hasil.statusDiperbarui} status ditandai ulang.`);
 
     // Sidik NIK dilaporkan apa adanya - yang tidak terisi berarti orangnya
-    // belum bisa masuk lewat SSO (login NIP tetap jalan), dan itu harus
+    // belum bisa masuk lewat SSO, dan itu harus
     // kelihatan, bukan hilang diam-diam.
     console.log(`\nSidik NIK (padanan SSO Naco): ${hasil.sidikNikTerisi} terisi.`);
     if (hasil.catatanSidikNik) console.log(`  ! ${hasil.catatanSidikNik}`);

@@ -1,51 +1,83 @@
-import { isNipDummy } from "../lib/dataUji";
-import { cocokkanPassword, pembatasPenguji, type KonfigPenguji, type PembatasPenguji } from "./akunPenguji";
+import { createHash, timingSafeEqual } from "node:crypto";
+import {
+  buatPembatas,
+  cocokkanPassword,
+  konfigPenguji,
+  pembatasPenguji,
+  type KonfigPenguji,
+  type PembatasPenguji,
+} from "./akunPenguji";
 
 /**
  * Keputusan jalur login berbasis kata sandi - dipakai bareng oleh Server
  * Action login dan Route Handler /api/auth/login supaya aturannya tidak bisa
  * berbeda di dua tempat. Tanpa I/O (satu-satunya keadaan: pembatas percobaan
- * akun penguji di memori, yang bisa diganti saat test).
+ * di memori, yang bisa diganti saat test).
  *
- * Jalur:
+ * Hanya dua jalur kata sandi. Tidak ada login memakai NIP, dan tidak ada kata
+ * sandi induk yang membuka akun orang lain; pegawai masuk lewat SSO.
  * - DEV     : username + kata sandi akun uji coba dari konfigurasi server.
  * - PENGUJI : akun penguji Pusdatik (lihat akunPenguji.ts), di mode jaringan
  *             apa pun, selama konfigurasinya aktif.
- * - NIP     : hanya saat Mode INTERNAL / ALLOW_NIP_LOGIN, dan kata sandinya
- *             SAMA dengan NIP itu sendiri. Tidak ada kata sandi induk yang
- *             membuka NIP orang lain.
- * NIP berawalan 9999 (data uji) tidak bisa masuk lewat jalur NIP.
+ * Tiap akun punya pembatas sendiri: 5 gagal dalam 15 menit -> terkunci 15 menit.
  */
 
 export interface KonfigLogin {
   devUser?: string;
   devPass?: string;
-  /** Mode INTERNAL atau ALLOW_NIP_LOGIN=true. */
-  modeInternal: boolean;
   /** Hasil konfigPenguji(); null/kosong = akun penguji mati. */
   penguji?: KonfigPenguji | null;
 }
 
-export type KeputusanLogin =
-  | { jenis: "DEV" }
-  | { jenis: "PENGUJI" }
-  | { jenis: "NIP"; nip: string };
+export type KeputusanLogin = { jenis: "DEV" } | { jenis: "PENGUJI" };
 
 /** Buang tanda kutip pembungkus nilai konfigurasi (gaya .env). */
 export function bersihkanNilaiEnv(v: string | undefined): string | undefined {
   return v?.trim().replace(/^["']|["']$/g, "");
 }
 
+/**
+ * Apakah ada akun berkata sandi yang aktif (akun uji coba lengkap dengan
+ * sandinya, atau akun penguji). Bila tidak, halaman login hanya menampilkan SSO.
+ */
+export function adaLoginKataSandi(env: Record<string, string | undefined>, now: Date = new Date()): boolean {
+  const devAktif = Boolean(bersihkanNilaiEnv(env.DEV_AUTH_USER) && bersihkanNilaiEnv(env.DEV_AUTH_PASS));
+  return devAktif || konfigPenguji(env, now) !== null;
+}
+
+/** Pembatas akun dev - terpisah dari pembatas penguji. */
+export const pembatasDev = buatPembatas();
+
+/** Perbandingan waktu-tetap; panjang berbeda aman karena dibandingkan lewat digest. */
+function samaAman(a: string, b: string): boolean {
+  const ha = createHash("sha256").update(a).digest();
+  const hb = createHash("sha256").update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
+
 export function putuskanLogin(
   input: { username: string; password: string },
   konfig: KonfigLogin,
   now: Date = new Date(),
-  pembatas: PembatasPenguji = pembatasPenguji
+  pembatas: PembatasPenguji = pembatasPenguji,
+  pembatasAkunDev: PembatasPenguji = pembatasDev
 ): KeputusanLogin | null {
-  const { devUser, devPass, modeInternal, penguji } = konfig;
+  const { devUser, devPass, penguji } = konfig;
 
-  if (devUser && devPass && input.username === devUser && input.password === devPass) {
-    return { jenis: "DEV" };
+  if (devUser && devPass && input.username === devUser) {
+    const sandiCocok = samaAman(input.password, devPass);
+    if (pembatasAkunDev.terkunci(now.getTime())) {
+      // Ke pengguna tampil sama persis dengan salah sandi biasa; jejaknya
+      // hanya di log server, tanpa username maupun kata sandi.
+      console.warn("[login] akun uji coba terkunci karena terlalu banyak percobaan salah");
+      return null;
+    }
+    if (sandiCocok) {
+      pembatasAkunDev.reset();
+      return { jenis: "DEV" };
+    }
+    pembatasAkunDev.catatGagal(now.getTime());
+    return null;
   }
 
   if (penguji) {
@@ -55,8 +87,6 @@ export function putuskanLogin(
     const sandiCocok = cocokkanPassword(input.password, penguji.passHash);
     if (input.username === penguji.user) {
       if (pembatas.terkunci(now.getTime())) {
-        // Ke pengguna tampil sama persis dengan salah sandi biasa; jejaknya
-        // hanya di log server, tanpa username maupun kata sandi.
         console.warn("[login] akun penguji terkunci karena terlalu banyak percobaan salah");
         return null;
       }
@@ -67,12 +97,6 @@ export function putuskanLogin(
       pembatas.catatGagal(now.getTime());
       return null;
     }
-  }
-
-  const nip = input.username.replace(/[ .\-]/g, "");
-  const passClean = input.password.replace(/[ .\-]/g, "");
-  if (modeInternal && /^\d{18}$/.test(nip) && passClean === nip && !isNipDummy(nip)) {
-    return { jenis: "NIP", nip };
   }
 
   return null;

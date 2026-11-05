@@ -9,13 +9,17 @@ vi.mock("../../../../lib/prisma", () => ({
 }));
 
 import { POST } from "../login/route";
+import { pembatasDev } from "../../../../auth/kredensialLogin";
 
 const NIP = "199001010000000001"; // sensitive-ok
 const HOST = "192.0.2.99"; // sensitive-ok
 
 let log: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
-  vi.stubEnv("ALLOW_NIP_LOGIN", "true");
+  vi.stubEnv("DEV_AUTH_USER", "akun-uji");
+  vi.stubEnv("DEV_AUTH_PASS", "sandi-dev-palsu"); // sensitive-ok
+  vi.stubEnv("DEV_AUTH_NIP", NIP);
+  pembatasDev.reset();
   log = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 afterEach(() => {
@@ -31,7 +35,7 @@ describe("POST /api/auth/login - galat database", () => {
     m.findPegawai.mockResolvedValue(null);
     const req = new Request("http://x/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ username: NIP, password: NIP }),
+      body: JSON.stringify({ username: "akun-uji", password: "sandi-dev-palsu" }), // sensitive-ok
     });
     const res = await POST(req as never);
     const body = await res.json();

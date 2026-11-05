@@ -3,11 +3,10 @@ export type ModeJaringan = "INTERNAL" | "PUBLIC";
 /**
  * Membaca mode jaringan aktif aplikasi:
  * - "INTERNAL": Akses publik diputus Pusdatik (hanya bisa diakses lewat Intranet / VPN).
- *   Seluruh redirect mempertahankan host/IP internal,
- *   dan login NIP 18 digit diaktifkan sebagai cadangan SSO.
+ *   Seluruh redirect mempertahankan host/IP internal.
  * - "PUBLIC": Akses domain publik (https://gajihub.kemnaker.go.id) dibuka Pusdatik.
  *   Redirect di balik proxy mengarah ke domain resmi NACO_REDIRECT_URI,
- *   dan login umum wajib melalui SSO SIAP ID (kecuali akun QA/dev).
+ *   dan login pegawai wajib melalui SSO SIAP ID (kecuali akun uji coba/penguji).
  */
 export function getModeJaringan(): ModeJaringan {
   if (process.env.NODE_ENV === "test" && !process.env.TEST_NETWORK_MODE) {

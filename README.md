@@ -139,7 +139,7 @@ gajihub/
 │   │   ├── admin/              # Dashboard Admin, Role Assignment, Sistem
 │   │   ├── api/                # Route Handlers & REST API internal
 │   │   ├── kasubag/            # Dashboard Unit & Layanan Kasubag TU
-│   │   ├── login/              # Form Login NIP & Integrasi Naco SSO
+│   │   ├── login/              # Form login (SSO Akun Kemnaker + akun uji/penguji)
 │   │   ├── osdma/              # Dashboard Biro OSDMA & Verifikasi SK
 │   │   ├── pegawai/            # Master Data Pegawai & Status Kepegawaian
 │   │   ├── pimpinan/           # Dashboard Eksekutif Pimpinan

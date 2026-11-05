@@ -10,6 +10,9 @@ vi.mock("../../../../lib/prisma", () => ({
 
 import { POST } from "../login/route";
 import { buatHashPenguji, pembatasPenguji } from "../../../../auth/akunPenguji";
+import { pembatasDev } from "../../../../auth/kredensialLogin";
+
+const SALAH = "Username atau password salah.";
 
 const NIP_UJI = "999900000000000001"; // sensitive-ok
 const NIP = "199001010000000001"; // sensitive-ok
@@ -27,6 +30,7 @@ function kirim(username: string, password: string) {
 
 beforeEach(() => {
   pembatasPenguji.reset();
+  pembatasDev.reset();
   m.findUser.mockReset();
   m.findPegawai.mockReset();
   m.createUser.mockReset();
@@ -36,7 +40,6 @@ beforeEach(() => {
   vi.stubEnv("DEV_AUTH_USER", "akun-uji");
   vi.stubEnv("DEV_AUTH_PASS", SANDI_DEV);
   vi.stubEnv("DEV_AUTH_NIP", NIP);
-  vi.stubEnv("ALLOW_NIP_LOGIN", "true");
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -77,12 +80,12 @@ describe("POST /api/auth/login - akun penguji", () => {
     for (let i = 0; i < 5; i++) {
       const res = await kirim("penguji-uji", "salah");
       expect(res.status).toBe(401);
-      expect((await res.json()).error).toBe("Username/NIP atau password salah.");
+      expect((await res.json()).error).toBe(SALAH);
     }
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const terkunci = await kirim("penguji-uji", SANDI);
     expect(terkunci.status).toBe(401);
-    expect((await terkunci.json()).error).toBe("Username/NIP atau password salah.");
+    expect((await terkunci.json()).error).toBe(SALAH);
     expect(m.findUser).not.toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -102,13 +105,32 @@ describe("POST /api/auth/login - akun penguji", () => {
   });
 });
 
-describe("POST /api/auth/login - sandi induk dicabut", () => {
-  it("sandi akun dev tidak lagi membuka NIP siapa pun", async () => {
+describe("POST /api/auth/login - login NIP dihapus", () => {
+  it("NIP=NIP ditolak di mode INTERNAL maupun ALLOW_NIP_LOGIN=true; tidak menyentuh database", async () => {
+    m.findUser.mockResolvedValue({ ...userUji, nip: NIP, role: "PEGAWAI" });
+    m.findPegawai.mockResolvedValue({ nip: NIP, jabatan: null });
+    for (const [kunci, nilai] of [
+      ["TEST_NETWORK_MODE", "INTERNAL"],
+      ["ALLOW_NIP_LOGIN", "true"],
+    ]) {
+      vi.stubEnv(kunci, nilai);
+      const res = await kirim(NIP, NIP);
+      expect(res.status).toBe(401);
+      expect((await res.json()).error).toBe(SALAH);
+      expect((await kirim(NIP_UJI, NIP_UJI)).status).toBe(401);
+    }
+    expect(m.findUser).not.toHaveBeenCalled();
+    expect(m.createUser).not.toHaveBeenCalled();
+  });
+
+  it("sandi akun dev tidak membuka NIP siapa pun", async () => {
     const res = await kirim(NIP, SANDI_DEV);
     expect(res.status).toBe(401);
     expect(m.findUser).not.toHaveBeenCalled();
   });
+});
 
+describe("POST /api/auth/login - akun dev", () => {
   it("akun dev tetap bisa masuk", async () => {
     m.findUser.mockResolvedValue({ ...userUji, nip: NIP, role: "ADMIN" });
     m.findPegawai.mockResolvedValue(null);
@@ -116,12 +138,29 @@ describe("POST /api/auth/login - sandi induk dicabut", () => {
     expect(res.status).toBe(200);
   });
 
-  it("login NIP=sandi NIP tetap jalan; NIP 9999 ditolak", async () => {
-    m.findUser.mockResolvedValue({ ...userUji, nip: NIP, role: "PEGAWAI" });
-    m.findPegawai.mockResolvedValue({ nip: NIP, jabatan: null });
-    expect((await kirim(NIP, NIP)).status).toBe(200);
-    m.findUser.mockClear();
-    expect((await kirim(NIP_UJI, NIP_UJI)).status).toBe(401);
+  it("5 gagal -> terkunci 15 menit; pesan sama persis dengan salah sandi biasa; log tanpa username/sandi", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (let i = 0; i < 5; i++) {
+      const res = await kirim("akun-uji", "salah");
+      expect(res.status).toBe(401);
+      expect((await res.json()).error).toBe(SALAH);
+    }
+    const terkunci = await kirim("akun-uji", SANDI_DEV);
+    expect(terkunci.status).toBe(401);
+    expect((await terkunci.json()).error).toBe(SALAH);
     expect(m.findUser).not.toHaveBeenCalled();
+    const teks = JSON.stringify(warn.mock.calls);
+    expect(teks).not.toContain("akun-uji");
+    expect(teks).not.toContain(SANDI_DEV);
+    warn.mockRestore();
+  });
+
+  it("dev terkunci tidak mengunci akun penguji", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (let i = 0; i < 6; i++) await kirim("akun-uji", "salah");
+    m.findUser.mockResolvedValue(userUji);
+    m.findPegawai.mockResolvedValue(pegawaiUji);
+    expect((await kirim("penguji-uji", SANDI)).status).toBe(200);
+    vi.restoreAllMocks();
   });
 });

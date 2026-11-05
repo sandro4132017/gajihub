@@ -10,8 +10,8 @@ relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
 Terakhir diperbarui: **2026-11-05** - rangkuman commit `64d9a46`..`9e3886e`
-(2026-10-21 s.d. 2026-10-29), plus akun penguji Tim Pusdatik (2026-11-05, lihat
-bagian 3 butir 15). Detail per perubahan ada di `docs/ai-log.md`.
+(2026-10-21 s.d. 2026-10-29), plus akun penguji Tim Pusdatik dan penghapusan login
+NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-log.md`.
 
 1. **Dashboard dirombak**:
    - `/kasubag`: kartu sambutan dan stepper tutup bulan lima langkah, yang
@@ -426,12 +426,12 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
 ### Keamanan - naik prioritas
 
 11. **HTTPS + login sungguhan.** Sejak fitur rekening masuk, database ini
-   menyimpan **nomor rekening bank ribuan pegawai**, sementara aplikasinya
-   masih jalan di **HTTP dengan password = NIP**. Sebelumnya kalau bocor yang
-   bocor nama & NIP; sekarang rekening bank. Ini bukan alasan menghentikan
-   fitur (Web Gaji memang butuh datanya), tapi HTTPS + SSO/password sungguhan
-   sebaiknya naik prioritas sebelum VPS dibuka lebih luas dari beberapa
-   pegawai yang tes sekarang.
+   menyimpan **nomor rekening bank ribuan pegawai**. Login NIP (password = NIP)
+   sudah **dihapus total dari kode** (2026-11-05): pegawai masuk lewat SSO
+   Akun Kemnaker, login kata sandi tersisa hanya akun dev dan akun penguji.
+   Dampaknya ±4 pegawai dengan NIK ganda/kosong di SIAP belum bisa masuk
+   sampai datanya dibereskan. HTTPS masih perlu dibereskan sebelum VPS dibuka
+   lebih luas dari beberapa pegawai yang tes sekarang.
    Lihat `TODO(legal-confirm)` di `src/auth/session.ts` dan model
    `RekeningPegawai`.
 
@@ -459,6 +459,11 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
    `PENGUJI_BERLAKU_SAMPAI` di prod. Matikan setelah pengujian: nonaktifkan di
    `/admin/role-assignment`, atau kosongkan `PENGUJI_PASS_HASH` lalu `pm2
    restart`, atau `npm run seed:uji -- --hapus --terapkan`.
+   TTE: akun ini BOLEH menandatangani SPTJM unit uji coba memakai NIK demo
+   (pegawai dummy tanpa sidik NIK, jadi cek NIK = pemegang sesi dilewati) -
+   keputusan user 2026-11-05, untuk pengujian. Akun SSO tetap menolak NIK orang lain.
+   NIK demo bisa dibuka untuk SEMUA akun lewat `TTE_IZINKAN_NIK_DEMO="true"`
+   (bawaan mati) - matikan sebelum SPTJM jadi dasar pembayaran.
 
 ### Baru - dari kelola predikat kinerja per orang (2026-08-05)
 
@@ -555,7 +560,7 @@ npx tsx src/auth/seedAkunPegawai.ts  # akun PEGAWAI untuk tiap Pegawai yang belu
 Role selain PEGAWAI diberikan lewat halaman Admin "Kelola Assignment Role"
 (`/admin/role-assignment`), dengan mengubah akun yang sudah ada.
 
-Login: NIP sebagai username SEKALIGUS password (sementara, sampai SSO).
+Login: pegawai masuk lewat SSO Akun Kemnaker saja (login NIP sudah dihapus 2026-11-05).
 Daftar akun demo lama (Alpha Sandro, Hanindita Widagdo, dst.) **belum
 diverifikasi masih ada** di database lokal maupun VPS. Cek dulu sebelum
 dipakai untuk demo.

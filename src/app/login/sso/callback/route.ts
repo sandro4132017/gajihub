@@ -34,7 +34,7 @@ export const dynamic = "force-dynamic";
  *   identitas, lalu dibuang. Menyimpannya menambah rahasia yang harus dijaga
  *   tanpa ada yang memakainya.
  * - **TIDAK mengubah lapisan otorisasi.** Setelah identitas terbukti, alurnya
- *   sama persis dengan login NIP: `User` dibaca dari database, sesi
+ *   sama persis dengan login kata sandi: `User` dibaca dari database, sesi
  *   diterbitkan lewat `buatTokenUntukUser`, peran & scope satuan kerja
  *   ditentukan `src/auth/permissions.ts` seperti sebelumnya.
  */
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
           }
         } catch (e) {
           // SIDIK_NIK_SECRET belum diisi. Bukan alasan merobohkan halaman -
-          // login NIP tetap jalan - tapi harus terbaca, karena kalau tidak,
+          // akun uji coba tetap jalan - tapi harus terbaca, karena kalau tidak,
           // gejalanya cuma "semua pegawai ditolak" tanpa sebab.
           console.error(`[sso] jalur NIK tidak aktif: ${e instanceof Error ? e.message : e}`);
         }
@@ -188,7 +188,7 @@ export async function GET(req: NextRequest) {
       `[sso] login berhasil NIP …${nip.slice(-4)} lewat ${lewatSidikNik ? "padanan sidik NIK" : "NIP langsung dari Naco"}`
     );
 
-    // Sama seperti login NIP: selalu mulai dari role UTAMA akun, bukan role
+    // Sama seperti login kata sandi: selalu mulai dari role UTAMA akun, bukan role
     // tambahan yang terakhir dipakai.
     const res = NextResponse.redirect(new URL(LANDING_ROLE[user.role], asalPublik(req.headers, req.url)));
     res.cookies.set(SESSION_COOKIE_NAME, sesi, OPSI_COOKIE_SESI);

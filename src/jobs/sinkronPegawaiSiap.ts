@@ -719,7 +719,7 @@ export async function terapkanSinkronPegawai(
   }
 
   if (kunci && sidikDilewati > 0) {
-    catatanSidikNik = `${sidikDilewati} pegawai tidak dapat sidik NIK - NIK tidak terbaca atau dipakai lebih dari satu orang. Mereka tetap bisa login memakai NIP.`;
+    catatanSidikNik = `${sidikDilewati} pegawai tidak dapat sidik NIK - NIK tidak terbaca atau dipakai lebih dari satu orang. Mereka belum bisa masuk lewat SSO.`;
   }
 
   // Daftar perubahan ditulis PALING AKHIR - sesudah tabel Pegawai benar-benar

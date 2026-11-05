@@ -8,9 +8,10 @@ description: Use whenever touching deployment, the VPS, pm2, nginx, prisma migra
 > Diekstrak **verbatim** dari `CLAUDE.md` (baris 4277-4384, 4969-5076) saat
 > pemecahan skill 2026-08-31.
 
-**Garis yang tidak boleh dilompati: SSO.** Selama password = NIP untuk 5.077 akun
-dan database menyimpan 9.944 baris rekening bank, membuka alamatnya ke luar sama
-dengan menerbitkan data itu tanpa kunci.
+**Garis yang tidak boleh dilompati: SSO.** Login NIP (password = NIP) sudah
+dihapus total dari kode (2026-11-05). Pegawai masuk HANYA lewat SSO Akun
+Kemnaker. Database menyimpan rekening bank pegawai, jadi membuka alamatnya ke
+luar tanpa SSO sama dengan menerbitkan data itu tanpa kunci.
 
 **JANGAN pernah menaruh alamat SIAP/e-Presensi di `DATABASE_URL`** - itu database
 PostgreSQL milik Gajihub sendiri.
@@ -40,27 +41,29 @@ dipulihkan sendiri, sementara salah arah ke PUBLIC melempar pengguna ke
 domain yang tidak menjawab. 11 test di `src/auth/__tests__/modeJaringan.test.ts`
 menguncinya.
 
-### Login NIP (password = NIP) masih hidup di mode INTERNAL (dibaca dari kode 2026-11-05)
+### Login kata sandi: jalur NIP sudah DIHAPUS (fakta 2026-11-05)
 
-**Password induk `DEV_AUTH_PASS` yang berlaku untuk NIP siapa pun SUDAH
-DICABUT.** Logika login dipusatkan di `putuskanLogin` (`src/auth/kredensialLogin.ts`),
-dipakai bersama Server Action dan Route Handler. Kata sandi `DEV_AUTH_PASS` kini
-hanya berlaku untuk akun uji coba `DEV_AUTH_USER` itu sendiri.
+Jalur "username NIP + password = NIP" **sudah dihapus total dari kode**, termasuk
+yang sempat dipasang lagi di commit c1d5c3a (2026-10-19). Pegawai masuk HANYA
+lewat SSO Akun Kemnaker (padanan sidik NIK). Logika login dipusatkan di
+`putuskanLogin` (`src/auth/kredensialLogin.ts`), dipakai bersama Server Action
+dan Route Handler. Hanya dua jalur kata sandi yang tersisa:
+- akun dev `DEV_AUTH_USER` / `DEV_AUTH_PASS`;
+- akun penguji Tim Pusdatik (lihat seksi di bawah).
 
-Yang MASIH ADA: jalur NIP 18 digit dengan password = NIP milik orang itu, dibuka
-saat `isModeInternal() || ALLOW_NIP_LOGIN === "true"`. NIP berawalan `9999`
-(data uji) tidak bisa masuk lewat jalur ini.
+Keduanya dibatasi 5 gagal per 15 menit. `ALLOW_NIP_LOGIN` tidak dipakai lagi.
+Dampaknya: pegawai dengan NIK ganda/kosong di SIAP (±4 orang, tanpa sidik NIK)
+tidak bisa masuk sampai datanya dibereskan.
 
-Jadi janji "password = NIP sudah tidak dipakai" belum tercapai untuk mode
-INTERNAL. Kalau mau dimatikan, yang dicabut adalah jalur NIP di
-`kredensialLogin.ts`, bukan mode jaringannya - mematikannya lewat
-NETWORK_MODE=PUBLIC justru akan melumpuhkan satu-satunya jalur akses yang hidup.
-Catatan: angka ini dibaca dari kode, belum diukur ulang dengan `.env` nyata.
+**Pelajaran**: perubahan login di commit uji coba bisa MENGHIDUPKAN LAGI jalur
+yang sudah dihapus. Sebelum mengklaim jalur login apa pun, cek `putuskanLogin`
+di `src/auth/kredensialLogin.ts` - itu sumber kebenarannya, bukan ingatan atau
+dokumen lama.
 
-Yang berubah saat INTERNAL: redirect mempertahankan host/IP yang diakses
-(`asalPublik()`) dan login NIP 18 digit dibuka sebagai cadangan SSO.
-NETWORK_MODE TIDAK memengaruhi TTE: alamat QR berasal dari `TTE_VERIFY_BASE_URL`
-(lihat `src/lib/tte/alamatVerifikasi.ts`), dan stempel simulasi tidak terkait mode jaringan.
+Yang berubah saat INTERNAL: hanya redirect yang mempertahankan host/IP yang
+diakses (`asalPublik()`). `NETWORK_MODE` tidak lagi membuka jalur login. Alamat
+QR TTE berasal dari `TTE_VERIFY_BASE_URL` (lihat `src/lib/tte/alamatVerifikasi.ts`),
+dan stempel simulasi tidak terkait mode jaringan.
 
 Toggle di `/admin` menyimpan ke `.env` secara **atomik** (tulis berkas
 sementara lalu `rename`) - berkas itu memuat seluruh kredensial aplikasi, dan
@@ -119,7 +122,7 @@ Dokumentasi resmi: `https://codes.kemnaker.go.id/naker-api/naco-api`
 | Identitas | `GET https://account.kemnaker.go.id/api/v1/users/me` (`Authorization: Bearer`) |
 
 **Yang berubah cuma CARA MEMBUKTIKAN IDENTITAS.** Setelah identitas terbukti,
-login SSO dan login NIP bermuara ke fungsi yang sama (`buatTokenUntukUser` di
+login SSO dan login kata sandi (akun dev/penguji) bermuara ke fungsi yang sama (`buatTokenUntukUser` di
 `src/auth/sesiCookie.ts`), dan seluruh lapisan di atasnya - peran, otorisasi
 (`permissions.ts`), scope satuan kerja, multi-role - **tidak berubah sama
 sekali**. Ini yang membuat perpindahannya kecil.
@@ -220,7 +223,8 @@ read-only ke SIAP (`PEGAWAI.NIK`, varchar 25):
   tidak punya nilai cadangan, pelajaran dari `getSecretKey()` di `session.ts`
   yang diam-diam memakai cadangan yang ada di repo PUBLIK.
 - **Kolom UNIK + NIK ganda sengaja tidak diberi sidik.** Satu sidik tidak
-  boleh menunjuk dua orang. Yang dilewati (4 orang) tetap masuk lewat login NIP.
+  boleh menunjuk dua orang. Yang dilewati (±4 orang) belum punya jalur masuk
+  sampai datanya dibereskan di SIAP - login NIP sudah dihapus.
 - **`sync:pegawai` tetap jalan tanpa kunci** - memblokir sinkronisasi pegawai
   gara-gara SSO belum siap jelas keliru; yang terjadi cuma login SSO belum
   cocok, dan itu dilaporkan di akhir sync.
@@ -304,10 +308,9 @@ siapa pun yang punya Akun Kemnaker langsung masuk ke sistem penggajian;
 Naco lain setelahnya, jadi menyimpannya cuma menambah rahasia yang harus
 dijaga tanpa ada yang memakainya.
 
-**Login NIP TETAP ADA berdampingan** selama masa transisi (belum tentu semua
-5.077 pegawai punya Akun Kemnaker aktif). TODO(confirm): begitu SSO terbukti
-mencakup semua pengguna, **jalur NIP WAJIB DIMATIKAN** - selama masih ada,
-seluruh alasan mengganti password = NIP belum tercapai.
+**Login NIP SUDAH DIHAPUS** (2026-11-05), tidak lagi menunggu SSO terbukti
+mencakup semua pengguna. Pegawai yang NIK-nya ganda/kosong di SIAP belum bisa
+masuk; penyelesaiannya di data SIAP, BUKAN dengan menghidupkan lagi jalur NIP.
 
 **JEBAKAN saat menguji - `redirect_uri` menentukan DI MESIN MANA callback
 mendarat.** Naco mengalihkan BROWSER ke alamat yang didaftarkan. Kalau

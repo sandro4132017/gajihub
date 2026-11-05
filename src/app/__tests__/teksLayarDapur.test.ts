@@ -80,6 +80,27 @@ describe("teks layar login: bahasa pengguna, bukan konfigurasi", () => {
     for (const f of ["app/login/LoginForm.tsx", "app/login/page.tsx", "app/login/PesanSso.tsx"]) tanpa(f, larangan);
   });
 
+  it("login tidak menyebut NIP (jalur NIP dihapus)", () => {
+    for (const f of ["app/login/LoginForm.tsx", "app/login/page.tsx", "app/login/actions.ts", "app/api/auth/login/route.ts"]) {
+      const lit = literalLayar(baca(f)).replace(/DEV_AUTH_NIP/g, "");
+      expect(lit, f).not.toMatch(/Username\/NIP|atau NIP|NIP 18|memakai NIP|pakai NIP/);
+      expect(baca(f), f).not.toContain("ALLOW_NIP_LOGIN");
+      expect(baca(f), f).not.toContain("modeInternal");
+    }
+  });
+
+  it("PesanSso tidak menyuruh masuk memakai NIP", () => {
+    const isi = baca("app/login/PesanSso.tsx");
+    expect(isi).not.toContain("NIP di bawah");
+    expect(isi).not.toContain("NIP dan kata sandi");
+  });
+
+  it("halaman login punya pesan status bila tak ada SSO maupun form lokal", () => {
+    const isi = baca("app/login/page.tsx");
+    expect(isi).toContain("!adaSso && !tampilkanFormLokal");
+    expect(isi).toContain("Masuk belum diaktifkan di server ini. Hubungi Admin Gajihub.");
+  });
+
   it("pesan galat login", () => {
     const larangan = [".env", "DEV_AUTH", "payload", "database", "Mode Akses Publik"];
     for (const f of ["app/login/actions.ts", "app/api/auth/login/route.ts"]) tanpa(f, larangan);

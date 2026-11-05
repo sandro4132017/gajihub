@@ -71,11 +71,10 @@ terdaftar - mereka tidak masuk file per bank manapun.
 
 **CATATAN KEAMANAN yang naik taruhannya.** Keputusan lama "kolom rekening
 SENGAJA dibuang saat parsing" DICABUT. Konsekuensinya database ini sekarang
-menyimpan rekening bank ribuan pegawai, sementara aplikasinya masih jalan di
-**HTTP dengan password = NIP** (lihat TODO(legal-confirm) di
-`src/auth/session.ts`). Ini bukan lagi soal nama & NIP - ini data rekening
-bank. WAJIB diamankan (HTTPS + SSO/password sungguhan) sebelum dibuka ke
-jaringan yang lebih luas. Peringatan ini juga ditampilkan di halaman
+menyimpan rekening bank ribuan pegawai. Login NIP (password = NIP) sudah
+dihapus total (2026-11-05); pegawai masuk lewat SSO Akun Kemnaker (lihat
+TODO(legal-confirm) di `src/auth/session.ts`). HTTPS tetap harus dibereskan
+sebelum dibuka ke jaringan yang lebih luas. Peringatan ini juga ditampilkan di halaman
 `/ppabp/rekening` supaya tidak cuma hidup di komentar kode.
 
 **Diverifikasi** dengan file ADK tukin ASLI sebagai sumber: parser membaca
@@ -414,7 +413,7 @@ user: 3 contoh/template ADK asli (`templatelemburPPPK202606.xlsx`,
     pegawai GET-based (pola sama dengan `osdma/update-sk`) mengisi celah
     ini - dipakai kalau ada nodin/arahan Pimpinan yang perlu dieksekusi
     cepat (mis. pegawai baru dilantik jadi Kasubag TU) tanpa nunggu PPABP
-    mengusulkan dulu. Password akun baru = NIP (konvensi yang sama).
+    mengusulkan dulu. Akun baru masuk lewat SSO Akun Kemnaker (tidak ada login NIP).
     Pencarian otomatis menyembunyikan opsi "Pilih" buat pegawai yang
     sudah punya akun (chip "Sudah punya akun") - diarahkan ke tabel di
     bawah buat ubah role yang sudah ada, bukan bikin akun duplikat.

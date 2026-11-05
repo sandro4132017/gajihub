@@ -168,10 +168,10 @@ di balik NAT tetap bisa memanggil API luar. Yang butuh keterbukaan cuma arah
 MASUK (pegawai membuka halamannya). Keduanya sering tertukar, dan tertukarnya
 menghasilkan keputusan "berarti harus dibuka ke publik dulu" yang keliru.
 
-**Garis yang tidak boleh dilompati: SSO.** Selama password = NIP, membuka
-alamatnya ke luar sama dengan menerbitkan gaji + 9.944 nomor rekening tanpa
-kunci - NIP tercetak di SK & daftar hadir, jadi itu bukan password lemah,
-itu tidak ada password. Demo di luar kantor TIDAK perlu menunggu SSO: jalankan
+**Garis yang tidak boleh dilompati: SSO.** Login NIP (password = NIP) sudah
+dihapus total dari kode (2026-11-05); pegawai masuk HANYA lewat SSO Akun
+Kemnaker. Membuka alamat ke luar tanpa SSO sama dengan menerbitkan gaji dan
+nomor rekening tanpa kunci. Demo di luar kantor TIDAK perlu menunggu SSO: jalankan
 dari laptop penyaji (nol paparan, sekaligus kebal wifi tempat acara).
 
 **Angka yang menopang argumennya** (diukur 2026-08-21, bukan perkiraan):
@@ -348,10 +348,10 @@ Urutan yang sudah dikerjakan (3 langkah):
        balik ke `/saya`.
 
 Login sekarang (lihat `src/app/login/`) SUDAH pakai model `User` (bukan
-`AkunApprover` lagi, yang itu di-deprecate) - NIP jadi username & password
-sekaligus, SEMENTARA sampai SSO Kemnaker tersambung (lihat
-`TODO(legal-confirm)` panjang di `src/auth/session.ts` soal risikonya - NIP
-bukan rahasia). Akun demo per role: `src/auth/seedUsers.ts`.
+`AkunApprover` lagi, yang itu di-deprecate). Login NIP sudah dihapus total
+(2026-11-05); pegawai masuk lewat SSO Akun Kemnaker, lihat
+`TODO(legal-confirm)` di `src/auth/session.ts`. Akun demo per role:
+`src/auth/seedUsers.ts`.
 
 Jangan loncat ke langkah 3 sebelum langkah 2 selesai dan direview - pola
 yang sama dengan roadmap awal (jangan bangun UI di atas logic yang belum

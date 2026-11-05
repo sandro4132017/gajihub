@@ -19,7 +19,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * KENAPA TIDAK MENYIMPAN NIK: yang dibutuhkan alur login cuma MENCOCOKKAN,
  * tidak pernah MEMBACA. Menyimpan NIK berarti menambah data pribadi 5.000
  * pegawai ke database yang sudah memuat 9.944 nomor rekening, di aplikasi
- * yang masih berjalan di HTTP dengan password = NIP.
+ * yang masih berjalan di HTTP.
  */
 
 /** NIK Indonesia: 16 digit. NIP 18 digit - panjangnya yang membedakan. */

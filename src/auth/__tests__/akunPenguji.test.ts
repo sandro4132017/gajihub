@@ -92,7 +92,7 @@ describe("pembatas percobaan", () => {
 
 describe("putuskanLogin jalur penguji", () => {
   const penguji = konfigPenguji(ENV, SEKARANG);
-  const konfig = { modeInternal: false, penguji };
+  const konfig = { penguji };
 
   it("sandi benar -> PENGUJI, di luar mode internal sekalipun", () => {
     const b = buatPembatas();
@@ -123,7 +123,7 @@ describe("putuskanLogin jalur penguji", () => {
 
   it("konfigurasi mati -> username penguji tidak dikenal", () => {
     expect(
-      putuskanLogin({ username: "penguji-uji", password: SANDI }, { modeInternal: false, penguji: null }, SEKARANG)
+      putuskanLogin({ username: "penguji-uji", password: SANDI }, { penguji: null }, SEKARANG)
     ).toBeNull();
   });
 });

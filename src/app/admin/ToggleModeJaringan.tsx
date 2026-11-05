@@ -48,7 +48,7 @@ export function ToggleModeJaringan({ modeAwal }: { modeAwal: ModeJaringan }) {
           <p className="text-xs text-muted leading-relaxed max-w-2xl">
             {isInternal ? (
               <>
-                <strong>Mode Internal Aktif:</strong> Digunakan saat akses publik diputus Pusdatik. Redirect tetap berada di IP/domain lokal, dan login NIP 18 digit dibuka sebagai cadangan SSO.
+                <strong>Mode Internal Aktif:</strong> Digunakan saat akses publik diputus Pusdatik. Redirect tetap berada di IP/domain lokal.
               </>
             ) : (
               <>

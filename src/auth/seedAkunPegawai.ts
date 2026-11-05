@@ -17,12 +17,8 @@
 // URUTAN JALANNYA: setelah seedUsers.ts (biar 13 akun demo dapat role
 // khususnya duluan, tidak ke-set jadi PEGAWAI oleh skrip ini).
 //
-// TODO(legal-confirm): password = NIP (konvensi login sementara yang sama,
-// lihat catatan panjang di src/auth/session.ts) - artinya SETIAP pegawai
-// di basis data otomatis bisa login pakai NIP-nya sendiri. Ini DISENGAJA
-// buat kebutuhan testing internal (akses cuma lewat jaringan kantor/VPN),
-// TAPI wajib diganti begitu SSO Kemnaker tersambung - jangan dibiarkan
-// begini pas sistem dibuka ke jaringan publik.
+// Akun yang dibuat TIDAK punya kata sandi: login memakai NIP sebagai
+// username/password sudah dihapus. Pegawai masuk lewat SSO Kemnaker.
 // ============================================================================
 
 import { PrismaClient } from "@prisma/client";

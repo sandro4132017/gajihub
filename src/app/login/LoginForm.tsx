@@ -7,7 +7,7 @@ const KELAS_FIELD =
   "outline-none transition placeholder:font-semibold placeholder:text-ink-2 " +
   "focus:border-biru focus:bg-white focus:shadow-[0_0_0_3px_rgba(63,114,175,0.18)]";
 
-export function LoginForm({ modeInternal = true }: { modeInternal?: boolean }) {
+export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -46,7 +46,7 @@ export function LoginForm({ modeInternal = true }: { modeInternal?: boolean }) {
     <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
       <div>
         <label htmlFor="username" className="sr-only">
-          {modeInternal ? "Username atau NIP" : "Username"}
+          Username
         </label>
         <div className="relative">
           <input
@@ -54,7 +54,7 @@ export function LoginForm({ modeInternal = true }: { modeInternal?: boolean }) {
             name="username"
             required
             autoFocus
-            placeholder={modeInternal ? "Username atau NIP (18 digit)" : "Username"}
+            placeholder="Username"
             autoComplete="off"
             className={KELAS_FIELD}
           />
@@ -85,7 +85,7 @@ export function LoginForm({ modeInternal = true }: { modeInternal?: boolean }) {
         disabled={pending}
         className="btn btn-primary mt-2 w-full rounded-xl py-3.5 text-base"
       >
-        {pending ? "Memproses..." : modeInternal ? "Masuk" : "Masuk dengan akun uji coba"}
+        {pending ? "Memproses..." : "Masuk dengan akun uji coba"}
       </button>
 
       {/* role="alert" supaya kegagalan login ikut dibacakan pembaca layar */}
@@ -96,9 +96,7 @@ export function LoginForm({ modeInternal = true }: { modeInternal?: boolean }) {
       )}
 
       <p className="pt-2 text-center text-xs text-muted">
-        {modeInternal
-          ? "Masuk memakai NIP 18 digit, atau akun uji coba dari Admin Gajihub."
-          : "Khusus akun uji coba yang diberikan Admin Gajihub."}
+        Khusus akun uji coba yang diberikan Admin Gajihub.
       </p>
     </form>
   );

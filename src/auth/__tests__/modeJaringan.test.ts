@@ -4,7 +4,7 @@ import { getModeJaringan, isModeInternal } from "../modeJaringan";
 // ============================================================================
 // Mode jaringan menentukan hal-hal yang TERLIHAT pengguna dan tidak bisa
 // dibatalkan sendiri: ke mana redirect SSO mendarat, host mana yang ditulis di
-// QR TTE, dan apakah login NIP 18 digit dibuka.
+// QR TTE, dan perilaku lain yang bergantung pada asal akses.
 //
 // YANG PALING PERLU DIJAGA: nilai yang tidak dikenali harus jatuh ke INTERNAL,
 // bukan PUBLIC. Salah arah di sini berarti aplikasi mengalihkan pengguna ke
