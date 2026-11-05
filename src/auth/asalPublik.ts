@@ -48,6 +48,23 @@ function protokolUntuk(host: string, proto: string | undefined, asalPermintaan: 
 }
 
 /**
+ * Header dari proxy dipercaya hanya kalau bentuknya sah. Nilai lain (protokol
+ * selain http/https, host berisi karakter di luar nama domain/IP) diabaikan
+ * seolah tidak dikirim: membangun URL dari nilai itu melempar galat dan
+ * menggagalkan permintaan, dan host sembarang bisa membelokkan pengalihan.
+ */
+export function protoSah(nilai: string | null): string | undefined {
+  const p = nilai?.split(",")[0].trim().toLowerCase();
+  return p === "http" || p === "https" ? p : undefined;
+}
+
+export function hostSah(nilai: string | null): string | undefined {
+  const h = nilai?.split(",")[0].trim();
+  if (!h) return undefined;
+  return /^(?:[a-z0-9-]+(?:\.[a-z0-9-]+)*|\[[0-9a-f:.]+\])(?::\d{1,5})?$/i.test(h) ? h : undefined;
+}
+
+/**
  * Alamat PUBLIK / INTERNAL aplikasi ini - yang dilihat browser, bukan yang dilihat server.
  *
  * Mengikuti toggle Mode Jaringan (`NETWORK_MODE` = "INTERNAL" | "PUBLIC"):
@@ -66,8 +83,8 @@ export function asalPublik(headers: Headers, asalPermintaan: string): string {
     }
   }
 
-  const host = headers.get("x-forwarded-host") ?? headers.get("host");
-  const proto = headers.get("x-forwarded-proto")?.split(",")[0].trim();
+  const host = hostSah(headers.get("x-forwarded-host")) ?? hostSah(headers.get("host"));
+  const proto = protoSah(headers.get("x-forwarded-proto"));
 
   // 2. Jika Mode Jaringan INTERNAL aktif ATAU host merupakan alamat lokal/intranet,
   // pertahankan alamat yang sedang diakses browser agar tidak terlempar ke domain publik yang mati.

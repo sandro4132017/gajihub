@@ -182,9 +182,10 @@ export async function GET(req: NextRequest) {
     // Jalan mana yang dipakai mengenali orang ini DICATAT. Selama NIP tidak
     // pernah dikirim Naco, praktis semua login SSO lewat padanan NIK - dan
     // kalau suatu saat Naco mulai mengirim NIP, pergeserannya kelihatan di sini
-    // tanpa perlu menebak. NIK-nya sendiri tidak ikut dicatat.
+    // tanpa perlu menebak. NIK tidak dicatat, NIP hanya 4 digit terakhir
+    // (log server bukan tempat data pegawai).
     console.info(
-      `[sso] login berhasil NIP ${nip} lewat ${lewatSidikNik ? "padanan sidik NIK" : "NIP langsung dari Naco"}`
+      `[sso] login berhasil NIP …${nip.slice(-4)} lewat ${lewatSidikNik ? "padanan sidik NIK" : "NIP langsung dari Naco"}`
     );
 
     // Sama seperti login NIP: selalu mulai dari role UTAMA akun, bukan role
