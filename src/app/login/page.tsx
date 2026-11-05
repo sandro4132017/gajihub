@@ -2,6 +2,7 @@ import { GajihubLogo } from "../../components/layout/GajihubLogo";
 import { LoginForm } from "./LoginForm";
 import { ssoAktif } from "../../auth/sso";
 import { getModeJaringan } from "../../auth/modeJaringan";
+import { konfigPenguji } from "../../auth/akunPenguji";
 import { PesanSso } from "./PesanSso";
 import { SlideFitur } from "./SlideFitur";
 
@@ -17,7 +18,9 @@ export default async function LoginPage({
   const modeJaringan = getModeJaringan();
   const isInternal = modeJaringan === "INTERNAL";
   const tampilkanFormLokal =
-    isInternal || Boolean(process.env.DEV_AUTH_USER || process.env.ALLOW_NIP_LOGIN === "true");
+    isInternal ||
+    Boolean(process.env.DEV_AUTH_USER || process.env.ALLOW_NIP_LOGIN === "true") ||
+    konfigPenguji(process.env) !== null;
 
   return (
     <div className="grid h-dvh overflow-hidden lg:grid-cols-2">
@@ -54,7 +57,7 @@ export default async function LoginPage({
                 Masuk dengan Akun SIAP ID
               </a>
               <p className="mt-3 text-center text-xs text-muted leading-relaxed">
-                Autentikasi terenkripsi melalui Single Sign-On (SSO) resmi Kementerian Ketenagakerjaan.
+                Masuk memakai akun resmi Kementerian Ketenagakerjaan.
               </p>
             </div>
           )}
@@ -64,8 +67,8 @@ export default async function LoginPage({
             <div className="mt-8 border-t border-line pt-6">
               <div className="mb-4 rounded-lg bg-teal-tint/60 p-2.5 text-center text-[11px] font-semibold text-navy">
                 {isInternal
-                  ? "Mode Jaringan Internal (Intranet / VPN)"
-                  : "Akses Pengujian (Akun Dev / QA)"}
+                  ? "Jaringan kantor Kemnaker"
+                  : "Akun uji coba"}
               </div>
               <LoginForm modeInternal={isInternal} />
             </div>

@@ -31,7 +31,7 @@ export default async function OsdmaSkHukdisPage({
   };
 
   if (!authUser || !canApproveSkHukumanDisiplin(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang memberikan approval SK Hukuman Disiplin." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang memberikan approval SK Hukuman Disiplin." />;
   }
 
   const [satuanKerjaRows, skListAll] = await Promise.all([
@@ -88,7 +88,7 @@ export default async function OsdmaSkHukdisPage({
               </span>
             </div>
             <p className="mt-1 text-xs sm:text-sm text-muted">
-              Penetapan dan pengesahan sanksi disiplin pegawai lintas satuan kerja &bull; Sinkronisasi otomatis terhadap pemotongan tunjangan kinerja.
+              Penetapan dan pengesahan sanksi disiplin pegawai lintas satuan kerja &bull; SK yang disahkan diperhitungkan saat kalkulasi Tunjangan Kinerja.
             </p>
           </div>
         </div>

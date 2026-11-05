@@ -7,6 +7,8 @@ import { UploadRekeningForm } from "./UploadRekeningForm";
 import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
 import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { REKENING_GAJI_DITERIMA } from "../../../business-logic/rekeningPegawai";
+import { labelJenisPembayaran } from "../../../lib/format/labelStatus";
+import { pegawaiBukanUji } from "../../../lib/dataUji";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ export default async function RekeningPage({
   const authUser: AuthUser | null =
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canKelolaGajiInduk(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengelola data rekening pegawai." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengelola data rekening pegawai." />;
   }
 
   const jenisAktif = jenis === "GAJI" && REKENING_GAJI_DITERIMA ? "GAJI" : "TUKIN";
@@ -56,7 +58,7 @@ export default async function RekeningPage({
       orderBy: { pegawai: { nama: "asc" } },
       include: { pegawai: { select: { nip: true, nama: true, satuanKerja: true } } },
     }),
-    prisma.pegawai.count(),
+    prisma.pegawai.count({ where: pegawaiBukanUji() }),
   ]);
 
   // Dikelompokkan per KODE bank, bukan per pasangan kode + nama. Satu kode
@@ -93,7 +95,7 @@ export default async function RekeningPage({
       </p>
       <p className="mt-1 text-sm text-muted">
         Disimpan <strong className="text-ink">terpisah per jenis</strong> - tukin dan gaji lewat rekening yang berbeda.
-        {!REKENING_GAJI_DITERIMA && " Rekening gaji menyusul setelah Gajihub terinterkoneksi."}
+        {!REKENING_GAJI_DITERIMA && " Rekening gaji belum dapat diunggah untuk saat ini."}
       </p>
 
       <UploadRekeningForm />
@@ -113,7 +115,7 @@ export default async function RekeningPage({
         </div>
         {perBank.length === 0 ? (
           <p className="mt-3 text-sm text-muted">
-            Belum ada rekening {jenisAktif} yang diupload. Tanpa ini, kolom rekening di Export ADK akan kosong dan Web
+            Belum ada rekening {labelJenisPembayaran(jenisAktif)} yang diupload. Tanpa ini, kolom rekening di Export ADK akan kosong dan Web
             Gaji tidak bisa memproses pembayarannya.
           </p>
         ) : (
@@ -131,8 +133,8 @@ export default async function RekeningPage({
                   <span className="mt-0.5 block border-l-2 border-gold pl-2 text-xs text-gold-deep">
                     Kode dan nama bank tidak sepakat:{" "}
                     {b.namaLain.map((n) => `${n.jumlah} baris bernama "${n.nama}"`).join(", ")}. Di Export ADK
-                    baris itu ikut berkas kode {b.kodeBankSpan}. Unggah ulang berkas rekening unitnya - perapian
-                    sekarang menetapkan kode mengikuti panjang nomor rekening.
+                    baris itu ikut berkas kode {b.kodeBankSpan}. Unggah ulang berkas rekening unit tersebut; kode bank
+                    akan ditetapkan otomatis dari panjang nomor rekening.
                   </span>
                 )}
               </li>
@@ -140,7 +142,7 @@ export default async function RekeningPage({
           </ul>
         )}
         <p className="mt-2 text-xs text-muted">
-          Total {perBank.reduce((a, b) => a + b.jumlah, 0)} dari {totalPegawai} pegawai punya rekening {jenisAktif}.
+          Total {perBank.reduce((a, b) => a + b.jumlah, 0)} dari {totalPegawai} pegawai punya rekening {labelJenisPembayaran(jenisAktif)}.
         </p>
       </div>
 
@@ -169,7 +171,7 @@ export default async function RekeningPage({
             {list.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-6 text-center text-muted">
-                  Tidak ada rekening {jenisAktif} untuk filter ini.
+                  Tidak ada rekening {labelJenisPembayaran(jenisAktif)} untuk filter ini.
                 </td>
               </tr>
             )}
@@ -200,10 +202,8 @@ export default async function RekeningPage({
       <div className="card mt-6 border-l-4 border-l-gold p-4">
         <p className="text-sm font-bold text-ink">Data rekening bank = data pribadi finansial</p>
         <p className="mt-1 text-sm text-muted">
-          Sebelumnya kolom rekening sengaja tidak disimpan. Keputusan itu dicabut karena Web Gaji memang
-          membutuhkannya. Konsekuensinya database ini sekarang menyimpan rekening bank ribuan pegawai, sementara
-          aplikasinya masih jalan di HTTP dengan password = NIP. Ini WAJIB diamankan sebelum dibuka ke jaringan yang
-          lebih luas.
+          Data rekening adalah data pribadi finansial. Gunakan hanya untuk keperluan pembayaran dan jangan
+          disebarkan atau diunduh di luar keperluan itu.
         </p>
       </div>
     </main>

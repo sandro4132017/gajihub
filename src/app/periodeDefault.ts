@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { pegawaiBukanUji } from "../lib/dataUji";
 
 /**
  * Periode default halaman - dipakai kalau user membuka halaman TANPA ?bulan=&tahun=.
@@ -103,7 +104,7 @@ export async function periodePunyaRekapPresensi(satuanKerja?: string): Promise<P
   const rows = await prisma.rekapPresensiPeriode.findMany({
     distinct: ["periodeBulan", "periodeTahun"],
     select: { periodeBulan: true, periodeTahun: true },
-    ...(satuanKerja ? { where: { pegawai: { satuanKerja } } } : {}),
+    where: { pegawai: satuanKerja ? { satuanKerja, ...pegawaiBukanUji(satuanKerja) } : pegawaiBukanUji() },
   });
   return rows.map((r) => ({ bulan: r.periodeBulan, tahun: r.periodeTahun }));
 }
@@ -132,7 +133,7 @@ export async function periodePunyaPredikatKinerja(satuanKerja?: string): Promise
   const rows = await prisma.predikatKinerja.findMany({
     distinct: ["periodeBulan", "periodeTahun"],
     select: { periodeBulan: true, periodeTahun: true },
-    ...(satuanKerja ? { where: { pegawai: { satuanKerja } } } : {}),
+    where: { pegawai: satuanKerja ? { satuanKerja, ...pegawaiBukanUji(satuanKerja) } : pegawaiBukanUji() },
   });
   return rows.map((r) => ({ bulan: r.periodeBulan, tahun: r.periodeTahun }));
 }
@@ -150,6 +151,7 @@ export async function periodePunyaUangLembur(): Promise<Periode[]> {
   const rows = await prisma.uangLembur.findMany({
     distinct: ["periodeBulan", "periodeTahun"],
     select: { periodeBulan: true, periodeTahun: true },
+    where: { pegawai: pegawaiBukanUji() },
   });
   return rows.map((r) => ({ bulan: r.periodeBulan, tahun: r.periodeTahun }));
 }
@@ -159,6 +161,7 @@ export async function periodePunyaUangMakan(): Promise<Periode[]> {
   const rows = await prisma.uangMakan.findMany({
     distinct: ["periodeBulan", "periodeTahun"],
     select: { periodeBulan: true, periodeTahun: true },
+    where: { pegawai: pegawaiBukanUji() },
   });
   return rows.map((r) => ({ bulan: r.periodeBulan, tahun: r.periodeTahun }));
 }
@@ -168,6 +171,7 @@ export async function periodePunyaTukin(): Promise<Periode[]> {
   const rows = await prisma.tukinCalculation.findMany({
     distinct: ["periodeBulan", "periodeTahun"],
     select: { periodeBulan: true, periodeTahun: true },
+    where: { pegawai: pegawaiBukanUji() },
   });
   return rows.map((r) => ({ bulan: r.periodeBulan, tahun: r.periodeTahun }));
 }

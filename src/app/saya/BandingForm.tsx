@@ -269,14 +269,14 @@ export function BandingForm({ sasaran }: { sasaran: SasaranBanding[] }) {
             <button
               type="button"
               onClick={handleHapusBerkas}
-              className="text-xs font-semibold text-red hover:underline"
+              className="-my-2 min-h-11 px-1 text-xs font-semibold text-red hover:underline"
             >
               Hapus berkas
             </button>
           )}
         </div>
 
-        <p className="text-[11px] text-muted leading-relaxed">
+        <p className="text-xs text-muted leading-relaxed">
           Unggah dokumen atau gambar yang mendukung pengajuan banding, seperti SK Grade, surat tugas, surat sakit, atau bukti presensi.
           <br />
           Format yang didukung: PDF, PNG, JPG, dan WebP.
@@ -361,12 +361,12 @@ export function BandingForm({ sasaran }: { sasaran: SasaranBanding[] }) {
           ini langsung mengubah angkanya. Sumber datanya disebut eksplisit
           supaya jelas perbaikannya terjadi di tempat lain. */}
       {info && (
-        <p className="text-[11px] leading-relaxed text-muted">
+        <p className="text-xs leading-relaxed text-muted">
           Diperiksa oleh{" "}
           <strong className="text-ink-2">{info.ditanganiOleh}</strong>. Kalau
           disetujui, perbaikannya dilakukan di{" "}
           <strong className="text-ink-2">{info.sistemSumber}</strong> - angka di
-          Gajihub ikut berubah setelah data itu ditarik ulang, bukan seketika.
+          Gajihub ikut berubah setelah data itu diperbarui, tidak seketika.
         </p>
       )}
 

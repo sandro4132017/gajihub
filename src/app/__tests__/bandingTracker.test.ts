@@ -70,7 +70,7 @@ describe("bandingTrackerLogic", () => {
       expect(steps[2].sublabel).toBe("Biro OSDMA");
 
       expect(steps[3].label).toBe("Selesai");
-      expect(steps[3].sublabel).toBe("Data telah diperbarui");
+      expect(steps[3].sublabel).toBe("Keputusan akhir");
     });
 
     it("status MENUNGGU_APPROVAL_FINAL: step 1 & 2 selesai, step 3 aktif, step 4 pending", () => {
@@ -137,7 +137,7 @@ describe("bandingTrackerLogic", () => {
       expect(steps[3].state).toBe("completed");
 
       expect(steps[2].keterangan).toBe("Disetujui oleh Biro OSDMA");
-      expect(steps[3].keterangan).toBe("Sinkronisasi selesai");
+      expect(steps[3].keterangan).toBe("Banding disetujui");
     });
 
     it("status DITOLAK di Kasubag TU: step 2 rejected", () => {
@@ -166,6 +166,17 @@ describe("bandingTrackerLogic", () => {
       expect(steps[3].state).toBe("pending");
 
       expect(steps[1].keterangan).toBe("Ditolak oleh Kasubag TU");
+    });
+  });
+
+  describe("uraian banding selesai", () => {
+    it("sumber Gajihub memakai kalimat perhitungan berikutnya", () => {
+      const cps = bangunTimelineCheckpoints(
+        { ...dummyBandingBaru, status: "DISETUJUI", referensiTipe: "LAINNYA" as never },
+        [],
+      );
+      const selesai = cps.find((c) => c.id === "selesai-mutakhir");
+      expect(selesai?.uraian).toBe("Seluruh tahapan banding selesai. Hasilnya diperhitungkan pada perhitungan berikutnya.");
     });
   });
 

@@ -133,6 +133,7 @@ akses resmi tersedia - tanpa refactor besar.
 | `src/app/` | Next.js App Router - halaman, Server Action, Route Handler. Komponen yang dipakai SATU halaman tinggal di folder halamannya |
 | `src/components/` | komponen UI yang dipakai lintas role: `layout/` (AppShell, AccountMenu), `forms/` (FilterBar, SearchableSelect), `feedback/` (Modal, AksesDitolak), `tables/`, `charts/`, `shared/`, `dashboard/` |
 | `src/lib/format/` | format tampilan murni (bulan, tanggal, presensi, lembur) - tanpa prisma |
+| `src/lib/kabar/` | logika murni panel Kabar: kalimat audit, penggabungan, tautan, tampilan - tanpa prisma, tanpa I/O |
 | `src/lib/storage/` | penyimpanan berkas privat (`storage/uploads/`, di luar `public/`); unduhan lewat `src/app/berkas/` yang berizin - jangan taruh berkas pegawai di `public/` |
 | `prisma/` | skema + migrasi (satu-satunya jalur perubahan database) |
 | `docs/` | teks peraturan & dokumen kirim-ke-pihak-luar |

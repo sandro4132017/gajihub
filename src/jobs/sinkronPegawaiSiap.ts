@@ -74,8 +74,10 @@ import { PrismaClient } from "@prisma/client";
 import sql from "mssql";
 import { bukaPoolSiap, konfigurasiSiap, labelSumberSiap } from "../lib/siapConfig";
 import { kunciSidikNik, normalkanNik, sidikNik } from "../auth/sidikNik";
+import { denganSumber } from "../lib/koneksi/galatSumber";
 import { judulkanNama } from "../business-logic/namaPegawai";
 import { jenisPegawaiDariKodeSiap } from "../business-logic/jenisPegawai";
+import { SUMBER_DUMMY } from "../lib/dataUji";
 
 // Prisma memuat .env sendiri buat DATABASE_URL, tapi variabel SIAP_* di
 // bawah dibaca langsung dari process.env - jadi .env perlu dimuat eksplisit.
@@ -380,10 +382,13 @@ export async function periksaSinkronPegawai(
   prisma: PrismaClient,
   prefixSatker: string | null = null
 ): Promise<RencanaSinkronPegawai> {
-  const baris = await ambilDariSiap(prefixSatker);
+  const baris = await denganSumber("SIAP", () => ambilDariSiap(prefixSatker));
   const { siap, dilewati } = saringBarisSiap(baris);
 
+  // Pegawai uji (penanda DUMMY_UJI) memang tidak ada di SIAP; tanpa
+  // dikecualikan, rekonsiliasi akan menandainya TIDAK_DI_SIAP.
   const adaDiGajihub = await prisma.pegawai.findMany({
+    where: { sourceSystem: { not: SUMBER_DUMMY } },
     select: {
       nip: true,
       nama: true,
@@ -450,7 +455,9 @@ export async function periksaSinkronPegawai(
   const perluDicek = adaDiGajihub.filter((p) => !nipAktif.has(p.nip));
   const gantiStatus: PerubahanPegawai[] = [];
   if (perluDicek.length > 0) {
-    const statusSiap = await ambilStatusDariSiap(perluDicek.map((p) => p.nip));
+    const statusSiap = await denganSumber("SIAP", () =>
+      ambilStatusDariSiap(perluDicek.map((p) => p.nip))
+    );
     for (const p of perluDicek) {
       const label = statusSiap.get(p.nip) ?? "TIDAK_DI_SIAP";
       if (p.statusPegawai !== label) {
@@ -577,7 +584,7 @@ export async function terapkanSinkronPegawai(
   terdeteksiOlehId: string | null = null
 ): Promise<HasilSinkronPegawai> {
   const rencana = await periksaSinkronPegawai(prisma, prefixSatker);
-  const baris = await ambilDariSiap(prefixSatker);
+  const baris = await denganSumber("SIAP", () => ambilDariSiap(prefixSatker));
   const { siap } = saringBarisSiap(baris);
   const waktuSync = new Date();
 

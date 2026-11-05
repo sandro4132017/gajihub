@@ -51,7 +51,7 @@ export default async function SkKgbUnitPage({
   }
 
   if (!canAjukanSkKgb(authUser, satkerEfektif)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengajukan SK KGB unit ini." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengajukan SK KGB unit ini." />;
   }
 
   const [pegawaiList, skKgbList] = await Promise.all([

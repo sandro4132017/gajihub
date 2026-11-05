@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -41,7 +42,7 @@ export async function putuskanRekonsiliasiAction(
 
     const pegawai = await prisma.pegawai.findUnique({ where: { id: recon.pegawaiId } });
     if (!canMonitorUbahStatusLintasUnit(authUser, pegawai?.satuanKerja)) {
-      return { error: "Role kamu tidak berwenang mengubah status rekonsiliasi ini." };
+      return { error: "Peran kamu tidak berwenang mengubah status rekonsiliasi ini." };
     }
     if (recon.status !== "SELISIH" && recon.status !== "SANGGAH") {
       return { error: `Baris ini berstatus ${recon.status} - tidak perlu diputuskan lagi.` };
@@ -55,6 +56,6 @@ export async function putuskanRekonsiliasiAction(
     revalidatePath("/ppabp/rekonsiliasi");
     return { success: `Keputusan tersimpan: ${keputusan === "HOLD_PEMBAYARAN" ? "tahan pembayaran" : "koreksi siklus berikutnya"}.` };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("ppabp.rekonsiliasi.actions#1", err, "Terjadi kesalahan") };
   }
 }

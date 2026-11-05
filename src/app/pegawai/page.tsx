@@ -82,7 +82,7 @@ export default async function DataPegawaiPage({
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
 
   if (!authUser || !canKelolaDataPegawai(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengelola data pegawai." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengelola data pegawai." />;
   }
 
   // KASUBAG_TU cuma boleh menyentuh unitnya sendiri - dipaksa di level QUERY

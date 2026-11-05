@@ -8,7 +8,6 @@ import {
   canKelolaHariLibur,
   canLihatKendalaEpresensi,
   canLihatHariLibur,
-  canUploadRekapPresensi,
   canExportRekapUnit,
   type AuthUser,
 } from "../../../auth/permissions";
@@ -68,12 +67,8 @@ export default async function PresensiTukinPage({
   const authUser: AuthUser | null =
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canBukaHalamanPredikatKinerja(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengelola data presensi." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengelola data presensi." />;
   }
-
-  // Kasubag TU ikut boleh (unitnya sendiri) - cakupan per pegawai dicek ulang
-  // di action rekonsiliasinya, jadi berkas lintas unit tetap tersaring.
-  const bolehRekonsiliasi = canUploadRekapPresensi(authUser, authUser.satuanKerja ?? "");
 
   // Dua keadaan yang BOLEH DILIHAT semua orang di halaman ini, tapi tidak
   // semua boleh MENGUBAH - dan sejak 2026-09-14 cakupan keduanya BERBEDA:
@@ -480,7 +475,7 @@ export default async function PresensiTukinPage({
       {/* ------------------------------------------------------------------
           PENGATURAN PERIODE - dibuka beberapa kali setahun, bukan tiap hari
           ------------------------------------------------------------------ */}
-      {(canLihatKendalaEpresensi(authUser) || canLihatHariLibur(authUser) || bolehRekonsiliasi) && (
+      {(canLihatKendalaEpresensi(authUser) || canLihatHariLibur(authUser)) && (
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {/* Pasal 10 ayat (2) - kalau e-Presensi bermasalah, kegagalan
               mencatat presensi bukan kelalaian pegawainya. */}
@@ -580,26 +575,6 @@ export default async function PresensiTukinPage({
             </div>
           )}
 
-          {/* Alat masa TRANSISI: selama petugas masih merekap di Excel,
-              berkas itulah yang menentukan pembayaran. Kartu ini yang membuat
-              kedua sumber bisa diadu per hari sebelum jalur manualnya
-              dimatikan. */}
-          {bolehRekonsiliasi && (
-            <div className="card flex flex-col p-5">
-              <p className="text-base font-extrabold text-navy">Bandingkan Rekap Petugas</p>
-              <p className="mt-1 flex-1 text-sm leading-relaxed text-muted">
-                Unggah berkas rekap absensi manual yang masih dipakai petugas, lalu lihat baris mana yang berbeda
-                dari data Gajihub beserta perkiraan dampak rupiahnya. Tidak mengubah data apa pun.
-              </p>
-              <Link href="/tukin/presensi/rekonsiliasi" className="btn btn-secondary mt-4 self-start">
-                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 7H7a4 4 0 0 0-4 4M3 17h14a4 4 0 0 0 4-4" />
-                  <path d="m17 3 4 4-4 4M7 21l-4-4 4-4" />
-                </svg>
-                Bandingkan Rekap
-              </Link>
-            </div>
-          )}
         </div>
       )}
 

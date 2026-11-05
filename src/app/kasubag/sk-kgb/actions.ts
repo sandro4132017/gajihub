@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -35,7 +36,7 @@ export async function ajukanSkKgbAction(
     const pegawai = await prisma.pegawai.findUnique({ where: { id: pegawaiId } });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
     if (!canAjukanSkKgb(authUser, pegawai.satuanKerja)) {
-      return { error: "Role kamu tidak berwenang mengajukan SK KGB pegawai unit ini." };
+      return { error: "Peran kamu tidak berwenang mengajukan SK KGB pegawai unit ini." };
     }
 
     await prisma.skKgb.create({
@@ -54,6 +55,6 @@ export async function ajukanSkKgbAction(
     revalidatePath("/kasubag/sk-kgb");
     return { success: `SK KGB ${pegawai.nama} diajukan, menunggu approval OSDMA.` };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("kasubag.sk-kgb.actions#1", err, "Terjadi kesalahan") };
   }
 }

@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { NAMA_BULAN } from "../lib/format/bulan";
 import type { BarisSumber } from "../components/shared/SumberAcuan";
+import { pegawaiBukanUji } from "../lib/dataUji";
 
 /**
  * Asal-usul tiap data yang dipakai menghitung, beserta KAPAN diambilnya.
@@ -79,7 +80,9 @@ export async function ambilSumberData({
   periodeBulan: number;
   periodeTahun: number;
 }): Promise<BarisSumberData[]> {
-  const filterPegawai = satuanKerja ? { satuanKerja, statusPegawai: "AKTIF" } : { statusPegawai: "AKTIF" };
+  const filterPegawai = satuanKerja
+    ? { satuanKerja, statusPegawai: "AKTIF", ...pegawaiBukanUji(satuanKerja) }
+    : { statusPegawai: "AKTIF", ...pegawaiBukanUji() };
   const periode = { periodeBulan, periodeTahun };
   const namaPeriode = `${NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} ${periodeTahun}`;
   const qs = `?bulan=${periodeBulan}&tahun=${periodeTahun}${satuanKerja ? `&satker=${encodeURIComponent(satuanKerja)}` : ""}`;

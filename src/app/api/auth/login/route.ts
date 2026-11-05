@@ -1,10 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { Pegawai, User } from "@prisma/client";
 import { prisma } from "../../../../lib/prisma";
 import { SESSION_COOKIE_NAME } from "../../../../auth/session";
 import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../../../auth/sesiCookie";
 import { LANDING_ROLE } from "../../../../auth/roleAktif";
 import { LABEL_ROLE } from "../../../../auth/roleLabel";
+import { pesanGalatUntukLayar } from "../../../../lib/koneksi/galatSumber";
 import { isModeInternal } from "../../../../auth/modeJaringan";
+import { bersihkanNilaiEnv, putuskanLogin } from "../../../../auth/kredensialLogin";
+import { konfigPenguji } from "../../../../auth/akunPenguji";
+import {
+  JABATAN_PENGUJI,
+  PESAN_PENGUJI_BELUM_SIAP,
+  PESAN_PENGUJI_NONAKTIF,
+  cariAkunPenguji,
+} from "../../../../auth/akunPengujiDb";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +31,7 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch {
-      return NextResponse.json({ ok: false, error: "Format payload tidak valid." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Permintaan masuk tidak terbaca. Muat ulang halaman lalu coba lagi." }, { status: 400 });
     }
 
     const inputUsername = String(body.username ?? "").trim();
@@ -31,83 +41,98 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Username dan password wajib diisi." }, { status: 400 });
     }
 
-    const devUser = process.env.DEV_AUTH_USER?.trim().replace(/^["']|["']$/g, "");
-    const devPass = process.env.DEV_AUTH_PASS?.trim().replace(/^["']|["']$/g, "");
     const modeInternal = isModeInternal() || process.env.ALLOW_NIP_LOGIN === "true";
-
-    const isDevLogin = Boolean(devUser && devPass && inputUsername === devUser && inputPassword === devPass);
-    const nipKandidat = inputUsername.replace(/[ .\-]/g, "");
-    const isNipFormat = /^\d{18}$/.test(nipKandidat);
-    const passClean = inputPassword.replace(/[ .\-]/g, "");
-    const isNipLogin = Boolean(
-      modeInternal &&
-        isNipFormat &&
-        (passClean === nipKandidat || (devPass && inputPassword === devPass))
+    const keputusan = putuskanLogin(
+      { username: inputUsername, password: inputPassword },
+      {
+        devUser: bersihkanNilaiEnv(process.env.DEV_AUTH_USER),
+        devPass: bersihkanNilaiEnv(process.env.DEV_AUTH_PASS),
+        modeInternal,
+        penguji: konfigPenguji(process.env),
+      }
     );
 
-    if (!isDevLogin && !isNipLogin) {
+    if (!keputusan) {
       return NextResponse.json(
         {
           ok: false,
           error: modeInternal
             ? "Username/NIP atau password salah."
-            : "Username atau password salah. (Mode Akses Publik aktif: login umum wajib menggunakan Akun SIAP ID / SSO Kemnaker).",
+            : "Username atau password salah. Dari luar jaringan kantor, masuk memakai Akun Kemnaker (SIAP ID).",
         },
         { status: 401 }
       );
     }
 
-    const targetNip = isDevLogin
-      ? process.env.DEV_AUTH_NIP?.trim().replace(/^["']|["']$/g, "")
-      : nipKandidat;
+    const isDevLogin = keputusan.jenis === "DEV";
+    const isPenguji = keputusan.jenis === "PENGUJI";
 
-    if (!targetNip) {
-      return NextResponse.json(
-        { ok: false, error: "DEV_AUTH_NIP belum dikonfigurasi di environment (.env)." },
-        { status: 500 }
-      );
-    }
+    let user: User | null;
+    let pegawai: Pegawai | null;
 
-    let user = await prisma.user.findUnique({ where: { nip: targetNip } });
-    const pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
+    if (isPenguji) {
+      const akunPenguji = await cariAkunPenguji();
+      if (akunPenguji.status === "belum") {
+        return NextResponse.json({ ok: false, error: PESAN_PENGUJI_BELUM_SIAP }, { status: 401 });
+      }
+      if (akunPenguji.status === "nonaktif") {
+        return NextResponse.json({ ok: false, error: PESAN_PENGUJI_NONAKTIF }, { status: 403 });
+      }
+      user = akunPenguji.user;
+      pegawai = akunPenguji.pegawai;
+    } else {
+      const targetNip =
+        keputusan.jenis === "DEV" ? bersihkanNilaiEnv(process.env.DEV_AUTH_NIP) : keputusan.nip;
 
-    if (!user) {
-      if (isDevLogin) {
-        user = await prisma.user.create({
-          data: {
-            nip: targetNip,
-            nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
-            role: "ADMIN",
-            satuanKerja: pegawai?.satuanKerja || null,
-            rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
-            aktif: true,
-          },
-        });
-      } else if (pegawai) {
-        user = await prisma.user.create({
-          data: {
-            nip: targetNip,
-            nama: pegawai.nama,
-            role: "PEGAWAI",
-            satuanKerja: pegawai.satuanKerja || null,
-            rolesTambahan: [],
-            aktif: true,
-          },
-        });
-      } else {
+      if (!targetNip) {
+        console.error("[login] DEV_AUTH_NIP kosong");
         return NextResponse.json(
-          { ok: false, error: `NIP ${targetNip} tidak ditemukan di data pegawai Gajihub.` },
-          { status: 401 }
+          { ok: false, error: "Akun uji coba belum siap dipakai. Laporkan ke Admin Gajihub." },
+          { status: 500 }
         );
       }
-    } else if (!user.aktif) {
-      return NextResponse.json(
-        { ok: false, error: `Akun dengan NIP ${targetNip} berstatus nonaktif di database.` },
-        { status: 403 }
-      );
+
+      user = await prisma.user.findUnique({ where: { nip: targetNip } });
+      pegawai = await prisma.pegawai.findUnique({ where: { nip: targetNip } });
+
+      if (!user) {
+        if (isDevLogin) {
+          user = await prisma.user.create({
+            data: {
+              nip: targetNip,
+              nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
+              role: "ADMIN",
+              satuanKerja: pegawai?.satuanKerja || null,
+              rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
+              aktif: true,
+            },
+          });
+        } else if (pegawai) {
+          user = await prisma.user.create({
+            data: {
+              nip: targetNip,
+              nama: pegawai.nama,
+              role: "PEGAWAI",
+              satuanKerja: pegawai.satuanKerja || null,
+              rolesTambahan: [],
+              aktif: true,
+            },
+          });
+        } else {
+          return NextResponse.json(
+            { ok: false, error: `NIP ${targetNip} tidak ditemukan di data pegawai Gajihub.` },
+            { status: 401 }
+          );
+        }
+      } else if (!user.aktif) {
+        return NextResponse.json(
+          { ok: false, error: `Akun dengan NIP ${targetNip} sedang dinonaktifkan. Hubungi Admin Gajihub.` },
+          { status: 403 }
+        );
+      }
     }
 
-    const jabatan = pegawai?.jabatan ?? LABEL_ROLE[user.role];
+    const jabatan = isPenguji ? JABATAN_PENGUJI : (pegawai?.jabatan ?? LABEL_ROLE[user.role]);
 
     const token = await buatTokenUntukUser(user, jabatan);
     const destination = LANDING_ROLE[user.role] ?? "/admin";
@@ -116,12 +141,8 @@ export async function POST(req: NextRequest) {
     res.cookies.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
     return res;
   } catch (error) {
-    console.error("[API Login Dev Error]", error);
     return NextResponse.json(
-      {
-        ok: false,
-        error: `Gagal login: ${error instanceof Error ? error.message : String(error)}`,
-      },
+      { ok: false, error: pesanGalatUntukLayar("api.auth.login", error, "Gagal login") },
       { status: 500 }
     );
   }

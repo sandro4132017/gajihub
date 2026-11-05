@@ -5,6 +5,7 @@ import { SESSION_COOKIE_NAME } from "../../../../auth/session";
 import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../../../auth/sesiCookie";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { daftarRoleTersedia, LANDING_ROLE } from "../../../../auth/roleAktif";
+import { pesanGalatUntukLayar } from "../../../../lib/koneksi/galatSumber";
 import { LABEL_ROLE } from "../../../../auth/roleLabel";
 
 export const dynamic = "force-dynamic";
@@ -15,12 +16,12 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch {
-      return NextResponse.json({ ok: false, error: "Format request tidak valid." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Permintaan tidak terbaca. Muat ulang halaman lalu coba lagi." }, { status: 400 });
     }
 
     const roleTujuan = String(body.role ?? "") as Role;
     if (!roleTujuan) {
-      return NextResponse.json({ ok: false, error: "Role tujuan wajib dipilih." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Pilih peran tujuan." }, { status: 400 });
     }
 
     const akun = await getSessionAccount();
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     if (!daftarRoleTersedia(user).includes(roleTujuan)) {
       return NextResponse.json(
-        { ok: false, error: `Akun kamu tidak punya role ${LABEL_ROLE[roleTujuan] ?? roleTujuan}.` },
+        { ok: false, error: `Akun kamu tidak punya peran ${LABEL_ROLE[roleTujuan] ?? roleTujuan}.` },
         { status: 403 }
       );
     }
@@ -47,9 +48,8 @@ export async function POST(req: NextRequest) {
     res.cookies.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
     return res;
   } catch (error) {
-    console.error("[API Ganti Role Error]", error);
     return NextResponse.json(
-      { ok: false, error: `Gagal ganti role: ${error instanceof Error ? error.message : String(error)}` },
+      { ok: false, error: pesanGalatUntukLayar("api.auth.gantiRole", error, "Gagal ganti peran") },
       { status: 500 }
     );
   }

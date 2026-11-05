@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jamTeks, labelStatus, namaHari, tanggalTeks } from "../presensiTampilan";
+import { jamTeks, labelStatus, namaHari, penandaHariPresensi, tanggalTeks } from "../presensiTampilan";
 
 describe("jamTeks", () => {
   it("membaca jam sebagai waktu dinding UTC, bukan zona server", () => {
@@ -39,5 +39,32 @@ describe("namaHari & tanggalTeks", () => {
 
   it("tengah malam UTC tetap tanggal yang sama, bukan mundur sehari", () => {
     expect(namaHari(new Date(Date.UTC(2026, 7, 3, 0, 0)))).toBe("Senin");
+  });
+});
+
+describe("penandaHariPresensi", () => {
+  const rapi = { menitTerlambat: 0, menitPulangCepat: 0, menitMeninggalkanKantor: 0, tidakIkutUpacara: false, jamLembur: 0 };
+
+  it("hari rapi tanpa penanda - nilai nol tidak jadi chip", () => {
+    expect(penandaHariPresensi(rapi, false)).toEqual([]);
+  });
+
+  it("pelanggaran bernada bahaya, lembur info, koreksi peringatan", () => {
+    const hasil = penandaHariPresensi(
+      { menitTerlambat: 12, menitPulangCepat: 30, menitMeninggalkanKantor: 45, tidakIkutUpacara: true, jamLembur: 2.6 },
+      true,
+    );
+    expect(hasil).toEqual([
+      { teks: "Terlambat 12 mnt", nada: "bahaya" },
+      { teks: "Kurang jam kerja 30 mnt", nada: "bahaya" },
+      { teks: "Tinggalkan kantor 45 mnt", nada: "bahaya" },
+      { teks: "Tanpa upacara", nada: "bahaya" },
+      { teks: "Lembur 2 jam", nada: "info" },
+      { teks: "Dikoreksi", nada: "peringatan" },
+    ]);
+  });
+
+  it("lembur kurang dari satu jam tetap tertulis 0 jam (sama dengan kolom tabel)", () => {
+    expect(penandaHariPresensi({ ...rapi, jamLembur: 0.3 }, false)).toEqual([{ teks: "Lembur 0 jam", nada: "info" }]);
   });
 });

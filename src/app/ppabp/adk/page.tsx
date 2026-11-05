@@ -7,6 +7,7 @@ import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { periodePunyaTukin, resolvePeriode } from "../../periodeDefault";
 import { kelompokkanPerBank } from "../../../business-logic/rekeningPegawai";
+import { SUMBER_DUMMY } from "../../../lib/dataUji";
 import { dataUangMakanHarian } from "./dataUangMakanHarian";
 import { dataUangLemburHarian } from "./dataUangLemburHarian";
 import { PratinjauAdkUangMakan } from "./PratinjauAdkUangMakan";
@@ -78,7 +79,7 @@ export default async function ExportAdkPage({
     aktif: true,
   };
   if (!authUser || !canGenerateAdk(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengekspor ADK." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengekspor ADK." />;
   }
 
   const periode = resolvePeriode(bulan, tahun, await periodePunyaTukin());
@@ -153,7 +154,7 @@ export default async function ExportAdkPage({
 
   // 4. UNIT PROGRESS & LOCK STATUS
   const unitAktif = await prisma.pegawai.findMany({
-    where: { statusPegawai: "AKTIF" },
+    where: { statusPegawai: "AKTIF", sourceSystem: { not: SUMBER_DUMMY } },
     distinct: ["satuanKerja"],
     select: { satuanKerja: true },
   });
@@ -168,7 +169,7 @@ export default async function ExportAdkPage({
   const belumKirim = {
     periodeBulan: bln,
     periodeTahun: thn,
-    pegawai: { satuanKerja: { notIn: satkerBoleh } },
+    pegawai: { satuanKerja: { notIn: satkerBoleh }, sourceSystem: { not: SUMBER_DUMMY } },
   };
   const [tukinDraft, umDraft, lemburDraft] = await Promise.all([
     prisma.tukinCalculation.count({ where: belumKirim }),
@@ -184,6 +185,7 @@ export default async function ExportAdkPage({
     periodeTahun: thn,
     pegawai: {
       satuanKerja: { in: satkerDipakai },
+      sourceSystem: { not: SUMBER_DUMMY },
       ...wherePegawaiTanpaJenis(),
     },
   };

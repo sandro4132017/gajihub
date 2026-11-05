@@ -16,6 +16,13 @@ import { labelReferensiBanding } from "../../business-logic/bandingData";
 import { NAMA_BULAN } from "../../lib/format/bulan";
 import { SearchableSelect } from "../../components/forms/SearchableSelect";
 import { labelStatus } from "../../lib/format/presensiTampilan";
+import {
+  labelJenisPembayaran,
+  labelStatusPegawai,
+  labelStatusSkKgb,
+  labelSumberDataPegawai,
+} from "../../lib/format/labelStatus";
+import { LABEL_PREDIKAT } from "../tukin/predikat-kinerja/predikat";
 import { keteranganTidakPresensiHari, rincianJamKerjaHari } from "../../business-logic/rincianJamKerjaHarian";
 import { muatHariLiburPeriode } from "../../lib/hariLibur";
 import {
@@ -25,6 +32,8 @@ import {
   tarifFinalHonorarium,
 } from "../../business-logic/ptkp";
 import { TAB_SAYA, resolveTabSaya } from "./tabs";
+import { keteranganFinalitas } from "./statusPembayaran";
+import { statusUnit } from "../../business-logic/pengirimanUnit";
 import { kunciPeriode, pilihPeriode, type PeriodeSaya } from "./periodeSaya";
 import { TAMPILKAN_NOMINAL_LEMBUR } from "../../lib/format/tampilUangLembur";
 import { HALAMAN } from "../../components/layout/layoutHalaman";
@@ -47,7 +56,9 @@ type KalkulasiRow = {
   id: string;
   periodeBulan: number;
   periodeTahun: number;
-  status: string;
+  /** Final = rekap unit periode itu sudah TERKIRIM ke PPABP (statusPembayaran.ts). */
+  final: boolean;
+  label: string;
   nilai: number;
 };
 
@@ -90,11 +101,7 @@ function KalkulasiSection({ judul, rows }: { judul: string; rows: KalkulasiRow[]
               </span>
               <p className="mt-0.5 text-[11px] text-muted">
                 Status:{" "}
-                {row.status === "APPROVED" ? (
-                  <span className="font-bold text-green">✓ Disetujui (histori pembayaran)</span>
-                ) : (
-                  <span className="font-bold text-gold-deep">{row.status} (estimasi)</span>
-                )}
+                <span className={row.final ? "chip chip-ok whitespace-normal" : "chip chip-wait whitespace-normal"}>{row.label}</span>
               </p>
             </div>
             <span className="font-mono text-sm sm:text-base font-extrabold text-navy">
@@ -118,23 +125,28 @@ function StatTile({
   highlight?: boolean;
   catatan?: string;
 }) {
+  // Di HP satu baris per kotak (label kiri, nominal kanan): nominal 9 digit
+  // berfont mono tidak muat di grid 2 kolom selebar 360px dan meluber keluar
+  // kartu. Mulai `sm` kembali jadi kotak tegak berjajar seperti semula.
   return (
     <div
-      className={`rounded-2xl border p-4 shadow-xs transition ${
+      className={`flex items-baseline justify-between gap-3 rounded-2xl border px-3 py-2.5 shadow-xs transition sm:block sm:p-4 ${
         highlight
           ? "border-teal bg-gradient-to-br from-teal-tint via-surface to-white shadow-sm ring-1 ring-teal/20"
           : "border-line bg-surface hover:border-biru/30"
       }`}
     >
-      <p className="text-[11px] font-bold uppercase tracking-wider text-muted">{label}</p>
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted">{label}</p>
+        {catatan && <p className="mt-0.5 text-[10px] text-muted">{catatan}</p>}
+      </div>
       <p
-        className={`mt-1 font-mono text-lg sm:text-xl font-extrabold ${
-          highlight ? "text-navy" : "text-ink"
+        className={`shrink-0 whitespace-nowrap font-mono font-extrabold sm:mt-1 sm:text-xl ${
+          highlight ? "text-lg text-navy" : "text-base text-ink"
         }`}
       >
         {formatRupiah(nilai)}
       </p>
-      {catatan && <p className="mt-0.5 text-[10px] text-muted">{catatan}</p>}
     </div>
   );
 }
@@ -158,7 +170,10 @@ function Butir({
       >
         {label}
       </dt>
-      <dd className="mt-1 text-xs sm:text-sm font-bold text-ink truncate sm:whitespace-normal">{children}</dd>
+      <dd className="mt-1 text-xs sm:text-sm font-bold text-ink break-words">
+        {children}
+        {keterangan && <span className="mt-1 block text-xs font-normal leading-snug text-muted sm:hidden">{keterangan}</span>}
+      </dd>
     </div>
   );
 }
@@ -218,9 +233,29 @@ export default async function DataSayaPage({
 
   if (!pegawai) {
     return (
-      <AksesDitolak pesan={`Data pegawai untuk NIP ${authUser.nip} tidak ditemukan di sistem.`} />
+      <AksesDitolak pesan={`Data kepegawaian untuk NIP ${authUser.nip} belum tercatat di Gajihub. Hubungi Admin Gajihub.`} />
     );
   }
+
+  // Finalitas per periode = keadaan rekap UNIT pegawai (statusUnit), satu query
+  // untuk semua periode, hanya saat tab Pendapatan dibuka. Periode tanpa baris
+  // pengiriman terbaca "belum dikirim".
+  const pengirimanPerPeriode = new Map<string, ReturnType<typeof statusUnit>>();
+  if (tabAktif === "pendapatan") {
+    const baris = await prisma.pengirimanUnit.findMany({
+      where: { satuanKerja: pegawai.satuanKerja },
+      select: { periodeBulan: true, periodeTahun: true, status: true, dikirimPada: true, alasanKembali: true },
+    });
+    for (const b of baris) {
+      pengirimanPerPeriode.set(kunciPeriode({ bulan: b.periodeBulan, tahun: b.periodeTahun }), statusUnit(b));
+    }
+  }
+  const finalitasPeriode = (r: { periodeBulan: number; periodeTahun: number }) => {
+    const k = keteranganFinalitas(
+      pengirimanPerPeriode.get(kunciPeriode({ bulan: r.periodeBulan, tahun: r.periodeTahun })) ?? statusUnit(null),
+    );
+    return { final: k.final, label: k.label };
+  };
 
   // Deteksi jenis kelamin: dari kolom database jenisKelamin (L/P dari SIAP),
   // atau fallback standar BKN dari digit ke-15 NIP 18-digit (1=L/Pria, 2=P/Wanita).
@@ -531,7 +566,7 @@ export default async function DataSayaPage({
                 Data Saya
               </h1>
               <span className="chip chip-ok font-semibold text-xs">
-                {pegawai.statusPegawai}
+                {labelStatusPegawai(pegawai.statusPegawai)}
               </span>
             </div>
             <p className="mt-1 text-xs sm:text-sm text-muted">
@@ -582,10 +617,12 @@ export default async function DataSayaPage({
                 {pegawai.jabatan ?? "Jabatan belum terisi"}
               </p>
               <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
-                <svg className="size-3.5 shrink-0 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="mt-0.5 size-3.5 shrink-0 self-start text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
-                {pegawai.unitKerja} &bull; <span className="font-semibold text-ink-2">{pegawai.satuanKerja}</span>
+                <span className="min-w-0">
+                  {pegawai.unitKerja} &bull; <span className="font-semibold text-ink-2">{pegawai.satuanKerja}</span>
+                </span>
               </p>
             </div>
           </div>
@@ -665,7 +702,7 @@ export default async function DataSayaPage({
                   "-"
                 )}
               </Butir>
-              <Butir label="Status kepegawaian">{pegawai.statusPegawai}</Butir>
+              <Butir label="Status kepegawaian">{labelStatusPegawai(pegawai.statusPegawai)}</Butir>
               <Butir label="Jabatan">{pegawai.jabatan ?? "-"}</Butir>
               <Butir label="Golongan">{pegawai.golongan ?? "-"}</Butir>
               <Butir label="Kelas jabatan">{pegawai.kelasJabatan ?? "-"}</Butir>
@@ -705,7 +742,7 @@ export default async function DataSayaPage({
               {pegawai.rekening.map((r) => (
                 <div key={r.id} className="rounded-xl border border-line bg-surface-2/50 p-4 transition hover:border-biru/40 hover:bg-surface-2 shadow-xs">
                   <div className="flex items-center justify-between gap-2 border-b border-line/60 pb-2.5">
-                    <span className="chip chip-navy font-bold text-xs">{r.jenisPembayaran}</span>
+                    <span className="chip chip-navy font-bold text-xs">{labelJenisPembayaran(r.jenisPembayaran)}</span>
                     <span className="text-xs font-bold text-ink">{r.namaBank}</span>
                   </div>
                   <div className="mt-3 space-y-2">
@@ -755,7 +792,7 @@ export default async function DataSayaPage({
                     <span className="font-mono text-base">{ptkp.kode}</span>
                   </Butir>
                   <Butir label="Kategori TER">{ptkp.kategoriTer}</Butir>
-                  <Butir label="PTKP setahun">{formatRupiah(ptkp.ptkpSetahun)}</Butir>
+                  <Butir label="PTKP setahun"><span className="font-mono">{formatRupiah(ptkp.ptkpSetahun)}</span></Butir>
                   <Butir
                     label="Tanggungan dihitung"
                     keterangan="Hanya anak. Tanggungan lain (orang tua, mertua, anak tiri, anak angkat) belum ikut, dan anak tanpa catatan pekerjaan dianggap tanggungan. Kalau tidak sesuai, sampaikan ke Kasubag TU unit kamu."
@@ -767,7 +804,7 @@ export default async function DataSayaPage({
                 {ptkp.catatan.length > 0 && (
                   <ul className="mt-4 space-y-1.5 rounded-xl border border-gold bg-gold/10 p-3.5">
                     {ptkp.catatan.map((c, i) => (
-                      <li key={i} className="text-[11px] leading-relaxed text-ink-2">
+                      <li key={i} className="text-xs leading-relaxed text-ink-2">
                         {c}
                       </li>
                     ))}
@@ -800,7 +837,7 @@ export default async function DataSayaPage({
                     <strong className="font-mono">{(finalHonor.tarif * 100).toFixed(0)}%</strong> dan bersifat{" "}
                     <strong>final</strong>.
                   </p>
-                  <p className="mt-1 text-[11px] text-muted">
+                  <p className="mt-1 text-xs text-muted">
                     Berlaku HANYA atas honorarium atau imbalan lain yang dibebankan APBN/APBD - bukan atas gaji
                     maupun tunjangan kinerja. Final berarti selesai di situ dan tidak digabung lagi di SPT Tahunan.
                   </p>
@@ -809,21 +846,21 @@ export default async function DataSayaPage({
                 <p className="mt-2 text-sm text-muted">
                   Belum bisa ditentukan untuk golongan{" "}
                   <strong className="text-ink-2">{pegawai.golongan ?? "(belum terisi)"}</strong>. Tabel tarif final
-                  hanya menyebut PNS Golongan I sampai IV; golongan PPPK tidak tercantum, dan sistem ini tidak
-                  menebaknya.
+                  hanya menyebut PNS Golongan I sampai IV; golongan PPPK tidak tercantum, sehingga tarifnya belum
+                  dapat ditentukan.
                 </p>
               )}
             </div>
 
             <div className="mt-5 border-t border-line pt-4">
               <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <Butir label="Sumber data">{pegawai.sourceSystem}</Butir>
-                <Butir label="Terakhir disinkronkan">{formatTanggal(pegawai.sourceSyncedAt)}</Butir>
+                <Butir label="Sumber data">{labelSumberDataPegawai(pegawai.sourceSystem)}</Butir>
+                <Butir label="Terakhir diperbarui">{formatTanggal(pegawai.sourceSyncedAt)}</Butir>
                 <Butir label="Status kawin tercatat">{pegawai.statusKawin ?? "(kosong)"}</Butir>
               </dl>
-              <p className="mt-2 text-[11px] text-muted">
-                Perubahan data keluarga dicatat di SIAP, lalu masuk ke sini pada sinkronisasi berikutnya. Kalau
-                sudah diperbarui di SIAP tetapi tanggal di atas masih lama, artinya sinkronisasi belum dijalankan.
+              <p className="mt-2 text-xs text-muted">
+                Perubahan data keluarga diajukan lewat SIAP. Data di sini ikut berubah setelah Gajihub memperbarui
+                data dari SIAP; kalau lama tidak berubah, hubungi Admin Gajihub.
               </p>
             </div>
           </section>
@@ -945,13 +982,12 @@ export default async function DataSayaPage({
                     <Butir label="Cuti">{rekapKehadiran.jumlahHariCuti}</Butir>
                   </dl>
                   <p className="mt-3 text-xs text-muted">
-                    Periode ini tidak punya rincian harian - rekapnya diisi lewat template Excel, bukan tarikan
-                    e-Presensi.
+                    Untuk periode ini hanya tersedia rekap bulanan, tanpa rincian per hari.
                   </p>
                 </div>
               )}
 
-              <p className="mt-4 border-t border-line pt-3 text-[11px] text-muted">
+              <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
                 Hari hadir tidak sama dengan hari yang dibayar uang makan - diklat dan dinas luar tetap bekerja
                 tapi konsumsinya ditanggung penyelenggara. Rinciannya di tab Pendapatan.
               </p>
@@ -971,8 +1007,8 @@ export default async function DataSayaPage({
           {!periodeKehadiran && (
             <section className="rounded-2xl border border-dashed border-line bg-surface-2 p-8 text-center">
               <p className="text-sm font-semibold text-muted">
-                Belum ada rekap presensi untuk kamu. Rekap dibuat waktu unit kamu menarik presensi periode berjalan
-                dari e-Presensi.
+                Belum ada rekap presensi untuk kamu. Rekap tersedia setelah unit kamu memproses presensi periode
+                berjalan.
               </p>
             </section>
           )}
@@ -1009,7 +1045,7 @@ export default async function DataSayaPage({
                       Periode {pk.periodeBulan}/{pk.periodeTahun}
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="chip chip-ok font-bold text-xs">{pk.predikat}</span>
+                      <span className="chip chip-ok font-bold text-xs">{LABEL_PREDIKAT[pk.predikat] ?? pk.predikat}</span>
                       <span className="font-mono font-extrabold text-navy text-xs sm:text-sm">{pk.nilaiAngka}%</span>
                     </div>
                   </div>
@@ -1017,7 +1053,7 @@ export default async function DataSayaPage({
               </div>
             )}
 
-            <p className="mt-4 border-t border-line pt-3 text-[11px] text-muted">
+            <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
               Predikat kinerja menentukan komponen 70% Tunjangan Kinerja (Pasal 5). Perubahannya dilakukan di
               e-Kinerja BKN, lalu diunggah ulang oleh unit Anda. Jika predikat tidak sesuai, ajukan lewat tab Banding.
             </p>
@@ -1058,7 +1094,7 @@ export default async function DataSayaPage({
               </div>
 
               <div
-                className={`mt-4 grid grid-cols-2 gap-3 ${
+                className={`mt-4 grid grid-cols-1 gap-2 sm:gap-3 ${
                   TAMPILKAN_NOMINAL_LEMBUR ? "sm:grid-cols-5" : "sm:grid-cols-4"
                 }`}
               >
@@ -1073,7 +1109,7 @@ export default async function DataSayaPage({
 
               {!gajiTerbaru && (
                 <p className="mt-3 text-xs text-muted">
-                  Gaji bersih masih kosong karena data gaji induk periode ini belum diunggah PPABP.
+                  Gaji bersih bulan ini belum tersedia.
                 </p>
               )}
               {gajiTerbaru && gajiTerbaru.honorarium > 0 && (
@@ -1106,16 +1142,16 @@ export default async function DataSayaPage({
 
           <KalkulasiSection
             judul="Tukin"
-            rows={pegawai.tukinCalc.map((r) => ({ ...r, nilai: r.tukinBersih }))}
+            rows={pegawai.tukinCalc.map((r) => ({ ...r, ...finalitasPeriode(r), nilai: r.tukinBersih }))}
           />
           <KalkulasiSection
             judul="Uang Makan"
-            rows={pegawai.uangMakan.map((r) => ({ ...r, nilai: r.totalUangMakan }))}
+            rows={pegawai.uangMakan.map((r) => ({ ...r, ...finalitasPeriode(r), nilai: r.totalUangMakan }))}
           />
           {TAMPILKAN_NOMINAL_LEMBUR && (
             <KalkulasiSection
               judul="Uang Lembur"
-              rows={pegawai.uangLembur.map((r) => ({ ...r, nilai: r.totalUangLembur }))}
+              rows={pegawai.uangLembur.map((r) => ({ ...r, ...finalitasPeriode(r), nilai: r.totalUangLembur }))}
             />
           )}
         </div>
@@ -1149,7 +1185,7 @@ export default async function DataSayaPage({
                   </span>
                   <Link
                     href={`/saya/slip-gaji/${p.bulan}/${p.tahun}`}
-                    className="inline-flex items-center gap-1 font-bold text-biru hover:underline text-xs"
+                    className="-my-1 inline-flex min-h-11 items-center gap-1 font-bold text-biru hover:underline text-xs"
                   >
                     Lihat / Cetak
                     <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1170,7 +1206,7 @@ export default async function DataSayaPage({
               </span>
               <div>
                 <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Bukti Potong Pajak</h2>
-                <p className="text-[11px] text-muted">Hasil sinkronisasi Web Gaji oleh Satker / PPABP</p>
+                <p className="text-[11px] text-muted">Bukti potong PPh dari Web Gaji Kemenkeu</p>
               </div>
             </div>
 
@@ -1180,18 +1216,18 @@ export default async function DataSayaPage({
 
             <div className="mt-3 divide-y divide-line">
               {pegawai.buktiPotongPajak.map((b) => (
-                <div key={b.id} className="flex items-center justify-between py-2.5 text-xs sm:text-sm">
-                  <div>
+                <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs sm:text-sm">
+                  <div className="min-w-0">
                     <span className="font-bold text-ink">Tahun Pajak {b.tahunPajak}</span>
                     {b.nomorBuktiPotong && (
-                      <span className="ml-2 font-mono text-xs text-muted">No: {b.nomorBuktiPotong}</span>
+                      <span className="ml-2 min-w-0 break-all font-mono text-xs text-muted">No: {b.nomorBuktiPotong}</span>
                     )}
                   </div>
                   <a
                     href={b.fileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-bold text-biru hover:underline text-xs"
+                    className="-my-1 inline-flex min-h-11 items-center gap-1 font-bold text-biru hover:underline text-xs"
                   >
                     Unduh Dokumen
                     <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1222,19 +1258,19 @@ export default async function DataSayaPage({
               {pegawai.skKgb.map((sk) => (
                 <div key={sk.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs">
                   <div className="min-w-0">
-                    <p className="font-mono text-xs font-bold text-ink">{sk.nomorSk}</p>
+                    <p className="min-w-0 break-all font-mono text-xs font-bold text-ink">{sk.nomorSk}</p>
                     <p className="text-xs text-muted mt-0.5">
                       {sk.golonganLama} &rarr; <strong className="text-ink">{sk.golonganBaru}</strong> &bull; TMT {formatTanggal(sk.tmtKgb)}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className="chip chip-draft text-xs">{sk.status}</span>
+                    <span className="chip chip-draft text-xs">{labelStatusSkKgb(sk.status)}</span>
                     {sk.fileUrl && (
                       <a
                         href={sk.fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="btn btn-outline btn-sm inline-flex items-center gap-1 text-xs"
+                        className="btn btn-ghost btn-sm inline-flex items-center gap-1 text-xs"
                       >
                         Unduh
                       </a>
@@ -1296,19 +1332,19 @@ export default async function DataSayaPage({
             open={pegawai.banding.length === 0}
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-gradient-to-r from-surface to-surface-2/60 p-4 sm:p-5 select-none transition hover:bg-surface-2/80 [&::-webkit-details-marker]:hidden">
-              <div className="flex items-center gap-2.5">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-gold-tint text-gold-deep">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gold-tint text-gold-deep">
                   <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </span>
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-sm font-extrabold uppercase tracking-wider text-ink">Formulir Pengajuan Banding</h2>
-                  <p className="text-[11px] text-muted">Ajukan koreksi jika terdapat data presensi, predikat, atau nominal yang tidak sesuai</p>
+                  <p className="text-xs text-muted">Ajukan koreksi jika terdapat data presensi, predikat, atau nominal yang tidak sesuai</p>
                 </div>
               </div>
-              <span className="btn btn-gold btn-sm group-open:hidden">Buka Formulir</span>
-              <span className="hidden text-xs font-bold text-muted group-open:inline">Tutup Formulir ✕</span>
+              <span className="btn btn-gold btn-sm shrink-0 group-open:hidden">Buka Formulir</span>
+              <span className="hidden shrink-0 text-xs font-bold text-muted group-open:inline">Tutup Formulir ✕</span>
             </summary>
             <div className="p-5 sm:p-6 border-t border-line">
               <BandingForm sasaran={sasaranBanding} />

@@ -66,7 +66,7 @@ export function ModalPreviewBerkas({ berkas, onClose }: ModalPreviewBerkasProps)
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative flex flex-col w-full max-w-4xl max-h-[92vh] rounded-2xl border border-line bg-surface shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+      <div className="relative flex flex-col w-full max-w-4xl max-h-[92dvh] rounded-2xl border border-line bg-surface shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
         {/* HEADER MODAL */}
         <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-2/80 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -118,7 +118,7 @@ export function ModalPreviewBerkas({ berkas, onClose }: ModalPreviewBerkasProps)
             <button
               type="button"
               onClick={onClose}
-              className="flex size-7 sm:size-8 items-center justify-center rounded-lg border border-transparent text-muted hover:bg-line hover:text-ink transition"
+              className="flex size-11 sm:size-8 items-center justify-center rounded-lg border border-transparent text-muted hover:bg-line hover:text-ink transition"
               title="Tutup (Esc)"
               aria-label="Tutup pratinjau berkas"
             >
@@ -136,15 +136,15 @@ export function ModalPreviewBerkas({ berkas, onClose }: ModalPreviewBerkasProps)
               <iframe
                 src={urlBerkas}
                 title={berkas.namaFile}
-                className="w-full h-[65vh] sm:h-[72vh] rounded-xl border border-line bg-white shadow-xs"
+                className="w-full h-[65dvh] sm:h-[72dvh] rounded-xl border border-line bg-white shadow-xs"
               />
-              <p className="mt-2 text-center text-[11px] text-muted">
+              <p className="mt-2 text-center text-xs text-muted">
                 Jika dokumen PDF tidak muncul secara otomatis, Anda dapat{" "}
                 <a
                   href={urlBerkas}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-bold text-biru underline hover:text-biru-deep"
+                  className="inline-block py-2 font-bold text-biru underline hover:text-biru-deep"
                 >
                   klik di sini untuk membuka di tab peramban baru
                 </a>.
@@ -155,7 +155,7 @@ export function ModalPreviewBerkas({ berkas, onClose }: ModalPreviewBerkasProps)
               <img
                 src={urlBerkas}
                 alt={berkas.namaFile}
-                className="max-h-[68vh] sm:max-h-[75vh] w-auto max-w-full rounded-xl object-contain border border-line bg-white shadow-md"
+                className="max-h-[68dvh] sm:max-h-[75dvh] w-auto max-w-full rounded-xl object-contain border border-line bg-white shadow-md"
               />
             </div>
           ) : (

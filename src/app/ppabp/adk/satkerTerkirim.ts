@@ -22,6 +22,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { wherePegawaiJenis, type JenisPegawaiAdk } from "./jenisPegawaiAdk";
+import { SUMBER_DUMMY } from "../../../lib/dataUji";
 
 /**
  * Daftar satuan kerja yang berhak ikut ke ADK periode ini.
@@ -72,7 +73,12 @@ export function whereIkutAdk(
   return {
     periodeBulan,
     periodeTahun,
-    pegawai: { satuanKerja: { in: [...satkerBoleh] }, ...wherePegawaiJenis(jenis) },
+    // Pegawai uji (DUMMY_UJI) tidak pernah ikut berkas yang dikirim ke Web Gaji.
+    pegawai: {
+      satuanKerja: { in: [...satkerBoleh] },
+      sourceSystem: { not: SUMBER_DUMMY },
+      ...wherePegawaiJenis(jenis),
+    },
   };
 }
 

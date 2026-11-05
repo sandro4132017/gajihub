@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -32,7 +33,7 @@ export async function approveBandingFinalAction(
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canApproveBandingFinal(authUser)) {
-      return { error: "Role kamu tidak berwenang memberikan approval final banding." };
+      return { error: "Peran kamu tidak berwenang memberikan approval final banding." };
     }
 
     const banding = await prisma.banding.findUnique({ where: { id: bandingId }, include: { pegawai: true } });
@@ -63,6 +64,6 @@ export async function approveBandingFinalAction(
     revalidatePath("/osdma/banding");
     return { success: keputusan === "SETUJU" ? `Banding ${banding.pegawai.nama} disetujui final.` : "Banding ditolak." };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("osdma.banding.actions#1", err, "Terjadi kesalahan") };
   }
 }

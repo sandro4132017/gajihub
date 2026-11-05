@@ -248,12 +248,12 @@ export function hitungTahapanStepper(
     keterangan: step3Ket,
   };
 
-  // 4. Selesai & Pemutakhiran Data Sumber
+  // 4. Selesai
   let step4State: StepState = "pending";
-  let step4Ket = "Sinkronisasi data";
+  let step4Ket = "Menunggu keputusan";
   if (banding.status === "DISETUJUI") {
     step4State = "completed";
-    step4Ket = "Sinkronisasi selesai";
+    step4Ket = "Banding disetujui";
   } else if (step2State === "rejected" || step3State === "rejected" || banding.status === "DITOLAK") {
     step4State = "pending";
     step4Ket = "Tidak disetujui";
@@ -263,7 +263,7 @@ export function hitungTahapanStepper(
     key: "SELESAI",
     nomor: 4,
     label: "Selesai",
-    sublabel: "Data telah diperbarui",
+    sublabel: "Keputusan akhir",
     state: step4State,
     keterangan: step4Ket,
   };
@@ -353,8 +353,11 @@ export function bangunTimelineCheckpoints(
     points.push({
       id: "selesai-mutakhir",
       tanggal: logOsdma ? (typeof logOsdma.timestampAksi === "string" ? new Date(logOsdma.timestampAksi) : logOsdma.timestampAksi) : tglUbah,
-      judul: "Selesai & Data Telah Diperbarui",
-      uraian: `Seluruh tahapan banding telah selesai disetujui. Pemutakhiran data pada sistem ${sumber} akan terefleksi pada siklus sinkronisasi berikutnya.`,
+      judul: "Banding Selesai Disetujui",
+      uraian:
+        sumber === "Gajihub"
+          ? "Seluruh tahapan banding selesai. Hasilnya diperhitungkan pada perhitungan berikutnya."
+          : `Seluruh tahapan banding selesai. Setelah data diperbaiki di ${sumber}, Gajihub memakai data baru itu pada pembaruan data berikutnya.`,
       isLatest: false,
     });
   }

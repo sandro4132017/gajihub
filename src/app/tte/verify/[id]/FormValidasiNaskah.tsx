@@ -36,12 +36,8 @@ export default function FormValidasiNaskah({ dokumenId }: { dokumenId: string })
         body: new FormData(form),
       });
       setHasil((await res.json()) as HasilValidasi);
-    } catch (err) {
-      setHasil({
-        error: `Tidak bisa menghubungi server: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      });
+    } catch {
+      setHasil({ error: "Tidak bisa menghubungi server. Periksa koneksi lalu coba lagi." });
     } finally {
       setSibuk(false);
     }

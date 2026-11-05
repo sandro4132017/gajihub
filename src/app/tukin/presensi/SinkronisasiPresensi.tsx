@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { SinkronPresensiFormState } from "./actionsSync";
 import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { PilihPeriode } from "./PilihPeriode";
+import { StatusKoneksiEpresensi } from "./StatusKoneksiEpresensi";
 
 const INITIAL_STATE: SinkronPresensiFormState = {};
 
@@ -47,12 +48,15 @@ export function SinkronisasiPresensi({
 
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
-        const text = await res.text().catch(() => "");
+        // Isi body TIDAK ditampilkan: untuk respons non-JSON biasanya halaman
+        // firewall/proxy, bukan pesan aplikasi.
         setState({
           error:
             res.status === 504 || res.status === 502
               ? `Waktu tunggu proxy habis (HTTP ${res.status}). Silakan klik Tarik Data Presensi sekali lagi.`
-              : `Respons server tidak terduga (HTTP ${res.status}): ${text.slice(0, 120)}`,
+              : res.status === 401 || res.status === 403
+                ? `Server menolak permintaan (HTTP ${res.status}). Kemungkinan diblokir firewall atau sesi berakhir; laporkan ke Admin Gajihub bila berulang.`
+                : `Server memberi jawaban yang tidak terduga (HTTP ${res.status}). Coba lagi; kalau berulang, laporkan ke Admin Gajihub.`,
         });
         setPending(false);
         return;
@@ -63,11 +67,9 @@ export function SinkronisasiPresensi({
       if (data.ringkasan) {
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       setState({
-        error: `Gagal menghubungi server saat menarik presensi: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        error: "Tidak dapat menghubungi server Gajihub. Periksa jaringan kantor/VPN lalu coba lagi.",
       });
     } finally {
       setPending(false);
@@ -115,9 +117,7 @@ export function SinkronisasiPresensi({
             Menarik data kehadiran langsung dari e-Presensi secara otomatis.
           </p>
         </div>
-        <span className="chip chip-ok rounded-full px-3.5 py-1.5 text-[13px]">
-          Tersambung
-        </span>
+        <StatusKoneksiEpresensi />
       </div>
 
       {/* DUA FORM BERDAMPINGAN, bukan satu - dan itu keharusan, bukan gaya.

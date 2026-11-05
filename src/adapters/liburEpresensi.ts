@@ -21,6 +21,7 @@
 // pelaporan.
 // ============================================================================
 import pg from "pg";
+import { GalatKonfigurasi } from "../lib/koneksi/galatSumber";
 
 export interface BarisLiburEpresensi {
   /** "YYYY-MM-DD" - dibaca sebagai TEKS, lihat catatan zona waktu di bawah. */
@@ -41,7 +42,7 @@ export interface BarisLiburEpresensi {
 export async function ambilLiburEpresensi(tahun: number): Promise<BarisLiburEpresensi[]> {
   const { EPRESENSI_HOST, EPRESENSI_PORT, EPRESENSI_DB, EPRESENSI_USER, EPRESENSI_PASSWORD } = process.env;
   if (!EPRESENSI_HOST || !EPRESENSI_DB || !EPRESENSI_USER || !EPRESENSI_PASSWORD) {
-    throw new Error("Kredensial e-Presensi belum lengkap di .env (EPRESENSI_HOST/DB/USER/PASSWORD).");
+    throw new GalatKonfigurasi("Kredensial e-Presensi belum lengkap di .env (EPRESENSI_HOST/DB/USER/PASSWORD).", "EPRESENSI");
   }
   const client = new pg.Client({
     host: EPRESENSI_HOST,

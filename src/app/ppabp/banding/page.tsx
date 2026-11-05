@@ -47,7 +47,7 @@ export default async function TembusanBandingPpabpPage({
   const authUser: AuthUser | null =
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canLihatTembusanBanding(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang melihat tembusan banding." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang melihat tembusan banding." />;
   }
 
   const satuanKerjaRows = await prisma.pegawai.findMany({

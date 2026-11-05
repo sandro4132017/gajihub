@@ -33,7 +33,7 @@ function CopyTicketButton({ ticketNumber }: { ticketNumber: string }) {
       type="button"
       onClick={handleCopy}
       title="Salin nomor tiket"
-      className="inline-flex items-center gap-1 rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
+      className="inline-flex min-h-11 items-center gap-1 rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono sm:min-h-0 text-xs font-semibold text-ink transition hover:border-biru hover:text-biru"
     >
       <span>{ticketNumber}</span>
       {copied ? (
@@ -282,7 +282,7 @@ export function SingleBandingTrackerCard({
               </div>
               {sumber && (
                 <span className="text-[11px] font-semibold text-ink-2">
-                  Sistem Sumber: <span className="font-mono font-bold text-navy">{sumber}</span>
+                  Data berasal dari: <span className="font-mono font-bold text-navy">{sumber}</span>
                 </span>
               )}
             </div>
@@ -367,7 +367,7 @@ export function SingleBandingTrackerCard({
                 <p className="mt-0.5 text-xs font-bold text-ink sm:text-sm">{banding.bagianData}</p>
                 {sumber && (
                   <p className="mt-1 text-[11px] text-muted">
-                    Pemutakhiran pada sistem <strong className="text-ink-2">{sumber}</strong>
+                    Diperbaiki di <strong className="text-ink-2">{sumber}</strong>
                   </p>
                 )}
               </div>

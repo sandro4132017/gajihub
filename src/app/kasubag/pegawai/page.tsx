@@ -64,7 +64,7 @@ export default async function RosterPegawaiUnitPage({
   }
 
   if (!canViewRekapUnitKerja(authUser, satkerEfektif)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang melihat rekap pegawai unit ini." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang melihat rekap pegawai unit ini." />;
   }
 
   // Default hanya AKTIF. Pegawai yang sudah pensiun/berhenti TETAP ADA di

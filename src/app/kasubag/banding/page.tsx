@@ -42,7 +42,7 @@ export default async function VerifikasiBandingUnitPage({
   }
 
   if (!canViewRekapUnitKerja(authUser, satkerEfektif)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang melihat banding unit ini." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang melihat banding unit ini." />;
   }
 
   const bandingListRaw = await prisma.banding.findMany({

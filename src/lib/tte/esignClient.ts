@@ -1,3 +1,5 @@
+import { bolehFallbackAkunDemo } from "./simulasiTte";
+
 interface SignPdfOptions {
   fileBuffer: Buffer;
   fileName?: string;
@@ -98,13 +100,13 @@ export async function checkUserStatus(nik: string): Promise<UserStatusResult> {
 
         // Jika akun demo resmi (0803202100007062) mendapat HTTP 500 / kendala koneksi upstream BSrE
         // saat jaringan publik diputus Pusdatik, izinkan langsung berstatus ISSUE agar pengujian TTE tidak terhambat.
-        if (res.status >= 500 && cleanNik === "0803202100007062") {
+        if (res.status >= 500 && cleanNik === "0803202100007062" && bolehFallbackAkunDemo()) {
           return {
             success: true,
             statusCode: 1111,
             status: "ISSUE",
             message:
-              "Sertifikat akun demo aktif (Mode Jaringan Internal / Fallback BSrE).",
+              "Sertifikat akun demo aktif (fallback akun demo - status tidak diperiksa ke BSrE).",
           };
         }
 
@@ -116,7 +118,8 @@ export async function checkUserStatus(nik: string): Promise<UserStatusResult> {
             message:
               data.message ||
               data.error ||
-              "Server BSrE sedang mengalami kendala koneksi upstream (HTTP 500). Gunakan Akun Demo (0803202100007062) atau lanjutkan penandatanganan untuk mode simulasi.",
+              "Server BSrE sedang mengalami kendala koneksi upstream (HTTP 500)." +
+                (bolehFallbackAkunDemo() ? " Gunakan Akun Demo (0803202100007062)." : ""),
           };
         }
 
@@ -144,25 +147,25 @@ export async function checkUserStatus(nik: string): Promise<UserStatusResult> {
             ? "Sertifikat elektronik aktif dan siap digunakan."
             : "NIK belum terdaftar di modul BSrE server ini."),
       };
-    } catch (err: any) {
+    } catch {
       if (percobaan === 1) {
         await new Promise((r) => setTimeout(r, 350));
         continue;
       }
-      if (cleanNik === "0803202100007062") {
+      if (cleanNik === "0803202100007062" && bolehFallbackAkunDemo()) {
         return {
           success: true,
           statusCode: 1111,
           status: "ISSUE",
           message:
-            "Sertifikat akun demo siap digunakan (Mode Jaringan Internal / Simulasi BSrE).",
+            "Sertifikat akun demo siap digunakan (fallback akun demo - status tidak diperiksa ke BSrE).",
         };
       }
       return {
         success: false,
         statusCode: 500,
         status: "NETWORK_ERROR",
-        message: err.message || "Gagal menghubungi server Esign Client BSrE.",
+        message: "Gagal menghubungi server Esign Client BSrE.",
       };
     }
   }
@@ -261,11 +264,11 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
       idDokumen,
       signingTimeMs,
     };
-  } catch (err: any) {
+  } catch {
     return {
       success: false,
       statusCode: 500,
-      error: err.message || "Terjadi kesalahan koneksi ke Esign Client BSrE.",
+      error: "Terjadi kesalahan koneksi ke Esign Client BSrE.",
     };
   }
 }
@@ -304,11 +307,53 @@ export async function verifyPdf(pdfBuffer: Buffer, fileName: string = "dokumen_s
       notes: data.notes,
       details: data.details,
     };
-  } catch (err: any) {
+  } catch {
     return {
       success: false,
-      error: err.message || "Terjadi kesalahan saat verifikasi dokumen.",
+      error: "Terjadi kesalahan saat verifikasi dokumen.",
     };
   }
 }
 
+
+/**
+ * Hasil mentah satu ping ke layanan BSrE. Klasifikasinya ada di
+ * `koneksiBsre.ts` (pure); berkas ini hanya mengumpulkan fakta.
+ */
+export type HasilPingBsre =
+  | { jenis: "respons"; status: number; punyaStatusCode: boolean }
+  | { jenis: "galat"; batasWaktu: boolean; ditolak: boolean };
+
+/**
+ * Satu panggilan ringan untuk mengetahui apakah layanan BSrE menjawab.
+ *
+ * Sengaja TANPA retry dan TANPA fallback akun demo (beda dari
+ * `checkUserStatus`): fallback itu menyamarkan gangguan menjadi "ISSUE", dan
+ * justru gangguan yang ingin diketahui di sini. NIK yang dikirim hanyalah
+ * penanda (lihat ESIGN_PROBE_NIK); jawaban "tidak terdaftar" tetap berarti
+ * layanannya hidup.
+ */
+export async function pingLayananBsre(
+  nikProbe: string,
+  timeoutMs = 4_000
+): Promise<HasilPingBsre> {
+  const { baseUrl, authHeader } = getEsignConfig();
+  try {
+    const res = await fetch(`${baseUrl}/api/user/status/${encodeURIComponent(nikProbe)}`, {
+      method: "GET",
+      headers: { Authorization: authHeader, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const data = await res.json().catch(() => null);
+    const punyaStatusCode =
+      data !== null &&
+      typeof data === "object" &&
+      ("status_code" in data || "status" in data);
+    return { jenis: "respons", status: res.status, punyaStatusCode };
+  } catch (err) {
+    const nama = err instanceof Error ? err.name : "";
+    const batasWaktu = nama === "TimeoutError" || nama === "AbortError";
+    return { jenis: "galat", batasWaktu, ditolak: !batasWaktu };
+  }
+}

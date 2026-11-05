@@ -249,7 +249,7 @@ describe("Monitoring Banding PPABP - render", () => {
   it("role non-PPABP/ADMIN ditolak dan tidak menyentuh database", async () => {
     sesi.akun.mockResolvedValue({ nip: "NIP-PEG-UJI", role: "PEGAWAI", satuanKerja: "Satker Uji A" });
     const html = await render();
-    expect(html).toContain("Role kamu tidak berwenang melihat tembusan banding.");
+    expect(html).toContain("Peran kamu tidak berwenang melihat tembusan banding.");
     expect(palsu.banding.findMany).not.toHaveBeenCalled();
     expect(palsu.reconciliationStatus.findMany).not.toHaveBeenCalled();
   });
@@ -257,7 +257,7 @@ describe("Monitoring Banding PPABP - render", () => {
   it("tanpa sesi ditolak", async () => {
     sesi.akun.mockResolvedValue(null);
     const html = await render();
-    expect(html).toContain("Role kamu tidak berwenang");
+    expect(html).toContain("Peran kamu tidak berwenang");
   });
 
   it("ADMIN boleh membuka halaman", async () => {

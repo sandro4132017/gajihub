@@ -52,7 +52,7 @@ export default async function SkHukumanDisiplinUnitPage({
   }
 
   if (!canInputSkHukumanDisiplin(authUser, satkerEfektif)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang input SK Hukuman Disiplin unit ini." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang input SK Hukuman Disiplin unit ini." />;
   }
 
   const [pegawaiList, skList] = await Promise.all([

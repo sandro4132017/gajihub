@@ -31,7 +31,7 @@ export default async function OsdmaSkKgbPage({
   };
 
   if (!authUser || !canApproveSkKgb(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang memberikan approval SK KGB." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang memberikan approval SK KGB." />;
   }
 
   const [satuanKerjaRows, skKgbListAll] = await Promise.all([
@@ -87,7 +87,7 @@ export default async function OsdmaSkKgbPage({
               </span>
             </div>
             <p className="mt-1 text-xs sm:text-sm text-muted">
-              Persetujuan usulan Kenaikan Gaji Berkala lintas satuan kerja &bull; Pengesahan langsung memutakhirkan golongan pegawai di sistem.
+              Persetujuan usulan Kenaikan Gaji Berkala lintas satuan kerja &bull; Pengesahan langsung memperbarui golongan pegawai di Gajihub.
             </p>
           </div>
         </div>

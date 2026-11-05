@@ -40,26 +40,27 @@ dipulihkan sendiri, sementara salah arah ke PUBLIC melempar pengguna ke
 domain yang tidak menjawab. 11 test di `src/auth/__tests__/modeJaringan.test.ts`
 menguncinya.
 
-### Login NIP MASIH HIDUP di mode INTERNAL (diperiksa 2026-10-20)
+### Login NIP (password = NIP) masih hidup di mode INTERNAL (dibaca dari kode 2026-11-05)
 
-User menyebut login NIP sudah dihapus dan fokusnya SSO + akun dev. **Kodenya
-belum.** `isNipLogin` di `src/app/login/actions.ts:48` dan
-`src/app/api/auth/login/route.ts:36` masih menerima username 18 digit dengan
-password = NIP, dan gerbangnya `isModeInternal() || ALLOW_NIP_LOGIN` - jadi
-mode INTERNAL yang sekarang aktif justru MEMBUKA jalur itu.
+**Password induk `DEV_AUTH_PASS` yang berlaku untuk NIP siapa pun SUDAH
+DICABUT.** Logika login dipusatkan di `putuskanLogin` (`src/auth/kredensialLogin.ts`),
+dipakai bersama Server Action dan Route Handler. Kata sandi `DEV_AUTH_PASS` kini
+hanya berlaku untuk akun uji coba `DEV_AUTH_USER` itu sendiri.
 
-Diukur dengan `.env` nyata dimuat: NETWORK_MODE=INTERNAL, ALLOW_NIP_LOGIN
-tidak diset, DEV_AUTH_USER/PASS terisi, COOKIE_SECURE=false (benar untuk
-akses HTTP internal) - dan hasilnya login password=NIP **AKTIF**.
+Yang MASIH ADA: jalur NIP 18 digit dengan password = NIP milik orang itu, dibuka
+saat `isModeInternal() || ALLOW_NIP_LOGIN === "true"`. NIP berawalan `9999`
+(data uji) tidak bisa masuk lewat jalur ini.
 
-Jadi janji "password = NIP sudah tidak dipakai" belum tercapai. Kalau memang
-mau dimatikan, yang dicabut adalah `isNipLogin`, bukan mode jaringannya -
-mematikannya lewat NETWORK_MODE=PUBLIC justru akan melumpuhkan satu-satunya
-jalur akses yang hidup.
+Jadi janji "password = NIP sudah tidak dipakai" belum tercapai untuk mode
+INTERNAL. Kalau mau dimatikan, yang dicabut adalah jalur NIP di
+`kredensialLogin.ts`, bukan mode jaringannya - mematikannya lewat
+NETWORK_MODE=PUBLIC justru akan melumpuhkan satu-satunya jalur akses yang hidup.
+Catatan: angka ini dibaca dari kode, belum diukur ulang dengan `.env` nyata.
 
 Yang berubah saat INTERNAL: redirect mempertahankan host/IP yang diakses
-(`asalPublik()`), QR TTE mengarah ke host internal, dan login NIP 18 digit
-dibuka sebagai cadangan SSO.
+(`asalPublik()`) dan login NIP 18 digit dibuka sebagai cadangan SSO.
+NETWORK_MODE TIDAK memengaruhi TTE: alamat QR berasal dari `TTE_VERIFY_BASE_URL`
+(lihat `src/lib/tte/alamatVerifikasi.ts`), dan stempel simulasi tidak terkait mode jaringan.
 
 Toggle di `/admin` menyimpan ke `.env` secara **atomik** (tulis berkas
 sementara lalu `rename`) - berkas itu memuat seluruh kredensial aplikasi, dan
@@ -72,6 +73,39 @@ diubah selama jalur itu masih dipakai. Selama akses publik mati, jalur B
 satu-satunya yang ada, jadi ini sekarang bukan catatan kecil lagi.
 
 ---
+
+### Akun penguji Tim Pusdatik (2026-11-05)
+
+Keputusan user: akun ini **aktif di staging dan prod** untuk pengujian Pusdatik,
+dengan semua peran termasuk ADMIN dan PPABP. Kode: `src/auth/akunPenguji.ts`
+(verifikasi, pembatas, kedaluwarsa), `src/auth/akunPengujiDb.ts` (data wajib ada),
+`src/auth/kredensialLogin.ts`.
+
+- **Env** (nilai asli TIDAK ditulis di dokumen): `PENGUJI_USER` (username),
+  `PENGUJI_PASS_HASH` (hash scrypt, bukan sandi), `PENGUJI_BERLAKU_SAMPAI`
+  opsional, format YYYY-MM-DD, berlaku s.d. 23:59:59 WIB.
+- **Buat hash**: `npm run hash:penguji` di mesin sendiri, bukan di server. Sandi
+  tidak dicetak ulang; hanya satu baris hash yang tercetak.
+- **Gerbang ganda**: env lengkap DAN data seed ada (User + Pegawai dengan
+  `sourceSystem = DUMMY_UJI`, NIP `9999…`). Kode TIDAK membuat akun otomatis.
+  Sesi penguji dicabut saat konfigurasinya mati (`getSessionAccount`).
+- **Urutan deploy**: `git pull` -> `npm run build` -> `npm run seed:uji` (uji
+  kering) -> `npm run seed:uji -- --terapkan` -> `pm2 restart` (env dibaca saat
+  proses start).
+- **Cara mematikan** (ada empat):
+  1. Nonaktifkan akun di `/admin/role-assignment`; login ditolak dengan pesan
+     "dinonaktifkan".
+  2. Kosongkan `PENGUJI_PASS_HASH` (atau `PENGUJI_USER`), lalu `pm2 restart`.
+  3. `npm run seed:uji -- --hapus --terapkan` (menghapus data uji).
+  4. Isi `PENGUJI_BERLAKU_SAMPAI` dengan tanggal yang sudah lewat, lalu
+     `pm2 restart`.
+- **Risiko yang diterima user**:
+  - Pembatas 5 gagal / 15 menit hanya di memori proses; hilang saat restart dan
+    tidak dibagi antar-instance.
+  - Satu aktor audit untuk semua penguji; log tidak bisa membedakan siapa yang bertindak.
+  - Unit dummy `UNIT UJI COBA PUSDATIK` tampil di dropdown satker.
+  - Pemegang sandi bisa mengunduh ADK asli, mengunggah gaji induk dan rekening,
+    sinkron SIAP, dan mengubah peran.
 
 ### SSO Kemnaker (Naco) - OAuth 2.0 Authorization Code (2026-08-21)
 
@@ -300,6 +334,29 @@ Windows gagal ke host ini dengan `SEC_E_UNSUPPORTED_FUNCTION` (schannel),
 
 ## Deployment testing internal (VPS kantor)
 
+### Versi Node.js di VPS (dimutakhirkan 2026-11-04)
+
+- Node sistem = **paket apt NodeSource jalur 24.x** (`/usr/bin/node`, v24.22.2 per
+  2026-11-04). `/usr/local/bin/node` dan `/usr/local/bin/npx` adalah SYMLINK ke
+  `/usr/bin/*`. Pembaruan keamanan Node cukup `sudo apt update && sudo apt install
+  --only-upgrade nodejs`, lalu restart aplikasi.
+- Sebelumnya `/usr/local/bin/node` binary manual **Node 20 (EOL sejak 30 April 2026)**
+  yang menutupi Node apt - itulah sebab VPS tertinggal rilis keamanan Node Oktober
+  2026. Jangan pasang binary manual lagi di `/usr/local/bin`.
+- Semua aplikasi pm2 memakai Node sistem (`/usr/bin/node`); Gajihub dijalankan
+  `pm2 start npm --name gajihub -- start -- -p 3002`. Node 20 lama dan Node 24
+  manual di `/opt` sudah DIHAPUS 2026-11-04 - tidak ada jalur rollback ke Node 20.
+  Cek proses Next: `pgrep -f "next/dist/bin/next"` lalu `readlink -f /proc/<pid>/exe`
+  (bukan `next start`, itu shell perantara `sh -c`).
+- npm 11 menampilkan peringatan `install scripts not yet covered by allowScripts`
+  (Prisma, esbuild, sharp). Engine Prisma tetap ada - periksa dengan `npx prisma -v`.
+  JANGAN `npm install-scripts approve` sebelum dipastikan tidak mengubah
+  `package.json` (bisa bentrok saat `git pull`).
+- `pm2 update` / `pm2 restart all` JANGAN dipakai selama `meeting-room-backend2`
+  masih terdaftar: foldernya (`~/apps/meeting-room-display2`) sudah tidak ada, jadi
+  proses itu tidak akan bisa menyala lagi. Restart per nama:
+  `pm2 restart gajihub && pm2 save`.
+
 Di-deploy ke VPS kantor (`192.168.221.44`, hostname `AIhelpdeskRokeu`, cuma
 bisa diakses lewat jaringan kantor/VPN) buat testing terbatas ke beberapa
 pegawai SEBELUM dapat subdomain resmi dari Kemnaker - `gajihub.rokeubmn.id`
@@ -406,3 +463,9 @@ ingat itu juga akan mengembalikan role 12 akun demo lain ke nilai seed, jadi
 kalau ada assignment manual di VPS yang mau dipertahankan, lebih aman
 tambahkan role tambahannya lewat halaman "Kelola Assignment Role" saja.
 
+
+**Diagnosis galat yang tampil di layar**: pesan galat mentah (host, user, teks
+driver) tidak lagi ditampilkan; layar hanya memuat kalimat awam dan "kode
+rujukan XXXXXXXX". Detail tersamarnya ada satu baris di log server -
+`pm2 logs gajihub | grep <kode rujukan>`. Pesan mentah Naco di halaman login
+SSO hanya tampil bila `NACO_DEBUG="true"` (dipakai saat memasang SSO).

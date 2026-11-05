@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { kembalikanRekapUnitAction, type KirimFormState } from "./actions";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import type { KirimFormState } from "./actions";
 import { Modal } from "../../../components/feedback/Modal";
+import { kirimAksiJson } from "../../../lib/koneksi/jawabanAksi";
 
-const INITIAL_STATE: KirimFormState = {};
+const INITIAL_STATE: KirimFormState & { tidakPasti?: boolean } = {};
 
 /**
  * "Kembalikan ke unit" - satu-satunya jalan membuka kiriman yang terkunci.
@@ -34,7 +36,35 @@ export function KembalikanRekapForm({
    */
   bisaDikembalikan: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(kembalikanRekapUnitAction, INITIAL_STATE);
+  // Lewat Route Handler JSON (/api/ppabp/kembalikan-rekap), bukan Server
+  // Action: firewall jaringan memblokir body multipart Server Action.
+  const [state, setState] = useState(INITIAL_STATE);
+  const [pending, setPending] = useState(false);
+  const [isRefreshing, startRefresh] = useTransition();
+  const router = useRouter();
+  const sedangKirim = useRef(false);
+  const sibuk = pending || isRefreshing;
+
+  async function kembalikan(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (sedangKirim.current) return;
+    sedangKirim.current = true;
+    const data = new FormData(e.currentTarget);
+    setPending(true);
+    try {
+      const jawaban = await kirimAksiJson("/api/ppabp/kembalikan-rekap", {
+        satuanKerja,
+        bulan: periodeBulan,
+        tahun: periodeTahun,
+        alasan: String(data.get("alasan") ?? ""),
+      });
+      setState(jawaban);
+      if (jawaban.success || jawaban.tidakPasti) startRefresh(() => router.refresh());
+    } finally {
+      sedangKirim.current = false;
+      setPending(false);
+    }
+  }
   const [notifTertutup, setNotifTertutup] = useState(false);
 
   const [jawabanTerakhir, setJawabanTerakhir] = useState(state);
@@ -83,6 +113,11 @@ export function KembalikanRekapForm({
         }
       >
         <p>{state.error}</p>
+        {state.tidakPasti && (
+          <p className="mt-2 text-muted">
+            Status belum pasti - halaman dimuat ulang; periksa apakah rekap sudah dikembalikan sebelum mengulang.
+          </p>
+        )}
       </Modal>
     </>
   );
@@ -97,10 +132,7 @@ export function KembalikanRekapForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col items-stretch gap-1.5">
-      <input type="hidden" name="satuanKerja" value={satuanKerja} />
-      <input type="hidden" name="bulan" value={periodeBulan} />
-      <input type="hidden" name="tahun" value={periodeTahun} />
+    <form onSubmit={kembalikan} className="flex flex-col items-stretch gap-1.5">
       {/* Placeholder dipendekkan supaya terbaca utuh di kolom yang sempit -
           yang panjang terpotong di tengah kata dan tidak menerangkan apa pun.
           Kalimat lengkapnya pindah ke `title`, muncul saat kursor berhenti. */}
@@ -113,8 +145,8 @@ export function KembalikanRekapForm({
         title="Tulis apa yang harus diperbaiki unit ini - ini satu-satunya keterangan yang mereka terima."
         className="field-input w-full min-w-0 py-1 text-xs"
       />
-      <button type="submit" disabled={pending} className="btn btn-ghost btn-sm w-full">
-        {pending ? "..." : "Kembalikan"}
+      <button type="submit" disabled={sibuk} className="btn btn-ghost btn-sm w-full">
+        {sibuk ? "..." : "Kembalikan"}
       </button>
       {popupHasil}
     </form>

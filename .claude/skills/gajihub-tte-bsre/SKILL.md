@@ -60,6 +60,8 @@ butuh akun demo BSrE untuk diuji.
 2. `src/app/tte/actions.ts` (dua tempat: `nikTarget || TEST_BSRE_NIK || <NIK demo>`)
    - NIK kosong jatuh ke akun demo.
 
+Temuan 2026-11-05: passphrase demo tertanam di kode klien `src/app/tte/ModalPassphraseTte.tsx:159-160` sehingga ikut terkirim ke browser; keputusan user 2026-11-05 membiarkannya sampai TTE dipakai sungguhan.
+
 **Jangan "dibereskan" atas inisiatif sendiri**, dan jangan dilaporkan ulang
 sebagai temuan baru - keputusannya sudah diambil.
 
@@ -70,3 +72,31 @@ Kriteria BSrE V & VIII di atas:
 - NIK kosong harus DITOLAK dengan pesan yang menyebut sebabnya, bukan
   dijatuhkan ke akun demo - kalau tidak, dokumen produksi bisa
   tertandatangani atas nama akun uji coba tanpa ada yang menyadarinya.
+
+## Stempel simulasi
+
+- Di production stempel simulasi TIDAK PERNAH diterbitkan; `TTE_SIMULASI` diabaikan.
+- Di non-production hanya bila `TTE_SIMULASI="true"` (`bolehSimulasiTte()` di
+  `src/lib/tte/simulasiTte.ts`). Mode jaringan INTERNAL/PUBLIC tidak berpengaruh.
+- Tanpa itu, kegagalan BSrE = dokumen `GAGAL`, tidak diterbitkan, dan dicatat di
+  `log_gagal_tte` (Kriteria IX) dengan `kategoriError`:
+  - `PASSPHRASE_SALAH` - passphrase ditolak BSrE.
+  - `NETWORK_TIMEOUT` - BSrE tidak terjangkau (timeout/koneksi), juga untuk pemeriksaan sertifikat.
+  - `BSRE_ERROR` - BSrE membalas HTTP 5xx atau galat lain.
+  - `SERTIFIKAT_BELUM_SIAP` - pemeriksaan sertifikat menolak (belum terdaftar/dicabut); `dokumenTteId` null.
+  - `SIMULASI_DITERAPKAN` - stempel simulasi dibubuhkan (hanya non-production).
+  - `SYSTEM_EXCEPTION` - galat tak terduga.
+- `apakahHasilSimulasi()` adalah satu-satunya penentu apakah dokumen hasil simulasi.
+
+## Indikator koneksi BSrE
+
+- Route `GET /api/tte/koneksi` (`src/lib/tte/koneksiBsre.ts`, komponen `src/app/tte/StatusKoneksiBsre.tsx`).
+  Hanya KASUBAG_TU yang satuan kerjanya terisi dan ADMIN (`canLihatStatusLayananTte`); tanpa sesi 401, selain itu 403.
+  Isinya hanya `keadaan`, `sebab`, `diperiksaPada` - tidak pernah alamat server, NIK, atau pesan galat.
+- Pemeriksaan = satu GET status ke Esign Client dengan NIK probe dari `ESIGN_PROBE_NIK`.
+  Bawaannya sentinel `0000000000000000`. Bukan NIK asli (data pribadi) dan bukan NIK demo
+  (fallback akun demo di `checkUserStatus` akan menyamarkan gangguan jadi "ISSUE"; ping sengaja
+  tanpa fallback dan tanpa retry). Jawaban "tidak terdaftar" tetap berarti layanan hidup.
+- Beban: cache 60 detik per proses, permintaan bersamaan digabung, "Periksa ulang" hanya menembus
+  cache bila umurnya > 15 detik. Jadi maksimal sekitar 1 ping per 60 detik per proses (tanpa polling di klien).
+- Sesi habis: middleware mengalihkan ke /login; komponen memperlakukan pengalihan seperti 401/403 dan menyembunyikan diri.

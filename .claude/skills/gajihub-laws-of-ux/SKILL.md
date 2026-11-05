@@ -306,7 +306,6 @@ yang bisa dilipat.
 | Berkas | `<th>` |
 |---|---|
 | `kasubag/kalkulasi/page.tsx` (beberapa tabel) | 54 |
-| `RekonsiliasiForm` | 13 |
 | `TabelRincianJamKerja` | 12 |
 | `tukin/presensi/page.tsx` | 11 |
 | `TabelRincianUnit` | 8 |

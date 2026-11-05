@@ -1,4 +1,5 @@
 import { prisma } from "../../../lib/prisma";
+import { SUMBER_DUMMY } from "../../../lib/dataUji";
 import type { PegawaiAdkHarian } from "../../../business-logic/adkHarian";
 import { satkerTerkirim, whereIkutAdk } from "./satkerTerkirim";
 import type { JenisPegawaiAdk } from "./jenisPegawaiAdk";
@@ -121,7 +122,7 @@ export async function dataUangLemburHarian(
     where: {
       tanggal: { gte: awal, lt: akhir },
       jamLembur: { gt: 0 },
-      pegawai: { satuanKerja: { in: satkerBoleh } },
+      pegawai: { satuanKerja: { in: satkerBoleh }, sourceSystem: { not: SUMBER_DUMMY } },
     },
     _sum: { jamLembur: true },
   });

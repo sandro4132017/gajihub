@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { SyncPegawaiFormState } from "./actionsSyncPegawai";
+import { StatusKoneksiSiap } from "./StatusKoneksiSiap";
 
 const AWAL: SyncPegawaiFormState = {};
 
@@ -24,8 +25,8 @@ export function SinkronPegawaiForm() {
       const res = await fetch("/api/admin/sync-pegawai/periksa", { method: "POST" });
       const data = await res.json();
       setCek(data);
-    } catch (err) {
-      setCek({ error: `Gagal menghubungi server: ${err instanceof Error ? err.message : String(err)}` });
+    } catch {
+      setCek({ error: "Gagal menghubungi server. Periksa koneksi Anda lalu coba lagi." });
     } finally {
       setSedangCek(false);
     }
@@ -40,8 +41,8 @@ export function SinkronPegawaiForm() {
       const res = await fetch("/api/admin/sync-pegawai/terapkan", { method: "POST" });
       const data = await res.json();
       setTerap(data);
-    } catch (err) {
-      setTerap({ error: `Gagal menghubungi server: ${err instanceof Error ? err.message : String(err)}` });
+    } catch {
+      setTerap({ error: "Gagal menghubungi server. Periksa koneksi Anda lalu coba lagi." });
     } finally {
       setSedangTerap(false);
     }
@@ -58,6 +59,7 @@ export function SinkronPegawaiForm() {
           </p>
         </div>
         <div className="flex flex-none items-center gap-2">
+          <StatusKoneksiSiap />
           <form onSubmit={handleCek}>
             <button type="submit" disabled={sedangCek || sedangTerap} className="btn btn-secondary">
               {sedangCek ? "Memeriksa..." : "Periksa perubahan"}

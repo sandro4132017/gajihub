@@ -24,6 +24,7 @@
 // barulah kolom itu layak - bukan sekarang.
 // ============================================================================
 import pg from "pg";
+import { GalatKonfigurasi } from "../lib/koneksi/galatSumber";
 import sql from "mssql";
 import { bukaPoolSiap } from "../lib/siapConfig";
 
@@ -82,7 +83,7 @@ export async function ambilPotonganEpresensi(
 ): Promise<BarisPotonganEpresensi[]> {
   const { EPRESENSI_HOST, EPRESENSI_PORT, EPRESENSI_DB, EPRESENSI_USER, EPRESENSI_PASSWORD } = process.env;
   if (!EPRESENSI_HOST || !EPRESENSI_DB || !EPRESENSI_USER || !EPRESENSI_PASSWORD) {
-    throw new Error("Kredensial e-Presensi belum lengkap di .env (EPRESENSI_HOST/DB/USER/PASSWORD).");
+    throw new GalatKonfigurasi("Kredensial e-Presensi belum lengkap di .env (EPRESENSI_HOST/DB/USER/PASSWORD).", "EPRESENSI");
   }
   const client = new pg.Client({
     host: EPRESENSI_HOST,

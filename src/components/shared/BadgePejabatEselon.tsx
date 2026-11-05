@@ -56,7 +56,7 @@ export function BadgePejabatEselon({ kelasJabatan }: { kelasJabatan: number | nu
           mengurangi nominal.
         </span>
         <span className="mt-1 block text-muted">
-          Mengikuti praktik pembayaran yang berjalan di Biro Keuangan, bukan pasal di Permenaker 15/2024.
+          Dasarnya praktik pembayaran yang berlaku di Biro Keuangan; tidak diatur dalam pasal tersendiri di Permenaker 15/2024.
         </span>
       </span>
     </span>

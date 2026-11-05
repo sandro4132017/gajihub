@@ -42,6 +42,7 @@ import { VerifikasiTabelPanel } from "../kirim/VerifikasiTabelPanel";
 import { TabelPemeriksaanLembur } from "./TabelPemeriksaanLembur";
 import { TabelPerubahanPegawai } from "./TabelPerubahanPegawai";
 import { PanelTteSptjm } from "./PanelTteSptjm";
+import { StatusKoneksiBsre } from "../../tte/StatusKoneksiBsre";
 import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 
@@ -136,9 +137,11 @@ export default async function KalkulasiUnitPage({
     rincian?: string;
     hal?: string;
     per?: string;
+    halLembur?: string;
+    perLembur?: string;
   }>;
 }) {
-  const { bulan, tahun, satker, rincian, hal, per } = await searchParams;
+  const { bulan, tahun, satker, rincian, hal, per, halLembur, perLembur } = await searchParams;
   const akses = await ambilAksesUnit(satker);
   if (!akses) {
     return <AksesDitolak pesan="Kamu harus login dulu buat lihat halaman ini." />;
@@ -170,7 +173,7 @@ export default async function KalkulasiUnitPage({
   }
 
   if (!canAjukanKalkulasiTukinMassalUnit(authUser, satkerEfektif)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengelola kalkulasi unit ini." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengelola kalkulasi unit ini." />;
   }
 
   // Dicek terpisah, tidak menumpang izin di atas: mengunduh rekap dan
@@ -566,6 +569,14 @@ export default async function KalkulasiUnitPage({
   const pegawaiHalaman = pegawaiList.slice(paginasi.mulai, paginasi.selesai);
   const paramPaginasi = new URLSearchParams(paramDasar);
   if (tampilRinci) paramPaginasi.set("rincian", "1");
+  // Tabel Rincian Jam Lembur punya paginasinya sendiri (halLembur/perLembur).
+  // Masing-masing membawa posisi halaman tabel lainnya, supaya pindah halaman
+  // di satu tabel tidak mengembalikan tabel lain ke halaman 1.
+  const paramPaginasiLembur = new URLSearchParams(paramPaginasi);
+  if (hal) paramPaginasiLembur.set("hal", hal);
+  if (per) paramPaginasiLembur.set("per", per);
+  if (halLembur) paramPaginasi.set("halLembur", halLembur);
+  if (perLembur) paramPaginasi.set("perLembur", perLembur);
 
   return (
     <main className={HALAMAN}>
@@ -1297,6 +1308,9 @@ export default async function KalkulasiUnitPage({
       />
 
       <TabelPemeriksaanLembur
+        halaman={halLembur}
+        perHalaman={perLembur}
+        paramPaginasi={paramPaginasiLembur.toString()}
         periodeBulan={periodeBulan}
         periodeTahun={periodeTahun}
         terkunci={kirimStatus.terkunci}
@@ -1385,13 +1399,18 @@ export default async function KalkulasiUnitPage({
 
         {/* Panel Tanda Tangan Elektronik (TTE) BSrE untuk 3 Dokumen SPTJM (Tukin, Uang Makan, Uang Lembur) */}
         <div className="border-b border-line-2 px-4 py-4 sm:px-5 space-y-3">
-          <div>
-            <h3 className="text-sm font-bold text-ink">
-              Tanda Tangan Elektronik (TTE) SPTJM
-            </h3>
-            <p className="mt-0.5 text-xs text-muted">
-              Pengesahan SPTJM digital via BSrE BSSN untuk 3 berkas (Tunjangan Kinerja, Uang Makan, dan Uang Lembur) sebelum dikirim ke PPABP.
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-ink">
+                Tanda Tangan Elektronik (TTE) SPTJM
+              </h3>
+              <p className="mt-0.5 text-xs text-muted">
+                Pengesahan SPTJM digital via BSrE BSSN untuk 3 berkas (Tunjangan Kinerja, Uang Makan, dan Uang Lembur) sebelum dikirim ke PPABP.
+              </p>
+            </div>
+            <div className="shrink-0">
+              <StatusKoneksiBsre />
+            </div>
           </div>
           {/* SATU peringatan untuk ketiga kartu, bukan diulang di masing-masing.
 

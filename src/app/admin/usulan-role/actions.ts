@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -28,7 +29,7 @@ export async function eksekusiUsulanRoleAction(
     if (!admin) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: admin.nip, role: admin.role, satuanKerja: admin.satuanKerja, aktif: admin.aktif };
     if (!canEksekusiPerubahanRole(authUser)) {
-      return { error: "Role kamu tidak berwenang mengeksekusi usulan perubahan role." };
+      return { error: "Peran kamu tidak berwenang mengeksekusi usulan perubahan role." };
     }
 
     const usulanId = String(formData.get("usulanId") ?? "");
@@ -106,6 +107,6 @@ export async function eksekusiUsulanRoleAction(
       }.`,
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("admin.usulan-role.actions#1", err, "Terjadi kesalahan") };
   }
 }

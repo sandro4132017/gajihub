@@ -32,6 +32,11 @@ description: Use whenever touching presensi - sinkronisasi e-Presensi, Epresensi
 
 ### Halaman Rekonsiliasi rekap absensi petugas (`/tukin/presensi/rekonsiliasi`)
 
+> **DIHAPUS 2026-11-04 atas permintaan user ("gapenting").** Halaman, action,
+> form, dan kartu "Bandingkan Rekap Petugas" di `/tukin/presensi` dicabut. Mesin
+> `rekapAbsensiManual.ts` beserta test-nya DIBIARKAN (masih diimpor modul lain).
+> Catatan di bawah ini disimpan sebagai riwayat.
+
 Alat masa TRANSISI, dibangun setelah terbukti berkas Excel petugas masih jadi
 penentu pembayaran. Mematikan berkas itu tanpa membuktikan dulu kedua sumber
 sepakat berarti memindahkan dasar pembayaran ribuan orang atas dasar keyakinan.

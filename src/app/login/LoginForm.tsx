@@ -36,8 +36,8 @@ export function LoginForm({ modeInternal = true }: { modeInternal?: boolean }) {
       }
 
       window.location.href = data.redirect || "/admin";
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan koneksi ke server.");
+    } catch {
+      setError("Terjadi kesalahan koneksi ke server.");
       setPending(false);
     }
   }
@@ -85,7 +85,7 @@ export function LoginForm({ modeInternal = true }: { modeInternal?: boolean }) {
         disabled={pending}
         className="btn btn-primary mt-2 w-full rounded-xl py-3.5 text-base"
       >
-        {pending ? "Memproses..." : modeInternal ? "Login Jaringan Internal" : "Login Pengujian"}
+        {pending ? "Memproses..." : modeInternal ? "Masuk" : "Masuk dengan akun uji coba"}
       </button>
 
       {/* role="alert" supaya kegagalan login ikut dibacakan pembaca layar */}
@@ -97,8 +97,8 @@ export function LoginForm({ modeInternal = true }: { modeInternal?: boolean }) {
 
       <p className="pt-2 text-center text-xs text-muted">
         {modeInternal
-          ? "Masuk menggunakan akun dev atau NIP 18 digit terdaftar pada jaringan internal."
-          : "Masuk menggunakan username & password dev yang terdaftar di .env."}
+          ? "Masuk memakai NIP 18 digit, atau akun uji coba dari Admin Gajihub."
+          : "Khusus akun uji coba yang diberikan Admin Gajihub."}
       </p>
     </form>
   );

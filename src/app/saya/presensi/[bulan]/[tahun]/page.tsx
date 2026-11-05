@@ -4,7 +4,18 @@ import { getSessionAccount } from "../../../../../auth/getSessionAccount";
 import { canViewDataSendiri } from "../../../../../auth/permissions";
 import { AksesDitolak } from "../../../../../components/feedback/AksesDitolak";
 import { NAMA_BULAN } from "../../../../../lib/format/bulan";
-import { jamTeks, labelStatus, lemburTeks, namaHari, tanggalTeks } from "../../../../../lib/format/presensiTampilan";
+import {
+  KELAS_CHIP_NADA,
+  jamTeks,
+  labelStatus,
+  lemburTeks,
+  namaHari,
+  penandaHariPresensi,
+  tanggalTeks,
+} from "../../../../../lib/format/presensiTampilan";
+import { NavigasiBulan } from "../../../NavigasiBulan";
+import { periodeDariParam } from "../../../periodeSaya";
+import { periodeSekarang } from "../../../../periodeDefault";
 import { HALAMAN } from "../../../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
@@ -28,21 +39,27 @@ export default async function PresensiSayaPage({
   params: Promise<{ bulan: string; tahun: string }>;
 }) {
   const { bulan: bulanParam, tahun: tahunParam } = await params;
-  const periodeBulan = Number(bulanParam);
-  const periodeTahun = Number(tahunParam);
+  const periodeSah = periodeDariParam(bulanParam, tahunParam);
 
   const akun = await getSessionAccount();
   const authUser = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
-  if (
-    !authUser ||
-    !canViewDataSendiri(authUser, authUser.nip) ||
-    !Number.isInteger(periodeBulan) ||
-    periodeBulan < 1 ||
-    periodeBulan > 12 ||
-    !Number.isInteger(periodeTahun)
-  ) {
+  if (!authUser) {
     return <AksesDitolak pesan="Kamu harus login dulu buat lihat halaman ini." />;
   }
+  if (!canViewDataSendiri(authUser, authUser.nip)) {
+    return <AksesDitolak pesan="Kamu tidak berwenang melihat halaman ini." />;
+  }
+  if (!periodeSah) {
+    return (
+      <AksesDitolak
+        pesan="Alamat periode tidak sah."
+        hrefAlternatif="/saya?tab=kehadiran"
+        labelAlternatif="Kembali ke Data Saya"
+      />
+    );
+  }
+  const periodeBulan = periodeSah.bulan;
+  const periodeTahun = periodeSah.tahun;
 
   // Batas periode dihitung dalam UTC - sama dengan cara barisnya ditulis
   // (lihat simpanRekapPresensi.ts). Memakai `new Date(tahun, bulan)` lokal
@@ -61,7 +78,7 @@ export default async function PresensiSayaPage({
   });
 
   if (!pegawai) {
-    return <AksesDitolak pesan={`Data pegawai untuk NIP ${authUser.nip} tidak ditemukan di sistem.`} />;
+    return <AksesDitolak pesan={`Data kepegawaian untuk NIP ${authUser.nip} belum tercatat di Gajihub. Hubungi Admin Gajihub.`} />;
   }
 
   const namaBulan = NAMA_BULAN[periodeBulan - 1] ?? String(periodeBulan);
@@ -69,7 +86,10 @@ export default async function PresensiSayaPage({
   // Tanggal yang jamnya pernah dikoreksi manual oleh verifikator. Ditandai,
   // BUKAN disembunyikan: pegawai berhak tahu barisnya tidak lagi apa adanya
   // dari e-Presensi.
-  const tanggalDikoreksi = new Set(pegawai.koreksiPresensi.map((k) => k.tanggal.toISOString().slice(0, 10)));
+  // Jam hasil koreksi ikut ditampilkan bersama jam e-Presensi - itu yang dipakai
+  // menghitung potongan. Menit terlambat dst. tetap angka mentah e-Presensi.
+  const koreksiPerTanggal = new Map(pegawai.koreksiPresensi.map((k) => [k.tanggal.toISOString().slice(0, 10), k]));
+  const tanggalDikoreksi = new Set(koreksiPerTanggal.keys());
 
   const totalTerlambat = pegawai.presensi.reduce((a, p) => a + p.menitTerlambat, 0);
   const totalPulangCepat = pegawai.presensi.reduce((a, p) => a + p.menitPulangCepat, 0);
@@ -100,20 +120,37 @@ export default async function PresensiSayaPage({
         <span className="font-mono">{pegawai.nip}</span>
       </p>
 
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <NavigasiBulan periode={periodeSah} sekarang={periodeSekarang()} dasar="/saya/presensi" />
+        {rekap && (
+          <>
+            <Link
+              href={`/saya/slip-gaji/${periodeBulan}/${periodeTahun}`}
+              className="btn btn-secondary btn-sm min-h-11"
+            >
+              Lihat slip
+            </Link>
+            <Link href="/saya?tab=banding" className="btn btn-ghost btn-sm min-h-11">
+              Ajukan banding
+            </Link>
+          </>
+        )}
+      </div>
+
       {pegawai.presensi.length === 0 && (
         <div className="card mt-6 p-5">
           <p className="text-sm text-muted">
             Belum ada rincian presensi harian untuk periode ini.
             {rekap
-              ? " Rekap periodenya sudah ada, tapi diisi lewat template Excel - jalur itu memang tidak menyimpan rincian per tanggal."
-              : " Unit kamu belum menarik presensi periode ini dari e-Presensi."}
+              ? " Untuk periode ini hanya tersedia rekap bulanan, tanpa rincian per tanggal."
+              : " Presensi periode ini belum diproses unit kamu."}
           </p>
         </div>
       )}
 
       {pegawai.presensi.length > 0 && (
         <>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
             <div className="rounded-xl border border-line bg-surface p-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Hari tercatat</p>
               <p className="mt-1 font-mono text-lg font-extrabold text-ink">{pegawai.presensi.length}</p>
@@ -127,6 +164,10 @@ export default async function PresensiSayaPage({
               <p className="mt-1 font-mono text-lg font-extrabold text-ink">{totalPulangCepat} mnt</p>
             </div>
             <div className="rounded-xl border border-line bg-surface p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Total tinggalkan kantor</p>
+              <p className="mt-1 font-mono text-lg font-extrabold text-ink">{totalMeninggalkan} mnt</p>
+            </div>
+            <div className="col-span-2 rounded-xl border border-line bg-surface p-3 sm:col-span-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Total lembur</p>
               <p className="mt-1 font-mono text-lg font-extrabold text-ink">{lemburTeks(totalLembur)}</p>
             </div>
@@ -147,7 +188,49 @@ export default async function PresensiSayaPage({
             </ul>
           </div>
 
-          <div className="card mt-5 overflow-x-auto">
+          <ul className="mt-5 space-y-2 sm:hidden">
+            {pegawai.presensi.map((p) => {
+              const kunci = p.tanggal.toISOString().slice(0, 10);
+              const dikoreksi = tanggalDikoreksi.has(kunci);
+              const koreksi = koreksiPerTanggal.get(kunci);
+              const akhirPekan = p.tanggal.getUTCDay() === 0 || p.tanggal.getUTCDay() === 6;
+              const penanda = penandaHariPresensi(p, dikoreksi);
+              return (
+                <li
+                  key={p.id}
+                  className={`rounded-xl border border-line p-3 ${akhirPekan ? "bg-surface-2/60" : "bg-surface"}`}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p>
+                      <span className="text-sm font-semibold text-ink">{tanggalTeks(p.tanggal)}</span>
+                      <span className="ml-1.5 text-xs text-muted">{namaHari(p.tanggal)}</span>
+                    </p>
+                    <span className="text-xs text-ink-2">{labelStatus(p.statusKehadiran)}</span>
+                  </div>
+                  <p className="mt-1 font-mono text-sm text-ink-2">
+                    {jamTeks(p.jamMasuk)} - {jamTeks(p.jamKeluar)}
+                  </p>
+                  {koreksi && (koreksi.jamMasuk || koreksi.jamKeluar) && (
+                    <p className="mt-0.5 font-mono text-xs text-gold-deep">
+                      {koreksi.jamMasuk && <>masuk dikoreksi &rarr; {jamTeks(koreksi.jamMasuk)} </>}
+                      {koreksi.jamKeluar && <>pulang dikoreksi &rarr; {jamTeks(koreksi.jamKeluar)}</>}
+                    </p>
+                  )}
+                  {penanda.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {penanda.map((x) => (
+                        <span key={x.teks} className={KELAS_CHIP_NADA[x.nada]}>
+                          {x.teks}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="card mt-5 hidden overflow-x-auto sm:block">
             <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b border-line bg-surface-2 text-[11px] uppercase tracking-wide text-muted">
@@ -163,7 +246,9 @@ export default async function PresensiSayaPage({
               </thead>
               <tbody>
                 {pegawai.presensi.map((p) => {
-                  const dikoreksi = tanggalDikoreksi.has(p.tanggal.toISOString().slice(0, 10));
+                  const kunci = p.tanggal.toISOString().slice(0, 10);
+                  const dikoreksi = tanggalDikoreksi.has(kunci);
+                  const koreksi = koreksiPerTanggal.get(kunci);
                   const akhirPekan = p.tanggal.getUTCDay() === 0 || p.tanggal.getUTCDay() === 6;
                   return (
                     <tr key={p.id} className={`border-b border-line-2 ${akhirPekan ? "bg-surface-2/60" : ""}`}>
@@ -171,21 +256,27 @@ export default async function PresensiSayaPage({
                         <span className="font-semibold text-ink">{tanggalTeks(p.tanggal)}</span>
                         <span className="ml-1.5 text-xs text-muted">{namaHari(p.tanggal)}</span>
                         {dikoreksi && (
-                          <span className="ml-1.5 rounded bg-gold-tint px-1.5 py-0.5 text-[10px] font-bold text-gold-deep">
-                            dikoreksi
-                          </span>
+                          <span className="chip chip-warn ml-1.5">Dikoreksi</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-ink-2">
                         {labelStatus(p.statusKehadiran)}
                         {p.tidakIkutUpacara && (
-                          <span className="ml-1.5 rounded bg-red-tint px-1.5 py-0.5 text-[10px] font-bold text-red">
-                            tanpa upacara
-                          </span>
+                          <span className="chip chip-danger ml-1.5">tanpa upacara</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 font-mono text-ink-2">{jamTeks(p.jamMasuk)}</td>
-                      <td className="px-3 py-2 font-mono text-ink-2">{jamTeks(p.jamKeluar)}</td>
+                      <td className="px-3 py-2 font-mono text-ink-2">
+                        {jamTeks(p.jamMasuk)}
+                        {koreksi?.jamMasuk && (
+                          <span className="block text-xs text-gold-deep">dikoreksi &rarr; {jamTeks(koreksi.jamMasuk)}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-ink-2">
+                        {jamTeks(p.jamKeluar)}
+                        {koreksi?.jamKeluar && (
+                          <span className="block text-xs text-gold-deep">dikoreksi &rarr; {jamTeks(koreksi.jamKeluar)}</span>
+                        )}
+                      </td>
                       {/* Menit nol ditulis "-" bukan "0": kolom penuh angka nol
                           membuat mata harus memindai tiap baris untuk menemukan
                           yang bukan nol, padahal justru itu yang dicari. */}
@@ -211,8 +302,10 @@ export default async function PresensiSayaPage({
           </div>
 
           <p className="mt-3 text-xs text-muted">
-            Rincian ini ditarik dari e-Presensi apa adanya - Gajihub tidak pernah mengubah data presensi. Kalau ada
-            baris yang tidak sesuai, ajukan lewat tab Banding di Data Saya, jangan hubungi e-Presensi langsung.
+            Jam dan menit di sini adalah data e-Presensi apa adanya. Tanggal bertanda &quot;dikoreksi&quot; jamnya
+            diperbaiki petugas unit karena e-Presensi bermasalah pada hari itu; jam hasil koreksi itu yang dipakai
+            menghitung potongan, data asli e-Presensi tidak diubah. Kalau ada yang tidak sesuai, ajukan lewat tab
+            Banding.
           </p>
         </>
       )}

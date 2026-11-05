@@ -9,7 +9,44 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-10-19** - **mengalihkan kalkulasi massal Tukin ke JSON API untuk menghindari kegagalan respons Server Action di balik proxy**:
+Terakhir diperbarui: **2026-11-05** - rangkuman commit `64d9a46`..`9e3886e`
+(2026-10-21 s.d. 2026-10-29), plus akun penguji Tim Pusdatik (2026-11-05, lihat
+bagian 3 butir 15). Detail per perubahan ada di `docs/ai-log.md`.
+
+1. **Dashboard dirombak**:
+   - `/kasubag`: kartu sambutan dan stepper tutup bulan lima langkah, yang
+     statusnya dihitung dari data (`langkahTutupBulan.ts`, `kalkulasiBasi.ts`),
+     ditambah kolom "Perlu perhatian".
+   - `/ppabp` & `/pimpinan`: empat pie komposisi pegawai dan tabel monitoring
+     satker. Kartu "Status Dokumen & Anggaran" dicabut, dan "Data yang
+     Menghalangi Pembayaran" sekarang tampil sebagai bar horizontal.
+   - Monitoring Banding memuat **keputusan pembayaran** per pegawai-periode
+     (`putuskanPembayaranAction`, lengkap dengan audit trail).
+     `/ppabp/rekonsiliasi` lama masih ada sampai "Tahap 3".
+2. **Berkas privat**: unggahan TTE & bukti dukung pindah dari `public/uploads/`
+   ke `storage/uploads/`, dan hanya bisa diunduh lewat `/berkas/*` yang
+   berizin (`src/lib/storage/`). Belum tercakup: `BuktiPotongPajak.fileUrl`
+   dan `SkKgb.fileUrl`. **`storage/` wajib ikut dibackup.** Urutan deploy ada
+   di `docs/ai-log.md` (job `pindah:unggahan`: `--dry-run`, lalu `--terapkan`).
+3. **Jenis pegawai (PNS/PPPK) diambil dari SIAP** (`STATUSPEGAWAIID`), bukan
+   dari Excel. Dipakai untuk memisah ADK PNS/P3K dan untuk pie komposisi.
+   Rekening GAJI ditahan (`REKENING_GAJI_DITERIMA = false`).
+4. **TTE**: halaman verifikasi dokumen beserta unduhan berkasnya
+   (`/tte/verify/[id]`), validasi naskah, dan hash berkas
+   (`isi:hash-tte`).
+5. **Perapian struktur**: komponen lintas-role pindah ke `src/components/`,
+   format tampilan ke `src/lib/format/`. **`src/approval/` dihapus**, karena
+   alurnya sudah diganti "kirim rekap ke PPABP" (lihat
+   `gajihub-approval-siklus`).
+6. **Mode jaringan internal/publik** (`src/auth/modeJaringan.ts`,
+   `asalTepercaya.ts`), gelar pegawai, dan font yang di-host sendiri di
+   `public/fonts/` (tidak lagi lewat `next/font`).
+7. **Alat kerja agent**: skill desain pihak ketiga, agent `planner` /
+   `implementer` / `reviewer` / `archivist`, `tools/verify.mjs`, dan
+   `tools/check-sensitive.mjs`.
+
+Sebelumnya, **2026-10-19** - kalkulasi massal Tukin dialihkan ke JSON API,
+supaya respons Server Action tidak gagal di balik proxy:
 
 1. **Integrasi TTE BSrE BSSN (Esign Client Service v2.2.2)**:
    - Terhubung langsung ke Esign Client (`192.168.221.11`).
@@ -31,13 +68,6 @@ Terakhir diperbarui: **2026-10-19** - **mengalihkan kalkulasi massal Tukin ke JS
 5. **Kalkulasi massal Tukin**:
    - Form `/kasubag/kalkulasi` memakai `POST /api/kasubag/kalkulasi` agar tidak bergantung pada transport Server Action yang bermasalah di balik proxy.
    - Pemeriksaan sesi, role, satker, dan penguncian periode tetap dilakukan oleh aksi server yang sama. Perubahan ini baru di source; verifikasi pada deployment masih menunggu.
-
-> **`.claude/` ada di `.gitignore` (baris 41).** Sepuluh skill lama selamat
-> karena sudah terlacak duluan; `gajihub-laws-of-ux` BELUM - perlu
-> `git add -f .claude/skills/gajihub-laws-of-ux/SKILL.md`, kalau tidak baris
-> routing di `CLAUDE.md` menunjuk skill yang tidak ada bagi yang clone repo.
-> Cek ulang: `git ls-files .claude/skills | wc -l` harus sama dengan
-> `ls .claude/skills | wc -l`.
 
 Sebelumnya, **2026-08-12** - **kendala e-Presensi**. Ketahuan waktu
 menelusuri kenapa satu pegawai punya "lupa absen" di Gajihub tapi tidak di
@@ -86,40 +116,37 @@ kinerja per orang (tambah/ubah/hapus).
 
 ## 1. Posisi sekarang
 
-Angka di bawah diukur **2026-09-28**. Tiap baris menyebut perintah yang
+Angka di bawah diukur **2026-10-29**. Tiap baris menyebut perintah untuk
 memeriksanya ulang - jangan dikutip tanpa menjalankan perintahnya dulu.
 
 | | | Cek ulang |
 |---|---|---|
-| Commit terakhir di `main` | `ad7dc4c` (2026-09-22) | `git log -1 --format='%h %ad' --date=short` |
-| Test | **945** lolos | `npm test` |
-| Migrasi | **37** total | `ls prisma/migrations \| grep -c '^2'` |
-| Belum di-commit | banyak - termasuk 2 migrasi baru | `git status --porcelain` |
+| Commit terakhir di `main` | `9e3886e` (2026-10-29) | `git log -1 --format='%h %ad' --date=short` |
+| Test | **3.016** lolos, 2 di-skip (178 file) | `npm test` |
+| Typecheck | lulus | `npm run typecheck` |
+| Migrasi | **42** total, terakhir `20261027120000_jenis_pegawai_dari_siap` | `ls prisma/migrations \| grep -c '^2'` |
+| Model Prisma | **33** | `grep -c '^model ' prisma/schema.prisma` |
+| Belum di-commit | tidak ada (bersih) | `git status --porcelain` |
 | Deploy | VPS kantor `192.168.221.44:3002` via pm2 (`gajihub`), nginx -> `gajihub.rokeubmn.id` (HTTP) | `pm2 list` di VPS |
 | Repo | https://github.com/sandro4132017/gajihub | - |
 
-**Dua migrasi terakhir sudah diterapkan ke database LOKAL, belum ke VPS**:
-`20260922120000_verifikasi_tabel_dan_koreksi_jam_lembur` dan
-`20260924100000_daftar_perubahan_data_pegawai`.
+**Status migrasi di VPS TIDAK diketahui dari sini.** Sejak 2026-09-22 ada
+tujuh migrasi baru (`20260922120000_*` sampai `20261027120000_*`). Cek dengan
+`npx prisma migrate status` di VPS sebelum deploy berikutnya.
 
-> **`npm ci` WAJIB sebelum build di VPS.** Dua dependensi baru masuk
-> 2026-09-28 (`react-icons`, dan `next/font` yang mengunduh Manrope saat
-> build). Tanpa `npm ci`, build gagal dengan "Module not found: react-icons".
-> Build juga butuh internet sekali untuk mengunduh fontnya.
+> **`npm ci` WAJIB sebelum build di VPS**, karena dependensi bisa berubah
+> antar-commit. Font (Manrope, JetBrains Mono) sudah di-host sendiri di
+> `public/fonts/`, jadi build tidak lagi butuh internet untuk font.
 
-**Ada perubahan yang belum di-commit dari sesi SEBELUMNYA** dan bukan bagian
-dari batch 2026-09-28: `src/middleware.ts` (-43 baris),
-`src/__tests__/middlewareMatcher.test.ts` (-25 baris),
-`SinkronisasiPresensi.tsx` (ditulis ulang), dan `.gitignore` kehilangan blok
-komentar yang menjelaskan kenapa `adk-lembur.xlsx` dikecualikan (aturannya
-sendiri masih ada, cuma alasannya yang hilang). **Periksa dulu sebelum
-commit** - saya tidak menyentuh keempatnya.
+> **`docs/` ada di `.gitignore`.** Teks peraturan yang menjadi acuan kode
+> hanya ada di checkout utama `D:\Sakeh\Project\gajihub`. Worktree dan clone
+> baru TIDAK memilikinya.
 
-**Kebiasaan kerja yang berlaku**: tiap selesai edit, langsung commit + push ke
-`main` lalu deploy ke VPS (`git pull && npx prisma migrate deploy && npm run
-build && pm2 restart gajihub`). Jalankan `npm test` + `npx tsc --noEmit` dulu.
-Server itu SHARED - jangan ganggu `bot-siska` (port 3000) dan
-`meeting-room-display-api` (port 3001).
+**Kebiasaan kerja yang berlaku**: git dipegang user (lihat "Mode operasi" di
+`CLAUDE.md`). Sebelum menyatakan selesai, jalankan `node tools/verify.mjs`.
+Deploy di VPS: `git pull && npm ci && npx prisma migrate deploy && npm run
+build && pm2 restart gajihub`. Server itu SHARED - jangan ganggu `bot-siska`
+(port 3000) dan `meeting-room-display-api` (port 3001).
 
 ---
 
@@ -423,6 +450,16 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
    LOKAL, tidak ikut ke VPS. Kosongkan lewat `/ppabp/gaji-induk` kalau tidak
    mau ikut tampil waktu demo.
 
+### Keputusan 2026-11-05 - akun penguji Tim Pusdatik
+
+15. **Keputusan user: akun "Tim Pusdatik" (semua peran termasuk ADMIN dan PPABP)
+   DIHIDUPKAN di staging dan prod untuk pengujian Pusdatik.** Risiko diterima
+   eksplisit: pemegang password bisa mengunduh ADK asli, mengunggah gaji induk
+   / rekening, sinkron SIAP, dan mengubah peran. Disarankan isi
+   `PENGUJI_BERLAKU_SAMPAI` di prod. Matikan setelah pengujian: nonaktifkan di
+   `/admin/role-assignment`, atau kosongkan `PENGUJI_PASS_HASH` lalu `pm2
+   restart`, atau `npm run seed:uji -- --hapus --terapkan`.
+
 ### Baru - dari kelola predikat kinerja per orang (2026-08-05)
 
 19. **NIP duplikat dalam SATU file rekap predikat - ditolak atau dibiarkan?**
@@ -508,22 +545,25 @@ yang masuk lewat PDF.
 
 ## 6. Seed data & akun demo
 
-Urutan seed (penting, lihat catatan di tiap file):
+**`seedUsers.ts`, `seedSimulasi.ts`, dan `akunDemo.ts` dihapus 2026-10-10**
+(commit `a12552b`, "bersihkan file dan skrip demo lama"). Yang tersisa:
 
 ```bash
-npx tsx src/auth/seedUsers.ts        # 13 akun demo dgn role khusus
-npx tsx src/db/seedSimulasi.ts       # presensi/kalkulasi/approval/banding/dst
-npx tsx src/auth/seedAkunPegawai.ts  # akun PEGAWAI massal buat SISA pegawai
+npx tsx src/auth/seedAkunPegawai.ts  # akun PEGAWAI untuk tiap Pegawai yang belum punya akun
 ```
 
-Login: NIP sebagai username SEKALIGUS password. Akun demo lengkap ada di tabel
-di `CLAUDE.md` bagian "Seed data simulasi". Yang paling sering dipakai:
+Role selain PEGAWAI diberikan lewat halaman Admin "Kelola Assignment Role"
+(`/admin/role-assignment`), dengan mengubah akun yang sudah ada.
 
-- Alpha Sandro - ADMIN + semua role (buat keliling sudut pandang)
-- Hanindita Widagdo - PPABP
-- Maheswari Yudhanto - KASUBAG_TU Pusdatik
-- Nirmala Hartanto - OSDMA
-- Wisnu Purnomo - PIMPINAN
+Login: NIP sebagai username SEKALIGUS password (sementara, sampai SSO).
+Daftar akun demo lama (Alpha Sandro, Hanindita Widagdo, dst.) **belum
+diverifikasi masih ada** di database lokal maupun VPS. Cek dulu sebelum
+dipakai untuk demo.
+
+Komentar di beberapa file masih menyebut `seedUsers.ts`/`seedSimulasi.ts`
+(`src/auth/seedAkunPegawai.ts`, `src/app/kasubag/kalkulasi/`,
+`src/app/admin/role-assignment/actions.ts`, `src/jobs/*PegawaiSiap.ts`, dan
+tiga skill). Itu klaim basi yang perlu dirapikan.
 
 ---
 
@@ -544,9 +584,10 @@ Ditulis di sini supaya tidak terulang di chat baru:
 4. **Dev server Next 16 + Turbopack pernah HANG** setelah POST Server Action.
    Request yang sama normal di production build. Kalau ketemu, restart dev
    server - jangan cari bug di action-nya.
-5. **Jangan import apa pun dari `src/db/seedSimulasi.ts`** - file itu punya
-   `main()` di top-level tanpa guard `require.main`, jadi meng-import-nya
-   me-re-run seluruh seed.
+5. **Job yang punya `main()` di top-level tanpa guard `require.main`**
+   menjalankan ulang seluruh job begitu di-import. Yang dulu kena adalah
+   `src/db/seedSimulasi.ts` (sudah dihapus 2026-10-10). Pola ini jangan
+   ditiru di job baru.
 6. **Menghitung ulang kalkulasi MERESET siklus approval ke DRAFT** - itu
    konvensi yang memang dipegang, tapi berarti tombol "Hitung sekarang" tidak
    boleh diklik sembarangan untuk pegawai yang sudah APPROVED.
@@ -600,8 +641,9 @@ komitmen:
 - Pengelompokan dashboard Pimpinan/PPABP per Eselon I (`strukturEselon.ts`
   sudah ada, baru dipakai di kop slip gaji)
 - Generate PDF slip gaji (sekarang `window.print()`)
-- Storage file bukti dukung banding (masih placeholder, kebijakan retensi
-  dokumen belum ada)
+- Kebijakan retensi dokumen bukti dukung (penyimpanannya sudah ada di
+  `storage/uploads/` sejak 2026-10-28; aturan berapa lama disimpan belum ada)
+- Pindahkan `BuktiPotongPajak.fileUrl` & `SkKgb.fileUrl` ke penyimpanan privat
 - Halaman audit log generik (`canMonitorKepatuhanData` belum ada UI-nya)
 
 ---

@@ -26,7 +26,7 @@ export default async function OsdmaUpdateSkPage({
   };
 
   if (!authUser || !canUpdateSkPegawaiStrukturalFungsional(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengubah SK pegawai." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengubah SK pegawai." />;
   }
 
   const pegawaiTerpilih = pegawaiId
@@ -72,7 +72,7 @@ export default async function OsdmaUpdateSkPage({
             <FiCheckCircle className="size-5" />
           </span>
           <p>
-            Data SK pegawai berhasil diperbarui dan disinkronkan ke sistem sumber kepegawaian.
+            Data SK pegawai di Gajihub berhasil diperbarui.
           </p>
         </section>
       )}

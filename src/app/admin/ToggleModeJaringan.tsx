@@ -48,13 +48,13 @@ export function ToggleModeJaringan({ modeAwal }: { modeAwal: ModeJaringan }) {
           <p className="text-xs text-muted leading-relaxed max-w-2xl">
             {isInternal ? (
               <>
-                <strong>Mode Internal Aktif:</strong> Digunakan saat akses publik diputus Pusdatik. Redirect tetap berada di IP/domain lokal, QR TTE mengarah ke server internal, dan login NIP 18 digit dibuka sebagai cadangan SSO.
+                <strong>Mode Internal Aktif:</strong> Digunakan saat akses publik diputus Pusdatik. Redirect tetap berada di IP/domain lokal, dan login NIP 18 digit dibuka sebagai cadangan SSO.
               </>
             ) : (
               <>
                 <strong>Mode Publik Aktif:</strong> Digunakan saat domain{" "}
                 <code className="font-mono font-bold text-ink">gajihub.kemnaker.go.id</code>{" "}
-                dibuka ke internet publik. Redirect diarahkan ke domain resmi, QR TTE mengarah ke domain publik, dan login umum dikunci ke SSO SIAP ID.
+                dibuka ke internet publik. Redirect diarahkan ke domain resmi, dan login umum dikunci ke SSO SIAP ID.
               </>
             )}
           </p>

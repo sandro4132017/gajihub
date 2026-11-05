@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -205,7 +206,7 @@ export async function tambahPredikatAction(
       peringatanHitungUlang: await cekKalkulasiBasi(pegawai.id, pegawai.nama, periode.bulan, periode.tahun),
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("tukin.predikat-kinerja.actionsKelola#1", err, "Terjadi kesalahan") };
   }
 }
 
@@ -306,7 +307,7 @@ export async function ubahPredikatAction(
       ),
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("tukin.predikat-kinerja.actionsKelola#2", err, "Terjadi kesalahan") };
   }
 }
 
@@ -443,7 +444,7 @@ export async function hapusPredikatPeriodeAction(
           : ""),
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("tukin.predikat-kinerja.actionsKelola#3", err, "Terjadi kesalahan") };
   }
 }
 
@@ -533,6 +534,6 @@ export async function hapusPredikatAction(
       ),
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("tukin.predikat-kinerja.actionsKelola#4", err, "Terjadi kesalahan") };
   }
 }

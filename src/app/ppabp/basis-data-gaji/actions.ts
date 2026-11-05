@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { read, utils } from "xlsx";
@@ -14,6 +15,7 @@ import {
   type BarisBasisDataGaji,
 } from "../../../business-logic/basisDataGaji";
 import { REKENING_GAJI_DITERIMA } from "../../../business-logic/rekeningPegawai";
+import { pegawaiBukanUji } from "../../../lib/dataUji";
 
 /**
  * Unggah "basis data gaji Kemnaker" - berkas identitas pembayaran dari Web
@@ -86,7 +88,7 @@ export async function uploadBasisDataGajiAction(
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canKelolaGajiInduk(authUser)) {
-      return { error: "Role kamu tidak berwenang mengelola basis data gaji." };
+      return { error: "Peran kamu tidak berwenang mengelola basis data gaji." };
     }
 
     const file = formData.get("file");
@@ -204,8 +206,10 @@ export async function uploadBasisDataGajiAction(
 
     // --- Bahan pemeriksaan manusia ---
     const bedaNama = siapSimpan.filter((b) => samakan(b.nama) !== samakan(b.namaSiap));
-    const totalAktif = await prisma.pegawai.count({ where: { statusPegawai: "AKTIF" } });
-    const tercakup = await prisma.identitasWebGaji.count({ where: { pegawai: { statusPegawai: "AKTIF" } } });
+    const totalAktif = await prisma.pegawai.count({ where: { statusPegawai: "AKTIF", ...pegawaiBukanUji() } });
+    const tercakup = await prisma.identitasWebGaji.count({
+      where: { pegawai: { statusPegawai: "AKTIF", ...pegawaiBukanUji() } },
+    });
 
     // Kalimatnya disusun SEKALI dari seluruh sheet yang sudah digabung -
     // bukan per sheet - supaya satu jenis masalah tidak muncul dua kali cuma
@@ -268,6 +272,6 @@ export async function uploadBasisDataGajiAction(
       dilewati: kelompokkanAlasan(dilewati),
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("ppabp.basis-data-gaji.actions#1", err, "Terjadi kesalahan") };
   }
 }

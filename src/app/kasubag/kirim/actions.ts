@@ -56,7 +56,7 @@ export async function kirimRekapUnitAction(
     return { error: "Akun ini tidak terikat ke satuan kerja mana pun, jadi tidak bisa mengirim rekap." };
   }
   if (!canKirimRekapUnit(user, satuanKerja)) {
-    return { error: "Role kamu tidak berwenang mengirim rekap unit." };
+    return { error: "Peran kamu tidak berwenang mengirim rekap unit." };
   }
 
   const kunciPeriode = {
@@ -318,7 +318,7 @@ export async function setVerifikasiTabelAction(
     return { error: "Akun ini tidak terikat ke satuan kerja mana pun." };
   }
   if (!canKirimRekapUnit(user, satuanKerja)) {
-    return { error: "Role kamu tidak berwenang memverifikasi tabel unit." };
+    return { error: "Peran kamu tidak berwenang memverifikasi tabel unit." };
   }
 
   const jenisTabel = String(formData.get("jenisTabel") ?? "") as JenisTabelKalkulasi;

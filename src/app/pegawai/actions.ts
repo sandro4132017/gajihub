@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../lib/prisma";
 import { ambilUserSesi } from "../../auth/getSessionAccount";
@@ -65,7 +66,7 @@ export async function ubahDataPegawaiAction(
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
 
     if (!canEditDataPegawai(authUser, pegawai.satuanKerja)) {
-      return { error: `Role kamu tidak berwenang mengubah data pegawai di "${pegawai.satuanKerja}".` };
+      return { error: `Peran kamu tidak berwenang mengubah data pegawai di "${pegawai.satuanKerja}".` };
     }
 
     if (!nama || !satuanKerja || !unitKerja || !statusPegawai) {
@@ -76,7 +77,7 @@ export async function ubahDataPegawaiAction(
     if (pindahSatker && !canPindahSatuanKerjaPegawai(authUser, pegawai.satuanKerja)) {
       return {
         error:
-          "Role kamu tidak berwenang memindahkan pegawai ke satuan kerja lain - " +
+          "Peran kamu tidak berwenang memindahkan pegawai ke satuan kerja lain - " +
           "begitu dipindah keluar unit, kamu tidak bisa menariknya balik sendiri. Minta PPABP atau Admin.",
       };
     }
@@ -146,6 +147,6 @@ export async function ubahDataPegawaiAction(
         : `Data ${nama} tersimpan.`,
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("pegawai.actions#1", err, "Terjadi kesalahan") };
   }
 }

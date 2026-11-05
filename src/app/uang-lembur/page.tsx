@@ -64,7 +64,7 @@ export default async function UangLemburPage({
         labelAlternatif="Lihat data saya"
       />
     ) : (
-      <AksesDitolak pesan="Role kamu tidak berwenang melihat data kalkulasi payroll." />
+      <AksesDitolak pesan="Peran kamu tidak berwenang melihat data perhitungan Uang Lembur." />
     );
   }
   // KASUBAG_TU dipaksa ke unitnya sendiri; dipisah dari satkerEfektif supaya

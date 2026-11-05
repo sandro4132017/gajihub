@@ -5,6 +5,7 @@ import {
   signSptjmUnitAction,
   hapusDraftSptjmAction,
 } from "../../tte/actions";
+import { pesanGalatUntukLayar } from "../../../lib/koneksi/galatSumber";
 import type { JenisSptjm } from "../../../lib/tte/sptjmTypes";
 
 export const dynamic = "force-dynamic";
@@ -79,13 +80,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Aksi TTE tidak dikenali." }, { status: 400 });
   } catch (err) {
     return NextResponse.json(
-      {
-        error: `Terjadi kendala pada layanan TTE: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      },
+      { error: pesanGalatUntukLayar("api.tte", err, "Terjadi kendala pada layanan TTE") },
       { status: 500 }
     );
   }
 }
-

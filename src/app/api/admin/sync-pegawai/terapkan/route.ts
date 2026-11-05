@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "../../../../../lib/prisma";
 import { ambilUserSesi } from "../../../../../auth/getSessionAccount";
 import { canKonfigurasiAdapter, type AuthUser } from "../../../../../auth/permissions";
+import { pesanGalatUntukLayar } from "../../../../../lib/koneksi/galatSumber";
 import { terapkanSinkronPegawai } from "../../../../../jobs/sinkronPegawaiSiap";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +49,7 @@ export async function POST() {
     return NextResponse.json({ hasil });
   } catch (e) {
     return NextResponse.json({
-      error: `Sinkronisasi gagal: ${e instanceof Error ? e.message : String(e)}`,
+      error: pesanGalatUntukLayar("admin.syncPegawai.terapkan", e, "Sinkronisasi gagal"),
     });
   }
 }

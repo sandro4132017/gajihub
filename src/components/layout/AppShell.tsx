@@ -342,7 +342,7 @@ export function AppShell({
             type="button"
             aria-label="Buka menu"
             onClick={() => setOpen((v) => !v)}
-            className="grid size-9 place-items-center rounded-lg border border-line bg-surface-2"
+            className="grid size-11 place-items-center rounded-lg border border-line bg-surface-2"
           >
             <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M3 12h18M3 6h18M3 18h18" />
@@ -587,9 +587,9 @@ export function AppShell({
       <div className="min-w-0">{children}</div>
 
       {/* Panel kanan Notifikasi & Aktivitas - tombolnya mengambang di kanan
-          atas, panelnya tertutup sampai diklik. PEGAWAI tidak dapat (ditolak
-          di sisi server), jadi tombolnya tetap muncul tapi panelnya kosong -
-          lihat catatan cakupan di panelKabar.ts. */}
+          atas, panelnya tertutup sampai diklik. PEGAWAI tidak dapat: ditolak
+          di sisi server, dan tombolnya tidak ditampilkan sama sekali. Aturan
+          cakupan per role ada di kabarData.ts. */}
       <PanelKabar tampilkan={account.role !== "PEGAWAI"} />
     </div>
   );

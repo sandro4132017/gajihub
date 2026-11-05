@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { read, utils } from "xlsx";
 import { prisma } from "../../../lib/prisma";
@@ -501,6 +502,6 @@ export async function uploadRekapPredikatAction(
       perluHitungUlang: perluHitungUlang.length > 0 ? perluHitungUlang : undefined,
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("tukin.predikat-kinerja.actions#1", err, "Terjadi kesalahan") };
   }
 }

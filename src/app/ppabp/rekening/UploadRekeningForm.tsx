@@ -17,7 +17,7 @@ export function UploadRekeningForm() {
       <p className="mt-1 text-sm text-muted">
         File ADK tukin yang sudah kamu punya bisa dipakai langsung - kolom NIP, Kode Bank SPAN, Nama Bank, Nomor
         Rekening, dan Nama Rekening di file itu sudah cukup.
-        {!REKENING_GAJI_DITERIMA && " Rekening gaji menyusul setelah Gajihub terinterkoneksi."}
+        {!REKENING_GAJI_DITERIMA && " Rekening gaji belum dapat diunggah untuk saat ini."}
       </p>
 
       <form action={formAction} className="mt-3 flex flex-wrap items-end gap-3">

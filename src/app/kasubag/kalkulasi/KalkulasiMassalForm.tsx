@@ -54,11 +54,10 @@ export function KalkulasiMassalForm({
       const hasil = (await res.json()) as KalkulasiMassalFormState;
       setState(hasil);
       if (hasil.ringkasan) router.refresh();
-    } catch (err) {
+    } catch {
       setState({
-        error: `Gagal menghubungi server saat menghitung Tukin: ${
-          err instanceof Error ? err.message : String(err)
-        }. Periksa hasil periode ini sebelum mencoba lagi.`,
+        error:
+          "Gagal menghubungi server saat menghitung Tukin. Periksa hasil periode ini sebelum mencoba lagi.",
       });
     } finally {
       setPending(false);

@@ -18,6 +18,7 @@
 // ============================================================================
 
 import { createHash } from "crypto";
+import { GalatPengguna } from "../koneksi/galatSumber";
 import fs from "fs/promises";
 import path from "path";
 
@@ -78,7 +79,7 @@ export function namaFolderUnit(satuanKerja: string | null | undefined): string {
 /** `2026-08`. Melempar untuk periode yang bukan bulan/tahun sah. */
 export function folderPeriode(tahun: number, bulan: number): string {
   if (!Number.isInteger(bulan) || bulan < 1 || bulan > 12 || !Number.isInteger(tahun) || tahun < 2000 || tahun > 2200) {
-    throw new Error("Periode tidak sah.");
+    throw new GalatPengguna("Periode tidak sah.");
   }
   return `${tahun}-${String(bulan).padStart(2, "0")}`;
 }

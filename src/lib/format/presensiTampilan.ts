@@ -103,3 +103,46 @@ export function lemburTeks(jam: number): string {
   if (!Number.isFinite(jam) || jam <= 0) return "-";
   return `${Math.floor(jam)} jam`;
 }
+
+export type NadaPenanda = "bahaya" | "info" | "peringatan";
+
+export interface PenandaHari {
+  teks: string;
+  nada: NadaPenanda;
+}
+
+/**
+ * Penanda ringkas satu hari presensi untuk tampilan kartu di HP.
+ *
+ * Nilai nol tidak diberi penanda: hari yang rapi harus terlihat sepi.
+ * Hanya mengemas angka yang sudah ada dari e-Presensi - tidak menghitung
+ * ulang apa pun, jadi tidak mempengaruhi potongan.
+ */
+export function penandaHariPresensi(
+  p: {
+    menitTerlambat: number;
+    menitPulangCepat: number;
+    menitMeninggalkanKantor: number;
+    tidakIkutUpacara: boolean;
+    jamLembur: number;
+  },
+  dikoreksi: boolean,
+): PenandaHari[] {
+  const hasil: PenandaHari[] = [];
+  if (p.menitTerlambat > 0) hasil.push({ teks: `Terlambat ${p.menitTerlambat} mnt`, nada: "bahaya" });
+  if (p.menitPulangCepat > 0) hasil.push({ teks: `Kurang jam kerja ${p.menitPulangCepat} mnt`, nada: "bahaya" });
+  if (p.menitMeninggalkanKantor > 0) {
+    hasil.push({ teks: `Tinggalkan kantor ${p.menitMeninggalkanKantor} mnt`, nada: "bahaya" });
+  }
+  if (p.tidakIkutUpacara) hasil.push({ teks: "Tanpa upacara", nada: "bahaya" });
+  if (p.jamLembur > 0) hasil.push({ teks: `Lembur ${lemburTeks(p.jamLembur)}`, nada: "info" });
+  if (dikoreksi) hasil.push({ teks: "Dikoreksi", nada: "peringatan" });
+  return hasil;
+}
+
+/** Kelas chip (globals.css) untuk tiap nada penanda. */
+export const KELAS_CHIP_NADA: Record<NadaPenanda, string> = {
+  bahaya: "chip chip-danger",
+  info: "chip chip-navy",
+  peringatan: "chip chip-warn",
+};

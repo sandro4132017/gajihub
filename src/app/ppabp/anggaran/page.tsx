@@ -17,7 +17,7 @@ export default async function AnggaranRealisasiPage() {
   const akun = await getSessionAccount();
   const authUser: AuthUser | null = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canUploadAnggaranRealisasi(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengelola Anggaran & Realisasi." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengelola Anggaran & Realisasi." />;
   }
 
   const [satuanKerjaRows, anggaranList] = await Promise.all([

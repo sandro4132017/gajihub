@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import type { Role } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
@@ -35,7 +36,7 @@ export async function ubahAssignmentRoleAction(
     if (!admin) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: admin.nip, role: admin.role, satuanKerja: admin.satuanKerja, aktif: admin.aktif };
     if (!canKelolaAssignmentRole(authUser)) {
-      return { error: "Role kamu tidak berwenang mengelola assignment role." };
+      return { error: "Peran kamu tidak berwenang mengelola assignment role." };
     }
 
     const targetUserId = String(formData.get("targetUserId") ?? "");
@@ -94,7 +95,7 @@ export async function ubahAssignmentRoleAction(
     const catatanTambahan = rolesTambahan.length > 0 ? ` (+ role tambahan: ${rolesTambahan.join(", ")})` : "";
     return { success: `Assignment role ${target.nama} diperbarui jadi ${role}${catatanTambahan}.` };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("admin.role-assignment.actions#1", err, "Terjadi kesalahan") };
   }
 }
 
@@ -124,7 +125,7 @@ export async function buatAkunBaruAction(
     if (!admin) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: admin.nip, role: admin.role, satuanKerja: admin.satuanKerja, aktif: admin.aktif };
     if (!canKelolaAssignmentRole(authUser)) {
-      return { error: "Role kamu tidak berwenang membuat akun baru." };
+      return { error: "Peran kamu tidak berwenang membuat akun baru." };
     }
 
     const pegawaiId = String(formData.get("pegawaiId") ?? "");
@@ -164,6 +165,6 @@ export async function buatAkunBaruAction(
     revalidatePath("/admin/role-assignment");
     return { success: `Akun ${created.nama} (NIP ${created.nip}) dibuat dengan role ${role}. Login pakai NIP sebagai password.` };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("admin.role-assignment.actions#2", err, "Terjadi kesalahan") };
   }
 }

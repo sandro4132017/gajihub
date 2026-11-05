@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -101,7 +102,7 @@ export async function kalkulasiMassalTukinUangMakanAction(
       return { error: "Satuan kerja dan periode wajib diisi." };
     }
     if (!canAjukanKalkulasiTukinMassalUnit(authUser, satuanKerja)) {
-      return { error: "Role kamu tidak berwenang mengajukan kalkulasi massal unit ini." };
+      return { error: "Peran kamu tidak berwenang mengajukan kalkulasi massal unit ini." };
     }
 
     // --- KUNCI PENGIRIMAN ---
@@ -545,7 +546,7 @@ export async function kalkulasiMassalTukinUangMakanAction(
       },
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("kasubag.kalkulasi.actions#1", err, "Terjadi kesalahan") };
   }
 }
 
@@ -582,7 +583,7 @@ export async function koreksiUangLemburAction(
     const pegawai = await prisma.pegawai.findUnique({ where: { id: pegawaiId } });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
     if (!canTelaahKoreksiAjukanUangLemburUnit(authUser, pegawai.satuanKerja)) {
-      return { error: "Role kamu tidak berwenang mengoreksi Uang Lembur unit ini." };
+      return { error: "Peran kamu tidak berwenang mengoreksi Uang Lembur unit ini." };
     }
 
     const hasilLembur = hitungUangLembur({
@@ -633,7 +634,7 @@ export async function koreksiUangLemburAction(
     revalidatePath("/kasubag/kalkulasi");
     return { success: `Uang Lembur ${pegawai.nama} dikoreksi jadi ${totalJamLembur} jam.` };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("kasubag.kalkulasi.actions#2", err, "Terjadi kesalahan") };
   }
 }
 
@@ -832,7 +833,7 @@ export async function koreksiJamLemburHarianAction(
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
 
     if (!canTelaahKoreksiAjukanUangLemburUnit(authUser, pegawai.satuanKerja)) {
-      return { error: `Role kamu tidak berwenang mengoreksi lembur pegawai ${pegawai.satuanKerja ?? "tanpa unit"}.` };
+      return { error: `Peran kamu tidak berwenang mengoreksi lembur pegawai ${pegawai.satuanKerja ?? "tanpa unit"}.` };
     }
 
     // Kunci pengiriman: jika rekap sudah dikirim ke PPABP, tidak boleh diedit
@@ -923,7 +924,7 @@ export async function koreksiJamLemburHarianAction(
       success: `Jam lembur ${pegawai.nama} tgl ${tglTampil(tanggalIso)} disesuaikan jadi ${jamLembur} jam (SPL: ${alasan}).`,
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("kasubag.kalkulasi.actions#3", err, "Terjadi kesalahan") };
   }
 }
 
@@ -958,7 +959,7 @@ export async function hapusKoreksiJamLemburHarianAction(
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
 
     if (!canTelaahKoreksiAjukanUangLemburUnit(authUser, pegawai.satuanKerja)) {
-      return { error: `Role kamu tidak berwenang mengoreksi lembur pegawai ${pegawai.satuanKerja ?? "tanpa unit"}.` };
+      return { error: `Peran kamu tidak berwenang mengoreksi lembur pegawai ${pegawai.satuanKerja ?? "tanpa unit"}.` };
     }
 
     if (pegawai.satuanKerja) {
@@ -1059,7 +1060,7 @@ export async function hapusKoreksiJamLemburHarianAction(
       success: `Koreksi lembur tgl ${tglTampil(tanggalIso)} dicabut. Jam dikembalikan ke hitungan mesin (${jamMesinAsli} jam).`,
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("kasubag.kalkulasi.actions#4", err, "Terjadi kesalahan") };
   }
 }
 

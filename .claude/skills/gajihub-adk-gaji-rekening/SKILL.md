@@ -312,8 +312,9 @@ PPABP.
 - Nilai nol ditulis "-" persis seperti contoh. Baris "Tunjangan Lain-lain"/
   "Potongan Lain-lain" CUMA muncul kalau isinya > 0 (tidak ada di slip
   contoh, ditambahkan supaya nilai dari satker lain tidak hilang diam-diam).
-- Penanda "estimasi" cuma muncul kalau ada komponen yang BELUM approved -
-  slip yang sudah final tercetak bersih seperti contoh.
+- Patokan final slip = rekap unit pegawai yang sudah TERKIRIM ke PPABP
+  (PengirimanUnit via `statusUnit()`, sama dengan gerbang ADK). Selain itu
+  slip diberi peringatan estimasi; slip final tercetak bersih seperti contoh.
 - Kalau gaji induk periode itu belum diupload, slip TIDAK error: tampil
   penjelasan + hanya komponen yang dihitung Gajihub.
 - Penanda tangan diambil dari `GajiInduk.diunggahOleh` (PPABP yang upload),

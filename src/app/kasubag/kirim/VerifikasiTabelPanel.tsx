@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { IoMdCheckmark, IoMdRemove } from "react-icons/io";
-import { setVerifikasiTabelAction, type KirimFormState } from "./actions";
+import type { KirimFormState } from "./actions";
+import { kirimAksiJson } from "../../../lib/koneksi/jawabanAksi";
 import {
   LABEL_TABEL_KALKULASI,
   TABEL_KALKULASI,
@@ -130,8 +132,35 @@ function BarisTabel({
   terkunci: boolean;
   tautan: string;
 }) {
-  const [state, formAction, pending] = useActionState(setVerifikasiTabelAction, {} as KirimFormState);
+  const [state, setState] = useState<KirimFormState>({});
+  const [pending, setPending] = useState(false);
+  const [isRefreshing, startRefresh] = useTransition();
+  const router = useRouter();
+  const sedangKirim = useRef(false);
   const sudah = tersimpan !== null;
+
+  // Lewat Route Handler JSON, bukan Server Action (firewall memblokir
+  // multipart). `centang` selalu eksplisit dari keadaan tersimpan, jadi kirim
+  // ulang tidak mengubah hasil akhir (idempoten).
+  async function simpan(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (sedangKirim.current) return;
+    sedangKirim.current = true;
+    setPending(true);
+    try {
+      const jawaban = await kirimAksiJson("/api/kasubag/kirim/verifikasi-tabel", {
+        bulan: periodeBulan,
+        tahun: periodeTahun,
+        jenisTabel: jenis,
+        centang: sudah ? "tidak" : "ya",
+      });
+      setState(jawaban);
+      if (jawaban.success || jawaban.tidakPasti) startRefresh(() => router.refresh());
+    } finally {
+      sedangKirim.current = false;
+      setPending(false);
+    }
+  }
 
   return (
     // JUDUL + TOMBOL selalu satu baris, sisanya di bawah.
@@ -166,20 +195,16 @@ function BarisTabel({
           )}
         </p>
 
-        <form action={formAction} className="flex shrink-0 items-center gap-2">
-          <input type="hidden" name="bulan" value={periodeBulan} />
-          <input type="hidden" name="tahun" value={periodeTahun} />
-          <input type="hidden" name="jenisTabel" value={jenis} />
-          {/* Nilai lawan dari keadaan sekarang - satu tombol yang memasang DAN
-              mencabut. Dua tombol terpisah membuat keadaan "sudah dicentang"
+        <form onSubmit={simpan} className="flex shrink-0 items-center gap-2">
+          {/* Satu tombol yang memasang DAN mencabut (nilai lawan dari keadaan
+              sekarang). Dua tombol terpisah membuat keadaan "sudah dicentang"
               harus dibaca dari mana tombol yang menyala, bukan dari chip-nya. */}
-          <input type="hidden" name="centang" value={sudah ? "tidak" : "ya"} />
           <button
             type="submit"
-            disabled={pending || terkunci}
+            disabled={pending || isRefreshing || terkunci}
             className={`btn btn-sm ${sudah ? "btn-ghost" : "btn-secondary"} disabled:cursor-not-allowed disabled:opacity-50`}
           >
-            {pending ? "..." : sudah ? "Batalkan centang" : "Tandai sudah diperiksa"}
+            {pending || isRefreshing ? "..." : sudah ? "Batalkan centang" : "Tandai sudah diperiksa"}
           </button>
           {/* Tadinya huruf "v" dan "-" biasa - bentuknya memang mirip centang
               dan strip, tapi ia huruf, jadi tebalnya ikut font dan tingginya

@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -128,7 +129,7 @@ export async function ajukanBandingAction(
 
     const user = await ambilUserSesi();
     if (!user) {
-      return { error: "Akun tidak terdaftar sebagai User." };
+      return { error: "Akun kamu belum terdaftar di Gajihub. Hubungi Admin Gajihub." };
     }
     const authUser: AuthUser = {
       nip: user.nip,
@@ -137,7 +138,7 @@ export async function ajukanBandingAction(
       aktif: user.aktif,
     };
     if (!canAjukanBanding(authUser, user.nip)) {
-      return { error: "Role kamu tidak berwenang mengajukan banding." };
+      return { error: "Peran kamu tidak berwenang mengajukan banding." };
     }
 
     const pegawai = await prisma.pegawai.findUnique({ where: { nip: user.nip } });
@@ -209,7 +210,7 @@ export async function ajukanBandingAction(
       const kunci = kunciBuktiDukung(pegawai.satuanKerja, namaFileSimpan);
       const targetPath = jalurAman(kunci, "bukti-dukung", akarStorage());
       if (!targetPath) {
-        return { error: "Lokasi penyimpanan lampiran tidak sah." };
+        return { error: "Lampiran gagal disimpan. Coba unggah ulang; kalau masih gagal, hubungi Admin Gajihub." };
       }
       await mkdir(path.dirname(targetPath), { recursive: true });
 
@@ -301,6 +302,6 @@ export async function ajukanBandingAction(
     revalidatePath("/saya");
     return { success: "Banding berhasil diajukan, menunggu verifikasi." };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("saya.actions#1", err, "Terjadi kesalahan") };
   }
 }

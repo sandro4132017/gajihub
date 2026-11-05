@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -65,7 +66,7 @@ export async function verifikasiBandingJenjang1Action(
       return { error: `Banding ini sudah berstatus ${banding.status} - tidak bisa diverifikasi lagi di jenjang 1.` };
     }
     if (!canVerifikasiBandingJenjang1(authUser, { pengajuNip: banding.pengaju.nip, satuanKerjaPegawai: banding.pegawai.satuanKerja })) {
-      return { error: "Role kamu tidak berwenang memverifikasi banding ini." };
+      return { error: "Peran kamu tidak berwenang memverifikasi banding ini." };
     }
 
     await prisma.$transaction([
@@ -90,6 +91,6 @@ export async function verifikasiBandingJenjang1Action(
     revalidatePath("/kasubag/banding");
     return { success: keputusan === "SETUJU" ? "Banding disetujui, diteruskan ke OSDMA untuk keputusan final - tembusan ke PPABP." : "Banding ditolak." };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("kasubag.banding.actions#1", err, "Terjadi kesalahan") };
   }
 }

@@ -30,3 +30,31 @@ export function pilihPeriode(nilai: string | undefined, tersedia: PeriodeSaya[])
   if (tersedia.length === 0) return null;
   return tersedia.find((p) => kunciPeriode(p) === nilai) ?? tersedia[0];
 }
+
+/**
+ * Bulan/tahun dari segmen URL. Hanya bulan 1-12 dan tahun 4 digit yang sah;
+ * "08" terbaca 8. Selain itu null - pemanggil menjawab "alamat tidak sah",
+ * bukan halaman kosong.
+ */
+export function periodeDariParam(bulan: string, tahun: string): PeriodeSaya | null {
+  if (!/^\d{1,2}$/.test(bulan) || !/^\d{4}$/.test(tahun)) return null;
+  const b = Number(bulan);
+  const t = Number(tahun);
+  if (b < 1 || b > 12 || t < 1000 || t > 9999) return null;
+  return { bulan: b, tahun: t };
+}
+
+/**
+ * Periode sebelum & sesudah. "Sesudah" null bila melewati bulan berjalan:
+ * periode di masa depan belum punya data, tautannya hanya mengarah ke
+ * halaman kosong. `sekarang` dioper dari pemanggil supaya fungsi ini murni.
+ */
+export function periodeTetangga(
+  p: PeriodeSaya,
+  sekarang: PeriodeSaya,
+): { sebelum: PeriodeSaya; sesudah: PeriodeSaya | null } {
+  const sebelum = p.bulan === 1 ? { bulan: 12, tahun: p.tahun - 1 } : { bulan: p.bulan - 1, tahun: p.tahun };
+  const berikut = p.bulan === 12 ? { bulan: 1, tahun: p.tahun + 1 } : { bulan: p.bulan + 1, tahun: p.tahun };
+  const lewat = berikut.tahun * 12 + berikut.bulan > sekarang.tahun * 12 + sekarang.bulan;
+  return { sebelum, sesudah: lewat ? null : berikut };
+}

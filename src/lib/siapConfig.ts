@@ -1,4 +1,5 @@
 import type { config as SqlConfig } from "mssql";
+import { GalatKonfigurasi } from "./koneksi/galatSumber";
 
 /**
  * SATU-SATUNYA tempat konfigurasi koneksi ke database SIAP dibentuk.
@@ -35,8 +36,9 @@ export function konfigurasiSiap(): SqlConfig {
     process.env;
 
   if (!SIAP_HOST || !SIAP_DB || !SIAP_USER || !SIAP_PASSWORD) {
-    throw new Error(
-      "Kredensial SIAP belum lengkap di .env - butuh SIAP_HOST, SIAP_DB, SIAP_USER, SIAP_PASSWORD."
+    throw new GalatKonfigurasi(
+      "Kredensial SIAP belum lengkap di .env - butuh SIAP_HOST, SIAP_DB, SIAP_USER, SIAP_PASSWORD.",
+      "SIAP"
     );
   }
 

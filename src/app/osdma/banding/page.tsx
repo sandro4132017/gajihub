@@ -19,7 +19,7 @@ export default async function OsdmaBandingPage({
   const akun = await getSessionAccount();
   const authUser: AuthUser | null = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canApproveBandingFinal(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang memberikan approval final banding." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang memberikan approval final banding." />;
   }
 
   const satuanKerjaRows = await prisma.pegawai.findMany({
@@ -99,9 +99,9 @@ export default async function OsdmaBandingPage({
           acuan={[
             { aturan: "Jenjang 2 (Biro OSDMA)", tentang: "Approval final dan validasi perubahan data kepegawaian kementerian" },
             { aturan: "Tembusan PPABP", tentang: "Data termutakhirkan otomatis terlihat oleh Biro Keuangan / PPABP" },
-            { aturan: "Pemutakhiran Sistem Sumber", tentang: "Data diperbaiki di SIAP, e-Presensi, atau e-Kinerja BKN" },
+            { aturan: "Perbaikan data di sistem asal", tentang: "Data diperbaiki di SIAP, e-Presensi, atau e-Kinerja BKN" },
           ]}
-          catatan="Persetujuan final mengesahkan pemutakhiran data pada siklus sinkronisasi berikutnya."
+          catatan="Setelah data diperbaiki di sistem asalnya, Gajihub memakai data baru itu pada pembaruan data berikutnya."
         />
       </h1>
       <p className="mt-0.5 text-sm font-bold text-ink">

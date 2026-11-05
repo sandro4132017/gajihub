@@ -14,7 +14,7 @@ export default async function RekonsiliasiLintasUnitPage() {
   const akun = await getSessionAccount();
   const authUser: AuthUser | null = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canViewRekonsiliasiLintasSatker(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang melihat rekonsiliasi lintas unit." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang melihat rekonsiliasi lintas unit." />;
   }
 
   // ReconciliationStatus.pegawaiId BUKAN foreign key relasi Prisma (cuma

@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   }
   const authUser: AuthUser = { nip: admin.nip, role: admin.role, satuanKerja: admin.satuanKerja, aktif: admin.aktif };
   if (!canEksekusiPerubahanRole(authUser)) {
-    return NextResponse.json({ error: "Role kamu tidak berwenang mengeksekusi usulan perubahan role." }, { status: 403 });
+    return NextResponse.json({ error: "Peran kamu tidak berwenang mengeksekusi usulan perubahan role." }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({}));

@@ -43,8 +43,8 @@ export function EksekusiUsulanForm({
         setSuccess(data.success || "Berhasil");
         router.refresh();
       }
-    } catch (err) {
-      setError(`Gagal menghubungi server: ${err instanceof Error ? err.message : String(err)}`);
+    } catch {
+      setError("Gagal menghubungi server. Periksa koneksi lalu coba lagi.");
     } finally {
       setPending(false);
     }

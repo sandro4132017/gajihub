@@ -25,7 +25,10 @@
     "preisi:hash-tte": "prisma generate",
     "isi:hash-tte": "tsx src/jobs/isiHashDokumenTte.ts",
     "prepindah:unggahan": "prisma generate",
-    "pindah:unggahan": "tsx src/jobs/pindahUnggahanPrivat.ts"
+    "pindah:unggahan": "tsx src/jobs/pindahUnggahanPrivat.ts",
+    "hash:penguji": "node tools/buat-hash-penguji.mjs",
+    "preseed:uji": "prisma generate",
+    "seed:uji": "tsx --env-file=.env src/jobs/seedPegawaiUji.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

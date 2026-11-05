@@ -29,6 +29,7 @@ import {
   rincianJamKerjaHari,
 } from "../../../../business-logic/rincianJamKerjaHarian";
 import { HALAMAN } from "../../../../components/layout/layoutHalaman";
+import { catatGalat, denganSumber, pesanGalatAwam } from "../../../../lib/koneksi/galatSumber";
 
 export const dynamic = "force-dynamic";
 
@@ -197,7 +198,7 @@ export default async function RincianPresensiPegawaiPage({
   const authUser: AuthUser | null =
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canBukaHalamanPredikatKinerja(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang melihat data presensi pegawai." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang melihat data presensi pegawai." />;
   }
 
   const pegawai = await prisma.pegawai.findUnique({
@@ -387,12 +388,14 @@ export default async function RincianPresensiPegawaiPage({
   let galatBanding: string | null = null;
   if (modeBanding) {
     try {
-      const idEpresensi = await pegawaiIdEpresensiUntukNip(pegawai.nip);
+      const idEpresensi = await denganSumber("SIAP", () => pegawaiIdEpresensiUntukNip(pegawai.nip));
       if (idEpresensi === null) {
         galatBanding =
           "NIP ini tidak ketemu di SIAP, jadi id pegawai e-Presensi-nya tidak bisa ditentukan. Perbandingan tidak bisa dibuat.";
       } else {
-        const potonganEpresensi = await ambilPotonganEpresensi(idEpresensi, periodeBulan, periodeTahun);
+        const potonganEpresensi = await denganSumber("EPRESENSI", () =>
+          ambilPotonganEpresensi(idEpresensi, periodeBulan, periodeTahun)
+        );
         hasilBanding = bandingkanPotongan({
           epresensi: potonganEpresensi,
           gajihub: harian.map((h, i) => {
@@ -411,10 +414,10 @@ export default async function RincianPresensiPegawaiPage({
         });
       }
     } catch (e) {
+      const { ref, info } = catatGalat("presensi-detail", e);
       galatBanding =
-        "Tidak bisa menghubungi SIAP atau e-Presensi: " +
-        (e instanceof Error ? e.message : String(e)) +
-        ". Perbandingan ini membaca kedua sistem itu langsung (read-only), jadi butuh jaringan kantor.";
+        pesanGalatAwam(info, ref, "Perbandingan dengan e-Presensi tidak bisa dibuat") +
+        " Perbandingan ini membaca SIAP dan e-Presensi langsung (read-only), jadi butuh jaringan kantor.";
     }
   }
 

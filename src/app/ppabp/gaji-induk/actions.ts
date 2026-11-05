@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 // Named import (BUKAN `import XLSX from "xlsx"` seperti di
 // src/jobs/importPegawaiXlsx.ts): bundler Next resolve paket ini ke build ESM
@@ -75,7 +76,7 @@ export async function uploadGajiIndukAction(
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canKelolaGajiInduk(authUser)) {
-      return { error: "Role kamu tidak berwenang mengunggah riwayat gaji." };
+      return { error: "Peran kamu tidak berwenang mengunggah riwayat gaji." };
     }
 
     const file = formData.get("file");
@@ -236,7 +237,7 @@ export async function uploadGajiIndukAction(
         .map((b) => ({ nip: b.nip, selisih: b.selisihAritmatika })),
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("ppabp.gaji-induk.actions#1", err, "Terjadi kesalahan") };
   }
 }
 
@@ -257,7 +258,7 @@ export async function ubahHonorariumAction(
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canKelolaGajiInduk(authUser)) {
-      return { error: "Role kamu tidak berwenang mengubah honorarium." };
+      return { error: "Peran kamu tidak berwenang mengubah honorarium." };
     }
 
     const gajiIndukId = String(formData.get("gajiIndukId") ?? "").trim();
@@ -287,6 +288,6 @@ export async function ubahHonorariumAction(
     revalidatePath("/ppabp/gaji-induk");
     return { success: "Tersimpan" };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("ppabp.gaji-induk.actions#2", err, "Terjadi kesalahan") };
   }
 }

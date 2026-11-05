@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -22,7 +23,7 @@ export async function uploadAnggaranRealisasiAction(
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canUploadAnggaranRealisasi(authUser)) {
-      return { error: "Role kamu tidak berwenang mengunggah Anggaran & Realisasi." };
+      return { error: "Peran kamu tidak berwenang mengunggah Anggaran & Realisasi." };
     }
 
     const satuanKerja = String(formData.get("satuanKerja") ?? "").trim();
@@ -47,6 +48,6 @@ export async function uploadAnggaranRealisasiAction(
     revalidatePath("/ppabp/anggaran");
     return { success: `Anggaran & Realisasi ${satuanKerja} periode ${periodeBulan}/${periodeTahun} tersimpan.` };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("ppabp.anggaran.actions#1", err, "Terjadi kesalahan") };
   }
 }

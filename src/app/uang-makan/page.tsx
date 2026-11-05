@@ -37,7 +37,7 @@ export default async function UangMakanPage({
         labelAlternatif="Lihat data saya"
       />
     ) : (
-      <AksesDitolak pesan="Role kamu tidak berwenang melihat data kalkulasi payroll." />
+      <AksesDitolak pesan="Peran kamu tidak berwenang melihat data perhitungan Uang Makan." />
     );
   }
 

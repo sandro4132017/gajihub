@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/prisma";
 import { ambilUserSesi } from "../../../../../auth/getSessionAccount";
 import { canKonfigurasiAdapter, type AuthUser } from "../../../../../auth/permissions";
+import { pesanGalatUntukLayar } from "../../../../../lib/koneksi/galatSumber";
 import { periksaSinkronPegawai } from "../../../../../jobs/sinkronPegawaiSiap";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function POST() {
     return NextResponse.json({ rencana });
   } catch (e) {
     return NextResponse.json({
-      error: `Gagal membaca SIAP: ${e instanceof Error ? e.message : String(e)}`,
+      error: pesanGalatUntukLayar("admin.syncPegawai.periksa", e, "Gagal membaca SIAP"),
     });
   }
 }

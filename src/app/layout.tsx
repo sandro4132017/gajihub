@@ -7,7 +7,7 @@ import { getSessionAccount } from "../auth/getSessionAccount";
 export const metadata: Metadata = {
   title: "Gajihub",
   description:
-    "Dashboard internal integrasi Gajihub - Kementerian Ketenagakerjaan",
+    "Tunjangan Kinerja dan Uang Makan pegawai Kementerian Ketenagakerjaan",
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {

@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isModeInternal } from "@/auth/modeJaringan";
 import { tautanVerifikasiDokumen } from "@/lib/tte/alamatVerifikasi";
 import { hitungHashBerkas } from "@/lib/tte/hashBerkas";
 import { buatSpesimenQr, ambilTemplateSpesimen } from "@/lib/tte/spesimenTte";
@@ -20,7 +19,12 @@ import {
   terapkanStempelTteSimulasi,
   type JenisSptjm,
 } from "@/lib/tte/sptjmPdf";
-import { idDokumenSimulasi } from "@/lib/tte/simulasiTte";
+import {
+  bolehSimulasiTte,
+  idDokumenSimulasi,
+  klasifikasiGagalBsre,
+  samarkanPassphrase,
+} from "@/lib/tte/simulasiTte";
 import { namaCetakPegawai } from "@/business-logic/namaPegawai";
 import { kunciSidikNik, sidikNik } from "@/auth/sidikNik";
 import {
@@ -30,8 +34,10 @@ import {
   kunciPratinjauTte,
   kunciSignedTte,
 } from "@/lib/storage/berkasPrivat";
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import fs from "fs/promises";
 import path from "path";
+import { labelStatusSertifikat } from "../../lib/tte/labelStatusSertifikat";
 
 export interface TteActionResult {
   success?: boolean;
@@ -73,6 +79,18 @@ export async function cekStatusTteAction(nikTarget?: string) {
   const user = await ambilUserSesi();
   if (!user) return { success: false, error: "Sesi telah berakhir." };
 
+  // Hanya penanda tangan SPTJM unit yang boleh memeriksa sertifikat; tanpa
+  // gerbang ini siapa pun yang login bisa menanyakan status BSrE NIK siapa saja.
+  const authUser: AuthUser = {
+    nip: user.nip,
+    role: user.role,
+    satuanKerja: user.satuanKerja,
+    aktif: user.aktif,
+  };
+  if (!canTandatanganiSptjmUnit(authUser, user.satuanKerja ?? "")) {
+    return { success: false, error: "Hanya Kasubag TU yang dapat memeriksa sertifikat TTE." };
+  }
+
   const nik = nikTarget || process.env.TEST_BSRE_NIK || "0803202100007062";
   const res = await checkUserStatus(nik);
   return res;
@@ -89,6 +107,14 @@ export async function ambilStatusSptjmAction(
 ) {
   const user = await ambilUserSesi();
   if (!user) return null;
+
+  const authUserLihat: AuthUser = {
+    nip: user.nip,
+    role: user.role,
+    satuanKerja: user.satuanKerja,
+    aktif: user.aktif,
+  };
+  if (!canLihatDokumenSptjm(authUserLihat, satker?.trim() || user.satuanKerja || "")) return null;
 
   // Tanpa bawaan "Biro Keuangan dan BMN": nama itu dipakai untuk MENCARI baris
   // dokumen_tte, dan seluruh barisnya memakai bentuk panjang - jadi bawaan itu
@@ -251,8 +277,8 @@ export async function buatDraftSptjmAction(params: {
       downloadUrl: `/berkas/tte-pratinjau?${q.toString()}`,
       nomorDokumen,
     };
-  } catch (err: any) {
-    return { error: `Gagal membuat draft: ${err.message}` };
+  } catch (err) {
+    return { error: pesanGalatUntukLayar("tte.buatDraft", err, "Gagal membuat draft") };
   }
 }
 
@@ -358,9 +384,7 @@ export async function hapusDraftSptjmAction(params: {
         prisma.dokumenTte.deleteMany({ where: { id: { in: idHapus } } }),
       ]);
     } catch (err) {
-      return {
-        error: `Gagal menghapus draft: ${err instanceof Error ? err.message : String(err)}`,
-      };
+      return { error: pesanGalatUntukLayar("tte.hapusDraft", err, "Gagal menghapus draft") };
     }
   }
 
@@ -547,18 +571,47 @@ export async function signSptjmUnitAction(
   //
   // Tanpa penjagaan ini akibatnya menyesatkan, bukan sekadar longgar: NIK
   // yang belum terdaftar membuat BSrE membalas galat, galat itu BUKAN
-  // "passphrase salah", dan selama mode INTERNAL aktif cabang berikutnya
-  // jatuh ke SIMULASI. Jadi orang yang mencoba dengan NIK yang belum
-  // terdaftar akan melihat dokumennya TERBIT - padahal tidak ada tanda
-  // tangan BSrE di dalamnya. Lebih baik ditolak terang-terangan.
+  // "passphrase salah", sehingga tanpa penjagaan ini penandatanganan
+  // diteruskan ke BSrE dengan sertifikat yang tidak ada. Lebih baik ditolak
+  // terang-terangan, dan penolakannya dicatat (Kriteria BSrE IX).
   //
   // Diukur langsung ke BSrE: NIK karangan membalas NOT_REGISTERED (2011)
   // atau NO_CERTIFICATE (2021); akun yang sah membalas ISSUE (1111).
   const statusSertifikat = await checkUserStatus(nik);
   if (statusSertifikat.status !== "ISSUE") {
+    const gangguanLayanan =
+      statusSertifikat.status === "NETWORK_ERROR" ||
+      statusSertifikat.status === "SERVER_ERROR";
+    // Dicatat dengan NIP, tanpa NIK dan tanpa passphrase.
+    await prisma.logGagalTte
+      .create({
+        data: {
+          dokumenTteId: null,
+          userId: user.id,
+          nip: nipPenandatangan,
+          statusCode: statusSertifikat.statusCode ?? 0,
+          pesanError: `Pemeriksaan sertifikat ditolak: status ${statusSertifikat.status}.`,
+          kategoriError: gangguanLayanan
+            ? statusSertifikat.status === "NETWORK_ERROR"
+              ? "NETWORK_TIMEOUT"
+              : "BSRE_ERROR"
+            : "SERTIFIKAT_BELUM_SIAP",
+        },
+      })
+      .catch(() => {
+        /* pencatatan gagal tidak boleh mengubah jawaban */
+      });
+    if (gangguanLayanan) {
+      return {
+        error:
+          "Pemeriksaan sertifikat GAGAL: layanan BSrE tidak dapat dihubungi. " +
+          "SPTJM belum ditandatangani. Coba lagi beberapa menit lagi; bila berulang, " +
+          "laporkan ke Admin Gajihub. Kegagalan ini sudah tercatat.",
+      };
+    }
     return {
       error:
-        `Sertifikat elektronik untuk NIK ini belum siap dipakai (${statusSertifikat.status}). ` +
+        `Sertifikat elektronik untuk NIK ini belum siap dipakai (${labelStatusSertifikat(statusSertifikat.status)}). ` +
         "Pastikan NIK-nya benar dan sudah terdaftar di BSrE sebelum menandatangani.",
     };
   }
@@ -617,7 +670,7 @@ export async function signSptjmUnitAction(
     // dalam PDF. Lihat src/lib/tte/alamatVerifikasi.ts.
     const linkQrVerifikasi = tautanVerifikasiDokumen(recordDokumen.id);
 
-    const signResult = await signPdf({
+    const signResultMentah = await signPdf({
       fileBuffer: draftPdfBuffer,
       fileName: `sptjm_${jenis.toLowerCase()}_${bulan}_${tahun}.pdf`,
       nik,
@@ -639,6 +692,16 @@ export async function signSptjmUnitAction(
       location: "Jakarta",
     });
 
+    // Teks galat BSrE disamarkan SEBELUM dipakai di mana pun (log, respons):
+    // BSrE bisa saja menggemakan input, termasuk passphrase (Kriteria V & VIII).
+    const signResult = {
+      ...signResultMentah,
+      error:
+        signResultMentah.error === undefined
+          ? undefined
+          : samarkanPassphrase(signResultMentah.error, passphrase),
+    };
+
     let signedPdfFinal: Buffer;
     // Id BSrE HANYA diisi kalau BSrE memang menjawab. Cabang simulasi di
     // bawah mengisinya dengan id berawalan SIMULASI-, supaya dokumen yang
@@ -650,22 +713,13 @@ export async function signSptjmUnitAction(
       // TTE Berhasil melalui server BSrE riil
       signedPdfFinal = signResult.signedPdfBuffer;
     } else {
-      // Jika server BSrE offline / timeout (misal testing localhost tanpa VPN kantor):
-      // Terapkan simulasi TTE resmi agar pengujian lokal tetap menghasilkan file PDF bertanda tangan digital
-      const errorMsg = (signResult.error || "").toLowerCase();
-      const isConnectionOrServer500 =
-        (signResult.statusCode !== undefined && signResult.statusCode >= 500) ||
-        errorMsg.includes("http 500") ||
-        errorMsg.includes("timeout") ||
-        errorMsg.includes("koneksi") ||
-        errorMsg.includes("network") ||
-        errorMsg.includes("fetch failed") ||
-        errorMsg.includes("econnrefused");
-      const isPassphraseError =
-        errorMsg.includes("passphrase") ||
-        signResult.statusCode === 0;
+      // BSrE tidak menghasilkan tanda tangan. Kegagalan digolongkan sekali di
+      // sini; stempel simulasi hanya mungkin di luar production dengan
+      // TTE_SIMULASI="true" (lihat src/lib/tte/simulasiTte.ts).
+      const gagal = klasifikasiGagalBsre(signResult);
+      const isPassphraseError = gagal.kategori === "PASSPHRASE_SALAH";
 
-      // Jika server BSrE aktif dan mengembalikan passphrase salah, jangan samarkan sebagai simulasi
+      // Passphrase salah tidak pernah disamarkan sebagai simulasi.
       if (isPassphraseError) {
         // KRITERIA IX: setiap kegagalan penandatanganan WAJIB tercatat di
         // log_gagal_tte - dan passphrase salah justru kegagalan yang paling
@@ -696,7 +750,7 @@ export async function signSptjmUnitAction(
         };
       }
 
-      if (isConnectionOrServer500 || isModeInternal() || process.env.NODE_ENV !== "production") {
+      if (bolehSimulasiTte()) {
         isSimulasiMode = true;
         idDokumenBsreFinal = idDokumenSimulasi(recordDokumen.id);
         // KEGAGALAN BSrE TETAP DICATAT walau PDF-nya tetap terbit.
@@ -725,7 +779,7 @@ export async function signSptjmUnitAction(
           verifyUrl: linkQrVerifikasi,
         });
       } else {
-        // Kegagalan otentikasi / passphrase salah pada server aktif (Kriteria IX BSrE)
+        // Kriteria IX BSrE: kegagalan dicatat; dokumen tidak diterbitkan.
         await prisma.$transaction([
           prisma.dokumenTte.update({
             where: { id: recordDokumen.id },
@@ -736,18 +790,14 @@ export async function signSptjmUnitAction(
               dokumenTteId: recordDokumen.id,
               userId: user.id,
               nip: nipPenandatangan,
-              statusCode: signResult.statusCode || 500,
+              statusCode: signResult.statusCode ?? 0,
               pesanError: signResult.error || "Gagal menandatangani dokumen.",
-              kategoriError: (signResult.error || "").toLowerCase().includes("passphrase")
-                ? "PASSPHRASE_SALAH"
-                : "BSRE_ERROR",
+              kategoriError: gagal.kategori,
             },
           }),
         ]);
 
-        return {
-          error: signResult.error || "Gagal melakukan tanda tangan elektronik pada dokumen.",
-        };
+        return { error: gagal.pesanPengguna };
       }
     }
 
@@ -801,18 +851,25 @@ export async function signSptjmUnitAction(
       penandatanganNama: namaPenandatangan,
       isSimulasi: isSimulasiMode,
     };
-  } catch (err: any) {
-    await prisma.logGagalTte.create({
-      data: {
-        nip: nipPenandatangan,
-        userId: user.id,
-        statusCode: 500,
-        pesanError: err.message || "Internal Server Error",
-        kategoriError: "SYSTEM_EXCEPTION",
-      },
-    });
+  } catch (err) {
+    const pesanMentah = err instanceof Error ? err.message : String(err);
+    // Kriteria BSrE IX: kegagalan tetap dicatat (tanpa passphrase). Kalau
+    // pencatatannya sendiri gagal, itu tidak boleh menggantikan jawaban ke layar.
+    await prisma.logGagalTte
+      .create({
+        data: {
+          nip: nipPenandatangan,
+          userId: user.id,
+          statusCode: 500,
+          pesanError: samarkanPassphrase(pesanMentah || "Internal Server Error", passphrase),
+          kategoriError: "SYSTEM_EXCEPTION",
+        },
+      })
+      .catch(() => null);
 
-    return { error: `Terjadi kendala teknis: ${err.message}` };
+    return {
+      error: pesanGalatUntukLayar("tte.sign", err, "Terjadi kendala teknis", [passphrase]),
+    };
   }
 }
 

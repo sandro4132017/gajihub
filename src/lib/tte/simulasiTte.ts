@@ -1,9 +1,11 @@
 // ============================================================================
 // PENANDA DOKUMEN HASIL SIMULASI TTE - bukan tanda tangan BSrE yang sesungguhnya.
 //
-// KENAPA INI ADA. Alur TTE punya jalur cadangan: kalau Esign Client BSrE tidak
-// menjawab, `terapkanStempelTteSimulasi()` membubuhkan stempel tiruan supaya
-// pengujian tetap menghasilkan PDF yang utuh. Jalur itu berguna, TAPI hasilnya
+// KENAPA INI ADA. Alur TTE punya jalur simulasi: HANYA di lingkungan non-
+// production DAN dengan TTE_SIMULASI="true", `terapkanStempelTteSimulasi()`
+// membubuhkan stempel tiruan supaya pengujian lokal tetap menghasilkan PDF yang
+// utuh. Di production jalur itu TIDAK PERNAH aktif, dan mode jaringan
+// (INTERNAL/PUBLIC) tidak memengaruhinya. Hasil simulasinya
 // dulu disimpan dengan status "TERTANDATANGANI", `signedAt` terisi, dan
 // `idDokumenBsre` berawalan "BSRE-" - persis seperti dokumen yang benar-benar
 // ditandatangani. Akibatnya halaman /tte/verify menyatakannya
@@ -55,4 +57,110 @@ export function apakahHasilSimulasi(d: {
   const nilai = d.idDokumenBsre.trim();
   if (nilai.startsWith(AWALAN_ID_SIMULASI)) return true;
   return nilai === idDokumenSimulasiLama(d.id);
+}
+
+// ----------------------------------------------------------------------------
+// GERBANG SIMULASI & KLASIFIKASI KEGAGALAN BSrE (Kriteria BSrE IX: setiap
+// kegagalan penandatanganan tercatat di log_gagal_tte).
+// ----------------------------------------------------------------------------
+
+/**
+ * Stempel simulasi hanya boleh dibubuhkan di luar production DAN bila
+ * TTE_SIMULASI bernilai "true" (tanpa memandang huruf besar/kecil). Di
+ * production bendera itu diabaikan sepenuhnya.
+ */
+export function bolehSimulasiTte(
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  if (env.NODE_ENV === "production") return false;
+  return (env.TTE_SIMULASI ?? "").trim().toLowerCase() === "true";
+}
+
+/**
+ * Jawaban cadangan "ISSUE" untuk NIK akun demo saat BSrE tak terjangkau hanya
+ * boleh di luar production; di production gangguan BSrE harus tampil apa adanya.
+ */
+export function bolehFallbackAkunDemo(
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  return env.NODE_ENV !== "production";
+}
+
+export type KategoriGagalBsre =
+  | "PASSPHRASE_SALAH"
+  | "NETWORK_TIMEOUT"
+  | "BSRE_ERROR";
+
+export interface KlasifikasiGagalBsre {
+  kategori: KategoriGagalBsre;
+  pesanPengguna: string;
+}
+
+/**
+ * Menggolongkan kegagalan `signPdf` menjadi kategori log dan pesan untuk
+ * pengguna. Pesan tidak memuat passphrase maupun NIK.
+ */
+export function klasifikasiGagalBsre(signResult: {
+  error?: string;
+  statusCode?: number;
+}): KlasifikasiGagalBsre {
+  const pesan = (signResult.error || "").toLowerCase();
+  const kode = signResult.statusCode;
+
+  if (kode === 0 || pesan.includes("passphrase")) {
+    return {
+      kategori: "PASSPHRASE_SALAH",
+      pesanPengguna: signResult.error || "Passphrase BSrE salah.",
+    };
+  }
+
+  const akhir =
+    " SPTJM belum ditandatangani dan tidak diterbitkan. Coba lagi beberapa menit lagi; " +
+    "bila berulang, laporkan ke Admin Gajihub. Kegagalan ini sudah tercatat.";
+
+  const jaringan =
+    pesan.includes("timeout") ||
+    pesan.includes("fetch failed") ||
+    pesan.includes("econnrefused") ||
+    pesan.includes("network") ||
+    pesan.includes("koneksi");
+  if (jaringan) {
+    return {
+      kategori: "NETWORK_TIMEOUT",
+      pesanPengguna:
+        "Penandatanganan GAGAL: layanan tanda tangan BSrE tidak dapat dihubungi (batas waktu/koneksi)." +
+        akhir,
+    };
+  }
+
+  if (kode !== undefined && kode >= 500) {
+    return {
+      kategori: "BSRE_ERROR",
+      pesanPengguna: `Penandatanganan GAGAL: server BSrE mengalami gangguan (HTTP ${kode}).` + akhir,
+    };
+  }
+
+  return {
+    kategori: "BSRE_ERROR",
+    pesanPengguna:
+      signResult.error || "Gagal melakukan tanda tangan elektronik pada dokumen.",
+  };
+}
+
+/** Panjang minimum passphrase yang disamarkan; di bawah ini teks dibiarkan utuh. */
+const PANJANG_MIN_SAMAR = 4;
+
+/**
+ * Mengganti setiap kemunculan passphrase (pencocokan string literal, bukan
+ * regex) dengan "[disamarkan]". Kriteria BSrE V & VIII: passphrase tidak boleh
+ * tersimpan di log maupun tampil di layar, termasuk bila BSrE menggemakannya
+ * di teks galat.
+ *
+ * Passphrase kosong atau lebih pendek dari 4 karakter dibiarkan: mengganti
+ * satu-dua karakter akan merusak seluruh teks galat, dan passphrase BSrE yang
+ * sah jauh lebih panjang dari itu.
+ */
+export function samarkanPassphrase(teks: string, passphrase: string): string {
+  if (!teks || !passphrase || passphrase.length < PANJANG_MIN_SAMAR) return teks;
+  return teks.split(passphrase).join("[disamarkan]");
 }

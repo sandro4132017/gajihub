@@ -30,7 +30,7 @@ export default async function RoleAssignmentPage({
   const akun = await getSessionAccount();
   const authUser: AuthUser | null = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canKelolaAssignmentRole(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengelola assignment role." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengelola assignment role." />;
   }
   const rolePilih = bacaRole(role);
 

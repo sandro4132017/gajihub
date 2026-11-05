@@ -7,6 +7,11 @@ import { getEselon1 } from "../../../../../business-logic/strukturEselon";
 import { AksesDitolak } from "../../../../../components/feedback/AksesDitolak";
 import { NAMA_BULAN } from "../../../../../lib/format/bulan";
 import { PrintButton } from "../../../PrintButton";
+import { NavigasiBulan } from "../../../NavigasiBulan";
+import { periodeDariParam } from "../../../periodeSaya";
+import { keteranganFinalitas } from "../../../statusPembayaran";
+import { statusUnit } from "../../../../../business-logic/pengirimanUnit";
+import { periodeSekarang } from "../../../../periodeDefault";
 import { TAMPILKAN_NOMINAL_LEMBUR } from "../../../../../lib/format/tampilUangLembur";
 
 export const dynamic = "force-dynamic";
@@ -53,13 +58,13 @@ function BarisNilai({
 }) {
   return (
     <tr className={garisAtas ? "border-t border-line" : undefined}>
-      <td className={`py-1 pr-2 align-top ${nomor ? "pl-6" : "pl-2"} ${tebal ? "font-bold text-ink" : "text-ink-2"}`}>
+      <td className={`break-words py-1 pr-2 align-top ${nomor ? "pl-6" : "pl-2"} ${tebal ? "font-bold text-ink" : "text-ink-2"}`}>
         {nomor ? `${nomor}. ` : ""}
         {label}
       </td>
       <td className={`py-1 pr-2 align-top ${tebal ? "font-bold text-ink" : "text-ink-2"}`}>:</td>
       <td className={`py-1 pr-2 align-top ${tebal ? "font-bold text-ink" : "text-ink-2"}`}>Rp</td>
-      <td className={`py-1 text-right align-top font-mono tabular-nums ${tebal ? "font-bold text-ink" : "text-ink-2"}`}>
+      <td className={`whitespace-nowrap py-1 text-right align-top font-mono tabular-nums ${tebal ? "font-bold text-ink" : "text-ink-2"}`}>
         {formatAngka(nilai)}
       </td>
     </tr>
@@ -72,17 +77,31 @@ export default async function SlipGajiPage({
   params: Promise<{ bulan: string; tahun: string }>;
 }) {
   const { bulan: bulanParam, tahun: tahunParam } = await params;
-  const periodeBulan = Number(bulanParam);
-  const periodeTahun = Number(tahunParam);
+  const periodeSah = periodeDariParam(bulanParam, tahunParam);
 
   // Guard: SEMUA role bisa cetak slip gaji sendiri (privilege Pegawai
   // otomatis dipunya semua role - lihat canCetakSlipGajiSendiri di
   // src/auth/permissions.ts dan "Simulasi role matrix lengkap" di CLAUDE.md).
   const akun = await getSessionAccount();
   const authUser = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
-  if (!authUser || !canCetakSlipGajiSendiri(authUser, authUser.nip) || !Number.isInteger(periodeBulan) || !Number.isInteger(periodeTahun)) {
+  if (!authUser) {
     return <AksesDitolak pesan="Kamu harus login dulu buat lihat halaman ini." />;
   }
+  if (!canCetakSlipGajiSendiri(authUser, authUser.nip)) {
+    return <AksesDitolak pesan="Kamu tidak berwenang melihat halaman ini." />;
+  }
+  if (!periodeSah) {
+    return (
+      <AksesDitolak
+        pesan="Alamat periode tidak sah."
+        hrefAlternatif="/saya?tab=dokumen"
+        labelAlternatif="Kembali ke Data Saya"
+      />
+    );
+  }
+  const periodeBulan = periodeSah.bulan;
+  const periodeTahun = periodeSah.tahun;
+  const sekarang = periodeSekarang();
 
   const pegawai = await prisma.pegawai.findUnique({
     where: { nip: authUser.nip },
@@ -98,7 +117,7 @@ export default async function SlipGajiPage({
   });
 
   if (!pegawai) {
-    return <AksesDitolak pesan={`Data pegawai untuk NIP ${authUser.nip} tidak ditemukan di sistem.`} />;
+    return <AksesDitolak pesan={`Data kepegawaian untuk NIP ${authUser.nip} belum tercatat di Gajihub. Hubungi Admin Gajihub.`} />;
   }
 
   const tukin = pegawai.tukinCalc[0];
@@ -108,15 +127,38 @@ export default async function SlipGajiPage({
 
   if (!tukin && !uangMakan && !uangLembur && !gaji) {
     return (
-      <AksesDitolak
-        pesan={`Belum ada data pembayaran untuk periode ${NAMA_BULAN[periodeBulan - 1] ?? periodeBulan}/${periodeTahun}.`}
-        hrefAlternatif="/saya"
-        labelAlternatif="Kembali ke Data Saya"
-      />
+      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
+          <Link href="/saya?tab=dokumen" className="text-sm font-semibold text-teal-deep underline">
+            &larr; Kembali ke Data Saya
+          </Link>
+          <NavigasiBulan periode={periodeSah} sekarang={sekarang} dasar="/saya/slip-gaji" />
+        </div>
+        <div className="card mt-4 p-5">
+          <h1 className="text-base font-extrabold text-ink">Slip Gaji</h1>
+          <p className="mt-2 text-sm text-muted">
+            Belum ada data pembayaran untuk {NAMA_BULAN[periodeBulan - 1]} {periodeTahun}. Gunakan tombol periode di
+            atas untuk membuka bulan lain.
+          </p>
+        </div>
+      </main>
     );
   }
 
-  const semuaApproved = [tukin, uangMakan, uangLembur].every((r) => !r || r.status === "APPROVED");
+  // Finalitas mengikuti keadaan rekap UNIT pegawai (statusUnit), bukan status
+  // per-baris kalkulasi. Hanya relevan bila ada komponen hitungan Gajihub;
+  // gaji induk berasal dari ADK GPP PPABP, bukan dari rekap unit.
+  const adaKomponenGajihub = Boolean(tukin || uangMakan || (TAMPILKAN_NOMINAL_LEMBUR && uangLembur));
+  let peringatanFinal: string | null = null;
+  if (adaKomponenGajihub) {
+    const barisKirim = await prisma.pengirimanUnit.findUnique({
+      where: {
+        satuanKerja_periodeBulan_periodeTahun: { satuanKerja: pegawai.satuanKerja, periodeBulan, periodeTahun },
+      },
+      select: { status: true, dikirimPada: true, alasanKembali: true },
+    });
+    peringatanFinal = keteranganFinalitas(statusUnit(barisKirim)).peringatan;
+  }
 
   // "Tunjangan Umum/Jabatan" di slip = tunjangan umum PNS ATAU tunjangan
   // struktural (di file GPP dua kolom terpisah, tapi satu pegawai praktis
@@ -140,14 +182,15 @@ export default async function SlipGajiPage({
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 print:max-w-full print:px-0 print:py-0">
-      <div className="flex items-center justify-between print:hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <Link href="/saya" className="text-sm font-semibold text-teal-deep underline">
           &larr; Kembali ke Data Saya
         </Link>
+        <NavigasiBulan periode={periodeSah} sekarang={sekarang} dasar="/saya/slip-gaji" />
         <PrintButton label="Cetak" />
       </div>
 
-      <div className="card mt-4 p-6 sm:p-8 print:border-0 print:p-0 print:shadow-none">
+      <div className="card mt-4 p-4 sm:p-8 print:border-0 print:p-0 print:shadow-none">
         {/* --- KOP --- */}
         <div className="border-b-2 border-ink pb-3 text-center">
           <p className="text-base font-semibold uppercase tracking-wide text-ink">Kementerian Ketenagakerjaan RI</p>
@@ -165,45 +208,44 @@ export default async function SlipGajiPage({
           </p>
         </div>
 
-        {!semuaApproved && (
+        {peringatanFinal && (
           <p className="mt-4 rounded-lg bg-gold-tint px-3 py-2 text-xs font-semibold text-gold-deep print:border print:border-line">
-            Sebagian komponen pada periode ini BELUM disetujui penuh - angka di bawah masih estimasi, bukan pembayaran
-            final.
+            {peringatanFinal}
           </p>
         )}
 
         {/* --- IDENTITAS --- */}
         <table data-tabel="dokumen" className="mt-5 w-full text-sm">
           <tbody>
-            <tr>
-              <td className="w-56 py-0.5 align-top text-ink-2">Nama</td>
-              <td className="w-4 py-0.5 align-top text-ink-2">:</td>
-              <td className="py-0.5 align-top font-semibold text-ink">{pegawai.nama}</td>
+            <tr className="block sm:table-row print:table-row">
+              <td className="block pt-1.5 text-xs align-top text-ink-2 sm:table-cell sm:w-56 sm:pt-0.5 sm:text-sm print:table-cell print:w-56 print:text-sm">Nama</td>
+              <td className="hidden w-4 py-0.5 align-top text-ink-2 sm:table-cell print:table-cell">:</td>
+              <td className="block py-0.5 align-top sm:table-cell print:table-cell font-semibold text-ink">{pegawai.nama}</td>
             </tr>
-            <tr>
-              <td className="py-0.5 align-top text-ink-2">Nomor Induk Pegawai (NIP)</td>
-              <td className="py-0.5 align-top text-ink-2">:</td>
-              <td className="py-0.5 align-top font-mono text-ink">{pegawai.nip}</td>
+            <tr className="block sm:table-row print:table-row">
+              <td className="block pt-1.5 text-xs align-top text-ink-2 sm:table-cell sm:w-56 sm:pt-0.5 sm:text-sm print:table-cell print:w-56 print:text-sm">Nomor Induk Pegawai (NIP)</td>
+              <td className="hidden py-0.5 align-top text-ink-2 sm:table-cell print:table-cell">:</td>
+              <td className="block py-0.5 align-top sm:table-cell print:table-cell font-mono text-ink">{pegawai.nip}</td>
             </tr>
-            <tr>
-              <td className="py-0.5 align-top text-ink-2">Golongan/Pangkat</td>
-              <td className="py-0.5 align-top text-ink-2">:</td>
-              <td className="py-0.5 align-top text-ink">{pegawai.golongan ?? "-"}</td>
+            <tr className="block sm:table-row print:table-row">
+              <td className="block pt-1.5 text-xs align-top text-ink-2 sm:table-cell sm:w-56 sm:pt-0.5 sm:text-sm print:table-cell print:w-56 print:text-sm">Golongan/Pangkat</td>
+              <td className="hidden py-0.5 align-top text-ink-2 sm:table-cell print:table-cell">:</td>
+              <td className="block py-0.5 align-top text-ink sm:table-cell print:table-cell">{pegawai.golongan ?? "-"}</td>
             </tr>
-            <tr>
-              <td className="py-0.5 align-top text-ink-2">Jabatan</td>
-              <td className="py-0.5 align-top text-ink-2">:</td>
-              <td className="py-0.5 align-top text-ink">{pegawai.jabatan ?? "-"}</td>
+            <tr className="block sm:table-row print:table-row">
+              <td className="block pt-1.5 text-xs align-top text-ink-2 sm:table-cell sm:w-56 sm:pt-0.5 sm:text-sm print:table-cell print:w-56 print:text-sm">Jabatan</td>
+              <td className="hidden py-0.5 align-top text-ink-2 sm:table-cell print:table-cell">:</td>
+              <td className="block py-0.5 align-top text-ink sm:table-cell print:table-cell">{pegawai.jabatan ?? "-"}</td>
             </tr>
-            <tr>
-              <td className="py-0.5 align-top text-ink-2">Unit Kerja</td>
-              <td className="py-0.5 align-top text-ink-2">:</td>
-              <td className="py-0.5 align-top text-ink">{pegawai.satuanKerja}</td>
+            <tr className="block sm:table-row print:table-row">
+              <td className="block pt-1.5 text-xs align-top text-ink-2 sm:table-cell sm:w-56 sm:pt-0.5 sm:text-sm print:table-cell print:w-56 print:text-sm">Unit Kerja</td>
+              <td className="hidden py-0.5 align-top text-ink-2 sm:table-cell print:table-cell">:</td>
+              <td className="block py-0.5 align-top text-ink sm:table-cell print:table-cell">{pegawai.satuanKerja}</td>
             </tr>
-            <tr>
-              <td className="py-0.5 align-top text-ink-2">Alamat Kantor</td>
-              <td className="py-0.5 align-top text-ink-2">:</td>
-              <td className="py-0.5 align-top text-ink">
+            <tr className="block sm:table-row print:table-row">
+              <td className="block pt-1.5 text-xs align-top text-ink-2 sm:table-cell sm:w-56 sm:pt-0.5 sm:text-sm print:table-cell print:w-56 print:text-sm">Alamat Kantor</td>
+              <td className="hidden py-0.5 align-top text-ink-2 sm:table-cell print:table-cell">:</td>
+              <td className="block py-0.5 align-top text-ink sm:table-cell print:table-cell">
                 {ALAMAT_KANTOR.map((baris) => (
                   <span key={baris} className="block">
                     {baris}
@@ -263,8 +305,8 @@ export default async function SlipGajiPage({
         ) : (
           <>
             <div className="mt-1 rounded-lg bg-gold-tint px-3 py-2 text-xs font-semibold text-gold-deep print:border print:border-line">
-              Data gaji induk (gaji pokok &amp; tunjangan melekat) periode ini belum diunggah PPABP, jadi slip ini baru
-              memuat komponen yang dihitung Gajihub.
+              Gaji pokok dan tunjangan bulan ini belum tersedia; slip ini baru memuat Tunjangan Kinerja dan Uang Makan
+              {TAMPILKAN_NOMINAL_LEMBUR && " dan Uang Lembur"}.
             </div>
             <table data-tabel="dokumen" className="mt-2 w-full text-sm">
               <tbody>

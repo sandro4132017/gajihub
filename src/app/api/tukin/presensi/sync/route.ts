@@ -3,6 +3,7 @@ import {
   tarikPresensiEpresensiAction,
   type SinkronPresensiFormState,
 } from "../../../../tukin/presensi/actionsSync";
+import { catatGalat, pesanGalatAwam } from "../../../../../lib/koneksi/galatSumber";
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +34,10 @@ export async function POST(req: NextRequest) {
     const hasil = await tarikPresensiEpresensiAction({}, formData);
     return NextResponse.json(hasil, { status: hasil.error ? 400 : 200 });
   } catch (err) {
+    // Pesan mentah (bisa memuat alamat server) hanya ke log server.
+    const { ref, info } = catatGalat("presensi-sync", err);
     return NextResponse.json(
-      {
-        error: `Gagal menarik data dari e-Presensi: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      } satisfies SinkronPresensiFormState,
+      { error: pesanGalatAwam(info, ref, "Gagal menarik data presensi") } satisfies SinkronPresensiFormState,
       { status: 500 }
     );
   }

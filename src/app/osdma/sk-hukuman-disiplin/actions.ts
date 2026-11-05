@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -31,7 +32,7 @@ export async function approveSkHukdisAction(
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canApproveSkHukumanDisiplin(authUser)) {
-      return { error: "Role kamu tidak berwenang memberikan approval SK Hukuman Disiplin." };
+      return { error: "Peran kamu tidak berwenang memberikan approval SK Hukuman Disiplin." };
     }
 
     const sk = await prisma.skHukumanDisiplin.findUnique({ where: { id: skId }, include: { pegawai: true } });
@@ -48,6 +49,6 @@ export async function approveSkHukdisAction(
     revalidatePath("/osdma/sk-hukuman-disiplin");
     return { success: keputusan === "SETUJU" ? `SK Hukuman Disiplin ${sk.pegawai.nama} disetujui.` : "SK Hukuman Disiplin ditolak." };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("osdma.sk-hukuman-disiplin.actions#1", err, "Terjadi kesalahan") };
   }
 }

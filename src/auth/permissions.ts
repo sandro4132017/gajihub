@@ -931,3 +931,35 @@ export function canPindahSatuanKerjaPegawai(user: AuthUser, satuanKerjaAsal: str
 export function canEditPresensiKinerjaLangsung(_user: AuthUser): boolean {
   return false;
 }
+
+/**
+ * Melihat indikator status koneksi layanan BSrE (penandatangan SPTJM dan
+ * Admin). Hanya informasi "layanan hidup atau tidak"; tidak memuat data
+ * pegawai. Kasubag TU tanpa satuan kerja tidak bisa menandatangani, jadi
+ * tidak perlu melihatnya.
+ */
+export function canLihatStatusLayananTte(user: AuthUser): boolean {
+  if (!user.aktif) return false;
+  if (user.role === "ADMIN") return true;
+  return user.role === "KASUBAG_TU" && !!user.satuanKerja;
+}
+
+/**
+ * Melihat indikator status koneksi database e-Presensi (halaman Sinkronisasi
+ * Presensi). Hanya "hidup atau tidak"; tidak memuat data pegawai. Mengikuti
+ * siapa yang menarik presensi: ADMIN, PPABP, dan Kasubag TU ber-satuan kerja.
+ */
+export function canLihatStatusKoneksiEpresensi(user: AuthUser): boolean {
+  if (!user.aktif) return false;
+  if (user.role === "ADMIN" || user.role === "PPABP") return true;
+  return user.role === "KASUBAG_TU" && !!user.satuanKerja;
+}
+
+/**
+ * Melihat indikator status koneksi database SIAP (halaman Konfigurasi &
+ * Kesehatan Sistem). Hanya "hidup atau tidak"; tidak memuat data pegawai.
+ * Khusus ADMIN, mengikuti halamannya.
+ */
+export function canLihatStatusKoneksiSiap(user: AuthUser): boolean {
+  return cekRole(user, "ADMIN");
+}

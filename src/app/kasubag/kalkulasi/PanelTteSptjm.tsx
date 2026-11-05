@@ -97,8 +97,8 @@ export function PanelTteSptjm({
       }
       setDokumen(null);
       setNotifSukses(hasil?.pesan || "Draft SPTJM dihapus.");
-    } catch (e) {
-      setErrorHapus(e instanceof Error ? e.message : "Gagal menghubungi layanan TTE.");
+    } catch {
+      setErrorHapus("Gagal menghubungi layanan TTE.");
     } finally {
       setSedangHapus(false);
       setMintaKonfirmasi(false);

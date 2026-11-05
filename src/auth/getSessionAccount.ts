@@ -20,6 +20,8 @@ import type { Role, User } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { SESSION_COOKIE_NAME, verifikasiTokenSesi, type SessionPayload } from "./session";
 import { daftarRoleTersedia, resolveRoleAktif } from "./roleAktif";
+import { konfigPenguji } from "./akunPenguji";
+import { NIP_PENGUJI } from "../lib/dataUji";
 
 /**
  * Isi sesi yang sudah divalidasi ke database. `role` = role AKTIF (sudah
@@ -34,7 +36,11 @@ async function bacaCookieSesi(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
-  return verifikasiTokenSesi(token);
+  const payload = await verifikasiTokenSesi(token);
+  // Sesi akun penguji ikut mati begitu konfigurasinya dikosongkan atau
+  // melewati batas berlaku, tanpa menunggu cookie 8 jamnya habis.
+  if (payload && payload.nip === NIP_PENGUJI && !konfigPenguji(process.env)) return null;
+  return payload;
 }
 
 export async function getSessionAccount(): Promise<SesiAktif | null> {

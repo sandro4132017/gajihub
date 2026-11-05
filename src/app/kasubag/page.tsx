@@ -89,7 +89,7 @@ export default async function KasubagDashboardPage({
   }
 
   if (!canViewDashboardUnit(authUser, satkerEfektif)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang melihat dashboard unit ini." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang melihat dashboard unit ini." />;
   }
 
   // Dicek terpisah dari izin membuka dashboard: PIMPINAN boleh MELIHAT

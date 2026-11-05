@@ -41,6 +41,7 @@
 
 import pg from "pg";
 import { bukaPoolSiap } from "../lib/siapConfig";
+import { GalatKonfigurasi, denganSumber } from "../lib/koneksi/galatSumber";
 import {
   rekapDariLaporanPdf,
   JADWAL_KERJA_DEFAULT,
@@ -148,7 +149,7 @@ async function ambilBarisPresensi(
   }
   const { EPRESENSI_HOST, EPRESENSI_PORT, EPRESENSI_DB, EPRESENSI_USER, EPRESENSI_PASSWORD } = process.env;
   if (!EPRESENSI_HOST || !EPRESENSI_DB || !EPRESENSI_USER || !EPRESENSI_PASSWORD) {
-    throw new Error("Kredensial e-Presensi belum lengkap di .env (EPRESENSI_HOST/DB/USER/PASSWORD).");
+    throw new GalatKonfigurasi("Kredensial e-Presensi belum lengkap di .env (EPRESENSI_HOST/DB/USER/PASSWORD).", "EPRESENSI");
   }
   const client = new pg.Client({
     host: EPRESENSI_HOST,
@@ -455,16 +456,16 @@ export async function tarikPresensiPeriode(
   let baris: BarisEpresensi[];
 
   if (filterNipSet && filterNipSet.size > 0) {
-    peta = await petaIdKeNipUntukDaftarNip([...filterNipSet]);
-    baris = await ambilBarisPresensi(bulan, tahun, [...peta.keys()]);
+    peta = await denganSumber("SIAP", () => petaIdKeNipUntukDaftarNip([...filterNipSet]));
+    baris = await denganSumber("EPRESENSI", () => ambilBarisPresensi(bulan, tahun, [...peta.keys()]));
   } else {
-    baris = await ambilBarisPresensi(bulan, tahun);
+    baris = await denganSumber("EPRESENSI", () => ambilBarisPresensi(bulan, tahun));
     const idUnik = new Set<string>();
     for (const b of baris) {
       const id = (b.id_pegawai ?? "").trim();
       if (id) idUnik.add(id);
     }
-    peta = await petaIdKeNip([...idUnik]);
+    peta = await denganSumber("SIAP", () => petaIdKeNip([...idUnik]));
   }
 
   const perPegawai = new Map<string, BarisEpresensi[]>();

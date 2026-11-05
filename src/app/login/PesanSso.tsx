@@ -9,8 +9,8 @@
  * membuat ketiganya terlihat sama, padahal tindak lanjutnya berbeda jauh.
  */
 const JUDUL: Record<string, string> = {
-  "belum-dikonfigurasi": "SSO belum dikonfigurasi",
-  ditolak: "Naco menolak permintaan masuk",
+  "belum-dikonfigurasi": "Masuk lewat Akun Kemnaker belum tersedia",
+  ditolak: "Akun Kemnaker menolak permintaan masuk",
   gagal: "Login lewat Akun Kemnaker gagal",
   "bukan-pegawai": "Akun ini bukan akun pegawai Kemnaker",
   "tidak-terdaftar": "NIP belum terdaftar di Gajihub",

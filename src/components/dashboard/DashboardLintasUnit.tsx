@@ -24,6 +24,7 @@ import {
   rangkumMonitoringSatker,
   saringMonitoring,
 } from "../../business-logic/monitoringSatker";
+import { pegawaiBukanUji } from "../../lib/dataUji";
 
 const formatRupiah = (nilai: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0, notation: "compact" }).format(nilai);
@@ -176,7 +177,9 @@ export async function DashboardLintasUnit({
   if (periodeBulan) filterPeriode.periodeBulan = periodeBulan;
   if (periodeTahun) filterPeriode.periodeTahun = periodeTahun;
 
-  const filterSatker = satkerEfektif ? { pegawai: { satuanKerja: satkerEfektif } } : {};
+  const filterSatker = satkerEfektif
+    ? { pegawai: { satuanKerja: satkerEfektif } }
+    : { pegawai: pegawaiBukanUji() };
   // Hanya AKTIF - pensiunan tetap disimpan (berhak atas tukin bulan yang
   // sudah dikerjakan) tapi tidak boleh ikut menggelembungkan hitungan pegawai.
   //
@@ -188,6 +191,7 @@ export async function DashboardLintasUnit({
   // di bawah).
   const wherePegawaiAktif = {
     statusPegawai: "AKTIF",
+    ...pegawaiBukanUji(satkerEfektif),
     ...(satkerEfektif ? { satuanKerja: satkerEfektif } : {}),
   };
 

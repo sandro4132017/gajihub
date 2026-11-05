@@ -6,6 +6,7 @@ import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
 import { UploadBasisDataGajiForm } from "./UploadBasisDataGajiForm";
 import { HALAMAN } from "../../../components/layout/layoutHalaman";
+import { pegawaiBukanUji } from "../../../lib/dataUji";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function BasisDataGajiPage({
   };
   if (!authUser || !canKelolaGajiInduk(authUser)) {
     return (
-      <AksesDitolak pesan="Role kamu tidak berwenang mengelola basis data gaji." />
+      <AksesDitolak pesan="Peran kamu tidak berwenang mengelola basis data gaji." />
     );
   }
 
@@ -46,9 +47,9 @@ export default async function BasisDataGajiPage({
   const [jumlahIdentitas, totalAktif, tercakupAktif, terbaru, list] =
     await Promise.all([
       prisma.identitasWebGaji.count(),
-      prisma.pegawai.count({ where: { statusPegawai: "AKTIF" } }),
+      prisma.pegawai.count({ where: { statusPegawai: "AKTIF", ...pegawaiBukanUji() } }),
       prisma.identitasWebGaji.count({
-        where: { pegawai: { statusPegawai: "AKTIF" } },
+        where: { pegawai: { statusPegawai: "AKTIF", ...pegawaiBukanUji() } },
       }),
       prisma.identitasWebGaji.findFirst({
         orderBy: { diunggahPada: "desc" },

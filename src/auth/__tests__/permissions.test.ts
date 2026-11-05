@@ -8,6 +8,9 @@ import {
   canDownloadBuktiPotongPajakSendiri,
   canViewRekapUnitKerja,
   canTandatanganiSptjmUnit,
+  canLihatStatusLayananTte,
+  canLihatStatusKoneksiEpresensi,
+  canLihatStatusKoneksiSiap,
   canExportRekapUnit,
   canVerifikasiBandingJenjang1,
   canKirimRekapUnit,
@@ -893,5 +896,54 @@ describe("canTandatanganiSptjmUnit - TTE SPTJM, satu-satunya izin yang menutup A
     });
     expect(canTandatanganiSptjmUnit(user, SETJEN)).toBe(false);
     expect(canTandatanganiSptjmUnit(user, BIRO_UMUM)).toBe(true);
+  });
+});
+
+describe("canLihatStatusLayananTte", () => {
+  it("Kasubag TU ber-satuan kerja dan ADMIN boleh", () => {
+    expect(canLihatStatusLayananTte(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }))).toBe(true);
+    expect(canLihatStatusLayananTte(buatUser({ role: "ADMIN" }))).toBe(true);
+  });
+  it("Kasubag TU tanpa satuan kerja ditolak", () => {
+    expect(canLihatStatusLayananTte(buatUser({ role: "KASUBAG_TU", satuanKerja: null }))).toBe(false);
+    expect(canLihatStatusLayananTte(buatUser({ role: "KASUBAG_TU", satuanKerja: "" }))).toBe(false);
+  });
+  it("role lain dan akun nonaktif ditolak", () => {
+    for (const role of ["PEGAWAI", "PPABP", "OSDMA", "PIMPINAN"] as const) {
+      expect(canLihatStatusLayananTte(buatUser({ role, satuanKerja: BIRO_UMUM }))).toBe(false);
+    }
+    expect(canLihatStatusLayananTte(buatUser({ role: "ADMIN", aktif: false }))).toBe(false);
+    expect(canLihatStatusLayananTte(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM, aktif: false }))).toBe(false);
+  });
+});
+
+describe("canLihatStatusKoneksiEpresensi", () => {
+  it("ADMIN, PPABP, dan Kasubag TU ber-satuan kerja boleh", () => {
+    expect(canLihatStatusKoneksiEpresensi(buatUser({ role: "ADMIN" }))).toBe(true);
+    expect(canLihatStatusKoneksiEpresensi(buatUser({ role: "PPABP" }))).toBe(true);
+    expect(canLihatStatusKoneksiEpresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }))).toBe(true);
+  });
+  it("Kasubag TU tanpa satuan kerja, PEGAWAI, OSDMA, PIMPINAN ditolak", () => {
+    expect(canLihatStatusKoneksiEpresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: null }))).toBe(false);
+    for (const role of ["PEGAWAI", "OSDMA", "PIMPINAN"] as const) {
+      expect(canLihatStatusKoneksiEpresensi(buatUser({ role, satuanKerja: BIRO_UMUM }))).toBe(false);
+    }
+  });
+  it("akun nonaktif ditolak", () => {
+    for (const role of ["ADMIN", "PPABP", "KASUBAG_TU"] as const) {
+      expect(canLihatStatusKoneksiEpresensi(buatUser({ role, satuanKerja: BIRO_UMUM, aktif: false }))).toBe(false);
+    }
+  });
+});
+
+describe("canLihatStatusKoneksiSiap", () => {
+  it("hanya ADMIN aktif yang boleh", () => {
+    expect(canLihatStatusKoneksiSiap(buatUser({ role: "ADMIN" }))).toBe(true);
+    for (const role of ["PEGAWAI", "OSDMA", "PIMPINAN", "PPABP", "KASUBAG_TU"] as const) {
+      expect(canLihatStatusKoneksiSiap(buatUser({ role, satuanKerja: BIRO_UMUM }))).toBe(false);
+    }
+  });
+  it("akun nonaktif ditolak", () => {
+    expect(canLihatStatusKoneksiSiap(buatUser({ role: "ADMIN", aktif: false }))).toBe(false);
   });
 });

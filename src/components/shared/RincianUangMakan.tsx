@@ -98,14 +98,14 @@ export function RincianUangMakan({
 
       {typeof hariDibayarTersimpan === "number" && hariDibayarTersimpan !== r.hariDibayar && (
         <p className="mt-2 text-xs text-muted">
-          Baris kalkulasi tersimpan memakai <strong>{hariDibayarTersimpan} hari</strong>.
+          Perhitungan terakhir memakai <strong>{hariDibayarTersimpan} hari</strong>.
         </p>
       )}
 
       {basi && (
         <p className="mt-2 rounded-lg border border-amber-300 bg-gold-tint px-2.5 py-1.5 text-xs font-medium text-ink-2 dark:border-amber-800">
-          Angka tersimpan <span className="font-mono">{rupiah(nilaiTersimpan!)}</span> tidak sama dengan rincian di
-          atas - presensi periode ini berubah setelah uang makan terakhir dihitung. Perlu dihitung ulang.
+          Hasil perhitungan terakhir <span className="font-mono">{rupiah(nilaiTersimpan!)}</span> berbeda dari
+          rincian di atas karena presensi berubah setelahnya. Kasubag TU unit perlu menghitung ulang.
         </p>
       )}
 

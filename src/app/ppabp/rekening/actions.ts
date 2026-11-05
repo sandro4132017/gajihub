@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { read, utils } from "xlsx";
 import { prisma } from "../../../lib/prisma";
@@ -67,7 +68,7 @@ export async function uploadRekeningAction(
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canKelolaGajiInduk(authUser)) {
-      return { error: "Role kamu tidak berwenang mengelola data rekening." };
+      return { error: "Peran kamu tidak berwenang mengelola data rekening." };
     }
 
     const jenisPembayaran = String(formData.get("jenisPembayaran") ?? "");
@@ -75,7 +76,7 @@ export async function uploadRekeningAction(
       return { error: "Jenis pembayaran wajib dipilih (Tukin atau Gaji)." };
     }
     if (jenisPembayaran === "GAJI" && !REKENING_GAJI_DITERIMA) {
-      return { error: "Rekening gaji belum diterima - menyusul setelah Gajihub terinterkoneksi." };
+      return { error: "Rekening gaji belum dapat diunggah untuk saat ini. Unggah rekening Tunjangan Kinerja saja." };
     }
 
     const file = formData.get("file");
@@ -191,6 +192,6 @@ export async function uploadRekeningAction(
       perluDiperiksa: perluDiperiksa.length > 0 ? perluDiperiksa : undefined,
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("ppabp.rekening.actions#1", err, "Terjadi kesalahan") };
   }
 }

@@ -10,6 +10,7 @@ import { UploadGajiIndukForm } from "./UploadGajiIndukForm";
 import { HonorariumForm } from "./HonorariumForm";
 import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
 import { HALAMAN } from "../../../components/layout/layoutHalaman";
+import { pegawaiBukanUji } from "../../../lib/dataUji";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function RiwayatGajiPage({
   const authUser: AuthUser | null =
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canKelolaGajiInduk(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengelola riwayat gaji pegawai." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengelola riwayat gaji pegawai." />;
   }
 
   // Periode yang benar-benar sudah punya data - dipakai buat dropdown dan
@@ -45,6 +46,7 @@ export default async function RiwayatGajiPage({
   // mendarat di halaman kosong setelah upload.
   const periodeTersedia = await prisma.gajiInduk.groupBy({
     by: ["periodeTahun", "periodeBulan"],
+    where: { pegawai: pegawaiBukanUji() },
     _count: { _all: true },
     orderBy: [{ periodeTahun: "desc" }, { periodeBulan: "desc" }],
   });
@@ -54,7 +56,7 @@ export default async function RiwayatGajiPage({
   const periodeTahun = tahun ? Number(tahun) : periodeDefault?.periodeTahun;
   const adaPeriode = Number.isInteger(periodeBulan) && Number.isInteger(periodeTahun);
 
-  const filterPegawai: Prisma.PegawaiWhereInput = {};
+  const filterPegawai: Prisma.PegawaiWhereInput = { ...pegawaiBukanUji(satker) };
   if (satker) filterPegawai.satuanKerja = satker;
   if (q?.trim()) {
     filterPegawai.OR = [
@@ -64,7 +66,7 @@ export default async function RiwayatGajiPage({
   }
 
   const where: Prisma.GajiIndukWhereInput = adaPeriode
-    ? { periodeBulan: periodeBulan!, periodeTahun: periodeTahun!, ...(Object.keys(filterPegawai).length > 0 ? { pegawai: filterPegawai } : {}) }
+    ? { periodeBulan: periodeBulan!, periodeTahun: periodeTahun!, pegawai: filterPegawai }
     : { id: "___tidak-ada___" };
 
   const [satuanKerjaRows, agregat, barisList] = await Promise.all([

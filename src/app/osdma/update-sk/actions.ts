@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "../../../lib/prisma";
@@ -30,7 +31,7 @@ export async function updateSkStrukturalAction(
     if (!user) return { error: "Akun tidak terdaftar sebagai User." };
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: user.satuanKerja, aktif: user.aktif };
     if (!canUpdateSkPegawaiStrukturalFungsional(authUser)) {
-      return { error: "Role kamu tidak berwenang mengubah SK pegawai." };
+      return { error: "Peran kamu tidak berwenang mengubah SK pegawai." };
     }
 
     const pegawaiId = String(formData.get("pegawaiId") ?? "");
@@ -82,7 +83,7 @@ export async function updateSkStrukturalAction(
 
     revalidatePath("/osdma/update-sk");
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("osdma.update-sk.actions#1", err, "Terjadi kesalahan") };
   }
   redirect(`/osdma/update-sk?berhasil=1`);
 }

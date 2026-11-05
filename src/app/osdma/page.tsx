@@ -131,7 +131,7 @@ export default async function OsdmaDashboardPage() {
               Kewenangan Biro OSDMA
             </h2>
             <p className="mt-0.5 text-xs sm:text-sm text-ink-2 leading-relaxed">
-              Persetujuan akhir Anda mengesahkan pemutakhiran data pada sistem sumber. PPABP Rokeu dapat memantau proses banding secara otomatis untuk penyesuaian hak belanja pegawai.
+              Persetujuan akhir Anda menetapkan hasil banding. Perbaikan datanya dilakukan di sistem asalnya (SIAP, e-Presensi, atau e-Kinerja BKN). PPABP Rokeu dapat memantau hasil banding untuk penyesuaian pembayaran.
             </p>
           </div>
           {totalAntrean > 0 ? (
@@ -274,7 +274,7 @@ export default async function OsdmaDashboardPage() {
             </span>
           </div>
           <p className="mt-2 text-xs text-muted">
-            Riwayat keputusan sah di sistem sumber
+            Riwayat keputusan akhir OSDMA
           </p>
         </div>
       </section>
@@ -349,7 +349,7 @@ export default async function OsdmaDashboardPage() {
                 SK Hukuman Disiplin
               </h3>
               <p className="mt-1 text-xs text-muted leading-relaxed">
-                Penetapan sanksi disiplin pegawai serta sinkronisasi pemotongan tunjangan kinerja otomatis.
+                Penetapan sanksi disiplin pegawai; SK yang disetujui diperhitungkan saat kalkulasi Tunjangan Kinerja.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-line/60 flex items-center justify-between text-xs font-bold text-biru">
@@ -559,7 +559,7 @@ export default async function OsdmaDashboardPage() {
                 Riwayat Keputusan Akhir OSDMA
               </h2>
               <p className="text-xs text-muted mt-0.5">
-                Pengesahan banding yang telah diputuskan dan tersinkronisasi ke sistem sumber
+                Banding yang telah diputuskan Biro OSDMA
               </p>
             </div>
             <Link

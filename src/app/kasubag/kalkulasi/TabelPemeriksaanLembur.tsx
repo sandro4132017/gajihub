@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { lemburTeks } from "../../../lib/format/presensiTampilan";
 import { BantuanTabel, BarisSumber } from "./BantuanTabel";
+import { Paginasi, hitungPaginasi } from "../../../components/tables/Paginasi";
 import {
   koreksiJamLemburHarianAction,
   hapusKoreksiJamLemburHarianAction,
@@ -200,11 +201,19 @@ export function TabelPemeriksaanLembur({
   periodeBulan,
   periodeTahun,
   terkunci = false,
+  halaman,
+  perHalaman,
+  paramPaginasi,
 }: {
   baris: readonly BarisPemeriksaanLembur[];
   periodeBulan: number;
   periodeTahun: number;
   terkunci?: boolean;
+  /** Nilai mentah `?halLembur=` & `?perLembur=` - dijepit hitungPaginasi. */
+  halaman?: string;
+  perHalaman?: string;
+  /** Query yang ikut terbawa saat pindah halaman (periode, satker, paginasi Tukin). */
+  paramPaginasi: string;
 }) {
   const [pegawaiDipilih, setPegawaiDipilih] = useState<BarisPemeriksaanLembur | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -215,6 +224,10 @@ export function TabelPemeriksaanLembur({
   );
   const totalKerja = berlembur.reduce((n, b) => n + (b.jamHariKerja ?? 0), 0);
   const totalLibur = berlembur.reduce((n, b) => n + (b.jamHariLibur ?? 0), 0);
+  // Ringkasan & peringatan di atas tetap menghitung SELURUH pegawai berlembur;
+  // yang dipotong per halaman hanya baris tabelnya.
+  const paginasi = hitungPaginasi(berlembur.length, halaman, perHalaman);
+  const berlemburHalaman = berlembur.slice(paginasi.mulai, paginasi.selesai);
 
   useEffect(() => {
     if (!pegawaiDipilih) {
@@ -309,7 +322,7 @@ export function TabelPemeriksaanLembur({
                   </td>
                 </tr>
               )}
-              {berlembur.map((b) => {
+              {berlemburHalaman.map((b) => {
                 const adaKoreksi = b.rincianHari.some((r) => r.koreksi !== null);
                 const jmlKoreksi = b.rincianHari.filter((r) => r.koreksi !== null).length;
                 const selisih = b.totalTersimpan !== null && b.totalTersimpan !== b.jamHarian;
@@ -369,6 +382,19 @@ export function TabelPemeriksaanLembur({
             </tbody>
           </table>
         </div>
+        {berlembur.length > 0 && (
+          <div className="border-t border-line-2 px-4 py-3 sm:px-6">
+            <Paginasi
+              basePath="/kasubag/kalkulasi"
+              params={new URLSearchParams(paramPaginasi)}
+              info={paginasi}
+              totalBaris={berlembur.length}
+              labelBaris="pegawai"
+              namaParam={{ hal: "halLembur", per: "perLembur" }}
+              anchor="tabel-lembur"
+            />
+          </div>
+        )}
       </div>
 
       {/* DIALOG MODAL PERIKSA & KOREKSI SPL */}

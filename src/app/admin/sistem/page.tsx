@@ -19,11 +19,14 @@ import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { IkonBercahaya, KartuBercahaya, type NuansaKpi } from "../../../components/shared/KartuKpi";
 import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { ToggleModeJaringan } from "../ToggleModeJaringan";
+import { StatusKoneksiEpresensi } from "../../tukin/presensi/StatusKoneksiEpresensi";
 import { SinkronPegawaiForm } from "./SinkronPegawaiForm";
+import { StatusKoneksiSiap } from "./StatusKoneksiSiap";
+import { pegawaiBukanUji } from "../../../lib/dataUji";
 
 export const dynamic = "force-dynamic";
 
-type StatusSumber = "Tersambung" | "Manual" | "Belum ada";
+type StatusSumber = "Langsung" | "Manual" | "Belum ada";
 
 // Sumber data eksternal beserta cara ambilnya. Status menjawab satu
 // pertanyaan saja: apakah datanya masuk sendiri lewat koneksi, atau menunggu
@@ -31,18 +34,28 @@ type StatusSumber = "Tersambung" | "Manual" | "Belum ada";
 //
 // SIAP & e-Presensi diakses READ-ONLY - keduanya sistem produksi yang sedang
 // melayani pegawai, dan Gajihub tidak pernah menulis apa pun ke sana.
-const SUMBER_DATA: { sistem: string; cara: string; status: StatusSumber; catatan: string; Ikon: IconType }[] = [
+// Entri "Langsung" (SIAP, e-Presensi) tidak menampilkan chip statis: status
+// diperiksa langsung lewat `SELECT 1` dan tampil sebagai indikator hidup
+// (`badge`).
+type SumberData = { sistem: string; cara: string; catatan: string; Ikon: IconType } & (
+  | { status: "Langsung"; badge: "SIAP" | "EPRESENSI" }
+  | { status: Exclude<StatusSumber, "Langsung">; badge?: undefined }
+);
+
+const SUMBER_DATA: SumberData[] = [
   {
     sistem: "SIAP",
     cara: "Koneksi langsung (baca saja)",
-    status: "Tersambung",
+    status: "Langsung",
+    badge: "SIAP",
     catatan: "Identitas, jabatan, golongan, kelas jabatan, dan jenis kepegawaian.",
     Ikon: RiTeamLine,
   },
   {
     sistem: "e-Presensi",
     cara: "Koneksi langsung (baca saja)",
-    status: "Tersambung",
+    status: "Langsung",
+    badge: "EPRESENSI",
     catatan: "Kehadiran harian, jam masuk/pulang, dan cuti. Ditarik per periode dari menu Presensi.",
     Ikon: RiCalendarCheckLine,
   },
@@ -70,8 +83,7 @@ const SUMBER_DATA: { sistem: string; cara: string; status: StatusSumber; catatan
 ];
 
 // Status selalu TEKS; titik warna cuma pendamping.
-const GAYA_STATUS: Record<StatusSumber, { chip: string; titik: string }> = {
-  Tersambung: { chip: "chip-ok", titik: "bg-green" },
+const GAYA_STATUS: Record<Exclude<StatusSumber, "Langsung">, { chip: string; titik: string }> = {
   Manual: { chip: "chip-draft", titik: "bg-muted" },
   "Belum ada": { chip: "chip-wait", titik: "bg-gold" },
 };
@@ -136,7 +148,7 @@ export default async function SistemPage() {
   const [totalPegawai, pegawaiAktif, sinkronTerakhir, totalUser, userAktif, totalAuditTrail, auditTerakhir, tukinTerbaru] =
     await Promise.all([
       prisma.pegawai.count(),
-      prisma.pegawai.count({ where: { statusPegawai: "AKTIF" } }),
+      prisma.pegawai.count({ where: { statusPegawai: "AKTIF", ...pegawaiBukanUji() } }),
       prisma.pegawai.aggregate({ _max: { sourceSyncedAt: true } }),
       prisma.user.count(),
       prisma.user.count({ where: { aktif: true } }),
@@ -235,10 +247,14 @@ export default async function SistemPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-bold text-ink">{s.sistem}</p>
-                    <span className={`chip ${GAYA_STATUS[s.status].chip} inline-flex items-center gap-1.5 text-[11px]`}>
-                      <span aria-hidden="true" className={`size-1.5 rounded-full ${GAYA_STATUS[s.status].titik}`} />
-                      {s.status}
-                    </span>
+                    {s.status === "Langsung" ? (
+                      s.badge === "SIAP" ? <StatusKoneksiSiap /> : <StatusKoneksiEpresensi />
+                    ) : (
+                      <span className={`chip ${GAYA_STATUS[s.status].chip} inline-flex items-center gap-1.5 text-[11px]`}>
+                        <span aria-hidden="true" className={`size-1.5 rounded-full ${GAYA_STATUS[s.status].titik}`} />
+                        {s.status}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-0.5 text-xs font-semibold text-ink-2">{s.cara}</p>
                   <p className="mt-1 text-xs text-muted">{s.catatan}</p>

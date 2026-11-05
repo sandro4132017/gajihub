@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -50,7 +51,7 @@ export async function putuskanPembayaranAction(
     });
     if (!pegawai) return { error: "Pegawai untuk baris ini tidak ditemukan." };
     if (!canMonitorUbahStatusLintasUnit(authUser, pegawai.satuanKerja)) {
-      return { error: "Role kamu tidak berwenang memutuskan pembayaran baris ini." };
+      return { error: "Peran kamu tidak berwenang memutuskan pembayaran baris ini." };
     }
 
     // Bersyarat pada status: dua PPABP yang menekan tombol bersamaan tidak
@@ -90,6 +91,6 @@ export async function putuskanPembayaranAction(
     }
     return { success: "Tercatat: pembayaran dibayar dulu, dikoreksi di siklus berikutnya." };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("ppabp.banding.actions#1", err, "Terjadi kesalahan") };
   }
 }

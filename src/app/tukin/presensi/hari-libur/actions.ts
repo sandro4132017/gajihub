@@ -5,6 +5,7 @@ import { prisma } from "../../../../lib/prisma";
 import { ambilUserSesi } from "../../../../auth/getSessionAccount";
 import { canKelolaHariLibur, type AuthUser } from "../../../../auth/permissions";
 import { ambilLiburEpresensi } from "../../../../adapters/liburEpresensi";
+import { catatGalat, denganSumber, pesanGalatAwam } from "../../../../lib/koneksi/galatSumber";
 
 export interface HariLiburFormState {
   error?: string;
@@ -146,14 +147,15 @@ export async function imporHariLiburAction(
 
   let baris;
   try {
-    baris = await ambilLiburEpresensi(tahun);
+    baris = await denganSumber("EPRESENSI", () => ambilLiburEpresensi(tahun));
   } catch (e) {
     // Jaringan ke e-Presensi memang bisa tidak terjangkau (beda segmen /
-    // lewat VPN). Sebutkan apa adanya - form manual di bawahnya tetap jalan.
+    // lewat VPN). Sebut sumber & sebab awamnya - form manual tetap jalan.
+    const { ref, info } = catatGalat("hari-libur", e);
     return {
       error:
-        `Gagal menghubungi database e-Presensi: ${e instanceof Error ? e.message : String(e)}. ` +
-        "Kalender tetap bisa diisi manual lewat form di bawah.",
+        pesanGalatAwam(info, ref, "Gagal mengimpor hari libur dari e-Presensi") +
+        " Kalender tetap bisa diisi manual lewat form di bawah.",
     };
   }
 

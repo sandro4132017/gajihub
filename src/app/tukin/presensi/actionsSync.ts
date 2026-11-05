@@ -25,6 +25,14 @@ import { tarikPresensiPeriode } from "../../../adapters/EpresensiAdapter";
 import { simpanHasilPresensiMassal } from "../../../jobs/simpanRekapPresensi";
 import { muatKendalaPeriode, muatKoreksiPeriode } from "../../../lib/kendalaPresensi";
 import { muatHariLiburPeriode } from "../../../lib/hariLibur";
+import {
+  GalatPengguna,
+  catatGalat,
+  jenisGalat,
+  namaSumber,
+  pesanGalatAwam,
+  type SumberGalat,
+} from "../../../lib/koneksi/galatSumber";
 
 export interface SinkronPresensiFormState {
   error?: string;
@@ -141,8 +149,21 @@ export async function tarikPresensiEpresensiAction(
       "e-Presensi (sinkronisasi)"
     );
     const tersimpan = hasilSimpan.tersimpan;
-    for (const pesanGagal of hasilSimpan.gagal) {
-      catat(`Gagal simpan database (${pesanGagal})`);
+    // Satu baris log per KELOMPOK galat (bukan per pegawai) - ribuan pegawai
+    // yang gagal karena sebab sama tidak boleh membanjiri log. Layar hanya
+    // menerima sebab awam + kode rujukan, tidak pernah pesan mentah.
+    const kelompokGagal = new Map<string, { galat: unknown; sumber: SumberGalat; jumlah: number }>();
+    for (const galat of hasilSimpan.gagal) {
+      const info = jenisGalat(galat);
+      const kunci = `${info.sumber}|${info.jenis}|${info.kode ?? "-"}`;
+      const ada = kelompokGagal.get(kunci);
+      if (ada) ada.jumlah++;
+      else kelompokGagal.set(kunci, { galat, sumber: info.sumber, jumlah: 1 });
+    }
+    for (const { galat, sumber, jumlah } of kelompokGagal.values()) {
+      const { ref } = catatGalat("presensi-sync", galat, { jumlah });
+      const alasan = `Gagal disimpan di ${namaSumber(sumber === "LAINNYA" ? "GAJIHUB_DB" : sumber)} (kode rujukan ${ref})`;
+      alasanDilewati.set(alasan, (alasanDilewati.get(alasan) ?? 0) + jumlah);
     }
 
     try {
@@ -167,9 +188,11 @@ export async function tarikPresensiEpresensiAction(
       },
     };
   } catch (err) {
-    // Kegagalan koneksi ke e-Presensi/SIAP paling mungkin terjadi di sini
-    // (jaringan kantor/VPN). Tampilkan apa adanya supaya bisa ditelusuri,
-    // jangan ditelan jadi "terjadi kesalahan".
-    return { error: `Gagal menarik data dari e-Presensi: ${err instanceof Error ? err.message : String(err)}` };
+    // Pesan buatan aplikasi tampil apa adanya. Selebihnya (kegagalan koneksi ke
+    // e-Presensi/SIAP/database Gajihub) hanya disebut sumber & sebab awamnya;
+    // detail tersamar ada di log server dengan kode rujukan yang sama.
+    if (err instanceof GalatPengguna) return { error: err.message };
+    const { ref, info } = catatGalat("presensi-sync", err);
+    return { error: pesanGalatAwam(info, ref, "Gagal menarik data presensi") };
   }
 }

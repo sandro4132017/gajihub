@@ -29,6 +29,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canKonfigurasiAdapter, type AuthUser } from "../../../auth/permissions";
+import { pesanGalatUntukLayar } from "../../../lib/koneksi/galatSumber";
 import {
   periksaSinkronPegawai,
   terapkanSinkronPegawai,
@@ -68,10 +69,9 @@ export async function periksaSyncPegawaiAction(
   try {
     return { rencana: await periksaSinkronPegawai(prisma) };
   } catch (e) {
-    // Kegagalan koneksi SIAP dikatakan apa adanya - paling sering VPN belum
-    // tersambung atau instance-nya berganti, dan dua-duanya bukan sesuatu
-    // yang bisa ditebak dari pesan "terjadi kesalahan".
-    return { error: `Gagal membaca SIAP: ${e instanceof Error ? e.message : String(e)}` };
+    // Sebab gangguan (VPN putus, server mati, kredensial) dikatakan dengan
+    // kalimat awam; detail teknisnya hanya di log server, lewat kode rujukan.
+    return { error: pesanGalatUntukLayar("admin.syncPegawai.periksa", e, "Gagal membaca SIAP") };
   }
 }
 
@@ -139,6 +139,6 @@ export async function terapkanSyncPegawaiAction(
     revalidatePath("/admin/sistem");
     return { hasil };
   } catch (e) {
-    return { error: `Sinkronisasi gagal: ${e instanceof Error ? e.message : String(e)}` };
+    return { error: pesanGalatUntukLayar("admin.syncPegawai.terapkan", e, "Sinkronisasi gagal") };
   }
 }

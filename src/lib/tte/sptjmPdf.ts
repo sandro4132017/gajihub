@@ -585,7 +585,8 @@ function renderKopTeksFallback(page: PDFPage, fontBold: PDFFont, fontRegular: PD
 }
 
 /**
- * Membubuhkan stempel QR Code TTE BSrE murni (Simulasi Offline / Fallback saat BSrE tidak dapat dijangkau)
+ * Membubuhkan stempel QR Code TTE BSrE murni (Simulasi Offline / Fallback saat BSrE tidak dapat dijangkau).
+ * Hanya dipanggil di non-production dengan TTE_SIMULASI=true (lihat bolehSimulasiTte).
  */
 export async function terapkanStempelTteSimulasi(
   pdfBuffer: Buffer,

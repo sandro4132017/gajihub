@@ -83,6 +83,8 @@ export function Paginasi({
   info,
   totalBaris,
   labelBaris = "baris",
+  namaParam = { hal: "hal", per: "per" },
+  anchor,
 }: {
   /** Path halaman tanpa query, mis. "/kasubag/kalkulasi". */
   basePath: string;
@@ -91,12 +93,20 @@ export function Paginasi({
   info: HasilPaginasi;
   totalBaris: number;
   labelBaris?: string;
+  /**
+   * Nama query untuk nomor & ukuran halaman. Diganti bila SATU halaman punya
+   * lebih dari satu tabel berpaginasi, supaya pindah halaman di tabel yang satu
+   * tidak ikut menggeser tabel lainnya.
+   */
+  namaParam?: { hal: string; per: string };
+  /** Id elemen tujuan gulir setelah pindah halaman (tanpa "#"). */
+  anchor?: string;
 }) {
   const url = (halaman: number, perHalaman: number) => {
     const q = new URLSearchParams(params);
-    q.set("hal", String(halaman));
-    q.set("per", String(perHalaman));
-    return `${basePath}?${q.toString()}`;
+    q.set(namaParam.hal, String(halaman));
+    q.set(namaParam.per, String(perHalaman));
+    return `${basePath}?${q.toString()}${anchor ? `#${anchor}` : ""}`;
   };
 
   const { halaman, perHalaman, totalHalaman, mulai, selesai } = info;

@@ -15,7 +15,7 @@ export default async function EksekusiUsulanRolePage() {
   const akun = await getSessionAccount();
   const authUser: AuthUser | null = akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canEksekusiPerubahanRole(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengeksekusi usulan perubahan role." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengeksekusi usulan perubahan role." />;
   }
 
   const [usulanList, satuanKerjaRows] = await Promise.all([

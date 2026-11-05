@@ -14,6 +14,7 @@ import {
   tukarKodeKeToken,
 } from "../../../../auth/sso";
 import { kunciSidikNik, sidikNik } from "../../../../auth/sidikNik";
+import { pesanGalatUntukLayar } from "../../../../lib/koneksi/galatSumber";
 import { COOKIE_STATE_SSO } from "../route";
 
 export const dynamic = "force-dynamic";
@@ -59,12 +60,12 @@ export async function GET(req: NextRequest) {
   if (galatNaco) {
     return keLogin(req, "ditolak", req.nextUrl.searchParams.get("error_description") ?? galatNaco);
   }
-  if (!kode) return keLogin(req, "gagal", "Naco tidak mengirimkan authorization code.");
+  if (!kode) return keLogin(req, "gagal", "Akun Kemnaker tidak mengirim tanda masuk. Ulangi dari halaman login.");
 
   // Verifikasi state SEBELUM kode dipakai - ini yang menahan CSRF login.
   const stateCookie = req.cookies.get(COOKIE_STATE_SSO)?.value;
   if (!stateCookie || !state || stateCookie !== state) {
-    return keLogin(req, "gagal", "Penanda keamanan (state) tidak cocok. Ulangi dari halaman login, jangan dari tautan lama.");
+    return keLogin(req, "gagal", "Sesi masuk sudah kedaluwarsa atau dibuka dari tautan lama. Ulangi dari halaman login.");
   }
 
   try {
@@ -193,9 +194,15 @@ export async function GET(req: NextRequest) {
     res.cookies.delete(COOKIE_STATE_SSO);
     return res;
   } catch (e) {
-    // Pesan galat Naco ikut ditampilkan - waktu memasang SSO, sebabnya
-    // hampir selalu redirect_uri yang tidak sama persis dengan yang
-    // didaftarkan, dan pesan generik menyembunyikan itu.
-    return keLogin(req, "gagal", e instanceof Error ? e.message : "Kesalahan tidak dikenal.");
+    // Pesan mentah Naco (bisa memuat alamat/redirect_uri) hanya tampil bila
+    // NACO_DEBUG="true", yaitu saat SSO sedang dipasang. Selain itu layar
+    // menerima kalimat awam + kode rujukan; detailnya ada di log server.
+    const awam = pesanGalatUntukLayar("sso.callback", e, "Login SSO gagal");
+    const debug = process.env.NACO_DEBUG?.trim() === "true";
+    return keLogin(
+      req,
+      "gagal",
+      debug ? (e instanceof Error ? e.message : "Kesalahan tidak dikenal.") : awam
+    );
   }
 }

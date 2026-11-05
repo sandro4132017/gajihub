@@ -9,27 +9,19 @@ export default function ErrorPage({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // error.message sengaja tidak dirender: bisa memuat detail internal. Pengguna
+  // hanya diberi kode rujukan (istilah sama dengan galatSumber.ts) untuk dilaporkan.
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
-      <h1 className="text-4xl font-bold text-navy">500</h1>
-      <p className="mt-2 text-lg font-medium text-ink">Terjadi Kesalahan pada Server</p>
-      <p className="mt-1 text-sm text-muted">
-        Permintaan Anda tidak dapat diproses saat ini. Silakan coba beberapa saat lagi.
-      </p>
-
-      {/* Informasi error untuk membantu diagnosis pengembang */}
-      {error && (
-        <div className="mt-4 max-w-xl rounded-xl border border-red/20 bg-red-tint/30 p-4 text-left">
-          <p className="font-mono text-xs font-semibold text-red">
-            {error.message || "Kesalahan internal (tanpa deskripsi)"}
-          </p>
-          {error.digest && (
-            <p className="mt-1 font-mono text-[11px] text-muted">
-              Digest ID: {error.digest}
-            </p>
-          )}
-        </div>
-      )}
+      <div role="alert">
+        <h1 className="text-2xl font-bold text-navy">Halaman gagal dimuat</h1>
+        <p className="mt-2 text-sm text-muted">
+          Coba muat ulang halaman ini. Kalau masih gagal, laporkan ke Admin Gajihub.
+        </p>
+        {error?.digest && (
+          <p className="mt-2 font-mono text-xs text-muted">kode rujukan {error.digest}</p>
+        )}
+      </div>
 
       <div className="mt-6 flex gap-3">
         <button

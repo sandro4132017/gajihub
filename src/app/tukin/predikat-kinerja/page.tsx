@@ -66,7 +66,7 @@ export default async function PredikatKinerjaPage({
   const authUser: AuthUser | null =
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
   if (!authUser || !canBukaHalamanPredikatKinerja(authUser)) {
-    return <AksesDitolak pesan="Role kamu tidak berwenang mengelola predikat kinerja." />;
+    return <AksesDitolak pesan="Peran kamu tidak berwenang mengelola predikat kinerja." />;
   }
 
   // KASUBAG_TU dipaksa ke unitnya sendiri di level QUERY (bukan cuma

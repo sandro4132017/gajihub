@@ -12,6 +12,8 @@ import {
   parseNomorSptjm,
 } from "@/lib/tte/sptjmTypes";
 import { Modal } from "@/components/feedback/Modal";
+import { StatusKoneksiBsre } from "./StatusKoneksiBsre";
+import { labelStatusSertifikat } from "../../lib/tte/labelStatusSertifikat";
 import {
   FiCheckCircle,
   FiLock,
@@ -141,7 +143,7 @@ export function ModalPassphraseTte({
           setStatusSertifikat({
             loading: false,
             status: "OFFLINE",
-            pesan: res?.error || "Server BSrE sedang offline (mode simulasi aktif).",
+            pesan: res?.error || "Server BSrE tidak dapat dihubungi. Penandatanganan belum bisa dilakukan.",
           });
         }
       })
@@ -149,7 +151,7 @@ export function ModalPassphraseTte({
         setStatusSertifikat({
           loading: false,
           status: "OFFLINE",
-          pesan: "Server BSrE sedang offline (mode simulasi aktif).",
+          pesan: "Server BSrE tidak dapat dihubungi. Penandatanganan belum bisa dilakukan.",
         });
       });
   };
@@ -276,11 +278,9 @@ export function ModalPassphraseTte({
         if (onSukses) onSukses(res);
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       setState({
-        error: `Gagal menghubungi server TTE: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        error: "Gagal menghubungi server TTE. Periksa koneksi lalu coba lagi.",
       });
     } finally {
       setPending(false);
@@ -343,14 +343,18 @@ export function ModalPassphraseTte({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-extrabold text-green">
-                  Tanda Tangan Elektronik (TTE) Selesai!
+                  {state.isSimulasi
+                    ? "Stempel simulasi dibubuhkan"
+                    : "Tanda Tangan Elektronik (TTE) Selesai!"}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-ink">
                   Dokumen <strong>SPTJM {labelJenis}</strong> periode{" "}
                   <strong>
                     {periodeBulan}/{periodeTahun}
                   </strong>{" "}
-                  telah berhasil disahkan secara elektronik menggunakan sertifikat BSrE BSSN.
+                  {state.isSimulasi
+                    ? "diberi stempel simulasi, bukan tanda tangan elektronik."
+                    : "telah berhasil disahkan secara elektronik menggunakan sertifikat BSrE BSSN."}
                 </p>
               </div>
             </div>
@@ -380,7 +384,7 @@ export function ModalPassphraseTte({
 
             {state.isSimulasi && (
               <p className="mt-2 text-[11px] text-muted italic">
-                *Tanda tangan digital dibubuhkan dalam mode simulasi internal (siap masuk SAKTI).
+                *Stempel SIMULASI (lingkungan pengembangan) - BUKAN tanda tangan BSrE dan tidak sah untuk SAKTI.
               </p>
             )}
           </div>
@@ -510,10 +514,10 @@ export function ModalPassphraseTte({
                 statusSertifikat.status === "ISSUE"
                   ? "border-green/30 bg-green/10 text-green"
                   : statusSertifikat.status === "OFFLINE" || statusSertifikat.status === "NETWORK_ERROR"
-                  ? "border-biru/30 bg-biru/10 text-biru"
+                  ? "border-red/30 bg-red-tint text-red"
                   : statusSertifikat.status === "INPUT"
                   ? "border-line-2 bg-surface-2 text-muted"
-                  : "border-amber-500/30 bg-amber-500/10 text-amber-700"
+                  : "border-gold/40 bg-gold-tint text-gold-deep"
               }`}
             >
               <div className="flex items-center justify-between font-semibold">
@@ -523,7 +527,7 @@ export function ModalPassphraseTte({
                   ) : (
                     <FiInfo className="size-4 shrink-0" />
                   )}
-                  Status Sertifikat BSrE: {statusSertifikat.status === "ISSUE" ? "ISSUE (Aktif & Siap)" : statusSertifikat.status}
+                  Status Sertifikat BSrE: {labelStatusSertifikat(statusSertifikat.status)}
                 </span>
 
                 {(statusSertifikat.status === "NOT_REGISTERED" || statusSertifikat.status === "BELUM_TERDAFTAR") &&
@@ -622,6 +626,9 @@ export function ModalPassphraseTte({
               <span>{state.error}</span>
             </div>
           )}
+
+          {/* Status layanan BSrE: hanya peringatan, tombol tetap aktif. */}
+          <StatusKoneksiBsre paksaSaatMuat denganPeringatan />
 
           {/* Tombol Aksi */}
           <div className="mt-5 flex items-center justify-end gap-2 pt-2 border-t border-line-2">

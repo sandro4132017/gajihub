@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kunciPeriode, pilihPeriode, type PeriodeSaya } from "../saya/periodeSaya";
+import { kunciPeriode, periodeDariParam, periodeTetangga, pilihPeriode, type PeriodeSaya } from "../saya/periodeSaya";
 
 const TERSEDIA: PeriodeSaya[] = [
   { bulan: 8, tahun: 2026 },
@@ -37,5 +37,38 @@ describe("pilihPeriode", () => {
   it("daftar kosong menghasilkan null, bukan periode karangan", () => {
     expect(pilihPeriode("2026-08", [])).toBeNull();
     expect(pilihPeriode(undefined, [])).toBeNull();
+  });
+});
+
+describe("periodeDariParam", () => {
+  it("menerima bulan 1-12 dan tahun 4 digit; nol depan dibuang", () => {
+    expect(periodeDariParam("8", "2026")).toEqual({ bulan: 8, tahun: 2026 });
+    expect(periodeDariParam("08", "2026")).toEqual({ bulan: 8, tahun: 2026 });
+    expect(periodeDariParam("12", "1000")).toEqual({ bulan: 12, tahun: 1000 });
+  });
+
+  it("menolak yang tidak sah", () => {
+    expect(periodeDariParam("0", "2026")).toBeNull();
+    expect(periodeDariParam("13", "2026")).toBeNull();
+    expect(periodeDariParam("abc", "2026")).toBeNull();
+    expect(periodeDariParam("8", "26")).toBeNull();
+    expect(periodeDariParam("8", "99999")).toBeNull();
+    expect(periodeDariParam("8.5", "2026")).toBeNull();
+    expect(periodeDariParam("", "")).toBeNull();
+  });
+});
+
+describe("periodeTetangga", () => {
+  const sekarang = { bulan: 9, tahun: 2026 };
+
+  it("menyeberang tahun di kedua arah", () => {
+    expect(periodeTetangga({ bulan: 1, tahun: 2026 }, sekarang).sebelum).toEqual({ bulan: 12, tahun: 2025 });
+    expect(periodeTetangga({ bulan: 12, tahun: 2025 }, sekarang).sesudah).toEqual({ bulan: 1, tahun: 2026 });
+  });
+
+  it("sesudah ada sampai bulan berjalan, lalu null", () => {
+    expect(periodeTetangga({ bulan: 8, tahun: 2026 }, sekarang).sesudah).toEqual({ bulan: 9, tahun: 2026 });
+    expect(periodeTetangga({ bulan: 9, tahun: 2026 }, sekarang).sesudah).toBeNull();
+    expect(periodeTetangga({ bulan: 10, tahun: 2026 }, sekarang).sesudah).toBeNull();
   });
 });

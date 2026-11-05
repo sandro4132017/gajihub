@@ -58,7 +58,7 @@ function Baris({
         <span className={`text-xs ${tebal ? "font-bold text-ink" : redup ? "text-muted" : "text-ink-2"}`}>
           {label}
         </span>
-        {catatan && <span className="block text-[11px] leading-snug text-muted">{catatan}</span>}
+        {catatan && <span className="block text-xs leading-snug text-muted">{catatan}</span>}
       </div>
       <span
         className={`shrink-0 font-mono text-xs tabular-nums ${
@@ -84,7 +84,7 @@ function Kelompok({
   return (
     <div className="rounded-xl border border-line bg-surface p-3">
       <p className="text-xs font-bold text-ink">{judul}</p>
-      <p className="mt-0.5 text-[11px] leading-snug text-muted">Sumber: {sumber}</p>
+      <p className="mt-0.5 text-xs leading-snug text-muted">Sumber: {sumber}</p>
       <div className="mt-2">{children}</div>
     </div>
   );
@@ -153,8 +153,8 @@ export function RincianPendapatan({
     <section className="card p-4">
       <h2 className="text-[14.5px] font-extrabold tracking-tight text-ink">Rincian pendapatan</h2>
       <p className="mt-1 text-xs leading-relaxed text-muted">
-        Tiap komponen dikelompokkan menurut sistem yang menentukan angkanya - itu yang menentukan ke mana
-        koreksinya diajukan kalau ada yang tidak sesuai.
+        Tiap komponen dikelompokkan menurut asal datanya, supaya jelas ke mana koreksi diajukan bila ada yang
+        tidak sesuai.
       </p>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -167,7 +167,7 @@ export function RincianPendapatan({
         {gaji ? (
           <Kelompok
             judul="Gaji pokok & tunjangan melekat"
-            sumber="file gaji induk GPP (Web Gaji Kemenkeu), diunggah PPABP"
+            sumber="Web Gaji Kemenkeu, lewat PPABP"
           >
             <Baris label="Gaji pokok" nilai={gaji.gajiPokok} redup={gaji.gajiPokok === 0} />
             <Baris
@@ -179,7 +179,7 @@ export function RincianPendapatan({
             <Baris
               label="Tunjangan umum/jabatan"
               nilai={gaji.tunjanganUmum + gaji.tunjanganStruktural}
-              catatan="Di file GPP tersimpan dua kolom terpisah (umum PNS & struktural)"
+              catatan="Gabungan tunjangan umum dan tunjangan struktural"
               redup={gaji.tunjanganUmum + gaji.tunjanganStruktural === 0}
             />
             <Baris
@@ -216,7 +216,7 @@ export function RincianPendapatan({
             <Baris
               label="Gaji bersih"
               nilai={gaji.gajiBersih}
-              catatan="Diambil apa adanya dari kolom bersih file GPP"
+              catatan="Sesuai Web Gaji Kemenkeu"
               tebal
               garisAtas
             />
@@ -224,11 +224,11 @@ export function RincianPendapatan({
         ) : (
           <Kelompok
             judul="Gaji pokok & tunjangan melekat"
-            sumber="file gaji induk GPP (Web Gaji Kemenkeu), diunggah PPABP"
+            sumber="Web Gaji Kemenkeu, lewat PPABP"
           >
             <p className="py-2 text-xs leading-relaxed text-muted">
-              Belum ada data untuk periode ini karena file gaji induknya belum diunggah PPABP. Yang tampil di
-              bawah baru komponen yang dihitung Gajihub sendiri.
+              Gaji pokok dan tunjangan bulan ini belum tersedia. Yang tampil di sebelahnya baru Tunjangan Kinerja
+              dan Uang Makan.
             </p>
           </Kelompok>
         )}
@@ -269,7 +269,7 @@ export function RincianPendapatan({
           </Kelompok>
 
           {gaji && gaji.honorarium > 0 && (
-            <Kelompok judul="Honorarium" sumber="diisi manual PPABP - tidak ada di file GPP">
+            <Kelompok judul="Honorarium" sumber="dicatat oleh PPABP">
               <Baris label="Honorarium" nilai={gaji.honorarium} />
             </Kelompok>
           )}
@@ -292,9 +292,8 @@ export function RincianPendapatan({
         <div className="mt-3 border-l-2 border-l-gold bg-surface-2 p-3">
           <p className="text-xs font-bold text-ink">Komponen tidak berjumlah pas dengan totalnya</p>
           <p className="mt-1 text-[11px] leading-relaxed text-ink-2">
-            Jumlah komponen di atas tidak sama dengan total yang tersimpan - kemungkinan ada kolom di file GPP
-            yang belum dipetakan sistem ini. Angka yang tampil tetap angka yang tersimpan, bukan hasil hitungan
-            ulang. Laporkan ke PPABP supaya file unggahannya dicek.
+            Jumlah komponen di atas tidak sama dengan total yang tercatat. Angka yang tampil adalah angka resmi
+            dari Web Gaji. Laporkan ke PPABP supaya datanya diperiksa.
           </p>
           <dl className="mt-1.5 space-y-0.5 text-[11px] text-muted">
             {Math.abs(selisihPenghasilan) > 1 && (

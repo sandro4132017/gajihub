@@ -237,14 +237,25 @@ permanen** - hampir semua halaman di sini bertabel lebar (rincian tukin 12
 kolom, grid ADK 33 kolom), jadi panel tetap selebar 320px memakan ruang yang
 justru paling dibutuhkan.
 
-- **Isinya diambil saat DIBUKA** lewat `GET /api/kabar`, bukan ikut tiap render
-  halaman - kalau ikut, setiap halaman menanggung 4 query untuk panel yang
-  mungkin tidak pernah dibuka.
-- **Notifikasi** = yang perlu ditangani (kalkulasi DRAFT, banding menunggu,
-  rekonsiliasi SELISIH), diturunkan dari data yang sudah ada - tidak ada tabel
-  notifikasi baru. **Aktivitas** = `AuditTrail` + `ApprovalLog` digabung lalu
-  diurutkan ulang (approval hidup di tabel tersendiri; kalau tidak digabung,
-  keputusan approval - salah satu aktivitas terpenting - tidak pernah muncul).
+- **Isi panel diambil saat DIBUKA** lewat `GET /api/kabar`. Badge lonceng
+  memakai `GET /api/kabar?ringkas=1` (hanya jumlah) saat komponen dipasang -
+  bukan ikut tiap render halaman.
+- **Notifikasi per role** mengikuti alur kirim rekap, diturunkan dari data yang
+  sudah ada (tidak ada tabel notifikasi baru):
+  - KASUBAG_TU: rekap DIKEMBALIKAN + banding DIAJUKAN.
+  - PPABP/ADMIN: rekap TERKIRIM yang belum diunduh ADK Tukin/Uang Makan
+    sesudahnya (`TODO(confirm)` definisi "diproses") + rekonsiliasi -> `/ppabp/banding`.
+  - OSDMA: banding MENUNGGU_APPROVAL_FINAL.
+  - PIMPINAN: tanpa notifikasi.
+  - Notifikasi lama "kalkulasi Tukin DRAFT" sudah dihapus.
+- **Aktivitas** = `AuditTrail` + `ApprovalLog` digabung lalu diurutkan ulang
+  (approval hidup di tabel tersendiri; kalau tidak digabung, keputusan approval -
+  salah satu aktivitas terpenting - tidak pernah muncul). Baris berulang ≤15 menit
+  per hari WIB digabung; dikelompokkan per hari; dipaginasi kursor
+  `(timestamp,id)` lewat "Muat lebih banyak" (`?sebelum=`). Kalimat per
+  entitas dari `src/lib/kabar/kalimatAudit.ts` (daftar putih, bukan data mentah).
+- **Tautan** hanya muncul bila guard halaman tujuan lolos (`tautanKabar.ts`).
+  Jangan menautkan halaman yang akan berakhir di AksesDitolak.
 - Tombolnya **tidak dirender untuk PEGAWAI** (server juga menolak, 403) - pola
   sama dengan tombol approval yang disembunyikan dari PIMPINAN: tombol yang
   selalu kosong itu dead-end.

@@ -1,5 +1,6 @@
 "use server";
 
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
@@ -82,7 +83,7 @@ export async function inputSkHukdisAction(
     const pegawai = await prisma.pegawai.findUnique({ where: { id: pegawaiId } });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
     if (!canInputSkHukumanDisiplin(authUser, pegawai.satuanKerja)) {
-      return { error: "Role kamu tidak berwenang input SK Hukuman Disiplin unit ini." };
+      return { error: "Peran kamu tidak berwenang input SK Hukuman Disiplin unit ini." };
     }
 
     await prisma.skHukumanDisiplin.create({
@@ -114,6 +115,6 @@ export async function inputSkHukdisAction(
           : ""),
     };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga." };
+    return { error: pesanGalatUntukLayar("kasubag.sk-hukuman-disiplin.actions#1", err, "Terjadi kesalahan") };
   }
 }

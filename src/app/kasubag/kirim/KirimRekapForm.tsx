@@ -1,12 +1,14 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { IoMdCheckmark, IoMdRemove } from "react-icons/io";
 import { RiErrorWarningLine } from "react-icons/ri";
-import { kirimRekapUnitAction, type KirimFormState } from "./actions";
+import type { KirimFormState } from "./actions";
 import { Modal } from "../../../components/feedback/Modal";
+import { kirimAksiJson } from "../../../lib/koneksi/jawabanAksi";
 
-const INITIAL_STATE: KirimFormState = {};
+const INITIAL_STATE: KirimFormState & { tidakPasti?: boolean } = {};
 
 export function KirimRekapForm({
   periodeBulan,
@@ -35,7 +37,41 @@ export function KirimRekapForm({
   alasanKembali: string | null;
   terkunci: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(kirimRekapUnitAction, INITIAL_STATE);
+  // Dikirim lewat Route Handler JSON (/api/kasubag/kirim), bukan Server Action:
+  // firewall jaringan memblokir body multipart Server Action.
+  const [state, setState] = useState(INITIAL_STATE);
+  const [pending, setPending] = useState(false);
+  const [isRefreshing, startRefresh] = useTransition();
+  const router = useRouter();
+  // Penjaga kirim ganda yang dicek SINKRON - `pending` baru terbaca di render
+  // berikutnya, jadi dua klik cepat bisa lolos kalau hanya mengandalkannya.
+  const sedangKirim = useRef(false);
+  // Selama halaman dimuat ulang tombol tetap mati, supaya tidak ada kiriman
+  // kedua di atas data yang belum diperbarui.
+  const sibuk = pending || isRefreshing;
+
+  async function kirim(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (sedangKirim.current) return;
+    sedangKirim.current = true;
+    const data = new FormData(e.currentTarget);
+    setPending(true);
+    try {
+      const jawaban = await kirimAksiJson("/api/kasubag/kirim", {
+        bulan: periodeBulan,
+        tahun: periodeTahun,
+        pernyataan: String(data.get("pernyataan") ?? ""),
+        catatan: String(data.get("catatan") ?? ""),
+      });
+      setState(jawaban);
+      // revalidatePath di route tidak menyegarkan RSC client; sukses dan hasil
+      // yang tidak pasti sama-sama memuat ulang supaya status terkunci terbaca.
+      if (jawaban.success || jawaban.tidakPasti) startRefresh(() => router.refresh());
+    } finally {
+      sedangKirim.current = false;
+      setPending(false);
+    }
+  }
   const [setuju, setSetuju] = useState(false);
   const [konfirmasiTerbuka, setKonfirmasiTerbuka] = useState(false);
   const [notifTertutup, setNotifTertutup] = useState(false);
@@ -94,7 +130,9 @@ export function KirimRekapForm({
       >
         <p>{state.error}</p>
         <p className="mt-2 text-muted">
-          Tidak ada data yang berubah - rekap unit ini masih bisa disunting seperti biasa.
+          {state.tidakPasti
+            ? "Status pengiriman belum pasti - halaman dimuat ulang; periksa apakah rekap sudah terkunci sebelum mengirim lagi."
+            : "Tidak ada data yang berubah - rekap unit ini masih bisa disunting seperti biasa."}
         </p>
       </Modal>
     </>
@@ -230,9 +268,7 @@ export function KirimRekapForm({
             <p className="mt-0.5 text-xs text-muted">Rekap siap dikirim ke PPABP.</p>
           </div>
 
-          <form action={formAction} className="mt-3">
-            <input type="hidden" name="bulan" value={periodeBulan} />
-            <input type="hidden" name="tahun" value={periodeTahun} />
+          <form onSubmit={kirim} className="mt-3">
 
             {/* PERNYATAAN - satu-satunya blok berkotak yang tersisa di kolom
                 ini, dan itu disengaja: inilah yang menahan pengiriman. Saat
@@ -275,11 +311,11 @@ export function KirimRekapForm({
                 sana mengirimnya tanpa sambungan tambahan. */}
             <button
               type="button"
-              disabled={pending || !setuju}
+              disabled={sibuk || !setuju}
               onClick={() => setKonfirmasiTerbuka(true)}
               className="btn btn-primary mt-3 w-full"
             >
-              {pending ? "Mengirim..." : "Kirim & kunci"}
+              {sibuk ? "Mengirim..." : "Kirim & kunci"}
             </button>
 
             <Modal
@@ -289,19 +325,19 @@ export function KirimRekapForm({
               // Tidak bisa ditutup selagi permintaannya berjalan: menutup
               // dialog di tengah pengiriman membuat orang mengira kirimannya
               // batal, padahal servernya tetap memprosesnya.
-              onTutup={pending ? null : () => setKonfirmasiTerbuka(false)}
+              onTutup={sibuk ? null : () => setKonfirmasiTerbuka(false)}
               aksi={
                 <>
                   <button
                     type="button"
-                    disabled={pending}
+                    disabled={sibuk}
                     onClick={() => setKonfirmasiTerbuka(false)}
                     className="btn btn-ghost btn-sm"
                   >
                     Batal
                   </button>
-                  <button type="submit" disabled={pending} className="btn btn-primary btn-sm">
-                    {pending ? "Mengirim..." : "Ya, kirim & kunci"}
+                  <button type="submit" disabled={sibuk} className="btn btn-primary btn-sm">
+                    {sibuk ? "Mengirim..." : "Ya, kirim & kunci"}
                   </button>
                 </>
               }

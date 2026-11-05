@@ -14,6 +14,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { hitungHashBerkas, hashSama } from "@/lib/tte/hashBerkas";
 
 export const dynamic = "force-dynamic";
@@ -88,11 +89,7 @@ export async function POST(
     });
   } catch (err) {
     return NextResponse.json(
-      {
-        error: `Gagal memeriksa berkas: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      },
+      { error: pesanGalatUntukLayar("tte.verify.validasi", err, "Gagal memeriksa berkas") },
       { status: 500 }
     );
   }

@@ -61,7 +61,7 @@ export function AccountMenu({
         window.location.href = data.redirect || "/";
         return;
       }
-      setError(data.error || "Gagal mengganti role.");
+      setError(data.error || "Gagal mengganti peran.");
       setPending(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Terjadi kesalahan koneksi ke server.");
@@ -106,7 +106,7 @@ export function AccountMenu({
           {multiRole && (
             <>
               <div className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-[1.2px] text-muted">
-                Ganti role
+                Ganti peran
               </div>
               {rolesTersedia.map((r) => {
                 const aktif = r === role;
@@ -187,7 +187,7 @@ export function AccountMenu({
 
       {multiRole && !ringkas && (
         <p className="mt-1.5 px-1 text-[10px] leading-snug text-nav-text">
-          Akun ini punya {rolesTersedia.length} role - klik nama di atas buat ganti sudut pandang.
+          Akun ini punya {rolesTersedia.length} peran - klik nama di atas untuk berpindah peran.
         </p>
       )}
     </div>

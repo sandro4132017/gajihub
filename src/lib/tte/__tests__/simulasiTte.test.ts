@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   AWALAN_ID_SIMULASI,
   apakahHasilSimulasi,
+  bolehSimulasiTte,
   idDokumenSimulasi,
+  klasifikasiGagalBsre,
+  samarkanPassphrase,
 } from "../simulasiTte";
 
 // ============================================================================
@@ -84,5 +87,63 @@ describe("gerbang keabsahan di halaman verifikasi", () => {
     for (const status of ["DRAFT", "MENUNGGU_TTE", "GAGAL"]) {
       expect(sah({ id: UUID, idDokumenBsre: "BSRE-99999999", status })).toBe(false);
     }
+  });
+});
+
+describe("bolehSimulasiTte", () => {
+  const kasus: Array<[string, string | undefined, boolean]> = [
+    ["production", "true", false],
+    ["production", "TRUE", false],
+    ["production", undefined, false],
+    ["development", "true", true],
+    ["development", "TRUE", true],
+    ["development", " true ", true],
+    ["development", undefined, false],
+    ["development", "1", false],
+    ["test", "true", true],
+    ["test", undefined, false],
+    ["test", "1", false],
+  ];
+  it.each(kasus)("NODE_ENV=%s TTE_SIMULASI=%s -> %s", (nodeEnv, flag, hasil) => {
+    expect(bolehSimulasiTte({ NODE_ENV: nodeEnv, TTE_SIMULASI: flag })).toBe(hasil);
+  });
+});
+
+describe("klasifikasiGagalBsre", () => {
+  const kasus: Array<[{ error?: string; statusCode?: number }, string]> = [
+    [{ statusCode: 500 }, "BSRE_ERROR"],
+    [{ statusCode: 503 }, "BSRE_ERROR"],
+    [{ error: "fetch failed" }, "NETWORK_TIMEOUT"],
+    [{ error: "connect ECONNREFUSED 10.0.0.1:80" }, "NETWORK_TIMEOUT"],
+    [{ error: "Timeout menghubungi BSrE" }, "NETWORK_TIMEOUT"],
+    [{ statusCode: 0, error: "ditolak" }, "PASSPHRASE_SALAH"],
+    [{ error: "Passphrase salah", statusCode: 400 }, "PASSPHRASE_SALAH"],
+    [{ statusCode: 422, error: "dokumen tidak valid" }, "BSRE_ERROR"],
+  ];
+  it.each(kasus)("%j -> %s", (input, kategori) => {
+    expect(klasifikasiGagalBsre(input).kategori).toBe(kategori);
+  });
+
+  it("pesan 5xx menyebut kode HTTP", () => {
+    expect(klasifikasiGagalBsre({ statusCode: 503 }).pesanPengguna).toMatch(/HTTP 503/);
+  });
+});
+
+describe("samarkanPassphrase", () => {
+  it("mengganti semua kemunculan secara literal", () => {
+    expect(samarkanPassphrase("a RAHASIA-1 b RAHASIA-1", "RAHASIA-1")).toBe(
+      "a [disamarkan] b [disamarkan]"
+    );
+  });
+  it("karakter regex di passphrase diperlakukan literal", () => {
+    expect(samarkanPassphrase("x p.*a(1 y", "p.*a(1")).toBe("x [disamarkan] y");
+    expect(samarkanPassphrase("pxxa", "p.*a")).toBe("pxxa");
+  });
+  it("passphrase kosong atau pendek tidak merusak teks", () => {
+    expect(samarkanPassphrase("galat a b", "")).toBe("galat a b");
+    expect(samarkanPassphrase("galat a b", "a")).toBe("galat a b");
+  });
+  it("teks kosong tetap kosong", () => {
+    expect(samarkanPassphrase("", "RAHASIA-1")).toBe("");
   });
 });

@@ -129,7 +129,7 @@ export async function simpanHasilPresensiMassal(
   periodeTahun: number,
   diunggahOlehId: string,
   sourceSystem: string
-): Promise<{ tersimpan: number; gagal: string[] }> {
+): Promise<{ tersimpan: number; gagal: unknown[] }> {
   if (daftar.length === 0) return { tersimpan: 0, gagal: [] };
 
   const awal = new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1));
@@ -137,7 +137,9 @@ export async function simpanHasilPresensiMassal(
   const sekarang = new Date();
 
   let tersimpan = 0;
-  const gagal: string[] = [];
+  // Galat disimpan APA ADANYA (bukan err.message): pemanggil yang menentukan
+  // apa yang boleh tampil di layar dan apa yang hanya masuk log server.
+  const gagal: unknown[] = [];
   const UKURAN_POTONGAN = 500;
 
   for (let i = 0; i < daftar.length; i += UKURAN_POTONGAN) {
@@ -251,7 +253,7 @@ export async function simpanHasilPresensiMassal(
           });
           tersimpan++;
         } catch (e) {
-          gagal.push(e instanceof Error ? e.message : String(e));
+          gagal.push(e);
         }
       }
     }

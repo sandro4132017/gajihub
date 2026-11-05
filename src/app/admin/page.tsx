@@ -27,6 +27,8 @@ import { HALAMAN } from "../../components/layout/layoutHalaman";
 import { IkonBercahaya, KartuBercahaya } from "../../components/shared/KartuKpi";
 import { sapaanNama } from "../../components/shared/sapaan";
 import { ToggleModeJaringan } from "./ToggleModeJaringan";
+import { StatusKoneksiBsre } from "../tte/StatusKoneksiBsre";
+import { pegawaiBukanUji } from "../../lib/dataUji";
 
 export const dynamic = "force-dynamic";
 
@@ -134,7 +136,7 @@ export default async function AdminDashboardPage() {
     prisma.usulanPerubahanRole.count({ where: { status: "MENUNGGU" } }),
     prisma.user.groupBy({ by: ["role"], where: { aktif: true }, _count: { _all: true } }),
     prisma.user.count({ where: { aktif: false } }),
-    prisma.pegawai.count({ where: { statusPegawai: "AKTIF" } }),
+    prisma.pegawai.count({ where: { statusPegawai: "AKTIF", ...pegawaiBukanUji() } }),
     prisma.pegawai.aggregate({ _max: { sourceSyncedAt: true } }),
     prisma.logGagalTte.count({ where: { createdAt: { gte: sejakGagalTte } } }),
     prisma.auditTrail.findMany({
@@ -281,6 +283,9 @@ export default async function AdminDashboardPage() {
             <p className="relative mt-3 text-xs text-ink-2">
               {gagalTte === 0 ? "Tidak ada kegagalan tanda tangan" : "Dicatat di log gagal TTE (Kriteria IX BSrE)"}
             </p>
+            <div className="relative mt-2">
+              <StatusKoneksiBsre />
+            </div>
           </KartuBercahaya>
         </div>
 

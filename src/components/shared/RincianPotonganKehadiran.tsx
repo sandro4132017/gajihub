@@ -21,7 +21,7 @@ const LEBAR_PANEL = 260;
  * wadah gulir itu, jadi begitu terbuka area gulirnya melebar dan tabelnya
  * bergeser. Panel `fixed` berada di luar alur tata letak - tabel tidak
  * berubah ukuran sama sekali. Posisinya dihitung dari letak tombol saat
- * dibuka, dan panel ditutup saat halaman digulir atau ukuran jendela berubah
+ * dibuka, dan panel ditutup saat halaman digulir atau LEBAR jendela berubah
  * supaya tidak tertinggal di tempat yang salah.
  */
 function InfoTanggalPopover({ tanggalList }: { tanggalList: string[] }) {
@@ -49,14 +49,20 @@ function InfoTanggalPopover({ tanggalList }: { tanggalList: string[] }) {
       if (!popoverRef.current?.contains(t) && !tombolRef.current?.contains(t)) setPosisi(null);
     }
     const tutup = () => setPosisi(null);
+    // Peramban HP mengirim resize saat bilah alamat muncul/hilang (hanya tinggi yang berubah);
+    // panel baru ditutup bila LEBAR berubah.
+    let lebarTerakhir = window.innerWidth;
+    const tutupBilaLebarBerubah = () => {
+      if (window.innerWidth !== lebarTerakhir) setPosisi(null);
+    };
     document.addEventListener("mousedown", handleClickOutside);
     // capture: gulir di wadah tabel (bukan cuma jendela) juga harus menutup.
     window.addEventListener("scroll", tutup, true);
-    window.addEventListener("resize", tutup);
+    window.addEventListener("resize", tutupBilaLebarBerubah);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       window.removeEventListener("scroll", tutup, true);
-      window.removeEventListener("resize", tutup);
+      window.removeEventListener("resize", tutupBilaLebarBerubah);
     };
   }, [buka]);
 
@@ -67,7 +73,7 @@ function InfoTanggalPopover({ tanggalList }: { tanggalList: string[] }) {
         type="button"
         aria-expanded={buka}
         onClick={alihkan}
-        className="inline-flex size-4 items-center justify-center rounded-full text-teal-deep hover:bg-teal-tint/70 transition-colors focus:outline-none"
+        className="relative inline-flex size-4 items-center justify-center rounded-full text-teal-deep hover:bg-teal-tint/70 transition-colors focus:outline-none before:absolute before:-inset-[14px] before:content-['']"
         title="Klik untuk melihat rincian tanggal kejadian"
         aria-label="Lihat rincian tanggal kejadian"
       >
@@ -111,7 +117,7 @@ function InfoTanggalPopover({ tanggalList }: { tanggalList: string[] }) {
               </div>
             ) : (
               <p className="text-xs text-muted">
-                Rincian tanggal tidak tersedia untuk periode yang diisi lewat template Excel.
+                Rincian tanggal tidak tersedia untuk periode ini.
               </p>
             )}
           </div>
@@ -205,7 +211,7 @@ export function RincianPotonganKehadiran({
         <p className="border-y border-line bg-gold-tint px-3 py-2.5 text-sm text-ink-2">
           <strong>Pejabat Pimpinan Tinggi</strong> - komponen kehadiran dibayar <strong>penuh</strong> sebagai
           kompensasi jabatan. Pelanggaran di bawah tetap ditampilkan apa adanya, tapi <strong>tidak memotong</strong>{" "}
-          tunjangan kinerja periode ini. Dasar hukum pengecualian ini masih menunggu konfirmasi.
+          tunjangan kinerja periode ini. Mengikuti praktik pembayaran yang berlaku di Biro Keuangan.
         </p>
       )}
       <table className="w-full text-sm">
@@ -273,9 +279,10 @@ export function RincianPotonganKehadiran({
 
       {perluHitungUlang && (
         <p className="border-t border-line bg-gold-tint px-3 py-2.5 text-sm text-ink-2">
-          Angka di atas dihitung dari <strong>rekap presensi saat ini</strong>, dan hasilnya berbeda{" "}
-          <strong>{rupiah(Math.abs(selisih!))}</strong> dari yang tersimpan di baris kalkulasi. Artinya presensinya
-          berubah setelah Tukin terakhir dihitung - perlu <strong>hitung ulang</strong> supaya yang dibayarkan sesuai.
+          Angka di atas mengikuti <strong>rekap presensi terbaru</strong> dan berbeda{" "}
+          <strong>{rupiah(Math.abs(selisih!))}</strong> dari Tunjangan Kinerja yang sudah dihitung. Presensi berubah
+          setelah perhitungan terakhir; Kasubag TU unit perlu <strong>menghitung ulang</strong> agar yang dibayarkan
+          sesuai.
         </p>
       )}
     </div>
