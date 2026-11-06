@@ -6,6 +6,7 @@ import type { Role } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../../auth/permissions";
+import { periksaBuatAkun, periksaUbahAssignment } from "./aturanAssignment";
 
 export interface UbahAssignmentRoleFormState {
   error?: string;
@@ -58,6 +59,18 @@ export async function ubahAssignmentRoleAction(
     const target = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!target) return { error: "Akun tidak ditemukan." };
 
+    const periksa = periksaUbahAssignment({
+      aktorId: admin.id,
+      aktorNip: admin.nip,
+      targetUserId,
+      targetNip: target.nip,
+      roleSebelum: { role: target.role, rolesTambahan: target.rolesTambahan },
+      roleBaru: role,
+      rolesTambahanBaru: rolesTambahan,
+      konfirmasiAdmin: String(formData.get("konfirmasiAdmin") ?? ""),
+    });
+    if (!periksa.ok) return { error: periksa.error };
+
     const dataSebelum = {
       role: target.role,
       rolesTambahan: target.rolesTambahan,
@@ -86,7 +99,14 @@ export async function ubahAssignmentRoleAction(
           aksi: "UPDATE",
           aktor: admin.nip,
           dataSebelum,
-          dataSesudah: { role, rolesTambahan, satuanKerja, aktif, sumber: "Kelola assignment role (Admin)" },
+          dataSesudah: {
+            role,
+            rolesTambahan,
+            satuanKerja,
+            aktif,
+            aktorNama: admin.nama,
+            sumber: "Kelola assignment role (Admin)",
+          },
         },
       }),
     ]);
@@ -135,6 +155,12 @@ export async function buatAkunBaruAction(
     if (!pegawaiId || !ROLE_VALID.includes(role)) {
       return { error: "Pegawai dan role tujuan wajib diisi dengan benar." };
     }
+    const periksa = periksaBuatAkun({
+      pegawaiId,
+      role,
+      konfirmasiAdmin: String(formData.get("konfirmasiAdmin") ?? ""),
+    });
+    if (!periksa.ok) return { error: periksa.error };
 
     const pegawai = await prisma.pegawai.findUnique({ where: { id: pegawaiId } });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
@@ -156,7 +182,7 @@ export async function buatAkunBaruAction(
           entitasId: user.id,
           aksi: "CREATE",
           aktor: admin.nip,
-          dataSesudah: { nip: user.nip, nama: user.nama, role, satuanKerja, sumber: "Buat akun baru (Admin, tanpa usulan PPABP)" },
+          dataSesudah: { nip: user.nip, nama: user.nama, role, satuanKerja, aktorNama: admin.nama, sumber: "Buat akun baru (Admin, tanpa usulan PPABP)" },
         },
       });
       return user;

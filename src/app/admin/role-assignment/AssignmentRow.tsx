@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import type { Role, User } from "@prisma/client";
+import type { Role } from "@prisma/client";
 import { ubahAssignmentRoleAction, type UbahAssignmentRoleFormState } from "./actions";
 import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
 import { SearchableSelect } from "../../../components/forms/SearchableSelect";
+import type { BarisAkun } from "./aturanAssignment";
 
 const INITIAL_STATE: UbahAssignmentRoleFormState = {};
 const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
@@ -14,7 +15,7 @@ export function AssignmentRow({
   satuanKerjaList,
   satuanKerjaPegawai,
 }: {
-  user: User;
+  user: BarisAkun;
   satuanKerjaList: string[];
   /** Satuan kerja di data Pegawai - dipakai sebagai default kalau unit akunnya masih kosong. */
   satuanKerjaPegawai: string | null;
@@ -35,6 +36,9 @@ export function AssignmentRow({
   const unitKosong = butuhSatuanKerja && !user.satuanKerja;
   const tambahanTerpilih = rolesTambahan.filter((r) => r !== role);
   const unitLabel = user.satuanKerja ?? satuanKerjaPegawai;
+  // Memberi ADMIN yang belum dimiliki akun ini wajib dicentang (F-01).
+  const sudahAdmin = user.role === "ADMIN" || (user.rolesTambahan ?? []).includes("ADMIN");
+  const adminBaru = !sudahAdmin && (role === "ADMIN" || rolesTambahan.includes("ADMIN"));
 
   return (
     <form action={formAction} className="p-4 sm:p-5">
@@ -91,6 +95,13 @@ export function AssignmentRow({
           {pending ? "Menyimpan..." : "Simpan"}
         </button>
       </div>
+
+      {adminBaru && (
+        <label className="mt-3 flex items-start gap-2 border-l-2 border-gold bg-gold-tint/40 py-1.5 pl-3 pr-2 text-xs font-semibold text-gold-deep">
+          <input type="checkbox" name="konfirmasiAdmin" value="ya" required className="mt-0.5 size-4" />
+          Saya yakin ingin memberi akses Admin. Admin bisa mengubah peran semua akun.
+        </label>
+      )}
 
       {unitKosong && (
         <p className="mt-3 border-l-2 border-gold bg-gold-tint/40 py-1.5 pl-3 pr-2 text-xs font-semibold text-gold-deep">

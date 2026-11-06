@@ -14,6 +14,9 @@ import { HALAMAN } from "../../../components/layout/layoutHalaman";
 
 export const dynamic = "force-dynamic";
 
+/** Hanya kolom yang dipakai layar - sisanya tidak ikut terkirim ke browser. */
+const PILIH_AKUN = { id: true, nip: true, nama: true, role: true, rolesTambahan: true, satuanKerja: true, aktif: true } as const;
+
 /** Role yang punya tab penyaring - PEGAWAI tidak, karena itu bawaan semua akun. */
 const ROLE_KHUSUS: Role[] = ["KASUBAG_TU", "PPABP", "OSDMA", "PIMPINAN", "ADMIN"];
 
@@ -43,6 +46,7 @@ export default async function RoleAssignmentPage({
   const [userNonPegawai, totalAkun, satuanKerjaRows] = await Promise.all([
     prisma.user.findMany({
       where: { OR: [{ role: { not: "PEGAWAI" } }, { rolesTambahan: { isEmpty: false } }] },
+      select: PILIH_AKUN,
       orderBy: { nama: "asc" },
     }),
     prisma.user.count(),
@@ -75,7 +79,7 @@ export default async function RoleAssignmentPage({
   );
 
   const pegawaiTerpilih = pegawaiId ? await prisma.pegawai.findUnique({ where: { id: pegawaiId } }) : null;
-  const akunTerpilih = pegawaiTerpilih ? await prisma.user.findUnique({ where: { nip: pegawaiTerpilih.nip } }) : null;
+  const akunTerpilih = pegawaiTerpilih ? await prisma.user.findUnique({ where: { nip: pegawaiTerpilih.nip }, select: PILIH_AKUN }) : null;
 
   const hrefTab = (r: Role | null) => {
     const p = new URLSearchParams();
@@ -229,7 +233,7 @@ async function PegawaiHasilPencarian({ q, rolePilih }: { q: string; rolePilih: R
     take: 20,
   });
   const akunByNip = new Map(
-    (await prisma.user.findMany({ where: { nip: { in: hasil.map((p) => p.nip) } } })).map((u) => [u.nip, u])
+    (await prisma.user.findMany({ where: { nip: { in: hasil.map((p) => p.nip) } }, select: PILIH_AKUN })).map((u) => [u.nip, u])
   );
   const awalan = `/admin/role-assignment?q=${encodeURIComponent(q)}${rolePilih ? `&role=${rolePilih}` : ""}`;
 

@@ -47,3 +47,50 @@ describe("asalPublik dengan header proxy rusak", () => {
     expect(asalPublik(h, "http://192.168.223.207:3002/a")).toBe("http://192.168.223.207:3002");
   });
 });
+
+describe("asalPublik - Host header palsu tidak dipantulkan (pentest F-03, CWE-601)", () => {
+  const RESMI = "https://gajihub.kemnaker.go.id";
+  const siapkan = (mode: "INTERNAL" | "PUBLIC") => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NETWORK_MODE", mode);
+    vi.stubEnv("NACO_REDIRECT_URI", "");
+  };
+
+  it.each(["INTERNAL", "PUBLIC"] as const)("Host evil.com (%s) -> alamat resmi", (mode) => {
+    siapkan(mode);
+    expect(asalPublik(new Headers({ host: "evil.com" }), "http://evil.com/login")).toBe(RESMI);
+  });
+
+  it("X-Forwarded-Host evil.com juga tidak dipantulkan", () => {
+    siapkan("INTERNAL");
+    const h = new Headers({ "x-forwarded-host": "evil.com", host: "evil.com" });
+    expect(asalPublik(h, "http://evil.com/")).toBe(RESMI);
+  });
+
+  it("XFH palsu tapi Host sah -> pakai Host sah", () => {
+    siapkan("INTERNAL");
+    const h = new Headers({ "x-forwarded-host": "evil.com", host: "192.168.223.206:3002" });
+    expect(asalPublik(h, "http://192.168.223.206:3002/")).toBe("http://192.168.223.206:3002");
+  });
+
+  it("localhost di produksi -> alamat resmi", () => {
+    siapkan("INTERNAL");
+    expect(asalPublik(new Headers({ host: "localhost:3002" }), "http://localhost:3002/")).toBe(RESMI);
+  });
+
+  it("IP staging dan produksi (port 3002) tetap dipertahankan", () => {
+    siapkan("INTERNAL");
+    expect(asalPublik(new Headers({ host: "192.168.223.206:3002" }), "http://x/")).toBe("http://192.168.223.206:3002");
+    expect(asalPublik(new Headers({ host: "192.168.223.207:3002" }), "http://x/")).toBe("http://192.168.223.207:3002");
+  });
+
+  it("req.url berhost evil tidak dipantulkan lewat cadangan", () => {
+    siapkan("INTERNAL");
+    expect(asalPublik(new Headers(), "http://evil.com/login")).toBe(RESMI);
+  });
+
+  it("req.url berhost tepercaya dipakai sebagai cadangan", () => {
+    siapkan("INTERNAL");
+    expect(asalPublik(new Headers(), "http://192.168.223.207:3002/login")).toBe("http://192.168.223.207:3002");
+  });
+});

@@ -43,6 +43,10 @@ export const ASAL_TEPERCAYA: readonly string[] = [
   "192.168.232.173:3000",
   "192.168.232.173:3002",
   "192.168.232.173",
+  "192.168.223.206:3002",
+  "192.168.223.206",
+  "192.168.223.207:3002",
+  "192.168.223.207",
   "localhost",
   "localhost:80",
   "localhost:3000",
@@ -62,7 +66,7 @@ export const ASAL_TEPERCAYA: readonly string[] = [
  * untuk "contoh.id" telanjang maupun "bukancontoh.id" - host induk yang
  * memang dipakai sudah disebut sendiri di daftar.
  */
-function hostTepercaya(host: string): boolean {
+export function hostTepercaya(host: string): boolean {
   const h = host.toLowerCase();
   return ASAL_TEPERCAYA.some((pola) => {
     const p = pola.toLowerCase();
@@ -88,4 +92,26 @@ export function hostAsalTepercaya(headerOrigin: string | null): string | null {
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
   return hostTepercaya(url.host) ? url.host : null;
+}
+
+/** Alamat resmi aplikasi - tujuan pengalihan bila host permintaan tidak dikenal. */
+export const ALAMAT_RESMI = "https://gajihub.kemnaker.go.id";
+
+const HOST_LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i;
+
+/**
+ * Bolehkah host ini dipakai MEMBANGUN URL pengalihan (login, SSO, /login)?
+ *
+ * Header Host/X-Forwarded-Host dikirim klien, jadi tidak boleh dipantulkan
+ * mentah ke `Location` (open redirect, OWASP CWE-601). Hanya host di daftar
+ * tepercaya yang lolos. Loopback (localhost, 127.0.0.1) ditolak di produksi:
+ * di server nyata ia bukan alamat yang dilihat browser pengguna.
+ */
+export function hostTepercayaUntukPengalihan(
+  host: string | undefined,
+  env: string | undefined = process.env.NODE_ENV
+): boolean {
+  if (!host) return false;
+  if (env === "production" && HOST_LOOPBACK.test(host)) return false;
+  return hostTepercaya(host);
 }

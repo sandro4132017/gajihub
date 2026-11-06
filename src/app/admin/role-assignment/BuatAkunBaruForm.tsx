@@ -50,6 +50,12 @@ export function BuatAkunBaruForm({
           />
         </div>
       )}
+      {role === "ADMIN" && (
+        <label className="flex items-start gap-2 border-l-2 border-gold bg-gold-tint/40 py-1.5 pl-3 pr-2 text-xs font-semibold text-gold-deep sm:col-span-2">
+          <input type="checkbox" name="konfirmasiAdmin" value="ya" required className="mt-0.5 size-4" />
+          Saya yakin ingin memberi akses Admin. Admin bisa mengubah peran semua akun.
+        </label>
+      )}
       <div className="sm:col-span-2">
         <button type="submit" disabled={pending} className="btn btn-primary">
           {pending ? "Membuat akun..." : `Buat Akun ${pegawai.nama}`}

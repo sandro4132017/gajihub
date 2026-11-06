@@ -7,6 +7,7 @@ import {
 import { LANDING_ROLE } from "./auth/roleAktif";
 import { asalPublik } from "./auth/asalPublik";
 import { hostAsalTepercaya } from "./auth/asalTepercaya";
+import { hostSah } from "./auth/asalPublik";
 
 /**
  * Route MESIN - diautentikasi header rahasia di dalam handler-nya sendiri,
@@ -34,12 +35,75 @@ export function nilaiXFrameOptions(path: string): "DENY" | "SAMEORIGIN" {
   return path.startsWith("/berkas/") ? "SAMEORIGIN" : "DENY";
 }
 
+function asalNaco(): string {
+  const dasar = process.env.NACO_BASE_URL?.trim() || "https://account.kemnaker.go.id";
+  try {
+    return new URL(dasar).origin;
+  } catch {
+    return "https://account.kemnaker.go.id";
+  }
+}
+
+/**
+ * Content-Security-Policy (temuan pentest F-07).
+ * - 'unsafe-inline' pada script/style dipertahankan: Next menyuntik skrip
+ *   inline untuk hidrasi dan belum memakai nonce; 'unsafe-eval' hanya di dev.
+ * - `frame-ancestors`: berkas privat (/berkas/) boleh dibingkai halaman sendiri
+ *   untuk pratinjau PDF, selain itu tidak boleh dibingkai siapa pun.
+ * - `form-action` menyertakan asal Naco karena pengalihan SSO.
+ * - Tanpa `upgrade-insecure-requests`: akses lewat IP internal memakai HTTP.
+ */
+export function kebijakanCsp(path: string, dev = process.env.NODE_ENV === "development"): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    `connect-src 'self'${dev ? " ws: wss:" : ""}`,
+    "frame-src 'self'",
+    `frame-ancestors ${path.startsWith("/berkas/") ? "'self'" : "'none'"}`,
+    // Berkas di /berkas/ (PDF) dirender penampil PDF bawaan browser, yang
+    // diperlakukan sebagai objek - 'none' di situ bisa membuat pratinjau kosong.
+    `object-src ${path.startsWith("/berkas/") ? "'self'" : "'none'"}`,
+    "base-uri 'self'",
+    `form-action 'self' ${asalNaco()}`,
+  ].join("; ");
+}
+
+/**
+ * Lapis kedua penahan CSRF (temuan pentest F-05): permintaan yang mengubah data
+ * dan membawa `Origin` dari luar daftar tepercaya DAN beda host dengan host
+ * yang diakses ditolak. Origin "null" ditolak; tanpa Origin dibiarkan
+ * (klien non-browser, dan cookie SameSite=Lax tetap menjaga).
+ */
+const METODE_UBAH = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+export function originLintasSitus(method: string, headers: Headers): boolean {
+  if (!METODE_UBAH.has(method.toUpperCase())) return false;
+  const origin = headers.get("origin");
+  if (origin === null) return false;
+  if (origin === "null") return true;
+  if (hostAsalTepercaya(origin)) return false;
+  let hostOrigin: string;
+  try {
+    hostOrigin = new URL(origin).host.toLowerCase();
+  } catch {
+    return true;
+  }
+  const hostPermintaan = [headers.get("x-forwarded-host"), headers.get("host")]
+    .map(hostSah)
+    .filter((h): h is string => !!h)
+    .map((h) => h.toLowerCase());
+  return !hostPermintaan.includes(hostOrigin);
+}
+
 function terapkanHeaderKeamanan(res: NextResponse, path = ""): NextResponse {
   res.headers.set(
     "Strict-Transport-Security",
     "max-age=31536000; includeSubDomains; preload"
   );
   res.headers.set("X-Frame-Options", nilaiXFrameOptions(path));
+  res.headers.set("Content-Security-Policy", kebijakanCsp(path));
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
@@ -72,6 +136,15 @@ export async function middleware(request: NextRequest) {
 
   if (payloadMencurigakan) {
     return terapkanHeaderKeamanan(new NextResponse("Bad Request", { status: 400 }));
+  }
+
+  if (originLintasSitus(request.method, request.headers)) {
+    return terapkanHeaderKeamanan(new NextResponse("Forbidden", { status: 403 }));
+  }
+
+  // robots.txt harus terbaca crawler tanpa login.
+  if (request.nextUrl.pathname === "/robots.txt") {
+    return terapkanHeaderKeamanan(NextResponse.next(), "/robots.txt");
   }
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
@@ -126,13 +199,13 @@ export async function middleware(request: NextRequest) {
         "x-forwarded-proto",
         originHeader?.startsWith("https:") ? "https" : "http"
       );
-      return NextResponse.next({ request: { headers: reqHeaders } });
+      return terapkanHeaderKeamanan(NextResponse.next({ request: { headers: reqHeaders } }), path);
     }
 
     // Asal DI LUAR daftar sengaja TIDAK diselaraskan. Menyelaraskannya berarti
     // membuat Origin dan Host cocok dengan sendirinya - penahan CSRF bawaan
     // Next jadi selalu lolos, untuk situs mana pun. Biarkan Next yang memutus.
-    return NextResponse.next();
+    return terapkanHeaderKeamanan(NextResponse.next(), path);
   }
 
   if (!session && !isLoginPage && !isRuteSso && !isRuteAuthApi && !isRuteVerifikasiTte && !isRuteMesin) {

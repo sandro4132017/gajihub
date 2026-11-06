@@ -110,6 +110,23 @@ dengan semua peran termasuk ADMIN dan PPABP. Kode: `src/auth/akunPenguji.ts`
   - Pemegang sandi bisa mengunduh ADK asli, mengunggah gaji induk dan rekening,
     sinkron SIAP, dan mengubah peran.
 
+### Allowlist host & header keamanan (pentest 2026-11-06)
+
+- **Aturan host baru**: host baru (IP, domain, atau port) WAJIB ditambahkan ke
+  `ASAL_TEPERCAYA` di `src/auth/asalTepercaya.ts` DAN ke `allowedOrigins` di
+  `next.config.mjs`. Kalau tidak, akses lewat host itu dialihkan ke
+  `https://gajihub.kemnaker.go.id` dan Server Action ditolak. Test
+  `asalTepercaya.test.ts` menjaga kedua daftar tetap sama.
+- Loopback (localhost, 127.0.0.1) ditolak sebagai tujuan pengalihan di production
+  (`hostTepercayaUntukPengalihan`).
+- **CSP** ada di middleware, fungsi `kebijakanCsp(path, dev)` di `src/middleware.ts`.
+  `frame-ancestors` dan `object-src` hanya untuk `/berkas/`. Unduhan berkas
+  non-PDF mengirim CSP `sandbox` sendiri dari `src/lib/storage/berkasPrivat.ts`
+  (`headerUnduh`), tidak lewat `kebijakanCsp`. `'unsafe-inline'` masih ada (tindak lanjut: nonce).
+- **CSRF lapis 2** di middleware: POST/PUT/PATCH/DELETE dengan `Origin` dari luar
+  daftar tepercaya, atau `Origin: null`, ditolak 403. Request tanpa `Origin`
+  dibiarkan lewat. GET tidak disentuh.
+
 ### SSO Kemnaker (Naco) - OAuth 2.0 Authorization Code (2026-08-21)
 
 Dokumentasi resmi: `https://codes.kemnaker.go.id/naker-api/naco-api`

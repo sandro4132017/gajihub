@@ -1,4 +1,5 @@
 import { isModeInternal } from "./modeJaringan";
+import { ALAMAT_RESMI, hostTepercayaUntukPengalihan } from "./asalTepercaya";
 
 function isAlamatLokal(host: string): boolean {
   const h = host.split(":")[0].toLowerCase();
@@ -83,7 +84,11 @@ export function asalPublik(headers: Headers, asalPermintaan: string): string {
     }
   }
 
-  const host = hostSah(headers.get("x-forwarded-host")) ?? hostSah(headers.get("host"));
+  // Host dari header dikirim klien: hanya yang ada di daftar tepercaya yang
+  // boleh jadi dasar URL pengalihan (OWASP CWE-601, temuan pentest F-03).
+  const host = [headers.get("x-forwarded-host"), headers.get("host")]
+    .map(hostSah)
+    .find((h) => hostTepercayaUntukPengalihan(h));
   const proto = protoSah(headers.get("x-forwarded-proto"));
 
   // 2. Jika Mode Jaringan INTERNAL aktif ATAU host merupakan alamat lokal/intranet,
@@ -103,12 +108,20 @@ export function asalPublik(headers: Headers, asalPermintaan: string): string {
     }
   }
 
-  // 4. Header dari proxy
+  // 4. Host tepercaya dari header proxy
   if (host) {
     return `${protokolUntuk(host, proto, asalPermintaan)}://${host}`;
   }
 
-  // 5. Fallback terakhir ke URL asal permintaan
-  return new URL(asalPermintaan).origin;
-}
+  // 5. Origin permintaan - `req.url` di `next start` dibangun dari header Host,
+  // jadi dipakai hanya bila hostnya sendiri tepercaya.
+  try {
+    const url = new URL(asalPermintaan);
+    if (hostTepercayaUntukPengalihan(url.host)) return url.origin;
+  } catch {
+    /* jatuh ke alamat resmi */
+  }
 
+  // 6. Alamat resmi
+  return ALAMAT_RESMI;
+}

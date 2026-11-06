@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ASAL_TEPERCAYA, hostAsalTepercaya } from "../asalTepercaya";
+import { ASAL_TEPERCAYA, hostAsalTepercaya, hostTepercayaUntukPengalihan } from "../asalTepercaya";
 
 describe("hostAsalTepercaya - asal milik sendiri", () => {
   it("domain resmi diterima", () => {
@@ -68,5 +68,23 @@ describe("daftar ini WAJIB sama dengan allowedOrigins di next.config.mjs", () =>
 
     expect(dariKonfig.length).toBeGreaterThan(0);
     expect([...dariKonfig].sort()).toEqual([...ASAL_TEPERCAYA].sort());
+  });
+});
+
+describe("hostTepercayaUntukPengalihan", () => {
+  it("IP staging dan produksi diterima", () => {
+    expect(hostTepercayaUntukPengalihan("192.168.223.206:3002", "production")).toBe(true);
+    expect(hostTepercayaUntukPengalihan("192.168.223.207:3002", "production")).toBe(true);
+  });
+  it("host asing, kosong, dan port asing ditolak", () => {
+    expect(hostTepercayaUntukPengalihan("evil.com", "production")).toBe(false);
+    expect(hostTepercayaUntukPengalihan(undefined, "production")).toBe(false);
+    expect(hostTepercayaUntukPengalihan("192.168.223.206:9999", "production")).toBe(false);
+  });
+  it("loopback ditolak di produksi, diterima di development/test", () => {
+    expect(hostTepercayaUntukPengalihan("localhost:3002", "production")).toBe(false);
+    expect(hostTepercayaUntukPengalihan("127.0.0.1:3002", "production")).toBe(false);
+    expect(hostTepercayaUntukPengalihan("localhost:3000", "development")).toBe(true);
+    expect(hostTepercayaUntukPengalihan("localhost:3000", "test")).toBe(true);
   });
 });

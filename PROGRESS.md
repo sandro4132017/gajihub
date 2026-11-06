@@ -9,7 +9,7 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-11-05** - rangkuman commit `64d9a46`..`9e3886e`
+Terakhir diperbarui: **2026-11-06** - rangkuman commit `64d9a46`..`9e3886e`, plus perbaikan pentest Pusdatik (2026-11-06, lihat bagian 3 butir 20)
 (2026-10-21 s.d. 2026-10-29), plus akun penguji Tim Pusdatik dan penghapusan login
 NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-log.md`.
 
@@ -464,6 +464,29 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
    keputusan user 2026-11-05, untuk pengujian. Akun SSO tetap menolak NIK orang lain.
    NIK demo bisa dibuka untuk SEMUA akun lewat `TTE_IZINKAN_NIK_DEMO="true"`
    (bawaan mati) - matikan sebelum SPTJM jadi dasar pembayaran.
+
+### Pentest Pusdatik 2026-11-06 - status perbaikan (belum di-commit)
+
+20. **Temuan pentest Pusdatik (`Laporan_Pentest_Gajihub_Gabungan.pdf`) diperbaiki di
+   worktree `resume-80863d1d-4e9915`; review LULUS, belum di-commit (git dipegang user).**
+   - **Ditutup di Gajihub**: F-03 Host header -> open redirect (`asalPublik` hanya
+     memakai host dari allowlist `src/auth/asalTepercaya.ts`; loopback ditolak di
+     production; IP 192.168.223.206/207 `:3002` masuk allowlist dan `next.config.mjs`).
+     F-01/F-02 role-assignment (ubah akun sendiri ditolak, UUID wajib sah, ADMIN baru
+     wajib centang konfirmasi, audit menyimpan `aktorNama`). F-07 CSP di
+     `src/middleware.ts` (`kebijakanCsp`; `'unsafe-inline'` untuk script/style, dan
+     frame-ancestors/object-src hanya untuk `/berkas/`). F-05 CSRF lapis 2 (Origin
+     asing atau "null" di POST/PUT/PATCH/DELETE ditolak 403). `src/app/robots.ts`.
+   - **Tanggung jawab Pusdatik/Naco (di luar Gajihub)**: TLS 1.0/1.1 dan IDEA (proxy
+     Pusdatik), cookiesession1 (FortiWeb), dan semua temuan account.kemnaker.go.id,
+     plausible, serta CDN.
+   - **Uji manual yang tersisa (wajib di staging)**: pratinjau PDF di Chrome, Console
+     tanpa pelanggaran CSP, login dan SSO, `curl -H "Host: evil.com"` harus dialihkan
+     ke domain resmi. Prod butuh lebih dari satu ADMIN, karena admin tidak bisa
+     mengubah akunnya sendiri.
+   - **Saran tertunda**: persempit wildcard `*.kemnaker.go.id`; nonaktifkan tombol
+     Simpan untuk akun sendiri (saat ini server yang menolak); CSP dengan nonce
+     (tindak lanjut).
 
 ### Baru - dari kelola predikat kinerja per orang (2026-08-05)
 

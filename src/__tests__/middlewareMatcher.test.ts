@@ -138,3 +138,120 @@ describe("X-Frame-Options per jalur", () => {
     expect(re.test("/berkas/tte/x")).toBe(false);
   });
 });
+
+describe("Content-Security-Policy (pentest F-07)", () => {
+  it("halaman biasa: frame-ancestors 'none', object-src 'none', tanpa unsafe-eval di produksi", async () => {
+    const { kebijakanCsp } = await import("../middleware");
+    const csp = kebijakanCsp("/kasubag/kalkulasi", false);
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("form-action 'self' https://account.kemnaker.go.id");
+    expect(csp).not.toContain("unsafe-eval");
+    expect(csp).not.toContain("upgrade-insecure-requests");
+  });
+
+  it("/berkas/ boleh dibingkai halaman sendiri", async () => {
+    const { kebijakanCsp } = await import("../middleware");
+    expect(kebijakanCsp("/berkas/tte/abc", false)).toContain("frame-ancestors 'self'");
+    expect(kebijakanCsp("/berkasku", false)).toContain("frame-ancestors 'none'");
+    expect(kebijakanCsp("/berkas/tte/abc", false)).toContain("object-src 'self'");
+    expect(kebijakanCsp("/berkasku", false)).toContain("object-src 'none'");
+  });
+
+  it("development menambah unsafe-eval dan websocket", async () => {
+    const { kebijakanCsp } = await import("../middleware");
+    const csp = kebijakanCsp("/", true);
+    expect(csp).toContain("'unsafe-eval'");
+    expect(csp).toContain("ws:");
+  });
+
+  it("terpasang di respons middleware", async () => {
+    const { NextRequest } = await import("next/server");
+    const { middleware } = await import("../middleware");
+    const res = await middleware(new NextRequest("http://localhost:3000/"));
+    expect(res.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
+  });
+});
+
+describe("penahan CSRF lapis kedua (pentest F-05)", () => {
+  const buat = async (url: string, init: { method?: string; headers?: Record<string, string> }) => {
+    const { NextRequest } = await import("next/server");
+    const { middleware } = await import("../middleware");
+    return middleware(new NextRequest(url, init));
+  };
+
+  it("POST API ber-Origin asing ditolak 403", async () => {
+    const res = await buat("http://localhost:3000/api/auth/login", {
+      method: "POST",
+      headers: { origin: "https://evil.example", host: "localhost:3000" },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("Server Action ber-Origin asing ditolak 403", async () => {
+    const res = await buat("http://localhost:3000/admin", {
+      method: "POST",
+      headers: { origin: "https://evil.example", host: "localhost:3000", "next-action": "abc" },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("Origin 'null' ditolak", async () => {
+    const res = await buat("http://localhost:3000/api/auth/login", {
+      method: "POST",
+      headers: { origin: "null", host: "localhost:3000" },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("Origin resmi, Origin sama host, dan tanpa Origin lolos", async () => {
+    const resmi = await buat("http://localhost:3000/api/auth/login", {
+      method: "POST",
+      headers: { origin: "https://gajihub.kemnaker.go.id", host: "localhost:3000" },
+    });
+    expect(resmi.status).not.toBe(403);
+    const samaHost = await buat("http://10.9.9.9:8080/api/auth/login", {
+      method: "POST",
+      headers: { origin: "http://10.9.9.9:8080", host: "10.9.9.9:8080" },
+    });
+    expect(samaHost.status).not.toBe(403);
+    const tanpa = await buat("http://localhost:3000/api/auth/login", { method: "POST" });
+    expect(tanpa.status).not.toBe(403);
+  });
+
+  it("GET ber-Origin asing tidak disentuh", async () => {
+    const res = await buat("http://localhost:3000/login", {
+      headers: { origin: "https://evil.example" },
+    });
+    expect(res.status).not.toBe(403);
+  });
+});
+
+describe("robots.txt", () => {
+  it("tidak dialihkan ke login", async () => {
+    const { NextRequest } = await import("next/server");
+    const { middleware } = await import("../middleware");
+    const res = await middleware(new NextRequest("http://localhost:3000/robots.txt"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+  it("robots.ts melarang semua", async () => {
+    const robots = (await import("../app/robots")).default;
+    expect(robots().rules).toEqual({ userAgent: "*", disallow: "/" });
+  });
+});
+
+describe("pengalihan login tidak memantulkan Host asing (pentest F-03)", () => {
+  it("GET / dengan Host evil.com dialihkan ke domain resmi", async () => {
+    const { NextRequest } = await import("next/server");
+    const { middleware } = await import("../middleware");
+    const res = await middleware(
+      new NextRequest("http://evil.com/", { headers: { host: "evil.com" } })
+    );
+    const lokasi = res.headers.get("location") ?? "";
+    expect(lokasi).not.toContain("evil.com");
+    expect(lokasi.startsWith("https://gajihub.kemnaker.go.id/login")).toBe(true);
+  });
+});

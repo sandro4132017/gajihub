@@ -181,8 +181,8 @@ describe("asalPublik", () => {
 
   it("mengambil proto pertama kalau X-Forwarded-Proto berantai", () => {
     delete process.env.NACO_REDIRECT_URI;
-    const h = new Headers({ "x-forwarded-proto": "https, http", host: "contoh.go.id" });
-    expect(asalPublik(h, "http://localhost:3002/x")).toBe("https://contoh.go.id");
+    const h = new Headers({ "x-forwarded-proto": "https, http", host: "gajihub.kemnaker.go.id" });
+    expect(asalPublik(h, "http://localhost:3002/x")).toBe("https://gajihub.kemnaker.go.id");
   });
 
   it("jatuh ke asal permintaan kalau tidak ada petunjuk apa pun", () => {
@@ -214,12 +214,23 @@ describe("asalPublik", () => {
     expect(asalPublik(h, "http://192.168.221.44:3002/login")).toBe("http://192.168.221.44:3002");
   });
 
-  it("mengikuti toggle Mode Jaringan: saat INTERNAL aktif, host apa pun dipertahankan dan tidak dialihkan ke NACO_REDIRECT_URI", () => {
+  it("mengikuti toggle Mode Jaringan: saat INTERNAL aktif, host TEPERCAYA dipertahankan dan tidak dialihkan ke NACO_REDIRECT_URI", () => {
+    process.env.NACO_REDIRECT_URI = "https://gajihub.kemnaker.go.id/login/sso/callback";
+    process.env.TEST_NETWORK_MODE = "INTERNAL";
+    try {
+      const h = new Headers({ host: "192.168.223.206:3002" });
+      expect(asalPublik(h, "http://localhost:3002/login")).toBe("http://192.168.223.206:3002");
+    } finally {
+      delete process.env.TEST_NETWORK_MODE;
+    }
+  });
+
+  it("mode INTERNAL: host dengan port asing tidak dipantulkan, jatuh ke NACO_REDIRECT_URI (CWE-601)", () => {
     process.env.NACO_REDIRECT_URI = "https://gajihub.kemnaker.go.id/login/sso/callback";
     process.env.TEST_NETWORK_MODE = "INTERNAL";
     try {
       const h = new Headers({ host: "intranet.kemnaker.go.id:8080" });
-      expect(asalPublik(h, "http://localhost:3002/login")).toBe("http://intranet.kemnaker.go.id:8080");
+      expect(asalPublik(h, "http://localhost:3002/login")).toBe("https://gajihub.kemnaker.go.id");
     } finally {
       delete process.env.TEST_NETWORK_MODE;
     }
