@@ -68,12 +68,15 @@ export function StepperTutupBulan({
   periodeLabel,
   qPeriode,
   bolehExportRekap,
+  dikembalikan = false,
 }: {
   langkah: LangkahPeriode[];
   /** Mis. "Juli 2026". */
   periodeLabel: string;
   qPeriode: string;
   bolehExportRekap: boolean;
+  /** Rekap periode ini dikembalikan PPABP - label di sebelah periode. */
+  dikembalikan?: boolean;
 }) {
   return (
     <section
@@ -82,7 +85,10 @@ export function StepperTutupBulan({
     >
       <div className="flex items-center justify-between border-b border-line-2 pb-3">
         <h2 className="text-sm font-bold text-ink">Langkah tutup bulan</h2>
-        <span className="text-xs font-semibold text-muted">{periodeLabel}</span>
+        <div className="flex items-center gap-2">
+          {dikembalikan && <span className="chip chip-danger text-[11px] font-semibold">Dikembalikan</span>}
+          <span className="text-xs font-semibold text-muted">{periodeLabel}</span>
+        </div>
       </div>
 
       {/* MENDATAR di layar lebar (permintaan user 2026-10-27: bentuk tegak

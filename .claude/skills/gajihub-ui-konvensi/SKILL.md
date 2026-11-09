@@ -588,3 +588,20 @@ grup lipat:
 Urutan hasilnya diverifikasi lewat production build (15 item, 3 pemisah, judul
 "Menu" hilang, gradient navy lama tidak ada lagi).
 
+### Panel selesai Kasubag: ilustrasi & progress bar (2026-11-09)
+
+- **Ilustrasi karakter** (`public/ilustrasi/man-done.png` / `woman-done.png`)
+  muncul di kartu sambutan Kasubag hanya saat rekap TERKIRIM dan semua
+  komponen lengkap. **Opsi A** (kalimat "Data semua komponen sudah lengkap."
+  saja) dipilih user; opsi B (judul + waktu kirim + tiga kotak x/y) pernah
+  dibuat lalu dibuang.
+- **Gender dari sesi** (`jenisKelaminTampil`: kolom `Pegawai.jenisKelamin`, lalu
+  digit ke-15 NIP). Tidak diketahui -> laki-laki sebagai bawaan. Tampilan saja,
+  bukan dasar perhitungan.
+- **Hidden di bawah `lg`**, `alt=""` dan `aria-hidden="true"`: hiasan, bukan
+  informasi. Kepala boleh keluar dari tepi atas kartu lapis kedua.
+- **Lengkap tapi belum terkirim** tetap memakai kalimat "Tinggal ...", tanpa
+  karakter.
+- **Progress bar disembunyikan saat TERKIRIM.** Sesudah terkirim bar selalu
+  penuh dan tidak memberi informasi; status "Terkirim & terkunci" sudah cukup.
+

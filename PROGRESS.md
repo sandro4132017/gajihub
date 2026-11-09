@@ -13,6 +13,15 @@ Terakhir diperbarui: **2026-11-09** - rangkuman commit `64d9a46`..`9e3886e`, plu
 (2026-10-21 s.d. 2026-10-29), plus akun penguji Tim Pusdatik dan penghapusan login
 NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-log.md`.
 
+0. **Panel selesai Kasubag (2026-11-09, belum di-commit)**:
+   - `/kasubag`: setelah rekap TERKIRIM dan semua komponen lengkap, kolom kanan
+     menampilkan "Data semua komponen sudah lengkap." + ilustrasi karakter
+     (`public/ilustrasi/`, sesuai jenis kelamin sesi, bawaan laki-laki; hidden di
+     bawah lg). Opsi A dipilih user (kalimat saja).
+   - Kolom kiri: periode jadi pil, progress bar disembunyikan saat terkirim.
+   - Helper `jenisKelaminTampil` (`src/lib/format/jenisKelamin.ts`) dipakai `/saya`
+     dan kartu Kasubag. Tanpa migrasi (hanya komentar `prisma/schema.prisma`).
+
 1. **Dashboard dirombak**:
    - `/kasubag`: kartu sambutan dan stepper tutup bulan lima langkah, yang
      statusnya dihitung dari data (`langkahTutupBulan.ts`, `kalkulasiBasi.ts`),

@@ -168,7 +168,9 @@ model Pegawai {
   ///
   /// Proyek ini menolak mengimpor data pribadi yang tidak menentukan
   /// pembayaran (alamat, NIK, NPWP, telepon). Kolom ini lolos justru karena
-  /// ia menentukan pembayaran - dan tidak dipakai untuk hal lain.
+  /// ia menentukan pembayaran. Selain itu hanya dibaca untuk tampilan
+  /// (sapaan & ilustrasi) lewat `jenisKelaminTampil`, tidak pernah ditampilkan
+  /// atau diekspor sebagai data.
   jenisKelamin String? @map("jenis_kelamin")
 
   /// Jumlah anak di SIAP yang kolom PEKERJAAN-nya kosong.

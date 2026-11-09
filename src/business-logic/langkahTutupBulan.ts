@@ -125,8 +125,6 @@ export interface KeadaanDaftarLangkah {
   jumlahUangMakan: number;
   tabelDiverifikasi: readonly JenisTabelKalkulasi[];
   status: StatusUnit;
-  /** Menimpa `status.alasanKembali` bila diisi. */
-  alasanKembali?: string | null;
 }
 
 /**
@@ -188,11 +186,15 @@ export function daftarLangkahTutupBulan(k: KeadaanDaftarLangkah): LangkahPeriode
   }
   const angkaPeriksa = { x: wajib - belumDiperiksa, y: wajib };
 
+  // Sesudah terkirim tidak ada catatan di langkah HITUNG (keputusan user
+  // 2026-11-09): angka "perlu dihitung ulang" pada rekap yang sudah terkunci
+  // tidak bisa ditindaklanjuti Kasubag, dan terbaca seperti pekerjaan yang
+  // belum selesai. Kalau PPABP mengembalikan rekapnya, catatannya muncul lagi.
   if (terkirim) {
     return [
       buat("PRESENSI", angkaBahan(k.jumlahPresensi), "SELESAI"),
       buat("PREDIKAT", angkaBahan(k.jumlahPredikat), "SELESAI"),
-      buat("HITUNG", angkaBahan(k.jumlahTukin), "SELESAI", null, catatanHitung),
+      buat("HITUNG", angkaBahan(k.jumlahTukin), "SELESAI"),
       buat("PERIKSA", angkaPeriksa, "SELESAI"),
       buat("KIRIM", null, "SELESAI"),
     ];
@@ -245,11 +247,10 @@ export function daftarLangkahTutupBulan(k: KeadaanDaftarLangkah): LangkahPeriode
       kode: "KIRIM",
       angka: null,
       selesai: false,
+      // Alasan pengembalian PPABP TIDAK ditulis di sini (keputusan user
+      // 2026-11-09) - stepper cuma memberi label "Dikembalikan" di kepalanya;
+      // pesan lengkapnya ada di panel Kirim halaman Kalkulasi.
       alasan: cek.boleh ? null : cek.alasan,
-      catatan:
-        k.status.keadaan === "DIKEMBALIKAN"
-          ? [`Dikembalikan PPABP: ${k.alasanKembali ?? k.status.alasanKembali ?? "tanpa alasan tercatat"}`]
-          : undefined,
     },
   ];
 

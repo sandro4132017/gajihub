@@ -65,6 +65,15 @@ export function responseAdk({
   });
 }
 
+/** Hapus sel berisi teks kosong ("") dari sheet. Diekspor untuk test. */
+export function hapusSelTeksKosong(ws: Record<string, unknown>): void {
+  for (const alamat of Object.keys(ws)) {
+    if (alamat.startsWith("!")) continue;
+    const sel = ws[alamat] as { v?: unknown } | undefined;
+    if (sel && sel.v === "") delete ws[alamat];
+  }
+}
+
 /**
  * Varian untuk ADK Uang Makan & Uang Lembur, yang formatnya PER HARI dan tanpa
  * rupiah sama sekali - lihat penjelasan lengkap di
@@ -106,6 +115,12 @@ export function responseAdkHarian({
   const wb = utils.book_new();
   const grid = susunGridAdkHarian(pegawai, periodeBulan, periodeTahun, { denganJam });
   const wsDepan = utils.aoa_to_sheet(grid);
+  // Slot tanpa kehadiran di grid berisi "" (dipakai pratinjau di layar), dan
+  // SheetJS menulis "" sebagai sel TEKS. Excel menghitung sel teks itu sebagai
+  // isi: memilih satu baris 31 tanggal menghasilkan Count 31 padahal Sum 14.
+  // Sel kosong dihapus supaya benar-benar kosong - Count = Sum = jumlah hari
+  // berangka 1.
+  hapusSelTeksKosong(wsDepan);
   // LEBAR KOLOM & MERGE disalin dari template asli (diukur dari
   // Excel/Template-ADK-Lembur.xlsm). Keduanya memang ikut tertulis oleh
   // SheetJS edisi komunitas - beda dari warna, perataan, dan font yang TIDAK

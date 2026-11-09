@@ -181,21 +181,17 @@ describe("daftarLangkahTutupBulan", () => {
     });
     expect(d.every((l) => l.status === "SELESAI")).toBe(true);
     expect(ringkasLangkah(d)).toMatchObject({ selesai: 5, total: 5, aktif: null });
+    // Tanpa catatan "perlu dihitung ulang" pada rekap yang sudah terkunci.
+    expect(d.every((l) => l.catatan === undefined)).toBe(true);
   });
 
-  it("DIKEMBALIKAN -> KIRIM AKTIF dengan alasan pengembalian di catatan", () => {
+  it("DIKEMBALIKAN -> KIRIM AKTIF tanpa alasan pengembalian di catatan", () => {
     const d = daftarLangkahTutupBulan({
       ...siap,
       status: statusUnit({ status: "DIKEMBALIKAN", dikirimPada: new Date(), alasanKembali: "Periksa ulang kelas" }),
     });
     expect(d[4].status).toBe("AKTIF");
-    expect(d[4].catatan?.[0]).toContain("Periksa ulang kelas");
-    const timpa = daftarLangkahTutupBulan({
-      ...siap,
-      alasanKembali: "Alasan lain",
-      status: statusUnit({ status: "DIKEMBALIKAN", dikirimPada: new Date(), alasanKembali: "Periksa ulang kelas" }),
-    });
-    expect(timpa[4].catatan?.[0]).toContain("Alasan lain");
+    expect(d[4].catatan).toBeUndefined();
   });
 
   it("total 0 -> semua TIDAK_BERLAKU, nol AKTIF", () => {

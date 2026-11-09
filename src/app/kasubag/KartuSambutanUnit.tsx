@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   RiAlertLine,
+  RiArrowRightLine,
   RiAwardLine,
   RiCalendarCheckLine,
   RiCheckDoubleLine,
@@ -99,6 +100,7 @@ export function KartuSambutanUnit({
   totalPegawaiAktif,
   kartu,
   sisaLangkah,
+  jenisKelamin,
 }: {
   nama: string;
   satuanKerja: string;
@@ -112,11 +114,15 @@ export function KartuSambutanUnit({
   kartu: KartuKomponen[];
   /** Langkah yang belum selesai, berurutan - untuk kalimat & daftar "tinggal ...". */
   sisaLangkah: { kode: KodeLangkah; judul: string }[];
+  /** Jenis kelamin pemilik sesi - hanya memilih ilustrasi panel selesai. */
+  jenisKelamin: "L" | "P" | null;
 }) {
   const belumSelesai = kartu.filter((k) => !k.selesai);
   // Tiga terdepan dari antrean; sisanya menunggu giliran.
   const tampil = belumSelesai.slice(0, 3);
   const terkirim = keadaanKirim === "TERKIRIM";
+  // Panel perayaan: semua komponen lengkap DAN rekap sudah terkirim.
+  const rayakan = terkirim && belumSelesai.length === 0;
   const persen = ringkas.total > 0 ? Math.round((ringkas.selesai / ringkas.total) * 100) : 0;
 
   // Tombol SELALU menunjuk langkah aktif, juga saat rekap dikembalikan PPABP:
@@ -159,11 +165,17 @@ export function KartuSambutanUnit({
               2026-10-27): nama unit sering panjang, dan periode yang ikut
               terlipat di tengahnya sulit ditemukan sekilas. */}
           <p className="mt-1 text-sm font-semibold text-white">{satuanKerja}</p>
-          <p className="text-sm text-white/80">Periode {periodeLabel}</p>
+          {/* Periode sebagai label kecil, tetap di barisnya sendiri. */}
+          <p className="mt-2">
+            <span className="inline-flex rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold text-white/90">
+              Periode {periodeLabel}
+            </span>
+          </p>
 
           {terkirim ? (
             <p className="mt-4 text-base font-semibold">
-              Rekap {periodeLabel} sudah dikirim dan terkunci.
+              {/* Tanpa nama bulan: periodenya sudah di label tepat di atas. */}
+              Rekap sudah dikirim ke PPABP dan terkunci.
             </p>
           ) : ringkas.total === 0 ? (
             <p className="mt-4 text-base font-semibold">
@@ -179,7 +191,9 @@ export function KartuSambutanUnit({
             </p>
           )}
 
-          {ringkas.total > 0 && (
+          {/* Sesudah terkirim bar selalu penuh dan tidak memberi informasi
+              baru - kalimat status di atasnya sudah cukup. */}
+          {ringkas.total > 0 && !terkirim && (
             <div
               role="progressbar"
               aria-label={`Langkah tutup bulan ${periodeLabel}`}
@@ -191,30 +205,36 @@ export function KartuSambutanUnit({
               <div className="h-full rounded-full bg-seri-4" style={{ width: `${persen}%` }} />
             </div>
           )}
+
+          {/* Tautan sekunder, dekat status - bukan blok berkotak (lihat
+              komentar di atas soal tombol utama). */}
+          <Link
+            href={`/kasubag/pegawai?satker=${encodeURIComponent(satuanKerja)}`}
+            className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-white underline underline-offset-4 hover:text-white/80"
+          >
+            Lihat <span className="font-mono">{totalPegawaiAktif}</span> pegawai unit
+            <RiArrowRightLine aria-hidden="true" className="size-4 shrink-0" />
+          </Link>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          {tombol && (
+        {tombol && (
+          <div>
             <Link
               href={tombol.href}
               className="inline-flex items-center rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-navy shadow-sm transition hover:bg-teal-tint"
             >
               {tombol.label}
             </Link>
-          )}
-          <Link
-            href={`/kasubag/pegawai?satker=${encodeURIComponent(satuanKerja)}`}
-            className="text-sm font-semibold text-white underline underline-offset-4 hover:text-white/80"
-          >
-            Pegawai unit ({totalPegawaiAktif})
-          </Link>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Kolom kanan, deret <ul>, dan tiap <li> SEMUANYA h-full: tanpa itu
           kartu menyusut ke tinggi isinya, alih-alih setinggi kolom sapaan. */}
       <div className="flex min-w-0 flex-col lg:col-span-7">
-        {belumSelesai.length === 0 ? (
+        {rayakan ? (
+          <PanelTerkirim jenisKelamin={jenisKelamin} />
+        ) : belumSelesai.length === 0 ? (
           // Semua komponen beres: satu pernyataan, bukan deret kartu kosong.
           // Ikon raksasa terpotong di sudut = pengganti ilustrasi, sama dengan
           // kartu komponen (hiasan, aria-hidden).
@@ -278,5 +298,42 @@ export function KartuSambutanUnit({
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * Kartu lapis kedua sesudah rekap terkirim: satu kalimat besar dan karakter
+ * yang berdiri di dalamnya, kepalanya keluar dari tepi atas kartu ini (bukan
+ * kartu navy luar). Sengaja tanpa kotak angka dan waktu kirim (pilihan user
+ * 2026-11-09, opsi A).
+ */
+function PanelTerkirim({ jenisKelamin }: { jenisKelamin: "L" | "P" | null }) {
+  return (
+    // mt di lg memberi ruang untuk kepala karakter yang keluar dari tepi atas.
+    <div className="relative flex h-full items-center rounded-2xl bg-white/10 p-5 lg:mt-8 lg:min-h-56 lg:pr-[19rem]">
+      <p className="inline-flex items-center gap-3 text-2xl font-black leading-snug">
+        <RiCheckDoubleLine aria-hidden="true" className="size-8 shrink-0 text-seri-4" />
+        Data semua komponen sudah lengkap.
+      </p>
+      <Karakter jenisKelamin={jenisKelamin} />
+    </div>
+  );
+}
+
+function Karakter({ jenisKelamin }: { jenisKelamin: "L" | "P" | null }) {
+  // Hiasan murni: alt kosong, disembunyikan di bawah lg karena di layar
+  // sempit ia menutupi teks. Jenis kelamin tidak diketahui -> ilustrasi
+  // laki-laki. Bagian atas PNG transparan, jadi tinggi 20rem membuat kepalanya
+  // keluar sedikit dari tepi atas kartu lapis kedua.
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={jenisKelamin === "P" ? "/ilustrasi/woman-done.png" : "/ilustrasi/man-done.png"}
+      alt=""
+      aria-hidden="true"
+      width={500}
+      height={500}
+      className="pointer-events-none absolute -right-2 bottom-0 hidden h-[20rem] w-auto select-none lg:block"
+    />
   );
 }

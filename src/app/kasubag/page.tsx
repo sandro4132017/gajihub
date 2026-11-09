@@ -24,6 +24,7 @@ import { HALAMAN } from "../../components/layout/layoutHalaman";
 import { KartuSambutanUnit } from "./KartuSambutanUnit";
 import { StepperTutupBulan } from "./StepperTutupBulan";
 import { qPeriodeUnit } from "./tautanLangkah";
+import { jenisKelaminTampil } from "../../lib/format/jenisKelamin";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +140,7 @@ export default async function KasubagDashboardPage({
     countHukdis,
     kalkulasiPerPeriode,
     pengirimanUnitIni,
+    pegawaiSesi,
   ] = await Promise.all([
     prisma.pegawai.count({ where: { satuanKerja: satkerEfektif, statusPegawai: "AKTIF" } }),
     // Satu query untuk SEMUA hitungan bahan & kalkulasi: tiap relasi disaring
@@ -237,6 +239,8 @@ export default async function KasubagDashboardPage({
         dikirimOleh: { select: { nama: true } },
       },
     }),
+    // Hanya untuk memilih ilustrasi panel "semua lengkap" (laki-laki/perempuan).
+    prisma.pegawai.findUnique({ where: { nip: authUser.nip }, select: { jenisKelamin: true } }),
   ]);
 
   const status = statusUnit(barisKirim);
@@ -405,6 +409,7 @@ export default async function KasubagDashboardPage({
           qPeriode={qPeriode}
           totalPegawaiAktif={totalPegawaiAktif}
           kartu={kartuKomponen}
+          jenisKelamin={jenisKelaminTampil(pegawaiSesi?.jenisKelamin, authUser.nip)}
           sisaLangkah={langkah
             .filter((l) => l.status !== "SELESAI" && l.status !== "TIDAK_BERLAKU")
             .map((l) => ({ kode: l.kode, judul: l.judul }))}
@@ -441,6 +446,7 @@ export default async function KasubagDashboardPage({
           periodeLabel={periodeLabel}
           qPeriode={qPeriode}
           bolehExportRekap={bolehExportRekap}
+          dikembalikan={keadaanKirim === "DIKEMBALIKAN"}
         />
 
 

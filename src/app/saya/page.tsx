@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "../../lib/prisma";
+import { jenisKelaminTampil } from "../../lib/format/jenisKelamin";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canViewDataSendiri } from "../../auth/permissions";
 import { hitungTotalPenghasilanSlip } from "../../business-logic/gajiInduk";
@@ -257,19 +258,8 @@ export default async function DataSayaPage({
     return { final: k.final, label: k.label };
   };
 
-  // Deteksi jenis kelamin: dari kolom database jenisKelamin (L/P dari SIAP),
-  // atau fallback standar BKN dari digit ke-15 NIP 18-digit (1=L/Pria, 2=P/Wanita).
-  const jkDb = pegawai.jenisKelamin?.trim().toUpperCase();
-  const nipDigits = pegawai.nip.replace(/\D/g, "");
-  const digit15 = nipDigits.length >= 15 ? nipDigits[14] : null;
-  const jenisKelamin: "L" | "P" | null =
-    jkDb === "L" || jkDb === "P"
-      ? (jkDb as "L" | "P")
-      : digit15 === "1"
-        ? "L"
-        : digit15 === "2"
-          ? "P"
-          : null;
+  // Kolom jenisKelamin dari SIAP, atau digit ke-15 NIP (lihat jenisKelaminTampil).
+  const jenisKelamin = jenisKelaminTampil(pegawai.jenisKelamin, pegawai.nip);
 
   // Daftar yang BISA dibanding, disusun dari baris yang benar-benar dimiliki
   // pegawai ini - bukan daftar jenis yang tetap. Menawarkan "Kehadiran Juli"

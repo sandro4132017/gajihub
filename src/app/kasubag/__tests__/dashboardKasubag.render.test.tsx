@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { palsu, izin, akses } = vi.hoisted(() => ({
   palsu: {
-    pegawai: { count: vi.fn(), findMany: vi.fn() },
+    pegawai: { count: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
     tukinCalculation: { findMany: vi.fn(), groupBy: vi.fn() },
     uangMakan: { groupBy: vi.fn() },
     uangLembur: { groupBy: vi.fn() },
@@ -91,6 +91,7 @@ function siapkan(opsi: Opsi = {}) {
     opsi;
   akses.satker = SATKER;
   palsu.pegawai.count.mockResolvedValue(kosong ? 0 : 2);
+  palsu.pegawai.findUnique.mockResolvedValue(null);
   palsu.pegawai.findMany.mockImplementation((arg: { distinct?: string[]; orderBy?: unknown }) => {
     if (arg?.distinct) return Promise.resolve([{ satuanKerja: SATKER }, { satuanKerja: "Pusdatik" }]);
     return Promise.resolve(kosong ? [] : pegawai(1, { presensi, predikat, tukin, uangMakan }));
@@ -233,12 +234,30 @@ describe("dashboard Kasubag TU - render", () => {
   it("TERKIRIM -> semua langkah selesai dan tombol utama hilang", async () => {
     siapkan({ tukin: 2, uangMakan: 2, predikat: 2, kirim: { status: "TERKIRIM" }, tabel: SEMUA_TABEL });
     const html = await render();
-    expect(html).toContain("Rekap Agustus 2026 sudah dikirim dan terkunci");
+    expect(html).toContain("Rekap sudah dikirim ke PPABP dan terkunci");
     expect(html).not.toContain("aria-current=");
     expect(html.match(/>Selesai</g)).toHaveLength(5);
-    expect(html).toContain('aria-valuenow="5"');
+    // Bar progres disembunyikan sesudah terkirim (selalu penuh, tanpa informasi baru).
+    expect(html).not.toContain('role="progressbar"');
     // Tombol utama = satu-satunya blok putih berkotak di kartu sambutan.
     expect(html).not.toContain("bg-white px-5 py-2.5");
+  });
+
+  it("TERKIRIM -> panel lengkap: kalimat besar dan karakter sesuai jenis kelamin", async () => {
+    siapkan({ tukin: 2, uangMakan: 2, predikat: 2, kirim: { status: "TERKIRIM" }, tabel: SEMUA_TABEL });
+    let html = await render();
+    expect(html).toContain("Data semua komponen sudah lengkap.");
+    expect(html).not.toContain("Berikutnya");
+    // NIP sesi palsu tidak memberi jenis kelamin -> bawaan laki-laki.
+    expect(html).toContain('src="/ilustrasi/man-done.png"');
+
+    palsu.pegawai.findUnique.mockResolvedValue({ jenisKelamin: "P" });
+    html = await render();
+    expect(html).toContain('src="/ilustrasi/woman-done.png"');
+  });
+
+  it("belum terkirim -> tanpa karakter", async () => {
+    expect(await render()).not.toContain("/ilustrasi/");
   });
 
   it("belum terkirim -> tombol utama ke langkah aktif", async () => {
@@ -247,7 +266,7 @@ describe("dashboard Kasubag TU - render", () => {
     expect(html).toContain('href="/tukin/predikat-kinerja?bulan=8&amp;tahun=2026&amp;satker=Biro%20Keuangan%20dan%20BMN"');
   });
 
-  it("DIKEMBALIKAN -> alasan PPABP tampil di langkah Kirim (panel perlu perhatian sudah dicabut)", async () => {
+  it("DIKEMBALIKAN -> label Dikembalikan di kepala stepper, alasan PPABP tidak di stepper", async () => {
     siapkan({
       tukin: 2,
       uangMakan: 2,
@@ -259,13 +278,13 @@ describe("dashboard Kasubag TU - render", () => {
       },
     });
     const html = await render();
-    // Alasannya satu-satunya keterangan unit tentang apa yang harus
-    // diperbaiki - harus tetap terlihat walau panelnya sudah tidak ada.
-    const awalStepper = html.indexOf('<ol aria-label="Langkah tutup bulan');
-    const stepper = html.slice(awalStepper, html.indexOf("</ol>", awalStepper));
-    expect(stepper).toContain("Periksa ulang kelas jabatan pegawai");
+    // Alasan lengkapnya dibaca di panel Kirim halaman Kalkulasi; stepper
+    // cuma memberi label di kepalanya (keputusan user 2026-11-09).
+    const kepala = html.slice(html.indexOf(">Langkah tutup bulan</h2>"), html.indexOf('<ol aria-label="Langkah tutup bulan'));
+    expect(kepala).toContain(">Dikembalikan</span>");
+    expect(html).not.toContain("Periksa ulang kelas jabatan pegawai");
     // Tombol menunjuk pekerjaan berikutnya (centang direset saat dikembalikan),
-    // bukan "Lihat catatan PPABP" - catatannya sudah tampil di langkah Kirim.
+    // bukan "Lihat catatan PPABP".
     expect(html).not.toContain("Lihat catatan PPABP");
     const hero = html.slice(html.indexOf('aria-label="Ringkasan tutup bulan"'), html.indexOf("</section>"));
     expect(hero).toContain(">Periksa tabel</a>");
