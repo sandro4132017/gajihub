@@ -9,7 +9,7 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-11-06** - rangkuman commit `64d9a46`..`9e3886e`, plus perbaikan pentest Pusdatik (2026-11-06, lihat bagian 3 butir 20)
+Terakhir diperbarui: **2026-11-09** - rangkuman commit `64d9a46`..`9e3886e`, plus perbaikan pentest Pusdatik (2026-11-06, lihat bagian 3 butir 20)
 (2026-10-21 s.d. 2026-10-29), plus akun penguji Tim Pusdatik dan penghapusan login
 NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-log.md`.
 
@@ -472,8 +472,13 @@ beberapa **mengubah angka yang dibayarkan**, jadi jangan diputuskan sendiri.
    - **Ditutup di Gajihub**: F-03 Host header -> open redirect (`asalPublik` hanya
      memakai host dari allowlist `src/auth/asalTepercaya.ts`; loopback ditolak di
      production; IP 192.168.223.206/207 `:3002` masuk allowlist dan `next.config.mjs`).
-     F-01/F-02 role-assignment (ubah akun sendiri ditolak, UUID wajib sah, ADMIN baru
-     wajib centang konfirmasi, audit menyimpan `aktorNama`). F-07 CSP di
+     F-01 role-assignment (ubah akun sendiri ditolak, UUID wajib sah, ADMIN baru
+     wajib centang konfirmasi, audit menyimpan `aktorNama`). F-02 (Excessive Data
+     Exposure, OWASP API3:2023) **ditutup penuh 2026-11-09**; sebelumnya hanya
+     pembatasan kolom. `revalidatePath` dibuang dari `ubahAssignmentRoleAction` dan
+     `buatAkunBaruAction`, sehingga response Server Action tidak lagi memuat daftar
+     akun; respons hanya berisi baris yang berubah. Trade-off: angka ringkasan, tab
+     filter, dan panel pegawai baru segar setelah muat ulang halaman. F-07 CSP di
      `src/middleware.ts` (`kebijakanCsp`; `'unsafe-inline'` untuk script/style, dan
      frame-ancestors/object-src hanya untuk `/berkas/`). F-05 CSRF lapis 2 (Origin
      asing atau "null" di POST/PUT/PATCH/DELETE ditolak 403). `src/app/robots.ts`.

@@ -11,7 +11,7 @@ const INITIAL_STATE: UbahAssignmentRoleFormState = {};
 const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
 
 export function AssignmentRow({
-  user,
+  user: awal,
   satuanKerjaList,
   satuanKerjaPegawai,
 }: {
@@ -21,6 +21,11 @@ export function AssignmentRow({
   satuanKerjaPegawai: string | null;
 }) {
   const [state, formAction, pending] = useActionState(ubahAssignmentRoleAction, INITIAL_STATE);
+  // Sesudah disimpan, keadaan akun diambil dari balasan aksi (hanya baris ini),
+  // bukan dari memuat ulang seluruh halaman. Disimpan di state supaya balasan
+  // GAGAL berikutnya (tanpa `baris`) tidak mengembalikan tampilan ke data lama.
+  const [user, setUser] = useState<BarisAkun>(awal);
+  if (state.baris && state.baris !== user) setUser(state.baris);
   const [role, setRole] = useState<Role>(user.role);
   // Role TAMBAHAN - akun bisa ganti-ganti sudut pandang lewat menu di tombol
   // akun (sidebar). Disimpan di state supaya field "Satuan kerja" bisa ikut

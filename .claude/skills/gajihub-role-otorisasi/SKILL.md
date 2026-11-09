@@ -765,6 +765,13 @@ ganti balik (sudah diverifikasi manual - lihat di bawah).
   yang sedang ganti role tetap dinilai dengan role lamanya. **Kalau nanti
   nulis action baru, pakai `ambilUserSesi()`, JANGAN `prisma.user.findUnique`
   by nip lagi.**
+- **JANGAN `revalidatePath` di Server Action halaman yang memuat daftar
+  pegawai/akun, kalau response-nya tidak boleh membawa daftar itu.** Di Next.js,
+  `revalidatePath` membuat response POST Server Action ikut memuat render ulang
+  halaman, jadi 100+ akun berkewenangan ikut terkirim ke browser (F-02 pentest,
+  2026-11-09). Kembalikan hanya baris yang berubah (lihat
+  `src/app/admin/role-assignment/actions.ts`); angka ringkasan dan tab baru segar
+  setelah muat ulang halaman.
 - **UI**: `src/components/layout/AccountMenu.tsx` (BARU) - tombol akun jadi popover berisi
   daftar "Ganti role" (role aktif ditandai centang & tidak bisa diklik) +
   Logout. Menu "Ganti role" cuma muncul kalau akun punya >1 role. Tombol

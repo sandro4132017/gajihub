@@ -1,16 +1,17 @@
 "use server";
 
 import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
-import { revalidatePath } from "next/cache";
 import type { Role } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../../auth/permissions";
-import { periksaBuatAkun, periksaUbahAssignment } from "./aturanAssignment";
+import { periksaBuatAkun, periksaUbahAssignment, type BarisAkun } from "./aturanAssignment";
 
 export interface UbahAssignmentRoleFormState {
   error?: string;
   success?: string;
+  /** Hanya akun yang baru diubah - dipakai baris itu untuk memperbarui tampilannya sendiri. */
+  baris?: BarisAkun;
 }
 
 const ROLE_VALID: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
@@ -87,10 +88,11 @@ export async function ubahAssignmentRoleAction(
       return { error: "Satuan kerja wajib diisi kalau akun ini punya role Kasubag TU." };
     }
 
-    await prisma.$transaction([
+    const [baris] = await prisma.$transaction([
       prisma.user.update({
         where: { id: targetUserId },
         data: { role, rolesTambahan, satuanKerja, aktif },
+        select: { id: true, nip: true, nama: true, role: true, rolesTambahan: true, satuanKerja: true, aktif: true },
       }),
       prisma.auditTrail.create({
         data: {
@@ -111,9 +113,11 @@ export async function ubahAssignmentRoleAction(
       }),
     ]);
 
-    revalidatePath("/admin/role-assignment");
+    // Sengaja TIDAK revalidatePath: response aksi hanya boleh memuat akun yang
+    // diubah, bukan daftar seluruh akun berkewenangan khusus (OWASP API3:2023,
+    // temuan pentest F-02). Baris di layar memperbarui dirinya dari `baris`.
     const catatanTambahan = rolesTambahan.length > 0 ? ` (+ role tambahan: ${rolesTambahan.join(", ")})` : "";
-    return { success: `Assignment role ${target.nama} diperbarui jadi ${role}${catatanTambahan}.` };
+    return { success: `Assignment role ${target.nama} diperbarui jadi ${role}${catatanTambahan}.`, baris };
   } catch (err) {
     return { error: pesanGalatUntukLayar("admin.role-assignment.actions#1", err, "Terjadi kesalahan") };
   }
@@ -188,8 +192,10 @@ export async function buatAkunBaruAction(
       return user;
     });
 
-    revalidatePath("/admin/role-assignment");
-    return { success: `Akun ${created.nama} (NIP ${created.nip}) dibuat dengan role ${role}. Akun ini masuk lewat Akun Kemnaker (SIAP ID).` };
+    // Tanpa revalidatePath - lihat catatan F-02 di ubahAssignmentRoleAction.
+    return {
+      success: `Akun ${created.nama} (NIP ${created.nip}) dibuat dengan role ${role}. Akun ini masuk lewat Akun Kemnaker (SIAP ID). Muat ulang halaman untuk melihatnya di daftar.`,
+    };
   } catch (err) {
     return { error: pesanGalatUntukLayar("admin.role-assignment.actions#2", err, "Terjadi kesalahan") };
   }
