@@ -3,7 +3,7 @@ import type { Pegawai, User } from "@prisma/client";
 import { prisma } from "../../../../lib/prisma";
 import { SESSION_COOKIE_NAME } from "../../../../auth/session";
 import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../../../auth/sesiCookie";
-import { LANDING_ROLE } from "../../../../auth/roleAktif";
+import { LANDING_ROLE, pilihRoleBawaan } from "../../../../auth/roleAktif";
 import { LABEL_ROLE } from "../../../../auth/roleLabel";
 import { pesanGalatUntukLayar } from "../../../../lib/koneksi/galatSumber";
 import { ssoAktif } from "../../../../auth/sso";
@@ -110,10 +110,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const jabatan = isPenguji ? JABATAN_PENGUJI : (pegawai?.jabatan ?? LABEL_ROLE[user.role]);
+    // Role bawaan login: urutan kewenangan atas role utama + tambahan, bukan
+    // otomatis role utama (lihat pilihRoleBawaan).
+    const roleBawaan = pilihRoleBawaan(user);
+    const jabatan = isPenguji ? JABATAN_PENGUJI : (pegawai?.jabatan ?? LABEL_ROLE[roleBawaan]);
 
-    const token = await buatTokenUntukUser(user, jabatan);
-    const destination = LANDING_ROLE[user.role] ?? "/admin";
+    const token = await buatTokenUntukUser(user, jabatan, roleBawaan);
+    const destination = LANDING_ROLE[roleBawaan];
 
     const res = NextResponse.json({ ok: true, redirect: destination });
     res.cookies.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);

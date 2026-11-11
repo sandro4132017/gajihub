@@ -743,7 +743,7 @@ ganti balik (sudah diverifikasi manual - lihat di bawah).
   `20260728000000_tambah_roles_tambahan_multi_role`, satu `ALTER TABLE`,
   aman di database kosong maupun yang sudah ada isi - baris lama otomatis
   `{}` = single-role, perilaku persis seperti sebelumnya). `User.role` tetap
-  role UTAMA/default yang dipakai waktu login.
+  role UTAMA, dipilih manual Admin. Role UTAMA TIDAK menentukan role saat login (lihat seksi "Role bawaan saat login" di bawah).
 - **`src/auth/roleAktif.ts`** (BARU, pure): `daftarRoleTersedia()` (role
   utama selalu paling depan, duplikat dibuang), `punyaMultiRole()`,
   `resolveRoleAktif()` (kandidat dari cookie kalau memang dimiliki, kalau
@@ -778,12 +778,12 @@ ganti balik (sudah diverifikasi manual - lihat di bawah).
   Logout yang dulu berdiri sendiri di kaki sidebar DAN di topbar mobile
   SUDAH DIHAPUS - di mobile, sisi kanan topbar sekarang chip role yang
   sedang aktif, logout-nya lewat drawer.
-- **`gantiRoleAction`** (`src/app/login/actions.ts`) cuma menerbitkan ulang
+- **Ganti role** lewat route `/api/auth/ganti-role` (server action `gantiRoleAction` sudah DIHAPUS 2026-11-11, tak terpakai) cuma menerbitkan ulang
   cookie sesi. TIDAK mengubah data akun sama sekali (`User.role` di database
   tetap role utama) dan TIDAK menulis `AuditTrail` (bukan perubahan data) -
   lihat catatan di bawah soal implikasinya. Role tujuan diverifikasi ULANG
   ke database, bukan dipercaya dari form.
-- **Login & middleware sekarang pakai `LANDING_ROLE`** - dulu semua role
+- **Login memakai `LANDING_ROLE[pilihRoleBawaan(...)]`** (urutan role bawaan: lihat seksi di bawah) - dulu semua role
   non-PEGAWAI mendarat di `/tukin`, padahal `/tukin` tidak ada di menu
   OSDMA/PIMPINAN/ADMIN. Sekarang tiap role diarahkan ke dashboard menu
   pertamanya (PEGAWAI `/saya`, KASUBAG_TU `/kasubag`, OSDMA `/osdma`, PPABP
@@ -822,6 +822,16 @@ tambahan lewat UI Admin tersimpan benar di database + tercatat di
 berisi Logout, tanpa bagian "Ganti role"; logout dari menu baru berfungsi.
 Semua mutasi verifikasi (role tambahan Ayu + baris AuditTrail-nya) SUDAH
 DI-REVERT.
+
+### Role bawaan saat login, Role Pegawai wajib & putus sesi (2026-11-11)
+
+- **Urutan role bawaan** (`URUTAN_ROLE_BAWAAN` dan `pilihRoleBawaan()` di `src/auth/roleAktif.ts`): PIMPINAN > KASUBAG_TU > PPABP > OSDMA > PEGAWAI > ADMIN, atas gabungan role utama + tambahan. Keputusan user final 2026-11-11 (tabel konfigurasi akun). Contoh: Kasubag TU + PPABP masuk sebagai Kasubag TU. ADMIN hanya bila satu-satunya role.
+- **Role UTAMA tidak menentukan login.** `User.role` tetap dipilih manual Admin di `/admin/role-assignment`, tapi saat login yang dipakai selalu hasil `pilihRoleBawaan()`. Berlaku untuk semua jalur login (SSO, kata sandi dev, akun penguji). Setelah login selalu ke dashboard role bawaan, tanpa kembali ke halaman terakhir. Akun dev (semua role tambahan) mendarat di PIMPINAN; ini menggantikan catatan "login mendarat di `/admin`" di bagian "Diverifikasi manual" di atas.
+- **Kelola Role** menampilkan "Masuk sebagai: X". Kalimat aturan di halaman itu diturunkan dari `URUTAN_ROLE_BAWAAN`; jangan ditulis manual.
+- **Role PEGAWAI wajib**: setiap akun yang NIP-nya ada di `Pegawai` wajib punya PEGAWAI, sebagai role utama atau tambahan. Logika di `src/auth/rolePegawaiWajib.ts` (`lengkapiRolePegawai`, `kekuranganRolePegawai`), diterapkan di Kelola Role (ubah dan buat akun) dan eksekusi usulan role (dua jalur; audit kini memuat `rolesTambahan` sebelum). Chip PEGAWAI terkunci dengan keterangan "wajib untuk pegawai".
+- **Penyebab akun yang melanggar**: role utama diganti dari PEGAWAI tanpa PEGAWAI dipindah ke tambahan. Job `npm run lengkapi:role-pegawai` (`src/jobs/lengkapiRolePegawai.ts`): uji kering bawaan, `-- --terapkan` untuk menulis, batch 500, satu AuditTrail per akun, tanpa NIP/nama di log. Uji kering lokal 2026-11-11: 4 dari 5.075 akun (1 PPABP, 2 KASUBAG_TU, 1 OSDMA).
+- Job ini TIDAK menaikkan `sesiVersi`: pengguna yang sedang login melihat role baru setelah masuk ulang.
+- **Putus semua sesi** (Admin): tombol di `/admin/role-assignment` memanggil `putusSemuaSesiAction` (`src/app/admin/role-assignment/actions.ts`), yang menaikkan `User.sesiVersi` sehingga semua perangkat keluar. Aturan sesi lengkap ada di `gajihub-akses-sso-deploy`.
 
 ### Data Pegawai (`/pegawai`) - ADMIN / PPABP / KASUBAG_TU
 
@@ -943,3 +953,30 @@ diterima, `AuditTrail` mencatat `"sumber":"Edit data pegawai (PPABP)"`.
 Submit dilakukan TANPA mengubah nilai apa pun (data Elang Sasmita sebelum &
 sesudah identik) dan baris AuditTrail uji itu sudah dihapus.
 
+
+
+## Rincian lengkap 38 kolom untuk PPABP di `/tukin` (2026-11-11)
+
+- **Aturan**: PPABP yang sudah memilih satu satker boleh melihat rincian lengkap
+  (38 kolom, sama dengan Kalkulasi Unit Kasubag TU) lewat `/tukin?rincian=1`.
+  Hanya unit yang SUDAH mengirim rekap yang tampil. Kelas jabatan memakai nilai
+  EFEKTIF (sama dengan tabel ringkas & ADK), tanpa penanda basi.
+- **Bawaan tetap ringkas** (7 kolom, keputusan 2026-09-06); "Tampilkan ringkas"
+  kembali ke tampilan itu.
+- **Satu sumber tabel**: komponen server `src/components/tables/TabelRincianTukinLengkap.tsx`
+  dipakai `/tukin` dan `/kasubag/kalkulasi`. Ubah di satu tempat, jangan menyalin
+  kolomnya ke halaman lain. `TabelRincianUnit` menerima prop `aksi` untuk tombol.
+- Rekap presensi hanya di-query saat tampilan lengkap.
+- Tombol "Kembali ke Rincian Tukin" di `/tukin/presensi/[nip]` hanya muncul kalau
+  halaman itu dibuka dengan `dari=tukin`.
+- Test: `src/app/tukin/__tests__/rincianLengkapPpabp.render.test.tsx` (3 kasus).
+
+## Koreksi jam presensi: hanya Kasubag TU unit pegawai (2026-11-11)
+
+- **Izin `canKoreksiJamPresensi(user, satkerPegawai)`** di `src/auth/permissions.ts`: akun aktif, role `KASUBAG_TU`, dan `user.satuanKerja` sama persis dengan satker pegawai yang dikoreksi. Satuan kerja kosong ditolak. Ini satu-satunya pemberi hak koreksi jam.
+- **Dua jalur, satu izin**: `/tukin/presensi/[nip]` (`actionsKoreksi.ts`) dan tabel lembur Kalkulasi Unit (`src/app/kasubag/kalkulasi/actions.ts`). Satker diambil dari database, bukan dari form.
+- **ADMIN SENGAJA TIDAK BYPASS.** Berbeda dengan `cekRoleAtauAdmin` dkk, izin ini tidak punya jalur ADMIN. Hibah `satuanKerjaTambahan` juga tidak ikut. PPABP dan ADMIN kehilangan hak koreksi, tetapi tetap bisa melihat koreksi, bukti, dan kartu jumlah koreksi per unit.
+- **Preseden: `canTandatanganiSptjmUnit`** (`src/auth/permissions.ts`). Koreksi jam juga berisi pernyataan "saya sudah memeriksa bukti dan bertanggung jawab", dan pernyataan semacam itu melekat pada orang yang memegang unitnya. Karena itu aturannya disalin: tanpa bypass ADMIN, tanpa hibah.
+- **Melihat bukti**: `canLihatBuktiKoreksiPresensi(user, {nipPegawai, satuanKerjaPegawai})` memberi akses kepada pegawai ybs (`canViewDataSendiri`), Kasubag TU unit (`canKoreksiJamPresensi`), dan PPABP/ADMIN (`cekPpabpAtauAdmin`). OSDMA dan PIMPINAN tidak termasuk.
+- **Risiko yang diterima user (2026-11-11)**: unit tanpa akun Kasubag TU tidak bisa dikoreksi sama sekali. Kalau nanti butuh jalur lain, itu keputusan baru.
+- Komentar `canEditPresensiKinerjaLangsung` diperbarui; fungsinya tetap `false` untuk semua role. Detail alur dan pengamannya: `gajihub-presensi-epresensi`.

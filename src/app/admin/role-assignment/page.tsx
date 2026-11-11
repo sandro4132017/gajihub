@@ -155,6 +155,8 @@ export default async function RoleAssignmentPage({
                   user={akunTerpilih}
                   satuanKerjaList={satuanKerjaList}
                   satuanKerjaPegawai={pegawaiTerpilih.satuanKerja}
+                  punyaDataPegawai
+                  idSaya={akun?.userId ?? null}
                 />
               ) : (
                 // Fallback: pegawai yang belum punya akun sama sekali (mis. data
@@ -217,6 +219,8 @@ export default async function RoleAssignmentPage({
                 user={u}
                 satuanKerjaList={satuanKerjaList}
                 satuanKerjaPegawai={satkerPegawaiByNip.get(u.nip) ?? null}
+                punyaDataPegawai={satkerPegawaiByNip.has(u.nip)}
+                idSaya={akun?.userId ?? null}
               />
             ))}
           </div>

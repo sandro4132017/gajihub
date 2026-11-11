@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { SESSION_COOKIE_NAME } from "../../../../auth/session";
 import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../../../auth/sesiCookie";
-import { LANDING_ROLE } from "../../../../auth/roleAktif";
+import { LANDING_ROLE, pilihRoleBawaan } from "../../../../auth/roleAktif";
 import { LABEL_ROLE } from "../../../../auth/roleLabel";
 import {
   ambilInfoPengguna,
@@ -177,7 +177,8 @@ export async function GET(req: NextRequest) {
     }
 
     const pegawai = await prisma.pegawai.findUnique({ where: { nip } });
-    const sesi = await buatTokenUntukUser(user, pegawai?.jabatan ?? LABEL_ROLE[user.role]);
+    const roleBawaan = pilihRoleBawaan(user);
+    const sesi = await buatTokenUntukUser(user, pegawai?.jabatan ?? LABEL_ROLE[roleBawaan], roleBawaan);
 
     // Jalan mana yang dipakai mengenali orang ini DICATAT. Selama NIP tidak
     // pernah dikirim Naco, praktis semua login SSO lewat padanan NIK - dan
@@ -188,9 +189,10 @@ export async function GET(req: NextRequest) {
       `[sso] login berhasil NIP …${nip.slice(-4)} lewat ${lewatSidikNik ? "padanan sidik NIK" : "NIP langsung dari Naco"}`
     );
 
-    // Sama seperti login kata sandi: selalu mulai dari role UTAMA akun, bukan role
-    // tambahan yang terakhir dipakai.
-    const res = NextResponse.redirect(new URL(LANDING_ROLE[user.role], asalPublik(req.headers, req.url)));
+    // Sama seperti login kata sandi: selalu mulai dari role bawaan (urutan
+    // kewenangan atas role utama + tambahan, lihat pilihRoleBawaan), bukan role
+    // yang terakhir dipakai.
+    const res = NextResponse.redirect(new URL(LANDING_ROLE[roleBawaan], asalPublik(req.headers, req.url)));
     res.cookies.set(SESSION_COOKIE_NAME, sesi, OPSI_COOKIE_SESI);
     res.cookies.delete(COOKIE_STATE_SSO);
     return res;

@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { Role } from "@prisma/client";
 import { prisma } from "../../../../lib/prisma";
-import { SESSION_COOKIE_NAME } from "../../../../auth/session";
-import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../../../auth/sesiCookie";
+import { SESSION_COOKIE_NAME, batasMutlakMs } from "../../../../auth/session";
+import { opsiCookieSampai, buatTokenUntukUser } from "../../../../auth/sesiCookie";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import { daftarRoleTersedia, LANDING_ROLE } from "../../../../auth/roleAktif";
 import { pesanGalatUntukLayar } from "../../../../lib/koneksi/galatSumber";
@@ -41,11 +41,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = await buatTokenUntukUser(user, akun.jabatan, roleTujuan);
+    // Waktu login (lp) sesi berjalan DIWARISKAN: ganti role tidak mengulang
+    // batas mutlak 8 jam. Versi diambil dari SESI BERJALAN (akun.v, yang baru
+    // lolos pencocokan ke database), bukan dari query kedua: kalau sesi dicabut
+    // di antara dua query, token baru tidak boleh menghidupkannya lagi.
+    const token = await buatTokenUntukUser({ ...user, sesiVersi: akun.v }, akun.jabatan, roleTujuan, akun.lp);
     const destination = LANDING_ROLE[roleTujuan] ?? "/saya";
 
     const res = NextResponse.json({ ok: true, redirect: destination });
-    res.cookies.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
+    res.cookies.set(SESSION_COOKIE_NAME, token, opsiCookieSampai(batasMutlakMs(akun)));
     return res;
   } catch (error) {
     return NextResponse.json(

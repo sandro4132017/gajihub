@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LANDING_ROLE } from "../../../../auth/roleAktif";
 
 const m = vi.hoisted(() => ({ findUser: vi.fn(), findPegawai: vi.fn(), createUser: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
@@ -43,6 +44,8 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 
+const LANDING_PIMPINAN = LANDING_ROLE.PIMPINAN;
+
 describe("POST /api/auth/login - akun penguji", () => {
   it("sandi benar + data uji ada -> 200 dan cookie sesi", async () => {
     m.findUser.mockResolvedValue(userUji);
@@ -51,6 +54,23 @@ describe("POST /api/auth/login - akun penguji", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).ok).toBe(true);
     expect(res.headers.get("set-cookie")).toContain("HttpOnly");
+  });
+
+  it("landing = role bawaan: ADMIN + [PPABP, OSDMA] -> /ppabp (bukan /admin); ADMIN saja -> /admin", async () => {
+    m.findPegawai.mockResolvedValue(pegawaiUji);
+    m.findUser.mockResolvedValue({ ...userUji, rolesTambahan: ["PPABP", "OSDMA"] });
+    const res = await kirim("penguji-uji", SANDI);
+    expect((await res.json()).redirect).toBe("/ppabp");
+    // token memuat role bawaan dan versi akun
+    const token = /gajihub_session=([^;]+)/.exec(res.headers.get("set-cookie") ?? "")?.[1] ?? "";
+    const { nilaiTokenSesi } = await import("../../../../auth/session");
+    expect((await nilaiTokenSesi(token)).payload).toMatchObject({ role: "PPABP", v: 0 });
+
+    m.findUser.mockResolvedValue({ ...userUji, rolesTambahan: [], sesiVersi: 7 });
+    const res2 = await kirim("penguji-uji", SANDI);
+    expect((await res2.json()).redirect).toBe("/admin");
+    const token2 = /gajihub_session=([^;]+)/.exec(res2.headers.get("set-cookie") ?? "")?.[1] ?? "";
+    expect((await nilaiTokenSesi(token2)).payload).toMatchObject({ role: "ADMIN", v: 7 });
   });
 
   it("sandi benar tapi data uji belum disiapkan di server itu -> 401, tidak membuat akun", async () => {
@@ -136,6 +156,17 @@ describe("POST /api/auth/login - akun dev", () => {
     m.findPegawai.mockResolvedValue(null);
     const res = await kirim("akun-uji", SANDI_DEV);
     expect(res.status).toBe(200);
+  });
+
+  it("akun dev ADMIN + semua role tambahan mendarat di role bawaan tertinggi (Pimpinan)", async () => {
+    m.findUser.mockResolvedValue({
+      ...userUji,
+      nip: NIP,
+      rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
+    });
+    m.findPegawai.mockResolvedValue(null);
+    const res = await kirim("akun-uji", SANDI_DEV);
+    expect((await res.json()).redirect).toBe(LANDING_PIMPINAN);
   });
 
   it("5 gagal -> terkunci 15 menit; pesan sama persis dengan salah sandi biasa; log tanpa username/sandi", async () => {

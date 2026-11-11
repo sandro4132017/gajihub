@@ -6,6 +6,11 @@ import { lemburTeks } from "../../../lib/format/presensiTampilan";
 import { BantuanTabel, BarisSumber } from "./BantuanTabel";
 import { Paginasi, hitungPaginasi } from "../../../components/tables/Paginasi";
 import {
+  EKSTENSI_BUKTI_KOREKSI,
+  PANJANG_MIN_ALASAN_KOREKSI,
+  TEKS_PERNYATAAN_KOREKSI,
+} from "../../../business-logic/koreksiPresensi";
+import {
   koreksiJamLemburHarianAction,
   hapusKoreksiJamLemburHarianAction,
   type KoreksiJamLemburHarianState,
@@ -46,16 +51,13 @@ function FormKoreksiHari({
   pegawaiId,
   nip,
   rincian,
-  periodeBulan,
-  periodeTahun,
-  terkunci,
+  bolehUbah,
 }: {
   pegawaiId: string;
   nip: string;
   rincian: RincianLemburHari;
-  periodeBulan: number;
-  periodeTahun: number;
-  terkunci: boolean;
+  /** Kasubag TU unit pegawai DAN rekap unit belum terkirim. */
+  bolehUbah: boolean;
 }) {
   const [state, formAction, pending] = useActionState(koreksiJamLemburHarianAction, AWAL_STATE);
   const [hapusState, hapusAction, hapusPending] = useActionState(hapusKoreksiJamLemburHarianAction, AWAL_STATE);
@@ -102,13 +104,11 @@ function FormKoreksiHari({
             </span>
           </div>
 
-          {!terkunci && (
+          {bolehUbah && (
             <form action={hapusAction}>
               <input type="hidden" name="koreksiId" value={rincian.koreksi.id} />
               <input type="hidden" name="pegawaiId" value={pegawaiId} />
               <input type="hidden" name="tanggalIso" value={rincian.tanggalIso} />
-              <input type="hidden" name="periodeBulan" value={periodeBulan} />
-              <input type="hidden" name="periodeTahun" value={periodeTahun} />
               <button
                 type="submit"
                 disabled={hapusPending}
@@ -128,12 +128,10 @@ function FormKoreksiHari({
         <p className="mt-2 text-xs font-semibold text-green">{hapusState.success}</p>
       )}
 
-      {!terkunci && (
-        <form action={formAction} className="mt-3">
+      {bolehUbah && (
+        <form action={formAction} autoComplete="off" className="mt-3">
           <input type="hidden" name="pegawaiId" value={pegawaiId} />
           <input type="hidden" name="tanggalIso" value={rincian.tanggalIso} />
-          <input type="hidden" name="periodeBulan" value={periodeBulan} />
-          <input type="hidden" name="periodeTahun" value={periodeTahun} />
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end">
             <div className="sm:col-span-3">
@@ -156,13 +154,14 @@ function FormKoreksiHari({
             <div className="sm:col-span-6">
               <label className="field-label text-xs">
                 Dasar Koreksi / Nomor SPL
-                <span className="font-normal text-muted"> (wajib min. 10 huruf)</span>
+                <span className="font-normal text-muted"> (wajib min. {PANJANG_MIN_ALASAN_KOREKSI} huruf)</span>
               </label>
               <input
                 type="text"
                 name="alasan"
-                minLength={10}
+                minLength={PANJANG_MIN_ALASAN_KOREKSI}
                 required
+                autoComplete="off"
                 defaultValue={rincian.koreksi?.alasan ?? ""}
                 placeholder="Contoh: SPL No. 142/TU/VI/2026 tugas rekap LK"
                 className="field-input w-full py-1 text-sm"
@@ -179,6 +178,23 @@ function FormKoreksiHari({
               </button>
             </div>
           </div>
+
+          <label className="mt-3 block">
+            <span className="field-label text-xs">
+              Bukti (opsional)
+              <span className="font-normal text-muted"> - JPG, PNG, atau PDF, maksimal 2 MB, mis. scan SPL</span>
+            </span>
+            <input
+              type="file"
+              name="bukti"
+              accept={EKSTENSI_BUKTI_KOREKSI.join(",")}
+              className="field-input w-full py-1 text-sm"
+            />
+          </label>
+          <label className="mt-2 flex items-start gap-2 text-xs font-semibold text-ink">
+            <input type="checkbox" name="pernyataan" value="1" required className="mt-0.5" />
+            <span>{TEKS_PERNYATAAN_KOREKSI}</span>
+          </label>
 
           <span className="mt-1.5 block text-[11px] text-muted">
             * Isi <strong>0</strong> jika ketukan pulang malam bukan penugasan lembur. Sisa menit tidak dibayarkan.
@@ -201,6 +217,7 @@ export function TabelPemeriksaanLembur({
   periodeBulan,
   periodeTahun,
   terkunci = false,
+  bolehKoreksi = false,
   halaman,
   perHalaman,
   paramPaginasi,
@@ -209,6 +226,11 @@ export function TabelPemeriksaanLembur({
   periodeBulan: number;
   periodeTahun: number;
   terkunci?: boolean;
+  /**
+   * Boleh mengoreksi jam lembur - `canKoreksiJamPresensi` (hanya Kasubag TU
+   * unit itu). Tanpa ini rincian hanya bisa dilihat.
+   */
+  bolehKoreksi?: boolean;
   /** Nilai mentah `?halLembur=` & `?perLembur=` - dijepit hitungPaginasi. */
   halaman?: string;
   perHalaman?: string;
@@ -473,7 +495,7 @@ export function TabelPemeriksaanLembur({
                   berhak uang makan lembur.
                 </li>
                 <li>
-                  Wajib mengisi Nomor/Dasar SPL minimal 10 karakter untuk rekam jejak audit (BPK/Itjen).
+                  Wajib mengisi Nomor/Dasar SPL minimal {PANJANG_MIN_ALASAN_KOREKSI} karakter untuk rekam jejak audit (BPK/Itjen).
                 </li>
               </ul>
             </div>
@@ -481,6 +503,11 @@ export function TabelPemeriksaanLembur({
             {terkunci && (
               <div className="mt-3 rounded-lg border border-gold bg-gold-tint p-3 text-xs font-semibold text-ink">
                 Periode ini sudah dikirim ke PPABP dan terkunci. Rincian jam lembur hanya dapat dilihat (read-only).
+              </div>
+            )}
+            {!terkunci && !bolehKoreksi && (
+              <div className="mt-3 rounded-lg border border-line bg-surface-2 p-3 text-xs text-ink-2">
+                Koreksi jam lembur hanya dapat dilakukan Kasubag TU unit pegawai ini. Rincian hanya dapat dilihat.
               </div>
             )}
 
@@ -501,9 +528,7 @@ export function TabelPemeriksaanLembur({
                     pegawaiId={pegawaiAktifModal.pegawaiId}
                     nip={pegawaiAktifModal.nip}
                     rincian={r}
-                    periodeBulan={periodeBulan}
-                    periodeTahun={periodeTahun}
-                    terkunci={terkunci}
+                    bolehUbah={bolehKoreksi && !terkunci}
                   />
                 ))
               )}

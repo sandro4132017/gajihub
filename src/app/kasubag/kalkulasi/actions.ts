@@ -4,7 +4,7 @@ import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
-import { canAjukanKalkulasiTukinMassalUnit, canTelaahKoreksiAjukanUangLemburUnit, type AuthUser } from "../../../auth/permissions";
+import { canAjukanKalkulasiTukinMassalUnit, canTelaahKoreksiAjukanUangLemburUnit, canKoreksiJamPresensi, type AuthUser } from "../../../auth/permissions";
 import { hitungTukin } from "../../../business-logic/tukin";
 import { parseJenisCuti } from "../../../business-logic/jenisCuti";
 import { hitungUangMakan } from "../../../business-logic/uangMakan";
@@ -23,6 +23,9 @@ import {
   kurungTarifSbm,
 } from "../../../business-logic/tarifSbm";
 import { statusUnit } from "../../../business-logic/pengirimanUnit";
+import { periodeDariTanggal, validasiAlasanKoreksi } from "../../../business-logic/koreksiPresensi";
+import { periksaBuktiKoreksi, tulisBuktiKoreksi } from "../../../lib/storage/buktiKoreksi";
+import { rekapUnitTerkunciUntukTanggal } from "../../../lib/koreksiPresensiDb";
 import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 import { tglTampil } from "../../../lib/format/tanggalTampil";
 import type { Prisma } from "@prisma/client";
@@ -805,12 +808,10 @@ export async function koreksiJamLemburHarianAction(
 
     const pegawaiId = String(formData.get("pegawaiId") ?? "").trim();
     const tanggalIso = String(formData.get("tanggalIso") ?? "").trim();
-    const periodeBulan = Number(formData.get("periodeBulan"));
-    const periodeTahun = Number(formData.get("periodeTahun"));
     const jamLemburStr = String(formData.get("jamLembur") ?? "").trim();
     const alasan = String(formData.get("alasan") ?? "").trim();
 
-    if (!pegawaiId || !tanggalIso || !periodeBulan || !periodeTahun) {
+    if (!pegawaiId || !tanggalIso) {
       return { error: "Data koreksi tidak lengkap." };
     }
 
@@ -822,8 +823,11 @@ export async function koreksiJamLemburHarianAction(
       return { error: "Jam lembur harus bilangan bulat antara 0 sampai 24 (sisa menit tidak dibayar)." };
     }
 
-    if (alasan.length < 10) {
-      return { error: "Dasar koreksi / nomor SPL wajib diisi minimal 10 karakter." };
+    const galatAlasan = validasiAlasanKoreksi(alasan);
+    if (galatAlasan) return { error: galatAlasan };
+
+    if (String(formData.get("pernyataan") ?? "") !== "1") {
+      return { error: "Centang pernyataan tanggung jawab dulu - koreksi ini atas nama kamu." };
     }
 
     const pegawai = await prisma.pegawai.findUnique({
@@ -832,25 +836,21 @@ export async function koreksiJamLemburHarianAction(
     });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
 
-    if (!canTelaahKoreksiAjukanUangLemburUnit(authUser, pegawai.satuanKerja)) {
-      return { error: `Peran kamu tidak berwenang mengoreksi lembur pegawai ${pegawai.satuanKerja ?? "tanpa unit"}.` };
+    // Hanya Kasubag TU unit pegawai - tanpa bypass ADMIN/PPABP.
+    if (!canKoreksiJamPresensi(authUser, pegawai.satuanKerja ?? "")) {
+      return { error: "Koreksi jam lembur hanya boleh dilakukan Kasubag TU unit pegawai ini." };
+    }
+    const satuanKerja = pegawai.satuanKerja as string;
+
+    // Periode DITURUNKAN DARI TANGGAL yang dikoreksi - bukan dari form.
+    const { bulan: periodeBulan, tahun: periodeTahun } = periodeDariTanggal(tanggal);
+    if (await rekapUnitTerkunciUntukTanggal(satuanKerja, tanggal)) {
+      return { error: "Periode ini sudah dikirim ke PPABP dan terkunci. Jam lembur tidak dapat diubah." };
     }
 
-    // Kunci pengiriman: jika rekap sudah dikirim ke PPABP, tidak boleh diedit
-    if (pegawai.satuanKerja) {
-      const pengiriman = await prisma.pengirimanUnit.findUnique({
-        where: {
-          satuanKerja_periodeBulan_periodeTahun: {
-            satuanKerja: pegawai.satuanKerja,
-            periodeBulan,
-            periodeTahun,
-          },
-        },
-      });
-      if (statusUnit(pengiriman).terkunci) {
-        return { error: "Periode ini sudah dikirim ke PPABP dan terkunci. Jam lembur tidak dapat diubah." };
-      }
-    }
+    // Bukti OPSIONAL untuk koreksi yang hanya jam lembur.
+    const bukti = await periksaBuktiKoreksi(formData.get("bukti"));
+    if (bukti.status === "galat") return { error: bukti.error };
 
     const presensiLama = await prisma.presensiHarian.findUnique({
       where: { pegawaiId_tanggal: { pegawaiId, tanggal } },
@@ -863,6 +863,25 @@ export async function koreksiJamLemburHarianAction(
 
     const hariLiburMap = await muatHariLiburPeriode(periodeBulan, periodeTahun);
 
+    // Berkas ditulis PALING AKHIR, sesudah semua validasi lolos.
+    // Bukti jalur lembur disimpan di buktiRefLembur; buktiRef (masuk) dan
+    // buktiRefKeluar milik jalur koreksi jam presensi tidak disentuh.
+    let buktiRefLembur: string | null = koreksiLama?.buktiRefLembur ?? null;
+    if (bukti.status === "siap") {
+      const kunci = await tulisBuktiKoreksi({
+        buffer: bukti.buffer,
+        ekstensi: bukti.ekstensi,
+        satuanKerja,
+        tanggal,
+        sisi: "lembur",
+      });
+      if (!kunci) return { error: "Bukti gagal disimpan. Coba unggah ulang; kalau masih gagal, hubungi Admin Gajihub." };
+      buktiRefLembur = kunci;
+    }
+
+    const jm = (d: Date | null | undefined) =>
+      d ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : null;
+
     await prisma.$transaction(async (tx) => {
       // 1. Catat ke KoreksiPresensiHarian
       await tx.koreksiPresensiHarian.upsert({
@@ -872,11 +891,13 @@ export async function koreksiJamLemburHarianAction(
           tanggal,
           jamLembur,
           alasan,
+          buktiRefLembur,
           dikoreksiOlehId: user.id,
         },
         update: {
           jamLembur,
           alasan,
+          buktiRefLembur,
           dikoreksiOlehId: user.id,
           dikoreksiPada: new Date(),
         },
@@ -900,14 +921,19 @@ export async function koreksiJamLemburHarianAction(
           satuanKerja: pegawai.satuanKerja,
           dataSebelum: {
             tanggal: tanggalIso,
+            jamMasukEpresensi: jm(presensiLama?.jamMasuk),
+            jamKeluarEpresensi: jm(presensiLama?.jamKeluar),
             jamLemburMesin: presensiLama?.jamLembur ?? 0,
             jamLemburSebelumnya: koreksiLama?.jamLembur ?? null,
             alasanSebelumnya: koreksiLama?.alasan ?? null,
+            buktiRefLemburSebelumnya: koreksiLama?.buktiRefLembur ?? null,
           },
           dataSesudah: {
             tanggal: tanggalIso,
             jamLembur,
             alasan,
+            buktiRefLembur,
+            pernyataanTanggungJawab: true,
             sumber: "Koreksi SPL Kasubag TU",
           },
         },
@@ -942,10 +968,8 @@ export async function hapusKoreksiJamLemburHarianAction(
     const koreksiId = String(formData.get("koreksiId") ?? "").trim();
     const pegawaiId = String(formData.get("pegawaiId") ?? "").trim();
     const tanggalIso = String(formData.get("tanggalIso") ?? "").trim();
-    const periodeBulan = Number(formData.get("periodeBulan"));
-    const periodeTahun = Number(formData.get("periodeTahun"));
 
-    if (!koreksiId || !pegawaiId || !tanggalIso || !periodeBulan || !periodeTahun) {
+    if (!koreksiId || !pegawaiId || !tanggalIso) {
       return { error: "Parameter hapus koreksi tidak lengkap." };
     }
 
@@ -958,29 +982,24 @@ export async function hapusKoreksiJamLemburHarianAction(
     });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
 
-    if (!canTelaahKoreksiAjukanUangLemburUnit(authUser, pegawai.satuanKerja)) {
-      return { error: `Peran kamu tidak berwenang mengoreksi lembur pegawai ${pegawai.satuanKerja ?? "tanpa unit"}.` };
-    }
-
-    if (pegawai.satuanKerja) {
-      const pengiriman = await prisma.pengirimanUnit.findUnique({
-        where: {
-          satuanKerja_periodeBulan_periodeTahun: {
-            satuanKerja: pegawai.satuanKerja,
-            periodeBulan,
-            periodeTahun,
-          },
-        },
-      });
-      if (statusUnit(pengiriman).terkunci) {
-        return { error: "Periode ini sudah dikirim ke PPABP dan terkunci. Koreksi tidak dapat dihapus." };
-      }
+    // Hanya Kasubag TU unit pegawai - tanpa bypass ADMIN/PPABP.
+    if (!canKoreksiJamPresensi(authUser, pegawai.satuanKerja ?? "")) {
+      return { error: "Koreksi jam lembur hanya boleh dicabut Kasubag TU unit pegawai ini." };
     }
 
     const koreksi = await prisma.koreksiPresensiHarian.findUnique({
       where: { id: koreksiId },
     });
     if (!koreksi) return { error: "Data koreksi tidak ditemukan atau sudah dihapus." };
+    if (koreksi.pegawaiId !== pegawaiId || koreksi.tanggal.getTime() !== tanggal.getTime()) {
+      return { error: "Koreksi itu bukan milik pegawai dan tanggal yang dipilih." };
+    }
+
+    // Periode DITURUNKAN DARI TANGGAL koreksi - bukan dari form.
+    const { bulan: periodeBulan, tahun: periodeTahun } = periodeDariTanggal(koreksi.tanggal);
+    if (await rekapUnitTerkunciUntukTanggal(pegawai.satuanKerja as string, koreksi.tanggal)) {
+      return { error: "Periode ini sudah dikirim ke PPABP dan terkunci. Koreksi tidak dapat dihapus." };
+    }
 
     const presensi = await prisma.presensiHarian.findUnique({
       where: { pegawaiId_tanggal: { pegawaiId, tanggal } },
@@ -1016,7 +1035,7 @@ export async function hapusKoreksiJamLemburHarianAction(
       } else {
         await tx.koreksiPresensiHarian.update({
           where: { id: koreksiId },
-          data: { jamLembur: null },
+          data: { jamLembur: null, buktiRefLembur: null },
         });
       }
 
@@ -1040,6 +1059,8 @@ export async function hapusKoreksiJamLemburHarianAction(
             tanggal: tanggalIso,
             jamLemburSebelumnya: koreksi.jamLembur,
             alasanSebelumnya: koreksi.alasan,
+            // Berkas bukti tidak dihapus dari disk; rujukannya dicatat di sini.
+            buktiRefLemburSebelumnya: koreksi.buktiRefLembur,
           },
           dataSesudah: {
             tanggal: tanggalIso,

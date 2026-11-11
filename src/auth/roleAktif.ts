@@ -1,8 +1,10 @@
 // ============================================================================
 // MULTI-ROLE PER AKUN (buat kemudahan TESTING) - pure function, tanpa I/O.
 //
-// Satu akun boleh punya beberapa role: `role` (utama, dipakai waktu login) +
-// `rolesTambahan` (lihat komentar panjang di model User, schema.prisma).
+// Satu akun boleh punya beberapa role: `role` (utama) + `rolesTambahan` (lihat
+// komentar panjang di model User, schema.prisma). Role yang dipakai SAAT LOGIN
+// ditentukan pilihRoleBawaan() di bawah (urutan kewenangan atas gabungan
+// keduanya), BUKAN otomatis role utama.
 // Pada satu waktu akun tetap berperan sebagai SATU role saja - "role aktif" -
 // yang disimpan di cookie sesi (SessionPayload.role) dan bisa diganti lewat
 // menu di tombol akun (sidebar).
@@ -43,15 +45,44 @@ export function punyaMultiRole(user: PemilikRole): boolean {
 
 /**
  * Role aktif yang BOLEH dipakai: kandidat (dari cookie sesi / pilihan user)
- * kalau memang dimiliki akun, kalau tidak JATUH BALIK ke role utama.
+ * kalau memang dimiliki akun, kalau tidak JATUH BALIK ke role bawaan login.
  *
  * Sengaja fallback (bukan melempar error): kasus paling umum adalah role
  * tambahan dicabut Admin saat sesi masih jalan - user tidak perlu diblokir,
- * cukup dikembalikan ke kewenangan utamanya.
+ * cukup dikembalikan ke role bawaannya.
  */
 export function resolveRoleAktif(user: PemilikRole, kandidat: Role | null | undefined): Role {
   if (kandidat && daftarRoleTersedia(user).includes(kandidat)) return kandidat;
-  return user.role;
+  return pilihRoleBawaan(user);
+}
+
+/**
+ * Urutan role bawaan saat login, dari yang diutamakan (keputusan user
+ * 2026-11-11, tabel konfigurasi akun): Pimpinan > Kasubag TU > PPABP > OSDMA >
+ * Pegawai. Contoh: Kasubag TU + PPABP masuk sebagai Kasubag TU.
+ *
+ * ADMIN paling akhir: dipakai hanya bila akun tidak punya role lain, supaya
+ * akun Admin yang juga memegang role kerja langsung mendarat di dashboard
+ * kerjanya. Role Utama (User.role) tetap dipilih manual oleh Admin dan TIDAK
+ * menentukan role saat login.
+ */
+export const URUTAN_ROLE_BAWAAN: readonly Role[] = [
+  "PIMPINAN",
+  "KASUBAG_TU",
+  "PPABP",
+  "OSDMA",
+  "PEGAWAI",
+  "ADMIN",
+];
+
+/**
+ * Role yang dipakai saat login (semua jalur): role pertama menurut
+ * URUTAN_ROLE_BAWAAN yang dimiliki akun, dari gabungan role utama + tambahan.
+ * Urutan masukan tidak berpengaruh.
+ */
+export function pilihRoleBawaan(user: PemilikRole): Role {
+  const dimiliki = daftarRoleTersedia(user);
+  return URUTAN_ROLE_BAWAAN.find((r) => dimiliki.includes(r)) ?? user.role;
 }
 
 /**

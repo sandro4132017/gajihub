@@ -21,6 +21,8 @@ import { PencarianDebounce } from "../../../components/forms/PencarianDebounce";
 import { Paginasi, hitungPaginasi } from "../../../components/tables/Paginasi";
 import { BadgePejabatEselon } from "../../../components/shared/BadgePejabatEselon";
 import { uraiJenisCuti, LABEL_JENIS_CUTI } from "../../../business-logic/jenisCuti";
+import { rincianCutiAtauNull, type BarisCutiHarian, type RincianJenisCuti } from "../../../lib/format/rincianCuti";
+import { RincianCutiTombol } from "./RincianCutiTombol";
 import { SumberAcuan } from "../../../components/shared/SumberAcuan";
 import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { RiBuildingLine } from "react-icons/ri";
@@ -120,8 +122,34 @@ export default async function PresensiTukinPage({
       tanggal: { gte: awalPeriode, lt: akhirPeriode },
       ...(satkerEfektif ? { pegawai: { satuanKerja: satkerEfektif } } : {}),
     },
-    select: { pegawaiId: true, dikoreksiPada: true },
+    select: {
+      pegawaiId: true,
+      dikoreksiPada: true,
+      jamMasuk: true,
+      jamKeluar: true,
+      buktiRef: true,
+      buktiRefKeluar: true,
+      pegawai: { select: { satuanKerja: true } },
+    },
   });
+  // Pengawasan PPABP/ADMIN: berapa koreksi jam per unit pada periode ini dan
+  // berapa yang tanpa bukti (jam masuk/pulang diubah tetapi sisi itu tanpa berkas). Kasubag TU
+  // tidak memerlukannya - ia hanya melihat unitnya sendiri.
+  const koreksiPerUnit = new Map<string, { jumlah: number; tanpaBukti: number }>();
+  if (!satkerWajib) {
+    for (const k of koreksiPeriode) {
+      const unit = k.pegawai.satuanKerja ?? "Tanpa satuan kerja";
+      const baris = koreksiPerUnit.get(unit) ?? { jumlah: 0, tanpaBukti: 0 };
+      baris.jumlah += 1;
+      // Tanpa bukti = koreksi yang mengubah jam masuk/pulang tetapi sisi itu
+      // tidak punya berkasnya. Koreksi yang hanya jam lembur tidak dihitung.
+      if ((k.jamMasuk && !k.buktiRef) || (k.jamKeluar && !k.buktiRefKeluar)) baris.tanpaBukti += 1;
+      koreksiPerUnit.set(unit, baris);
+    }
+  }
+  const daftarKoreksiUnit = [...koreksiPerUnit.entries()].sort(
+    (a, b) => b[1].tanpaBukti - a[1].tanpaBukti || b[1].jumlah - a[1].jumlah || a[0].localeCompare(b[0], "id-ID")
+  );
   const waktuTarikan = koreksiPeriode.length
     ? await prisma.rekapPresensiPeriode.findMany({
         where: {
@@ -203,6 +231,30 @@ export default async function PresensiTukinPage({
         }),
   ]);
 
+  // Rincian cuti per JENIS untuk pop up angka cuti. Rekap bulanan hanya
+  // menyimpan jenis terbanyak (dipakai Pasal 14); baris harian e-Presensi
+  // menyimpan semuanya. Satu query untuk halaman ini saja, hanya pegawai yang
+  // punya cuti.
+  const idBerCuti = rekapList.filter((r) => r.jumlahHariCuti > 0).map((r) => r.pegawaiId);
+  const harianCuti = idBerCuti.length
+    ? await prisma.presensiHarian.findMany({
+        where: {
+          pegawaiId: { in: idBerCuti },
+          tanggal: { gte: awalPeriode, lt: akhirPeriode },
+          statusKehadiran: "CUTI",
+        },
+        select: { pegawaiId: true, tanggal: true, namaSistemKerja: true },
+      })
+    : [];
+  const harianPerPegawai = new Map<string, BarisCutiHarian[]>();
+  for (const h of harianCuti) {
+    const daftar = harianPerPegawai.get(h.pegawaiId) ?? [];
+    daftar.push(h);
+    harianPerPegawai.set(h.pegawaiId, daftar);
+  }
+  const petaRincianCuti = new Map<string, RincianJenisCuti[] | null>();
+  for (const [id, baris] of harianPerPegawai) petaRincianCuti.set(id, rincianCutiAtauNull(baris));
+
   // Tombol Kembali HANYA kalau halaman ini dibuka dari Dashboard Tukin.
   // Lewat sidebar, halaman ini adalah tujuan akhir - tidak ada tempat untuk
   // "kembali", dan tombol yang menunjuk ke halaman yang belum tentu pernah
@@ -276,6 +328,39 @@ export default async function PresensiTukinPage({
           ...(satkerEfektif && !satkerWajib ? { satker: satkerEfektif } : {}),
         }}
       />
+
+      {daftarKoreksiUnit.length > 0 && (
+        <section className="mt-6" aria-label="Koreksi jam presensi per unit">
+          <h2 className="text-base font-bold text-ink">
+            Koreksi jam presensi {NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} {periodeTahun}
+          </h2>
+          <p className="mt-0.5 text-xs text-muted">
+            Dibuat Kasubag TU unit masing-masing. &quot;Tanpa bukti&quot; = koreksi lama atau yang hanya jam lembur.
+          </p>
+          <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {daftarKoreksiUnit.map(([unit, k]) => (
+              <li key={unit} className="card p-3">
+                <Link
+                  href={`/tukin/presensi?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(unit)}`}
+                  className="link block truncate text-sm font-semibold"
+                  title={unit}
+                >
+                  {unit}
+                </Link>
+                <p className="mt-1 text-xs text-ink-2">
+                  <span className="font-mono font-bold text-ink">{k.jumlah}</span> koreksi
+                  {k.tanpaBukti > 0 ? (
+                    <>
+                      {" "}
+                      - <span className="font-mono font-bold text-gold-deep">{k.tanpaBukti}</span> tanpa bukti
+                    </>
+                  ) : null}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -449,11 +534,19 @@ export default async function PresensiTukinPage({
                       {r.totalMenitPulangCepat} mnt
                     </td>
                     <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariCuti)}`}>
-                      {r.jumlahHariCuti}
-                      {/* Jenisnya ikut disebut - "3 hari cuti" tidak cukup buat
-                          menilai, karena Pasal 14 memotong berbeda-beda per
-                          jenis (cuti tahunan 0%, CLTN 100%). */}
-                      {labelCuti && <span className="block text-xs text-muted">{labelCuti}</span>}
+                      {/* Angka saja; jenis cutinya (bisa lebih dari satu dalam
+                          sebulan) dibaca lewat pop up saat angkanya diklik. */}
+                      {r.jumlahHariCuti > 0 ? (
+                        <RincianCutiTombol
+                          nama={r.pegawai.nama}
+                          periodeLabel={`${NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} ${periodeTahun}`}
+                          jumlahRekap={r.jumlahHariCuti}
+                          labelRekap={labelCuti}
+                          rincian={petaRincianCuti.get(r.pegawaiId) ?? null}
+                        />
+                      ) : (
+                        r.jumlahHariCuti
+                      )}
                     </td>
                   </tr>
                 );

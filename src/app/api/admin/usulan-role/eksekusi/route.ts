@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "../../../../../lib/prisma";
 import { ambilUserSesi } from "../../../../../auth/getSessionAccount";
 import { canEksekusiPerubahanRole, type AuthUser } from "../../../../../auth/permissions";
+import { lengkapiRolePegawai } from "../../../../../auth/rolePegawaiWajib";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,17 @@ export async function POST(req: Request) {
   }
   const satuanKerjaBaru = butuhSatuanKerja ? satuanKerjaInput : null;
 
+  // Akun yang NIP-nya ada di tabel Pegawai wajib tetap punya role PEGAWAI
+  // (lihat rolePegawaiWajib.ts), apa pun role utama barunya.
+  const nipAkun = usulan.user?.nip;
+  const punyaDataPegawai = nipAkun
+    ? !!(await prisma.pegawai.findUnique({ where: { nip: nipAkun }, select: { id: true } }))
+    : false;
+  const rolesTambahanBaru = lengkapiRolePegawai(
+    { role: usulan.roleDiusulkan, rolesTambahan: usulan.user?.rolesTambahan ?? [] },
+    punyaDataPegawai
+  );
+
   await prisma.$transaction([
     prisma.usulanPerubahanRole.update({
       where: { id: usulanId },
@@ -55,7 +67,7 @@ export async function POST(req: Request) {
     }),
     prisma.user.update({
       where: { id: usulan.userId },
-      data: { role: usulan.roleDiusulkan, satuanKerja: satuanKerjaBaru },
+      data: { role: usulan.roleDiusulkan, rolesTambahan: rolesTambahanBaru, satuanKerja: satuanKerjaBaru },
     }),
     prisma.auditTrail.create({
       data: {
@@ -63,9 +75,14 @@ export async function POST(req: Request) {
         entitasId: usulan.userId,
         aksi: "UPDATE",
         aktor: admin.nip,
-        dataSebelum: { role: usulan.roleSaatIni, satuanKerja: usulan.user?.satuanKerja },
+        dataSebelum: {
+          role: usulan.roleSaatIni,
+          rolesTambahan: usulan.user?.rolesTambahan ?? [],
+          satuanKerja: usulan.user?.satuanKerja,
+        },
         dataSesudah: {
           role: usulan.roleDiusulkan,
+          rolesTambahan: rolesTambahanBaru,
           satuanKerja: satuanKerjaBaru,
           sumber: "Eksekusi Usulan Perubahan Role",
           usulanId,

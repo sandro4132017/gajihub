@@ -9,9 +9,76 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-11-09** - rangkuman commit `64d9a46`..`9e3886e`, plus perbaikan pentest Pusdatik (2026-11-06, lihat bagian 3 butir 20)
+Terakhir diperbarui: **2026-11-11** - sesi berbatas & role bawaan login (migrasi `user_sesi_versi` belum dijalankan, lihat butir 0000), lalu koreksi jam presensi dipersempit ke Kasubag TU (migrasi belum dijalankan, lihat butir 000), lalu rincian lengkap PPABP di `/tukin` (2026-11-11, belum di-commit), lalu rangkuman commit `64d9a46`..`9e3886e`, plus perbaikan pentest Pusdatik (2026-11-06, lihat bagian 3 butir 20)
 (2026-10-21 s.d. 2026-10-29), plus akun penguji Tim Pusdatik dan penghapusan login
 NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-log.md`.
+
+0000. **Sesi berbatas, role bawaan login, role Pegawai wajib (2026-11-11, belum di-commit, MIGRASI BELUM DIJALANKAN)**:
+   - Sesi: menganggur 30 menit (sliding, env `SESI_MENGANGGUR_MENIT`) dan mutlak 8 jam sejak login.
+     Token format lama DITOLAK, jadi semua pengguna login ulang sekali setelah deploy. Logout, nonaktif
+     akun, dan "Putus semua sesi" (Admin) memutus semua perangkat. Detail: `gajihub-akses-sso-deploy`.
+   - Role bawaan saat login: PIMPINAN > KASUBAG_TU > PPABP > OSDMA > PEGAWAI > ADMIN atas gabungan role
+     utama + tambahan. Role Utama dipilih manual Admin dan TIDAK menentukan login. Detail:
+     `gajihub-role-otorisasi`.
+   - Role PEGAWAI wajib untuk akun ber-NIP di Pegawai (`src/auth/rolePegawaiWajib.ts`). Uji kering lokal:
+     4 dari 5.075 akun. Job `npm run lengkapi:role-pegawai` (uji kering bawaan; `-- --terapkan` menulis).
+   - Verifikasi (dilaporkan user, belum diulang pencatat): review LULUS (2 putaran); typecheck dan 2.285
+     test lulus; check-sensitive 71 temuan lama. Production build belum dijalankan.
+   - **Langkah deploy** (dijalankan user sendiri, bukan AI, di luar jam kerja):
+     - Lokal: hentikan `npm run dev`, lalu `npx prisma migrate deploy && npx prisma generate`, lalu
+       `npm run lengkapi:role-pegawai` (uji kering), lalu `npm run lengkapi:role-pegawai -- --terapkan`,
+       lalu `npm run dev`.
+     - VPS: `git pull && npx prisma migrate deploy && npx prisma generate && npm run build && pm2 restart gajihub`,
+       lalu job yang sama (uji kering, lalu `-- --terapkan`). `prisma generate` ditambahkan karena script
+       `build` tidak menjalankannya (hanya `postinstall`); tanpa itu client Prisma tidak mengenal `sesiVersi`.
+     - Migrasi `20261111140000_user_sesi_versi` hanya menambah kolom `sesi_versi` (DEFAULT 0). Jangan
+       `migrate reset` atau `db push`.
+     - Job role Pegawai TIDAK menaikkan sesiVersi: pengguna yang sedang login melihat role baru setelah
+       masuk ulang.
+   - **Open items** (kode belum diubah):
+     - Saran review yang belum dikerjakan: test `x-pathname` palsu ke rute lain; selaraskan pengecualian
+       `/tte/verify` (tanpa garis miring) di middleware dengan `src/auth/halamanPublik.ts`; GET
+       `/api/auth/keluar` bisa dipakai logout-CSRF ringan (dampak gangguan saja).
+
+000. **Koreksi jam presensi dipersempit (2026-11-11, belum di-commit, MIGRASI BELUM DIJALANKAN)**:
+   - Hanya KASUBAG_TU unit pegawai yang bisa mengoreksi jam (`canKoreksiJamPresensi`,
+     tanpa bypass ADMIN, tanpa hibah). PPABP dan ADMIN tetap bisa melihat koreksi dan
+     buktinya. Gerbang "tanggal harus ditandai kendala" DICABUT; penggantinya bukti wajib
+     (JPG/PNG/PDF, maks 2 MB) bila jam masuk/pulang disentuh, disimpan privat, alasan
+     minimal 15 karakter, dan ditolak bila rekap unit sudah TERKIRIM. Detail:
+     `gajihub-presensi-epresensi`, `gajihub-role-otorisasi`.
+   - Verifikasi: review LULUS; typecheck dan 2.175 test lulus; check-sensitive 71 temuan
+     lama. Production build belum dijalankan.
+   - **Langkah deploy** (dijalankan user sendiri, bukan AI):
+     - Lokal: hentikan `npm run dev` dulu, lalu `npx prisma migrate deploy && npx prisma generate`.
+     - VPS, sebelum build: cek `npx prisma migrate status`, lalu
+       `git pull && npm ci && npx prisma migrate deploy && npx prisma generate && npm run build && pm2 restart gajihub`.
+     - Migrasi `20261111120000_koreksi_presensi_bukti_ref` hanya menambah kolom `bukti_ref`
+       (nullable), tanpa backfill. Jangan pakai `migrate reset` atau `db push`.
+     - Folder `storage/uploads/bukti-koreksi/` dibuat saat bukti pertama disimpan; ikut dibackup bersama `storage/`.
+   - **Open items** (kode belum diubah):
+     - Koreksi lembur di Kalkulasi menulis langsung ke `PresensiHarian.jamLembur`, jadi bisa
+       hilang pada tarikan sync berikutnya.
+     - Saran review yang belum dikerjakan: try/catch saat tulis berkas (berkas yatim),
+       `Number("")` untuk jam lembur, mengosongkan jam saat edit, test hapus ADMIN/PPABP,
+       dan validasi tanggal masa depan.
+     - Risiko yang diterima user: unit tanpa akun Kasubag TU tidak bisa dikoreksi sama sekali.
+
+00. **Pop up rincian cuti di `/tukin/presensi` (2026-11-11, belum di-commit)**:
+   - Angka kolom Cuti bisa diklik -> pop up "Rincian cuti {nama} - {periode}"
+     (jenis | hari | tanggal) dari `namaSistemKerja` e-Presensi. Sel tetap angka.
+     Perhitungan Tukin tidak berubah. Detail: `gajihub-presensi-epresensi`.
+   - Temuan baca ulang Permenaker 15/2024 (Pasal 14 & 17) ikut dicatat di bagian
+     2b butir 4-5. Kode BELUM diubah.
+
+0a. **Rincian lengkap PPABP di `/tukin` (2026-11-11, belum di-commit)**:
+   - PPABP memilih satu satker, lalu "Lihat rincian lengkap" (`?rincian=1`)
+     menampilkan tabel 38 kolom yang sama dengan Kalkulasi Unit Kasubag TU.
+     Hanya unit yang sudah mengirim rekap. "Tampilkan ringkas" kembali ke 7 kolom
+     (bawaan).
+   - Tabel pindah ke `src/components/tables/TabelRincianTukinLengkap.tsx` (dipakai
+     dua halaman; ubah di satu tempat). Detail: `gajihub-role-otorisasi`.
+   - `/tukin/presensi/[nip]` dengan `dari=tukin` punya tombol kembali ke rincian.
 
 0. **Panel selesai Kasubag (2026-11-09, belum di-commit)**:
    - `/kasubag`: setelah rekap TERKIRIM dan semua komponen lengkap, kolom kanan
@@ -200,6 +267,16 @@ Tiga yang paling menahan pekerjaan:
    punya cuti berpotongan 100% sebanyak SATU HARI.
 3. **Peraturan tata cara lembur & potongan hukuman disiplin** — dua dokumen
    yang belum ada sama sekali, keduanya mengubah uang.
+4. **Pasal 14: cuti dihitung proporsional ke masa cuti atau sebulan penuh?**
+   (BARU, 2026-11-11, OPEN ITEM - kode BELUM diubah). Kalimat pembuka Pasal 14
+   ("Tunjangan Kinerja selama menjalani Cuti dibayarkan...") mendukung
+   pembacaan proporsional; kasus Deddy (cuti besar bulan ke-2, 9 hari) jadi
+   contoh. Ini bertentangan dengan butir 0 di bagian 3 dan klaim "tidak ada
+   pembagian proporsional" di `gajihub-tukin-potongan`. Menunggu keputusan
+   **tertulis Biro Hukum**.
+5. **Pasal 17: tambahan Tukin Plt/Plh (20% atau selisih)** (BARU, 2026-11-11).
+   Belum diimplementasi sama sekali; ayat (3) pembayaran tertunda satu bulan.
+   Menunggu **konfirmasi OSDMA/Biro Hukum** atas dasar dan besarannya.
 
 ---
 

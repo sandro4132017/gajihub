@@ -601,7 +601,7 @@ tidak ada penandanya di skema `Pegawai`.
 
 **JEBAKAN BARU YANG HARUS DISADARI - cuti 1 hari menghapus tukin SEBULAN.**
 Pasal 14 memberi satu persentase per PERIODE, tidak ada pembagian proporsional
-harian (open item #3). Selama `cutiAktif` cuma diisi manusia lewat template,
+harian (open item #3; DIPERTANYAKAN 2026-11-11, lihat "Pasal 14 & 17: baca ulang 2026-11-11" di bawah). Selama `cutiAktif` cuma diisi manusia lewat template,
 ini tidak pernah terjadi. Sejak ditarik otomatis, kasusnya NYATA: Juli 2026
 ada 3 pegawai dengan CLTN / cuti sakit >3 bulan sebanyak **satu hari** -
 aturannya menghapus tukin mereka sebulan penuh. `hitungTukin` sekarang
@@ -635,6 +635,23 @@ yang menyebut nomor bulan; sisanya tidak punya dan itu benar.
 **Kalkulasi Tukin yang dibuat SEBELUM sinkronisasi ini jadi basi** - rekap
 presensinya berubah (jenis cuti baru terisi), jadi perlu dihitung ulang supaya
 potongan Pasal 14 ikut berlaku.
+
+### Pasal 14 & 17: baca ulang 2026-11-11 (OPEN ITEM, kode BELUM diubah)
+
+- **Pasal 14 - proporsional atau sebulan penuh?** Kalimat pembuka Pasal 14
+  ("Tunjangan Kinerja selama menjalani Cuti dibayarkan dengan ketentuan
+  sebagai berikut") bisa dibaca sebagai potongan PROPORSIONAL ke masa cuti,
+  bukan sebulan penuh. Kasus uji: Deddy (cuti besar bulan ke-2, 9 hari). Ini
+  membatalkan klaim "tidak ada pembagian proporsional" di atas. Keputusan
+  TERTULIS Biro Hukum belum ada; sampai itu, perilaku kode tetap (sebulan
+  penuh, dengan `PERIKSA MANUAL` bila hari cuti < setengah hari kerja).
+  Jangan diubah dari tafsir saja.
+- **Pasal 17 - tambahan Tukin Plt/Plh** (20% atau selisih, jangka minimal 1
+  bulan kalender, pembayaran tertunda satu bulan): BELUM diimplementasi sama
+  sekali. Dasar dan besarannya menunggu konfirmasi OSDMA/Biro Hukum.
+- Usulan "telat >100 menit = lupa absen" sudah DITOLAK sebelumnya - lihat
+  `docs/laporan-lupa-absen-dan-batas-jam-untuk-osdma.md` bagian 6.
+- Tercatat di `PROGRESS.md` bagian 2b butir 4-5.
 
 ## Teks peraturan: `docs/permenaker-15-2024-tunjangan-kinerja.md`
 

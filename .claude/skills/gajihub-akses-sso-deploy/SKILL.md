@@ -352,6 +352,20 @@ token, dan membuktikan jalur server-ke-server tembus. Catatan: `curl` di
 Windows gagal ke host ini dengan `SEC_E_UNSUPPORTED_FUNCTION` (schannel),
 **bukan** tanda jaringannya terblokir - Node memakai OpenSSL dan lolos.
 
+## Sesi: batas menganggur, batas mutlak & login ulang (2026-11-11)
+
+- **Dua batas**: menganggur 30 menit (sliding; env `SESI_MENGANGGUR_MENIT` mengubahnya) dan mutlak 8 jam sejak login. Ganti role tidak mengulang 8 jam. Token (`src/auth/session.ts`) memuat `v` (sesiVersi), `lp` (loginPada), dan `ak` (aktifPada). Token format lama DITOLAK, jadi setelah deploy semua pengguna login ulang sekali.
+- **Yang memperpanjang sesi**: navigasi dokumen; RSC non-prefetch (`next-router-prefetch` dan `next-router-segment-prefetch` bukan); Server Action; POST/PUT/PATCH/DELETE `/api/*` kecuali `/api/auth/*` dan RUTE_MESIN. **Yang TIDAK**: GET `/api/*`, `/berkas/*`, panel Kabar, badge koneksi.
+- **Klien**: `src/components/layout/DetakSesi.tsx` mengirim `POST /api/auth/perpanjang` paling sering 5 menit sekali, dan hanya saat ada ketikan atau klik.
+- **Middleware** (Edge, `src/middleware.ts`) redirect ke `/login?sesi=<alasan>` dan menghapus cookie. Pesan alasannya tampil di halaman login (`src/app/login/PesanSesi.tsx`).
+- **Putus di database**: kolom `User.sesiVersi` (`app_user.sesi_versi`, INT NOT NULL DEFAULT 0), dicek di `getSessionAccount` dan `ambilUserSesi` tanpa query tambahan. Menaikkan versi berarti semua perangkat keluar: logout (termasuk akun penguji bersama, jadi penguji lain ikut keluar), nonaktifkan akun, dan "Putus semua sesi" di `/admin/role-assignment`.
+- **Route baru**: `/api/auth/keluar` (layout mengalihkan cookie yang ditolak database ke sini; halaman publik `/tte/verify/*` dikecualikan) dan `/api/auth/perpanjang`. Header `x-pathname` dipasang middleware dan menimpa nilai dari klien.
+- **Urutan deploy (sesi + role Pegawai wajib)**:
+  - Lokal: hentikan `npm run dev` -> `npx prisma migrate deploy && npx prisma generate` -> `npm run lengkapi:role-pegawai` (uji kering) -> `npm run lengkapi:role-pegawai -- --terapkan` -> `npm run dev`.
+  - VPS (di luar jam kerja, semua pengguna login ulang): `git pull && npx prisma migrate deploy && npx prisma generate && npm run build && pm2 restart gajihub`, lalu job yang sama (uji kering, lalu `-- --terapkan`). `prisma generate` ditambahkan karena script `build` tidak menjalankannya (hanya `postinstall`).
+  - Migrasi `20261111140000_user_sesi_versi` hanya menambah kolom (DEFAULT 0). Jangan `migrate reset` atau `db push`.
+  - Beri tahu pegawai sebelum deploy bahwa mereka akan diminta masuk ulang.
+
 ## Deployment testing internal (VPS kantor)
 
 ### Versi Node.js di VPS (dimutakhirkan 2026-11-04)

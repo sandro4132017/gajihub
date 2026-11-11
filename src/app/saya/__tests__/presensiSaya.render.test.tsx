@@ -44,7 +44,17 @@ function pegawaiUji(opsi: { rekap?: boolean; koreksi?: boolean } = {}) {
     ],
     rekapPresensi: opsi.rekap === false ? [] : [{ id: "r1" }],
     koreksiPresensi: opsi.koreksi
-      ? [{ tanggal: new Date(Date.UTC(2026, 7, 3)), jamMasuk: new Date(Date.UTC(2026, 7, 3, 7, 45)), jamKeluar: null }]
+      ? [
+          {
+            id: "k-uji-1",
+            tanggal: new Date(Date.UTC(2026, 7, 3)),
+            jamMasuk: new Date(Date.UTC(2026, 7, 3, 7, 45)),
+            jamKeluar: null,
+            buktiRef: "bukti-koreksi/Satker Uji A/2026-08/2026-08-03_masuk_1_abcd1234.jpg",
+            buktiRefKeluar: "bukti-koreksi/Satker Uji A/2026-08/2026-08-03_keluar_1_abcd1235.jpg",
+            buktiRefLembur: null,
+          },
+        ]
       : [],
   };
 }
@@ -97,6 +107,13 @@ describe("presensi saya", () => {
     const html = await render("8", "2026");
     expect(html).toContain("dikoreksi → 07:45");
     expect(html).toContain("jam hasil koreksi itu yang dipakai");
+    expect(html).toContain("dikoreksi Kasubag TU unit berdasarkan bukti kehadiran");
+    expect(html).not.toContain("e-Presensi bermasalah");
+    expect(html).toContain("/berkas/koreksi-presensi/k-uji-1");
+    expect(html).toContain("Bukti masuk");
+    expect(html).toContain("?sisi=keluar");
+    expect(html).toContain("Bukti pulang");
+    expect(html).not.toContain("Bukti lembur");
     expect(html).not.toContain("tidak pernah mengubah data presensi");
   });
 

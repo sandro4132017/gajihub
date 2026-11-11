@@ -15,6 +15,10 @@ import { SumberDataTukin } from "./SumberDataTukin";
 import { BadgePejabatEselon } from "../../components/shared/BadgePejabatEselon";
 import { RingkasanPerUnit, type BarisRingkasanUnit } from "./RingkasanPerUnit";
 import { TabelRincianUnit, type BarisRincianTukin } from "./TabelRincianUnit";
+import {
+  TabelRincianTukinLengkap,
+  type BarisRincianTukinLengkap,
+} from "../../components/tables/TabelRincianTukinLengkap";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
 import { kelasJabatanEfektif } from "../../business-logic/kelasJabatanEfektif";
 import { SumberAcuan } from "../../components/shared/SumberAcuan";
@@ -23,15 +27,21 @@ import { NAMA_BULAN } from "../../lib/format/bulan";
 
 export const dynamic = "force-dynamic";
 
+const KELAS_TOMBOL_RINCIAN =
+  "rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-3";
+
 const formatRupiah = (nilai: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(nilai);
 
 export default async function TukinPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bulan?: string; tahun?: string; satker?: string }>;
+  searchParams: Promise<{ bulan?: string; tahun?: string; satker?: string; rincian?: string }>;
 }) {
-  const { bulan, tahun, satker } = await searchParams;
+  const { bulan, tahun, satker, rincian } = await searchParams;
+  // Tampilan rincian LENGKAP (38 kolom, sama dengan Kalkulasi Unit Kasubag TU).
+  // Bawaannya tetap tabel ringkas 7 kolom (keputusan user 2026-09-06).
+  const tampilLengkap = rincian === "1";
 
   // Guard eksplisit: PEGAWAI diarahkan ke dashboard self-service sendiri
   // (/saya), bukan halaman approver ini - lihat canViewApproverDashboard +
@@ -154,6 +164,7 @@ export default async function TukinPage({
   // ditampilkan padanya ringkasan - query di bawah hasilnya tidak akan
   // dirender sama sekali.
   const barisRincian: BarisRincianTukin[] = [];
+  const barisLengkap: BarisRincianTukinLengkap[] = [];
   if (satkerEfektif && !adalahKasubagUnit && kalkulasiTampil.length > 0) {
     const idPegawai = kalkulasiTampil.map((k) => k.pegawaiId);
     const kunciPeriode = kalkulasiTampil.map((k) => ({
@@ -162,10 +173,17 @@ export default async function TukinPage({
       periodeTahun: k.periodeTahun,
     }));
 
-    const [predikatList, skHukdis] = await Promise.all([
+    const [predikatList, skHukdis, rekapList] = await Promise.all([
       prisma.predikatKinerja.findMany({
         where: { OR: kunciPeriode },
-        select: { pegawaiId: true, periodeBulan: true, periodeTahun: true, predikat: true },
+        select: {
+          pegawaiId: true,
+          periodeBulan: true,
+          periodeTahun: true,
+          predikat: true,
+          hasilKerja: true,
+          perilakuKerja: true,
+        },
       }),
       // Kelas jabatan EFEKTIF - pegawai yang sedang menjalani penurunan
       // jabatan (PP 94/2021) dibayar dengan tarif kelas yang turun. Dihitung
@@ -174,10 +192,15 @@ export default async function TukinPage({
       prisma.skHukumanDisiplin.findMany({
         where: { pegawaiId: { in: idPegawai }, status: "DISETUJUI", kelasJabatanSelamaHukuman: { not: null } },
       }),
+      // Rekap presensi hanya untuk tabel lengkap - tabel ringkas tidak memakainya.
+      tampilLengkap
+        ? prisma.rekapPresensiPeriode.findMany({ where: { OR: kunciPeriode } })
+        : Promise.resolve([]),
     ]);
 
     const kunci = (p: string, b: number, t: number) => `${p}|${b}|${t}`;
     const petaPredikat = new Map(predikatList.map((r) => [kunci(r.pegawaiId, r.periodeBulan, r.periodeTahun), r]));
+    const petaRekap = new Map(rekapList.map((r) => [kunci(r.pegawaiId, r.periodeBulan, r.periodeTahun), r]));
     const petaSk = new Map<string, typeof skHukdis>();
     for (const sk of skHukdis) petaSk.set(sk.pegawaiId, [...(petaSk.get(sk.pegawaiId) ?? []), sk]);
 
@@ -198,6 +221,20 @@ export default async function TukinPage({
         dibayarkan: k.tukinBersih,
         catatanAnomali: k.catatanAnomali,
       });
+      if (tampilLengkap) {
+        const kp = kunci(k.pegawaiId, k.periodeBulan, k.periodeTahun);
+        barisLengkap.push({
+          id: k.id,
+          nip: k.pegawai.nip,
+          nama: k.pegawai.nama,
+          golongan: k.pegawai.golongan,
+          // Kelas jabatan EFEKTIF, sama dengan tabel ringkas & berkas ADK.
+          kelasJabatan: efektif.kelas,
+          tukin: k,
+          rekap: petaRekap.get(kp) ?? null,
+          predikat: petaPredikat.get(kp) ?? null,
+        });
+      }
     }
   }
 
@@ -282,6 +319,14 @@ export default async function TukinPage({
   // bisa memeriksa angkanya per pegawai.
   const tampilkanRingkasan = ringkasanUnit.length > 0 && (!satkerEfektif || adalahKasubagUnit);
 
+  // Tombol ringkas/lengkap - bentuk & perilaku sama dengan Kalkulasi Unit.
+  const hrefRincian = (lengkap: boolean) => {
+    const q = new URLSearchParams({ bulan: String(periodeBulan), tahun: String(periodeTahun) });
+    if (satkerEfektif) q.set("satker", satkerEfektif);
+    if (lengkap) q.set("rincian", "1");
+    return `/tukin?${q.toString()}`;
+  };
+
   return (
     <main className={HALAMAN}>
       <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
@@ -338,11 +383,36 @@ export default async function TukinPage({
               : undefined
           }
         />
+      ) : barisRincian.length > 0 && tampilLengkap ? (
+        <>
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-extrabold text-ink">
+              Rincian Tukin {NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} {periodeTahun} &mdash; {satkerEfektif}
+              <span className="ml-2 text-sm font-normal text-muted">- rincian lengkap</span>
+            </h2>
+            <a href={hrefRincian(false)} className={KELAS_TOMBOL_RINCIAN}>
+              Tampilkan ringkas
+            </a>
+          </div>
+          <TabelRincianTukinLengkap
+            baris={barisLengkap}
+            hrefNama={(b) =>
+              `/tukin/presensi/${b.nip}?bulan=${periodeBulan}&tahun=${periodeTahun}&dari=tukin&satker=${encodeURIComponent(
+                satkerEfektif ?? ""
+              )}`
+            }
+          />
+        </>
       ) : barisRincian.length > 0 ? (
         <TabelRincianUnit
           baris={barisRincian}
           satuanKerja={satkerEfektif ?? ""}
           periode={`${NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} ${periodeTahun}`}
+          aksi={
+            <a href={hrefRincian(true)} className={KELAS_TOMBOL_RINCIAN}>
+              Lihat rincian lengkap
+            </a>
+          }
         />
       ) : (
         <div className="mt-8 space-y-4">

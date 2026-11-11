@@ -3,6 +3,7 @@ import { LoginForm } from "./LoginForm";
 import { ssoAktif } from "../../auth/sso";
 import { adaLoginKataSandi } from "../../auth/kredensialLogin";
 import { PesanSso } from "./PesanSso";
+import { PesanSesi } from "./PesanSesi";
 import { SlideFitur } from "./SlideFitur";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +11,9 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sso?: string; pesan?: string }>;
+  searchParams: Promise<{ sso?: string; pesan?: string; sesi?: string }>;
 }) {
-  const { sso, pesan } = await searchParams;
+  const { sso, pesan, sesi } = await searchParams;
   const adaSso = ssoAktif();
   // Form username/password hanya untuk akun uji coba atau akun penguji.
   const tampilkanFormLokal = adaLoginKataSandi(process.env);
@@ -38,6 +39,8 @@ export default async function LoginPage({
 
           {/* Hasil percobaan SSO (kalau ada) muncul di ATAS pilihan masuk */}
           <PesanSso kode={sso} pesan={pesan} />
+          {/* Sesi berakhir (menganggur / 8 jam / dicabut) - nada info, bukan galat */}
+          <PesanSesi kode={sesi} />
 
           {/* JALUR UTAMA: SSO NACO (AKUN SIAP ID) */}
           {adaSso && (

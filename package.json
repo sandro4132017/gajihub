@@ -24,6 +24,8 @@
     "prisma:studio": "prisma studio",
     "preisi:hash-tte": "prisma generate",
     "isi:hash-tte": "tsx src/jobs/isiHashDokumenTte.ts",
+    "prelengkapi:role-pegawai": "prisma generate",
+    "lengkapi:role-pegawai": "tsx src/jobs/lengkapiRolePegawai.ts",
     "prepindah:unggahan": "prisma generate",
     "pindah:unggahan": "tsx src/jobs/pindahUnggahanPrivat.ts",
     "hash:penguji": "node tools/buat-hash-penguji.mjs",

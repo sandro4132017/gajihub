@@ -49,6 +49,7 @@ const GAYA_NADA: Record<NadaModal, { ikon: string; kelasIkon: string; kelasJudul
 export function Modal({
   terbuka,
   judul,
+  subjudul,
   nada = "netral",
   onTutup,
   children,
@@ -56,6 +57,8 @@ export function Modal({
 }: {
   terbuka: boolean;
   judul: string;
+  /** Baris di bawah judul, mis. nama pegawai lalu periode - satu baris per entri. */
+  subjudul?: string | string[];
   nada?: NadaModal;
   /**
    * Menutup modal. `null` berarti modal TIDAK bisa ditutup sembarangan -
@@ -86,6 +89,8 @@ export function Modal({
 
   if (!terbuka) return null;
 
+  const barisSub = subjudul === undefined ? [] : Array.isArray(subjudul) ? subjudul : [subjudul];
+
   const gaya = GAYA_NADA[nada];
 
   return (
@@ -103,7 +108,7 @@ export function Modal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={judul}
+        aria-label={[judul, ...barisSub].join(" - ")}
         className="card max-h-[85vh] w-full max-w-lg overflow-y-auto p-5"
         style={{ animation: "gj-masuk 180ms ease-out both" }}
       >
@@ -114,7 +119,14 @@ export function Modal({
           >
             {gaya.ikon}
           </span>
-          <h2 className={`mt-1 text-sm font-bold ${gaya.kelasJudul}`}>{judul}</h2>
+          <div className="mt-1 min-w-0">
+            <h2 className={`text-sm font-bold ${gaya.kelasJudul}`}>{judul}</h2>
+            {barisSub.map((b, i) => (
+              <p key={i} className={i === 0 ? "mt-0.5 text-xs font-semibold text-ink" : "text-xs text-muted"}>
+                {b}
+              </p>
+            ))}
+          </div>
         </div>
 
         <div className="mt-3 text-xs leading-relaxed text-ink-2">{children}</div>

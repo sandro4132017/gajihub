@@ -1,3 +1,4 @@
+import { TautanBuktiKoreksi } from "../../../../../components/shared/TautanBuktiKoreksi";
 import Link from "next/link";
 import { prisma } from "../../../../../lib/prisma";
 import { getSessionAccount } from "../../../../../auth/getSessionAccount";
@@ -216,6 +217,7 @@ export default async function PresensiSayaPage({
                       {koreksi.jamKeluar && <>pulang dikoreksi &rarr; {jamTeks(koreksi.jamKeluar)}</>}
                     </p>
                   )}
+                  {koreksi && <TautanBuktiKoreksi koreksi={koreksi} className="link mr-3 mt-0.5 inline-block text-xs" />}
                   {penanda.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {penanda.map((x) => (
@@ -276,6 +278,7 @@ export default async function PresensiSayaPage({
                         {koreksi?.jamKeluar && (
                           <span className="block text-xs text-gold-deep">dikoreksi &rarr; {jamTeks(koreksi.jamKeluar)}</span>
                         )}
+                        {koreksi && <TautanBuktiKoreksi koreksi={koreksi} className="link block font-sans text-xs" />}
                       </td>
                       {/* Menit nol ditulis "-" bukan "0": kolom penuh angka nol
                           membuat mata harus memindai tiap baris untuk menemukan
@@ -303,7 +306,7 @@ export default async function PresensiSayaPage({
 
           <p className="mt-3 text-xs text-muted">
             Jam dan menit di sini adalah data e-Presensi apa adanya. Tanggal bertanda &quot;dikoreksi&quot; jamnya
-            diperbaiki petugas unit karena e-Presensi bermasalah pada hari itu; jam hasil koreksi itu yang dipakai
+            dikoreksi Kasubag TU unit berdasarkan bukti kehadiran; jam hasil koreksi itu yang dipakai
             menghitung potongan, data asli e-Presensi tidak diubah. Kalau ada yang tidak sesuai, ajukan lewat tab
             Banding.
           </p>

@@ -32,7 +32,7 @@ vi.mock("../../../../lib/prisma", () => ({
   },
 }));
 
-import { buatAkunBaruAction, ubahAssignmentRoleAction } from "../actions";
+import { buatAkunBaruAction, putusSemuaSesiAction, ubahAssignmentRoleAction } from "../actions";
 
 const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
 const TARGET_ID = "22222222-2222-4222-8222-222222222222";
@@ -109,5 +109,75 @@ describe("buatAkunBaruAction - response tanpa daftar akun (F-02)", () => {
     expect(hasil.error).toBeUndefined();
     expect(Object.keys(hasil)).toEqual(["success"]);
     expect(m.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("putusSemuaSesiAction", () => {
+  it("non-admin ditolak: tidak ada tulisan ke database", async () => {
+    m.ambilUser.mockResolvedValue({ id: ADMIN_ID, nip: "199000000000000001", nama: "X", role: "PEGAWAI", satuanKerja: null, aktif: true }); // sensitive-ok
+    const hasil = await putusSemuaSesiAction(TARGET_ID);
+    expect(hasil.error).toBeTruthy();
+    expect(m.transaction).not.toHaveBeenCalled();
+  });
+
+  it("id tidak valid ditolak", async () => {
+    const hasil = await putusSemuaSesiAction("bukan-uuid");
+    expect(hasil.error).toBeTruthy();
+    expect(m.transaction).not.toHaveBeenCalled();
+  });
+
+  it("admin: sesiVersi naik 1 + audit dalam satu transaksi; respons hanya pesan target; tanpa revalidatePath", async () => {
+    m.userFindUnique.mockResolvedValue({ ...barisBaru, sesiVersi: 3 });
+    m.userUpdate.mockReturnValue("update");
+    m.auditCreate.mockReturnValue("audit");
+    m.transaction.mockResolvedValue([{ id: TARGET_ID }, { id: "log" }]);
+
+    const hasil = await putusSemuaSesiAction(TARGET_ID);
+
+    expect(hasil.error).toBeUndefined();
+    expect(Object.keys(hasil)).toEqual(["success"]);
+    expect(hasil.success).toContain("Pegawai Uji");
+    expect(m.userUpdate.mock.calls[0][0]).toMatchObject({
+      where: { id: TARGET_ID },
+      data: { sesiVersi: { increment: 1 } },
+    });
+    const audit = m.auditCreate.mock.calls[0][0].data;
+    expect(audit).toMatchObject({ entitas: "app_user", entitasId: TARGET_ID, aksi: "UPDATE" });
+    expect(audit.dataSesudah.sesiVersi).toBe(4);
+    expect(m.transaction).toHaveBeenCalledTimes(1);
+    expect(m.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("target diri sendiri: pesan menyebut ikut keluar", async () => {
+    m.userFindUnique.mockResolvedValue({ ...barisBaru, id: ADMIN_ID, sesiVersi: 0 });
+    m.userUpdate.mockReturnValue("update");
+    m.auditCreate.mockReturnValue("audit");
+    m.transaction.mockResolvedValue([]);
+    const hasil = await putusSemuaSesiAction(ADMIN_ID);
+    expect(hasil.success).toContain("termasuk yang ini");
+  });
+});
+
+describe("ubahAssignmentRoleAction - menonaktifkan akun memutus sesinya", () => {
+  const kirim = async (aktifSebelum: boolean, aktifBaru: boolean) => {
+    m.userFindUnique.mockResolvedValue({ ...barisBaru, role: "PEGAWAI", aktif: aktifSebelum });
+    m.userUpdate.mockReturnValue("update");
+    m.auditCreate.mockReturnValue("audit");
+    m.transaction.mockResolvedValue([barisBaru, { id: "log" }]);
+    const f = new FormData();
+    f.set("targetUserId", TARGET_ID);
+    f.set("role", "PEGAWAI");
+    if (aktifBaru) f.set("aktif", "on");
+    await ubahAssignmentRoleAction({}, f);
+    return m.userUpdate.mock.calls[0][0].data;
+  };
+
+  it("aktif -> nonaktif: sesiVersi dinaikkan", async () => {
+    expect((await kirim(true, false)).sesiVersi).toEqual({ increment: 1 });
+  });
+  it("tetap aktif atau diaktifkan lagi: sesiVersi tidak disentuh", async () => {
+    expect((await kirim(true, true)).sesiVersi).toBeUndefined();
+    m.userUpdate.mockReset();
+    expect((await kirim(false, true)).sesiVersi).toBeUndefined();
   });
 });

@@ -63,6 +63,8 @@ import {
   canLihatHariLibur,
   canLihatBuktiDukung,
   canLihatDokumenSptjm,
+  canKoreksiJamPresensi,
+  canLihatBuktiKoreksiPresensi,
   type AuthUser,
 } from "../permissions";
 
@@ -945,5 +947,81 @@ describe("canLihatStatusKoneksiSiap", () => {
   });
   it("akun nonaktif ditolak", () => {
     expect(canLihatStatusKoneksiSiap(buatUser({ role: "ADMIN", aktif: false }))).toBe(false);
+  });
+});
+
+describe("canKoreksiJamPresensi - hanya Kasubag TU unit pegawai, tanpa bypass", () => {
+  it("Kasubag TU unitnya sendiri -> boleh", () => {
+    expect(canKoreksiJamPresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(true);
+  });
+
+  it("Kasubag TU unit LAIN -> ditolak", () => {
+    expect(canKoreksiJamPresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }), SETJEN)).toBe(false);
+  });
+
+  it("role lain ditolak semuanya - termasuk ADMIN dan PPABP", () => {
+    for (const role of SEMUA_ROLE) {
+      if (role === "KASUBAG_TU") continue;
+      expect(canKoreksiJamPresensi(buatUser({ role, satuanKerja: BIRO_UMUM }), BIRO_UMUM)).toBe(false);
+      expect(canKoreksiJamPresensi(buatUser({ role, satuanKerja: null }), BIRO_UMUM)).toBe(false);
+    }
+  });
+
+  it("hibah satuanKerjaTambahan tidak memberi wewenang", () => {
+    const user = buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM, satuanKerjaTambahan: [SETJEN] });
+    expect(canKoreksiJamPresensi(user, SETJEN)).toBe(false);
+    expect(canKoreksiJamPresensi(user, BIRO_UMUM)).toBe(true);
+  });
+
+  it("akun nonaktif ditolak; satuan kerja kosong tidak cocok dengan kosong", () => {
+    expect(
+      canKoreksiJamPresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM, aktif: false }), BIRO_UMUM)
+    ).toBe(false);
+    expect(canKoreksiJamPresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: null }), "")).toBe(false);
+    expect(canKoreksiJamPresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }), "")).toBe(false);
+  });
+
+  it("canEditPresensiKinerjaLangsung tetap false untuk semua role", () => {
+    for (const role of SEMUA_ROLE) {
+      expect(canEditPresensiKinerjaLangsung(buatUser({ role, satuanKerja: BIRO_UMUM }))).toBe(false);
+    }
+  });
+});
+
+describe("canLihatBuktiKoreksiPresensi - bukti memuat foto pegawai", () => {
+  const NIP_PEGAWAI = "000000000000000042"; // sensitive-ok
+  const NIP_LAIN = "000000000000000099"; // sensitive-ok
+  const target = { nipPegawai: NIP_PEGAWAI, satuanKerjaPegawai: BIRO_UMUM };
+
+  it("pegawai yang bersangkutan boleh, pegawai lain tidak", () => {
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ nip: NIP_PEGAWAI }), target)).toBe(true);
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ nip: NIP_LAIN }), target)).toBe(false);
+  });
+
+  it("Kasubag TU unit itu boleh; unit lain tidak", () => {
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: BIRO_UMUM }), target)).toBe(true);
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN }), target)).toBe(false);
+  });
+
+  it("PPABP dan ADMIN boleh", () => {
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ role: "PPABP" }), target)).toBe(true);
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ role: "ADMIN" }), target)).toBe(true);
+  });
+
+  it("OSDMA dan PIMPINAN tidak", () => {
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ role: "OSDMA" }), target)).toBe(false);
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ role: "PIMPINAN" }), target)).toBe(false);
+  });
+
+  it("hibah satuanKerjaTambahan tidak ikut; akun nonaktif ditolak", () => {
+    const user = buatUser({ role: "KASUBAG_TU", satuanKerja: SETJEN, satuanKerjaTambahan: [BIRO_UMUM] });
+    expect(canLihatBuktiKoreksiPresensi(user, target)).toBe(false);
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ role: "PPABP", aktif: false }), target)).toBe(false);
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ nip: NIP_PEGAWAI, aktif: false }), target)).toBe(false);
+  });
+
+  it("satuan kerja pegawai kosong: Kasubag TU tanpa unit tidak lolos", () => {
+    const kosong = { nipPegawai: NIP_PEGAWAI, satuanKerjaPegawai: null };
+    expect(canLihatBuktiKoreksiPresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: null }), kosong)).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { RiErrorWarningLine } from "react-icons/ri";
 
 /**
@@ -78,8 +79,11 @@ export function TabelRincianUnit({
   baris,
   satuanKerja,
   periode,
+  aksi,
 }: {
   baris: BarisRincianTukin[];
+  /** Tombol di kepala tabel, mis. "Lihat rincian lengkap". */
+  aksi?: ReactNode;
   satuanKerja: string;
   /**
    * Periode yang sedang ditampilkan, mis. "Juli 2026".
@@ -106,7 +110,10 @@ export function TabelRincianUnit({
         <h2 className="text-sm font-extrabold text-ink">
           Rincian Tukin {periode} &mdash; {satuanKerja}
         </h2>
-        <p className="text-xs text-muted">{baris.length} pegawai</p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-muted">{baris.length} pegawai</p>
+          {aksi}
+        </div>
       </div>
 
       <div className="overflow-x-auto">

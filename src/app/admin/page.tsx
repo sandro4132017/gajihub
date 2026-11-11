@@ -400,7 +400,7 @@ export default async function AdminDashboardPage() {
               ))}
             </ul>
             <p className="mt-3 text-[11px] text-muted">
-              Menurut role utama akun. Role tambahan (multi-role) tidak ikut terhitung.
+              Menurut role utama akun (bukan peran saat login). Role tambahan (multi-role) tidak ikut terhitung.
             </p>
           </section>
         </div>

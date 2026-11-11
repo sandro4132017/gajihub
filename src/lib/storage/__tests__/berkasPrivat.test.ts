@@ -8,6 +8,7 @@ import {
   FOLDER_UNIT_CADANGAN,
   folderPeriode,
   kunciBuktiDukung,
+  kunciBuktiKoreksi,
   kunciDraftTte,
   kunciPratinjauTte,
   kunciSignedTte,
@@ -330,5 +331,38 @@ describe("headerUnduh - Content-Security-Policy sandbox", () => {
 
   it("PDF TIDAK diberi sandbox - penampil PDF peramban tidak jalan di dokumen ber-sandbox", () => {
     expect(headerUnduh("SPTJM.pdf", { inline: true, panjang: 10 })["Content-Security-Policy"]).toBeUndefined();
+  });
+});
+
+describe("jenis bukti-koreksi", () => {
+  it("kunciBuktiKoreksi: tanpa NIP/nama, berpola unit/periode/tanggal_waktu_acak.ext", () => {
+    const kunci = kunciBuktiKoreksi("Biro Umum", 2026, 8, "2026-08-03", 1700000000000, "abcd1234", ".JPG");
+    expect(kunci).toBe("bukti-koreksi/Biro Umum/2026-08/2026-08-03_1700000000000_abcd1234.jpg");
+  });
+
+  it("kunciBuktiKoreksi: penanda sisi disisipkan sebelum waktu, tetap tanpa NIP", () => {
+    const kunci = kunciBuktiKoreksi("Biro Umum", 2026, 8, "2026-08-03", 5, "abcd1234", "png", "keluar");
+    expect(kunci).toBe("bukti-koreksi/Biro Umum/2026-08/2026-08-03_keluar_5_abcd1234.png");
+    expect(jalurAman(kunci, "bukti-koreksi", AKAR)).not.toBeNull();
+  });
+
+  it("kunci hasil bentukan lolos urai & jalurAman jenis sendiri", () => {
+    const kunci = kunciBuktiKoreksi("Biro Umum", 2026, 8, "2026-08-03", 1, "abcd1234", "pdf");
+    expect(uraiReferensi(kunci)?.jenis).toBe("bukti-koreksi");
+    const jalur = jalurAman(kunci, "bukti-koreksi", AKAR);
+    expect(jalur).not.toBeNull();
+    expect(jalur!.startsWith(path.resolve(AKAR, "bukti-koreksi"))).toBe(true);
+  });
+
+  it("jalurAman lintas jenis -> null (bukti-koreksi tak bisa dibaca sebagai bukti-dukung/tte, dan sebaliknya)", () => {
+    const kunci = kunciBuktiKoreksi("Biro Umum", 2026, 8, "2026-08-03", 1, "abcd1234", "pdf");
+    expect(jalurAman(kunci, "bukti-dukung", AKAR)).toBeNull();
+    expect(jalurAman(kunci, "tte", AKAR)).toBeNull();
+    expect(jalurAman("bukti-dukung/Biro Umum/1_ab_SK.pdf", "bukti-koreksi", AKAR)).toBeNull();
+    expect(jalurAman("tte/abc/draft.pdf", "bukti-koreksi", AKAR)).toBeNull();
+  });
+
+  it("traversal di bawah bukti-koreksi ditolak", () => {
+    expect(jalurAman("bukti-koreksi/../tte/a.pdf", "bukti-koreksi", AKAR)).toBeNull();
   });
 });

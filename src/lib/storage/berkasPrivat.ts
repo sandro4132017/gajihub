@@ -22,7 +22,7 @@ import { GalatPengguna } from "../koneksi/galatSumber";
 import fs from "fs/promises";
 import path from "path";
 
-export const JENIS_BERKAS = ["bukti-dukung", "tte"] as const;
+export const JENIS_BERKAS = ["bukti-dukung", "tte", "bukti-koreksi"] as const;
 export type JenisBerkas = (typeof JENIS_BERKAS)[number];
 
 export interface ReferensiUrai {
@@ -113,6 +113,26 @@ export function kunciPratinjauTte(
 /** Kunci bukti dukung: `bukti-dukung/<unit pegawai>/<nama tersimpan>`. */
 export function kunciBuktiDukung(satkerPegawai: string, namaTersimpan: string): string {
   return `bukti-dukung/${namaFolderUnit(satkerPegawai)}/${namaTersimpan}`;
+}
+
+/**
+ * Kunci bukti koreksi jam presensi:
+ * `bukti-koreksi/<unit pegawai>/<tahun-bulan>/<tanggal>_[<sisi>_]<waktu>_<acak>.<ext>`.
+ * Tanpa NIP/nama pegawai - identitas ada di baris database, bukan di nama berkas.
+ */
+export function kunciBuktiKoreksi(
+  satkerPegawai: string,
+  tahun: number,
+  bulan: number,
+  tanggalIso: string,
+  waktu: number,
+  acak: string,
+  ekstensi: string,
+  sisi?: "masuk" | "keluar" | "lembur"
+): string {
+  const ext = ekstensi.toLowerCase().replace(/^\./, "");
+  const penanda = sisi ? `${sisi}_` : "";
+  return `bukti-koreksi/${namaFolderUnit(satkerPegawai)}/${folderPeriode(tahun, bulan)}/${tanggalIso}_${penanda}${waktu}_${acak}.${ext}`;
 }
 
 function jenisSah(nilai: string): nilai is JenisBerkas {

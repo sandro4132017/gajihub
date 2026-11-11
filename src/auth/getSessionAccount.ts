@@ -11,7 +11,8 @@
 //      dicabut, user otomatis balik ke role utamanya, bukan tetap memegang
 //      kewenangan yang sudah tidak dia punya;
 //   2. akun yang sudah dinonaktifkan (aktif = false) langsung dianggap tidak
-//      login sama sekali;
+//      login sama sekali, dan token dengan versi lama (User.sesiVersi sudah
+//      naik karena logout / sesi diputus Admin) ditolak;
 //   3. satuanKerja dibaca dari database (bukan dari cookie yang bisa basi).
 // Ini menutup celah "role/satuanKerja basi di cookie" untuk SEMUA halaman
 // sekaligus - sebelumnya cuma Server Action penting yang fetch ulang User.
@@ -32,33 +33,61 @@ export interface SesiAktif extends SessionPayload {
   rolesTersedia: Role[];
 }
 
-async function bacaCookieSesi(): Promise<SessionPayload | null> {
+/** Alasan sesi ditolak oleh database; "tidak-ada" = tidak ada cookie / token tak sah. */
+export type AlasanSesiDitolak = "tidak-ada" | "dicabut" | "nonaktif";
+
+export type HasilSesi =
+  | { ok: true; sesi: SesiAktif }
+  | { ok: false; alasan: AlasanSesiDitolak };
+
+async function bacaCookieSesi(): Promise<SessionPayload | typeof PENGUJI_DIMATIKAN | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
   const payload = await verifikasiTokenSesi(token);
   // Sesi akun penguji ikut mati begitu konfigurasinya dikosongkan atau
   // melewati batas berlaku, tanpa menunggu cookie 8 jamnya habis.
-  if (payload && payload.nip === NIP_PENGUJI && !konfigPenguji(process.env)) return null;
+  if (payload && payload.nip === NIP_PENGUJI && !konfigPenguji(process.env)) return PENGUJI_DIMATIKAN;
   return payload;
 }
 
-export async function getSessionAccount(): Promise<SesiAktif | null> {
+const PENGUJI_DIMATIKAN = Symbol("penguji-dimatikan");
+
+/**
+ * Sama dengan getSessionAccount tetapi menyebut ALASAN penolakan, supaya
+ * layout bisa mengirim pengunjung ke /login dengan pesan yang tepat.
+ * Satu query; versi sesi (`sesiVersi`) dibandingkan dengan `payload.v`.
+ */
+export async function periksaSesiRinci(): Promise<HasilSesi> {
   const payload = await bacaCookieSesi();
-  if (!payload) return null;
+  if (!payload) return { ok: false, alasan: "tidak-ada" };
+  // Cookie sah tetapi akun penguji sudah dimatikan: dicabut, cookie harus dibuang.
+  if (payload === PENGUJI_DIMATIKAN) return { ok: false, alasan: "dicabut" };
 
   const user = await prisma.user.findUnique({
     where: { nip: payload.nip },
-    select: { role: true, rolesTambahan: true, satuanKerja: true, aktif: true },
+    select: { role: true, rolesTambahan: true, satuanKerja: true, aktif: true, sesiVersi: true },
   });
-  if (!user || !user.aktif) return null;
+  // Cookie sah tetapi akunnya sudah tidak ada: diperlakukan dicabut supaya
+  // cookie dibuang (kalau tidak, /login memantul balik ke landing).
+  if (!user) return { ok: false, alasan: "dicabut" };
+  if (!user.aktif) return { ok: false, alasan: "nonaktif" };
+  if (payload.v !== user.sesiVersi) return { ok: false, alasan: "dicabut" };
 
   return {
-    ...payload,
-    role: resolveRoleAktif(user, payload.role),
-    satuanKerja: user.satuanKerja,
-    rolesTersedia: daftarRoleTersedia(user),
+    ok: true,
+    sesi: {
+      ...payload,
+      role: resolveRoleAktif(user, payload.role),
+      satuanKerja: user.satuanKerja,
+      rolesTersedia: daftarRoleTersedia(user),
+    },
   };
+}
+
+export async function getSessionAccount(): Promise<SesiAktif | null> {
+  const hasil = await periksaSesiRinci();
+  return hasil.ok ? hasil.sesi : null;
 }
 
 /**
@@ -74,10 +103,12 @@ export async function getSessionAccount(): Promise<SesiAktif | null> {
  */
 export async function ambilUserSesi(): Promise<User | null> {
   const payload = await bacaCookieSesi();
-  if (!payload) return null;
+  if (!payload || payload === PENGUJI_DIMATIKAN) return null;
 
   const user = await prisma.user.findUnique({ where: { nip: payload.nip } });
   if (!user || !user.aktif) return null;
+  // Versi beda = sesi dicabut (logout / Admin memutus semua sesi).
+  if (payload.v !== user.sesiVersi) return null;
 
   return { ...user, role: resolveRoleAktif(user, payload.role) };
 }

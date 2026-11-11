@@ -1,9 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   SESSION_COOKIE_NAME,
-  verifikasiTokenSesi,
+  batasMutlakMs,
+  nilaiTokenSesi,
+  perluPerpanjang,
+  terbitkanUlang,
+  type HasilNilaiSesi,
   type SessionPayload,
 } from "./auth/session";
+import { opsiCookieSampai } from "./auth/sesiCookie";
 import { LANDING_ROLE } from "./auth/roleAktif";
 import { asalPublik } from "./auth/asalPublik";
 import { hostAsalTepercaya } from "./auth/asalTepercaya";
@@ -77,6 +82,7 @@ export function kebijakanCsp(path: string, dev = process.env.NODE_ENV === "devel
  * yang diakses ditolak. Origin "null" ditolak; tanpa Origin dibiarkan
  * (klien non-browser, dan cookie SameSite=Lax tetap menjaga).
  */
+const ALASAN_SESI_HABIS = new Set(["menganggur", "kedaluwarsa", "format-lama"]);
 const METODE_UBAH = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 export function originLintasSitus(method: string, headers: Headers): boolean {
   if (!METODE_UBAH.has(method.toUpperCase())) return false;
@@ -95,6 +101,69 @@ export function originLintasSitus(method: string, headers: Headers): boolean {
     .filter((h): h is string => !!h)
     .map((h) => h.toLowerCase());
   return !hostPermintaan.includes(hostOrigin);
+}
+
+/**
+ * Apakah permintaan ini AKTIVITAS pengguna (memperpanjang batas menganggur)?
+ *
+ * Dihitung: navigasi dokumen, navigasi RSC yang BUKAN prefetch, Server Action,
+ * dan POST/PUT/PATCH/DELETE ke /api/* (kecuali /api/auth/* dan RUTE_MESIN).
+ * TIDAK dihitung: GET /api/* (polling Kabar, dsb), /berkas/*, dan prefetch -
+ * semuanya bisa jalan sendiri di tab yang ditinggalkan, jadi kalau dihitung,
+ * batas menganggur tidak pernah tercapai.
+ */
+export function adalahAktivitas(request: {
+  method: string;
+  headers: Headers;
+  nextUrl: { pathname: string };
+}): boolean {
+  const path = request.nextUrl.pathname;
+  const metode = request.method.toUpperCase();
+  const h = request.headers;
+
+  if (path === "/api" || path.startsWith("/api/")) {
+    if (path === "/api/auth" || path.startsWith("/api/auth/")) return false;
+    if ((RUTE_MESIN as readonly string[]).includes(path)) return false;
+    return METODE_UBAH.has(metode);
+  }
+  if (path.startsWith("/berkas/")) return false;
+  if (h.has("next-action")) return true;
+  if (metode !== "GET") return false;
+  if (h.has("rsc")) return !h.has("next-router-prefetch") && !h.has("next-router-segment-prefetch");
+  return h.get("sec-fetch-mode") === "navigate" || (h.get("accept") ?? "").includes("text/html");
+}
+
+/**
+ * Pasang cookie sesi baru (ak = sekarang) bila ada aktivitas dan jeda sejak
+ * pencatatan terakhir sudah >= 60 detik. maxAge = sisa sampai batas mutlak.
+ */
+async function perpanjangBilaPerlu(
+  res: NextResponse,
+  request: NextRequest,
+  payload: SessionPayload | null
+): Promise<NextResponse> {
+  if (!payload || !adalahAktivitas(request)) return res;
+  // Penerbitan ulang TANPA cek database aman: terbitkanUlang mempertahankan `v`
+  // dan `lp`, jadi cookie baru tidak menghidupkan sesi yang sudah dicabut -
+  // layout dan handler tetap membandingkan `v` dengan User.sesiVersi dan
+  // menolak versi basi.
+  const sekarang = Date.now();
+  if (!perluPerpanjang(payload, sekarang)) return res;
+  const token = await terbitkanUlang(payload, sekarang);
+  res.cookies.set(SESSION_COOKIE_NAME, token, opsiCookieSampai(batasMutlakMs(payload), sekarang));
+  return res;
+}
+
+/**
+ * Header permintaan yang memberi tahu layout path halaman. Selalu ditimpa di
+ * sini, jadi nilai kiriman klien tidak pernah sampai ke layout.
+ */
+export const HEADER_PATH = "x-pathname";
+
+function lanjutkan(path: string, headers?: Headers): NextResponse {
+  const reqHeaders = new Headers(headers);
+  reqHeaders.set(HEADER_PATH, path);
+  return NextResponse.next({ request: { headers: reqHeaders } });
 }
 
 function terapkanHeaderKeamanan(res: NextResponse, path = ""): NextResponse {
@@ -157,9 +226,9 @@ export async function middleware(request: NextRequest) {
   // yang tersisa adalah SESSION_SECRET yang belum diatur atau kurang dari 32
   // byte di .env server - dan itu disebut namanya di log, bukan dibiarkan
   // muncul sebagai 500 tanpa keterangan.
-  let session: SessionPayload | null = null;
+  let nilai: HasilNilaiSesi = { status: "tidak-ada", payload: null };
   try {
-    session = token ? await verifikasiTokenSesi(token) : null;
+    nilai = await nilaiTokenSesi(token);
   } catch (err) {
     console.error(
       "[middleware] Sesi tidak bisa diverifikasi - periksa SESSION_SECRET di .env server:",
@@ -176,6 +245,7 @@ export async function middleware(request: NextRequest) {
     );
   }
 
+  const session = nilai.payload;
   const path = request.nextUrl.pathname;
   const isLoginPage = path === "/login";
   const isRuteSso = path === "/login/sso" || path.startsWith("/login/sso/");
@@ -199,20 +269,31 @@ export async function middleware(request: NextRequest) {
         "x-forwarded-proto",
         originHeader?.startsWith("https:") ? "https" : "http"
       );
-      return terapkanHeaderKeamanan(NextResponse.next({ request: { headers: reqHeaders } }), path);
+      return perpanjangBilaPerlu(
+        terapkanHeaderKeamanan(lanjutkan(path, reqHeaders), path),
+        request,
+        session
+      );
     }
 
     // Asal DI LUAR daftar sengaja TIDAK diselaraskan. Menyelaraskannya berarti
     // membuat Origin dan Host cocok dengan sendirinya - penahan CSRF bawaan
     // Next jadi selalu lolos, untuk situs mana pun. Biarkan Next yang memutus.
-    return terapkanHeaderKeamanan(NextResponse.next(), path);
+    return perpanjangBilaPerlu(terapkanHeaderKeamanan(lanjutkan(path, request.headers), path), request, session);
   }
 
   if (!session && !isLoginPage && !isRuteSso && !isRuteAuthApi && !isRuteVerifikasiTte && !isRuteMesin) {
     const origin = asalPublik(request.headers, request.url);
-    return terapkanHeaderKeamanan(
-      NextResponse.redirect(new URL("/login", origin))
-    );
+    // Sesi yang SAH tanda tangannya tetapi sudah habis (menganggur / 8 jam /
+    // format lama) dijelaskan di /login dan cookie-nya dibuang. Rute di atas
+    // yang dikecualikan (termasuk /login sendiri) tidak pernah sampai sini,
+    // jadi tidak ada loop /login -> /login.
+    const alasan = ALASAN_SESI_HABIS.has(nilai.status) ? nilai.status : null;
+    const url = new URL("/login", origin);
+    if (alasan) url.searchParams.set("sesi", alasan);
+    const res = terapkanHeaderKeamanan(NextResponse.redirect(url));
+    if (alasan) res.cookies.delete(SESSION_COOKIE_NAME);
+    return res;
   }
   if (session && isLoginPage) {
     const origin = asalPublik(request.headers, request.url);
@@ -221,7 +302,7 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  return terapkanHeaderKeamanan(NextResponse.next(), path);
+  return perpanjangBilaPerlu(terapkanHeaderKeamanan(lanjutkan(path, request.headers), path), request, session);
 }
 
 export const config = {

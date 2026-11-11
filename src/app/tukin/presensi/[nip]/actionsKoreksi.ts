@@ -3,28 +3,30 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "../../../../lib/prisma";
 import { ambilUserSesi } from "../../../../auth/getSessionAccount";
-import { canUploadRekapPresensi, type AuthUser } from "../../../../auth/permissions";
+import { canKoreksiJamPresensi, type AuthUser } from "../../../../auth/permissions";
 import { tglTampil } from "../../../../lib/format/tanggalTampil";
+import { butuhBukti, validasiAlasanKoreksi } from "../../../../business-logic/koreksiPresensi";
+import { periksaBuktiKoreksi, tulisBuktiKoreksi } from "../../../../lib/storage/buktiKoreksi";
+import { rekapUnitTerkunciUntukTanggal } from "../../../../lib/koreksiPresensiDb";
 
 /**
  * KOREKSI JAM PRESENSI SATU HARI - Pasal 10 ayat (2) Permenaker 15/2024.
  *
  * Alur nyatanya: e-Presensi error -> pegawai memotret dirinya beserta geotag
- * & jam -> dikirim ke WhatsApp petugas absensi -> petugas memperbaikinya di
- * sini.
+ * & jam -> dikirim ke Kasubag TU unitnya -> Kasubag TU mengunggah buktinya
+ * dan memperbaiki jamnya di sini.
  *
- * TIGA PENGAMAN, dan ketiganya menentukan boleh/tidaknya fitur ini ada:
+ * Tidak ada syarat "tanggal harus ditandai kendala e-Presensi". Pengamannya,
+ * semuanya ditegakkan di bawah:
  *
- * 1. HANYA di tanggal yang sudah ditandai kendala e-Presensi. Ini yang
- *    membedakannya dari "edit presensi bebas" - invariant lama
- *    (`canEditPresensiKinerjaLangsung` = false untuk SEMUA role) tetap utuh.
- *    Tanpa syarat ini, siapa pun yang berwenang meng-upload presensi bisa
- *    mengubah jam hari biasa tanpa ada yang tahu.
- * 2. Otorisasi dicek terhadap satuan kerja PEGAWAI YANG DIKOREKSI, bukan
- *    terhadap yang sedang dibuka - id dari form tidak dipercaya.
- * 3. Setiap koreksi menulis AuditTrail lengkap dengan nilai SEBELUM (jam asli
- *    dari e-Presensi) dan SESUDAH. Angka hasil ketikan manusia tidak bisa
- *    menyamar sebagai angka dari e-Presensi.
+ * 1. HANYA Kasubag TU unit pegawai (`canKoreksiJamPresensi`) - tanpa bypass
+ *    ADMIN/PPABP. Dicek terhadap satuan kerja PEGAWAI YANG DIKOREKSI, bukan
+ *    id dari form.
+ * 2. Bukti kehadiran wajib PER SISI: buktiMasuk untuk jam masuk, buktiKeluar
+ *    untuk jam pulang (opsional untuk jam lembur), alasan minimal 15 karakter, dan pernyataan tanggung jawab.
+ * 3. Ditolak kalau rekap unit pada periode tanggal itu sudah TERKIRIM.
+ * 4. AuditTrail memuat jam ASLI e-Presensi, nilai sebelum/sesudah, rujukan
+ *    bukti, dan pernyataan - angka ketikan manusia tidak bisa menyamar.
  */
 
 export interface KoreksiJamFormState {
@@ -56,6 +58,9 @@ function waktuDariJam(tanggal: Date, jam: string): Date | null | undefined {
   return new Date(Date.UTC(tanggal.getUTCFullYear(), tanggal.getUTCMonth(), tanggal.getUTCDate(), h, mnt));
 }
 
+const jm = (d: Date | null | undefined) =>
+  d ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : null;
+
 export async function koreksiJamPresensiAction(
   _state: KoreksiJamFormState,
   formData: FormData
@@ -67,39 +72,7 @@ export async function koreksiJamPresensiAction(
   const nip = String(formData.get("nip") ?? "").trim();
   const tanggal = tanggalUtcDariIso(String(formData.get("tanggal") ?? ""));
   if (!tanggal) return { error: "Tanggal tidak valid." };
-
-  const pegawai = await prisma.pegawai.findUnique({ where: { nip } });
-  if (!pegawai) return { error: "Pegawai tidak ditemukan." };
-
-  // Pengaman 2 - dicek terhadap satuan kerja pegawai yang disentuh.
-  if (!canUploadRekapPresensi(authUser, pegawai.satuanKerja ?? "")) {
-    return { error: `Di luar kewenangan kamu (pegawai ${pegawai.satuanKerja ?? "tanpa satuan kerja"}).` };
-  }
-
-  // Pengaman 1 - tanggalnya harus sudah dinyatakan bermasalah.
-  //
-  // BERLAKU UNTUK JAM MASUK/PULANG SAJA, dan pembatasannya dipersempit
-  // 2026-09-22. Dulu gerbang ini menutup SELURUH form, termasuk jam lembur -
-  // dan itu keliru sejak koreksi jam lembur ada, karena keduanya menjawab
-  // pertanyaan yang berbeda:
-  //
-  //   jam masuk/pulang : memperbaiki FAKTA yang salah tercatat e-Presensi.
-  //                      Menyentuh potongan Pasal 13 untuk pegawai itu, jadi
-  //                      memang harus ada penanda kendala lebih dulu -
-  //                      penanda yang sama juga membatalkan potongan bagi
-  //                      seluruh pegawai terdampak, termasuk yang tidak
-  //                      melapor.
-  //   jam lembur       : menetapkan HAK, dan yang mengesahkannya SURAT
-  //                      PERINTAH LEMBUR - bukan kerusakan mesin absensi.
-  //                      Mewajibkan penanda kendala di sini berarti memaksa
-  //                      petugas menandai kerusakan yang tidak pernah terjadi
-  //                      hanya untuk mencatat lembur yang sah.
-  const kendala = await prisma.kendalaEpresensi.findFirst({
-    where: {
-      tanggal,
-      OR: [{ satuanKerja: null }, { satuanKerja: pegawai.satuanKerja ?? undefined }],
-    },
-  });
+  const tanggalIso = tanggal.toISOString().slice(0, 10);
 
   const jamMasuk = waktuDariJam(tanggal, String(formData.get("jamMasuk") ?? ""));
   const jamKeluar = waktuDariJam(tanggal, String(formData.get("jamKeluar") ?? ""));
@@ -110,6 +83,10 @@ export async function koreksiJamPresensiAction(
   // "sudah diperiksa, memang bukan lembur". Karena itu dibaca lewat
   // pemeriksaan string kosong, bukan lewat `Number(...) || null` yang akan
   // menelan nol jadi null tanpa ada yang menyadarinya.
+  // Form halaman presensi TIDAK lagi mengirim jam lembur (keputusan user
+  // 2026-11-11: lembur ikut hitungan mesin). Kalau kolomnya tidak dikirim,
+  // nilai lembur koreksi yang sudah tersimpan DIPERTAHANKAN, bukan dihapus.
+  const kirimLembur = formData.has("jamLembur");
   const jamLemburTeks = String(formData.get("jamLembur") ?? "").trim();
   let jamLembur: number | null = null;
   if (jamLemburTeks !== "") {
@@ -126,28 +103,72 @@ export async function koreksiJamPresensiAction(
   if (jamMasuk === null && jamKeluar === null && jamLembur === null) {
     return { error: "Isi minimal satu kolom - kalau semuanya kosong tidak ada yang dikoreksi." };
   }
-
-  // Gerbang kendala ditagih DI SINI, sesudah diketahui kolom mana yang
-  // benar-benar diisi - bukan di awal. Koreksi yang cuma menyentuh jam lembur
-  // lolos; begitu jam masuk atau pulang ikut diubah, penandanya wajib ada.
-  if (!kendala && (jamMasuk !== null || jamKeluar !== null)) {
-    return {
-      error:
-        `Tanggal ${String(formData.get("tanggal"))} belum ditandai sebagai kendala e-Presensi, jadi JAM MASUK dan JAM ` +
-        "PULANG tidak boleh diubah. Tandai dulu tanggal itu di halaman Kendala e-Presensi - penanda itu yang " +
-        "membatalkan potongan \"tidak melakukan presensi\" bagi semua pegawai terdampak, termasuk yang tidak " +
-        "mengirim bukti foto. Jam lembur tetap bisa dikoreksi tanpa penanda itu.",
-    };
-  }
   if (jamMasuk && jamKeluar && jamKeluar <= jamMasuk) {
     return { error: "Jam pulang harus lebih lambat dari jam masuk." };
   }
 
   const alasan = String(formData.get("alasan") ?? "").trim();
-  if (alasan.length < 10) {
+  const galatAlasan = validasiAlasanKoreksi(alasan);
+  if (galatAlasan) return { error: galatAlasan };
+
+  if (String(formData.get("pernyataan") ?? "") !== "1") {
+    return { error: "Centang pernyataan tanggung jawab dulu - koreksi ini atas nama kamu." };
+  }
+
+  const pegawai = await prisma.pegawai.findUnique({ where: { nip } });
+  if (!pegawai) return { error: "Pegawai tidak ditemukan." };
+
+  // Dicek terhadap satuan kerja pegawai yang disentuh. Hanya Kasubag TU unit itu.
+  if (!canKoreksiJamPresensi(authUser, pegawai.satuanKerja ?? "")) {
+    return { error: "Koreksi jam presensi hanya boleh dilakukan Kasubag TU unit pegawai ini." };
+  }
+  const satuanKerja = pegawai.satuanKerja as string; // non-kosong: dijamin canKoreksiJamPresensi
+
+  // Rekap terkirim = angka unit periode itu sudah dibekukan. Periode dari TANGGAL.
+  if (await rekapUnitTerkunciUntukTanggal(satuanKerja, tanggal)) {
+    return {
+      error: "Rekap unit untuk periode tanggal ini sudah dikirim ke PPABP dan terkunci. Koreksi tidak dapat diubah.",
+    };
+  }
+
+  // Penanda kendala TIDAK menjadi gerbang; dicatat sebagai keterangan audit
+  // kalau kebetulan ada.
+  const kendala = await prisma.kendalaEpresensi.findFirst({
+    where: { tanggal, OR: [{ satuanKerja: null }, { satuanKerja }] },
+  });
+
+  const lama = await prisma.koreksiPresensiHarian.findUnique({
+    where: { pegawaiId_tanggal: { pegawaiId: pegawai.id, tanggal } },
+  });
+
+  // Dua berkas terpisah: bukti absen MASUK dan bukti absen PULANG. Keduanya
+  // diperiksa dulu (tanpa menulis apa pun); satu saja salah -> tidak ada yang ditulis.
+  const buktiMasuk = await periksaBuktiKoreksi(formData.get("buktiMasuk"));
+  if (buktiMasuk.status === "galat") return { error: `Bukti absen masuk: ${buktiMasuk.error}` };
+  const buktiKeluar = await periksaBuktiKoreksi(formData.get("buktiKeluar"));
+  if (buktiKeluar.status === "galat") return { error: `Bukti absen pulang: ${buktiKeluar.error}` };
+
+  const wajib = butuhBukti(
+    { jamMasuk: jm(jamMasuk), jamKeluar: jm(jamKeluar) },
+    lama
+      ? {
+          jamMasuk: jm(lama.jamMasuk),
+          jamKeluar: jm(lama.jamKeluar),
+          buktiRef: lama.buktiRef,
+          buktiRefKeluar: lama.buktiRefKeluar,
+        }
+      : null
+  );
+  if (wajib.masuk && buktiMasuk.status !== "siap") {
     return {
       error:
-        "Alasan wajib diisi minimal 10 karakter - sebutkan dasar koreksinya (mis. lapor via WhatsApp + foto bergeotag jam 07.15).",
+        "Unggah bukti absen masuk (foto/tangkapan layar JPG, PNG, atau PDF, maksimal 2 MB) - wajib untuk koreksi jam masuk.",
+    };
+  }
+  if (wajib.keluar && buktiKeluar.status !== "siap") {
+    return {
+      error:
+        "Unggah bukti absen pulang (foto/tangkapan layar JPG, PNG, atau PDF, maksimal 2 MB) - wajib untuk koreksi jam pulang.",
     };
   }
 
@@ -155,23 +176,61 @@ export async function koreksiJamPresensiAction(
     where: { pegawaiId: pegawai.id, tanggal },
     select: { jamMasuk: true, jamKeluar: true, statusKehadiran: true },
   });
-  const lama = await prisma.koreksiPresensiHarian.findUnique({
-    where: { pegawaiId_tanggal: { pegawaiId: pegawai.id, tanggal } },
-  });
 
-  const jm = (d: Date | null | undefined) =>
-    d ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : null;
+  // Berkas ditulis PALING AKHIR, sesudah semua validasi lolos. Bukti lama
+  // tidak dihapus dari disk; rujukannya masuk dataSebelum audit.
+  const jamLemburSimpan = kirimLembur ? jamLembur : (lama?.jamLembur ?? null);
+  let buktiRef: string | null = lama?.buktiRef ?? null;
+  let buktiRefKeluar: string | null = lama?.buktiRefKeluar ?? null;
+  // Bukti lembur berasal dari jalur Kalkulasi Unit; di sini hanya dipertahankan.
+  const buktiRefLembur: string | null = lama?.buktiRefLembur ?? null;
+  const gagalSimpan = {
+    error: "Bukti gagal disimpan. Coba unggah ulang; kalau masih gagal, hubungi Admin Gajihub.",
+  };
+  if (buktiMasuk.status === "siap") {
+    const kunci = await tulisBuktiKoreksi({
+      buffer: buktiMasuk.buffer,
+      ekstensi: buktiMasuk.ekstensi,
+      satuanKerja,
+      tanggal,
+      sisi: "masuk",
+    });
+    if (!kunci) return gagalSimpan;
+    buktiRef = kunci;
+  }
+  if (buktiKeluar.status === "siap") {
+    const kunci = await tulisBuktiKoreksi({
+      buffer: buktiKeluar.buffer,
+      ekstensi: buktiKeluar.ekstensi,
+      satuanKerja,
+      tanggal,
+      sisi: "keluar",
+    });
+    if (!kunci) return gagalSimpan;
+    buktiRefKeluar = kunci;
+  }
 
   await prisma.$transaction([
     prisma.koreksiPresensiHarian.upsert({
       where: { pegawaiId_tanggal: { pegawaiId: pegawai.id, tanggal } },
-      create: { pegawaiId: pegawai.id, tanggal, jamMasuk, jamKeluar, jamLembur, alasan, dikoreksiOlehId: user.id },
-      update: { jamMasuk, jamKeluar, jamLembur, alasan, dikoreksiOlehId: user.id, dikoreksiPada: new Date() },
+      create: {
+        pegawaiId: pegawai.id,
+        tanggal,
+        jamMasuk,
+        jamKeluar,
+        jamLembur: jamLemburSimpan,
+        alasan,
+        buktiRef,
+        buktiRefKeluar,
+        buktiRefLembur,
+        dikoreksiOlehId: user.id,
+      },
+      update: { jamMasuk, jamKeluar, jamLembur: jamLemburSimpan, alasan, buktiRef, buktiRefKeluar, buktiRefLembur, dikoreksiOlehId: user.id, dikoreksiPada: new Date() },
     }),
     prisma.auditTrail.create({
       data: {
         entitas: "koreksi_presensi_harian",
-        entitasId: `${nip}-${tanggal.toISOString().slice(0, 10)}`,
+        entitasId: `${nip}-${tanggalIso}`,
         aksi: lama ? "UPDATE" : "CREATE",
         aktor: user.nip,
         satuanKerja: pegawai.satuanKerja,
@@ -188,6 +247,9 @@ export async function koreksiJamPresensiAction(
                   jamKeluar: jm(lama.jamKeluar),
                   jamLembur: lama.jamLembur,
                   alasan: lama.alasan,
+                  buktiRef: lama.buktiRef,
+                  buktiRefKeluar: lama.buktiRefKeluar,
+                  buktiRefLembur: lama.buktiRefLembur,
                 },
               }
             : {}),
@@ -195,14 +257,15 @@ export async function koreksiJamPresensiAction(
         dataSesudah: {
           jamMasuk: jm(jamMasuk),
           jamKeluar: jm(jamKeluar),
-          jamLembur,
+          jamLembur: jamLemburSimpan,
           alasan,
-          // null kalau koreksinya cuma menyentuh jam lembur - tanggal itu
-          // memang tidak perlu ditandai kendala. Dicatat apa adanya supaya
-          // jejak audit bisa membedakan dua jenis koreksi ini.
-          dasarKendala: kendala
-            ? { tanggal: tanggal.toISOString().slice(0, 10), alasan: kendala.alasan }
-            : null,
+          buktiRef,
+          buktiRefKeluar,
+          buktiRefLembur,
+          pernyataanTanggungJawab: true,
+          // Keterangan saja: ada tidaknya penanda kendala tidak menentukan
+          // boleh/tidaknya koreksi.
+          dasarKendala: kendala ? { tanggal: tanggalIso, alasan: kendala.alasan } : null,
           sumber: "Koreksi jam presensi (Pasal 10 ayat (2))",
         },
       },
@@ -212,7 +275,7 @@ export async function koreksiJamPresensiAction(
   revalidatePath(`/tukin/presensi/${nip}`);
   return {
     sukses:
-      `Jam ${tglTampil(tanggal.toISOString().slice(0, 10))} dikoreksi (masuk ${jm(jamMasuk) ?? "tetap"}, pulang ${jm(jamKeluar) ?? "tetap"}). ` +
+      `Jam ${tglTampil(tanggalIso)} dikoreksi (masuk ${jm(jamMasuk) ?? "tetap"}, pulang ${jm(jamKeluar) ?? "tetap"}). ` +
       // Cara menerapkannya TIDAK diulang di sini - tombolnya berdiri tepat di
       // bawah pesan ini (AjakanTerapkan di KoreksiJamForm).
       "Angkanya belum berubah sampai koreksi diterapkan.",
@@ -233,12 +296,20 @@ export async function hapusKoreksiJamAction(
   });
   if (!baris) return { error: "Koreksi itu sudah tidak ada." };
 
-  if (!canUploadRekapPresensi(keAuthUser(user), baris.pegawai.satuanKerja ?? "")) {
-    return { error: "Di luar kewenangan kamu." };
+  if (!canKoreksiJamPresensi(keAuthUser(user), baris.pegawai.satuanKerja ?? "")) {
+    return { error: "Koreksi jam presensi hanya boleh dihapus Kasubag TU unit pegawai ini." };
+  }
+  // Periode dari TANGGAL koreksi, bukan dari form.
+  if (await rekapUnitTerkunciUntukTanggal(baris.pegawai.satuanKerja as string, baris.tanggal)) {
+    return {
+      error: "Rekap unit untuk periode tanggal ini sudah dikirim ke PPABP dan terkunci. Koreksi tidak dapat dihapus.",
+    };
   }
 
-  const jm = (d: Date | null) =>
-    d ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : null;
+  const presensiAsli = await prisma.presensiHarian.findFirst({
+    where: { pegawaiId: baris.pegawaiId, tanggal: baris.tanggal },
+    select: { jamMasuk: true, jamKeluar: true },
+  });
 
   await prisma.$transaction([
     prisma.koreksiPresensiHarian.delete({ where: { id } }),
@@ -250,11 +321,18 @@ export async function hapusKoreksiJamAction(
         aktor: user.nip,
         satuanKerja: baris.pegawai.satuanKerja,
         // Barisnya sudah tidak ada - ini satu-satunya jejak yang tersisa.
+        // Berkas bukti TIDAK dihapus dari disk; rujukannya dicatat di sini.
         dataSebelum: {
           tanggal: baris.tanggal.toISOString().slice(0, 10),
           jamMasuk: jm(baris.jamMasuk),
           jamKeluar: jm(baris.jamKeluar),
+          jamLembur: baris.jamLembur,
           alasan: baris.alasan,
+          buktiRef: baris.buktiRef,
+          buktiRefKeluar: baris.buktiRefKeluar,
+          buktiRefLembur: baris.buktiRefLembur,
+          jamMasukEpresensi: jm(presensiAsli?.jamMasuk),
+          jamKeluarEpresensi: jm(presensiAsli?.jamKeluar),
         },
       },
     }),

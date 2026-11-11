@@ -1,5 +1,6 @@
 "use client";
 
+import { DetakSesi } from "./DetakSesi";
 import { type ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -585,6 +586,9 @@ export function AppShell({
           Dulu perlu, karena sidebar yang diciutkan benar-benar hilang dan
           tombol pemunculnya mengambang di atas judul halaman. */}
       <div className="min-w-0">{children}</div>
+
+      {/* Detak interaksi: hanya mengirim bila pengguna benar-benar berinteraksi. */}
+      <DetakSesi />
 
       {/* Panel kanan Notifikasi & Aktivitas - tombolnya mengambang di kanan
           atas, panelnya tertutup sampai diklik. PEGAWAI tidak dapat: ditolak

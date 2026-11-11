@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import path from "node:path";
 
 // ============================================================================
@@ -15,6 +15,13 @@ import path from "node:path";
 // ============================================================================
 
 export default defineConfig({
+  test: {
+    // Worktree sesi Claude Code tinggal di .claude/worktrees/ DI DALAM repo.
+    // Tanpa pengecualian ini, `npm test` dari checkout utama ikut menjalankan
+    // salinan test di sana (jumlahnya jadi dobel), dan salinan itu bisa gagal
+    // karena konteksnya berbeda - verify merah padahal kodenya sehat.
+    exclude: [...configDefaults.exclude, ".claude/**"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

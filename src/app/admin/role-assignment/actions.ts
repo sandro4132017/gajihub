@@ -5,7 +5,8 @@ import type { Role } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../../auth/permissions";
-import { periksaBuatAkun, periksaUbahAssignment, type BarisAkun } from "./aturanAssignment";
+import { lengkapiRolePegawai } from "../../../auth/rolePegawaiWajib";
+import { idSah, periksaBuatAkun, periksaUbahAssignment, type BarisAkun } from "./aturanAssignment";
 
 export interface UbahAssignmentRoleFormState {
   error?: string;
@@ -48,7 +49,7 @@ export async function ubahAssignmentRoleAction(
     // Role TAMBAHAN (checkbox, boleh lebih dari satu) - buat kemudahan
     // testing lintas role. Role utama dibuang dari daftar supaya tidak
     // dobel, lihat daftarRoleTersedia().
-    const rolesTambahan = formData
+    const rolesTambahanInput = formData
       .getAll("rolesTambahan")
       .map((r) => String(r) as Role)
       .filter((r) => ROLE_VALID.includes(r) && r !== role);
@@ -59,6 +60,11 @@ export async function ubahAssignmentRoleAction(
 
     const target = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!target) return { error: "Akun tidak ditemukan." };
+
+    // Akun yang NIP-nya ada di tabel Pegawai WAJIB punya role PEGAWAI: server
+    // menambahkannya kembali walau tidak dicentang (UI menampilkannya terkunci).
+    const punyaDataPegawai = !!(await prisma.pegawai.findUnique({ where: { nip: target.nip }, select: { id: true } }));
+    const rolesTambahan = lengkapiRolePegawai({ role, rolesTambahan: rolesTambahanInput }, punyaDataPegawai);
 
     const periksa = periksaUbahAssignment({
       aktorId: admin.id,
@@ -91,7 +97,9 @@ export async function ubahAssignmentRoleAction(
     const [baris] = await prisma.$transaction([
       prisma.user.update({
         where: { id: targetUserId },
-        data: { role, rolesTambahan, satuanKerja, aktif },
+        // Akun yang BARU dinonaktifkan: versi sesi naik supaya sesi yang sedang
+        // berjalan putus seketika di semua perangkat.
+        data: { role, rolesTambahan, satuanKerja, aktif, ...(target.aktif && !aktif ? { sesiVersi: { increment: 1 } } : {}) },
         select: { id: true, nip: true, nama: true, role: true, rolesTambahan: true, satuanKerja: true, aktif: true },
       }),
       prisma.auditTrail.create({
@@ -120,6 +128,63 @@ export async function ubahAssignmentRoleAction(
     return { success: `Assignment role ${target.nama} diperbarui jadi ${role}${catatanTambahan}.`, baris };
   } catch (err) {
     return { error: pesanGalatUntukLayar("admin.role-assignment.actions#1", err, "Terjadi kesalahan") };
+  }
+}
+
+export interface PutusSesiState {
+  error?: string;
+  success?: string;
+}
+
+/**
+ * Putus SEMUA sesi satu akun (semua perangkat): menaikkan User.sesiVersi, jadi
+ * token yang beredar ditolak pada permintaan berikutnya. Role/data akun tidak
+ * berubah. Respons hanya memuat pesan - tanpa revalidatePath (aturan F-02).
+ */
+export async function putusSemuaSesiAction(targetUserId: string): Promise<PutusSesiState> {
+  try {
+    const akun = await getSessionAccount();
+    if (!akun) return { error: "Sesi login sudah habis - silakan login ulang." };
+
+    const admin = await ambilUserSesi();
+    if (!admin) return { error: "Akun tidak terdaftar sebagai User." };
+    const authUser: AuthUser = { nip: admin.nip, role: admin.role, satuanKerja: admin.satuanKerja, aktif: admin.aktif };
+    if (!canKelolaAssignmentRole(authUser)) {
+      return { error: "Peran kamu tidak berwenang memutus sesi akun." };
+    }
+
+    const id = String(targetUserId ?? "");
+    if (!idSah(id)) return { error: "Akun tidak valid." };
+
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) return { error: "Akun tidak ditemukan." };
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id }, data: { sesiVersi: { increment: 1 } }, select: { id: true } }),
+      prisma.auditTrail.create({
+        data: {
+          entitas: "app_user",
+          entitasId: id,
+          aksi: "UPDATE",
+          aktor: admin.nip,
+          dataSebelum: { sesiVersi: target.sesiVersi },
+          dataSesudah: {
+            sesiVersi: target.sesiVersi + 1,
+            aktorNama: admin.nama,
+            sumber: "Putus semua sesi (Admin)",
+          },
+        },
+      }),
+    ]);
+
+    return {
+      success:
+        target.id === admin.id
+          ? "Semua sesi akunmu diputus, termasuk yang ini."
+          : `Semua sesi ${target.nama} diputus. Akun itu harus masuk lagi.`,
+    };
+  } catch (err) {
+    return { error: pesanGalatUntukLayar("admin.role-assignment.actions#3", err, "Terjadi kesalahan") };
   }
 }
 
@@ -168,6 +233,8 @@ export async function buatAkunBaruAction(
 
     const pegawai = await prisma.pegawai.findUnique({ where: { id: pegawaiId } });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
+    // Pegawai ini jelas punya data Pegawai: role PEGAWAI wajib (rolePegawaiWajib.ts).
+    const rolesTambahanBaru = lengkapiRolePegawai({ role, rolesTambahan: [] }, true);
 
     const existing = await prisma.user.findUnique({ where: { nip: pegawai.nip } });
     if (existing) {
@@ -178,7 +245,7 @@ export async function buatAkunBaruAction(
 
     const created = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { nip: pegawai.nip, nama: pegawai.nama, role, satuanKerja, aktif: true },
+        data: { nip: pegawai.nip, nama: pegawai.nama, role, rolesTambahan: rolesTambahanBaru, satuanKerja, aktif: true },
       });
       await tx.auditTrail.create({
         data: {
@@ -186,7 +253,7 @@ export async function buatAkunBaruAction(
           entitasId: user.id,
           aksi: "CREATE",
           aktor: admin.nip,
-          dataSesudah: { nip: user.nip, nama: user.nama, role, satuanKerja, aktorNama: admin.nama, sumber: "Buat akun baru (Admin, tanpa usulan PPABP)" },
+          dataSesudah: { nip: user.nip, nama: user.nama, role, rolesTambahan: rolesTambahanBaru, satuanKerja, aktorNama: admin.nama, sumber: "Buat akun baru (Admin, tanpa usulan PPABP)" },
         },
       });
       return user;

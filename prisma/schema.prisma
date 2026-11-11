@@ -636,7 +636,10 @@ model User {
   //   sebagai SATU role aktif saja (disimpan di cookie sesi). Otorisasi
   //   tetap dievaluasi terhadap satu role itu lewat src/auth/permissions.ts
   //   - tidak ada fungsi izin yang meng-OR-kan beberapa role sekaligus.
-  // - `role` di atas tetap role UTAMA/default (dipakai waktu login).
+  // - `role` di atas adalah role UTAMA (label & urutan pertama di menu Ganti
+  //   role). Role yang dipakai SAAT LOGIN dipilih pilihRoleBawaan() di
+  //   src/auth/roleAktif.ts (urutan kewenangan atas role utama + tambahan,
+  //   ADMIN hanya bila satu-satunya), BUKAN otomatis role ini.
   // - `satuanKerja` TETAP SATU untuk semua role akun ini - jadi kalau
   //   KASUBAG_TU ada di daftar role (utama maupun tambahan), field itu
   //   WAJIB diisi, kalau tidak akun jadi "buta unit" begitu ganti ke role
@@ -655,6 +658,11 @@ model User {
   rolesTambahan Role[] @map("roles_tambahan")
 
   aktif Boolean @default(true)
+
+  // Versi sesi akun. Dicatat di token sesi (payload.v); token yang versinya
+  // beda dengan kolom ini ditolak. Dinaikkan saat logout, saat Admin memutus
+  // semua sesi, dan saat akun dinonaktifkan - memutus SEMUA perangkat akun itu.
+  sesiVersi Int @default(0) @map("sesi_versi")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1299,9 +1307,11 @@ model KendalaEpresensi {
 // ---------------------------------------------------------------------------
 // Koreksi jam presensi SATU pegawai SATU hari - lanjutan Pasal 10 ayat (2).
 //
-// ALUR NYATANYA (keterangan user): e-Presensi error -> pegawai memotret
-// dirinya beserta geotag & jam -> dikirim ke WhatsApp petugas absensi ->
-// petugas memperbaiki jamnya di Gajihub. Tabel ini tempat perbaikan itu.
+// ALUR NYATANYA: e-Presensi error -> pegawai memotret dirinya beserta geotag
+// & jam -> dikirim ke Kasubag TU unitnya -> Kasubag TU mengunggah buktinya
+// dan memperbaiki jamnya di Gajihub (tanpa syarat tanggal ditandai kendala;
+// pengamannya bukti + pernyataan + kunci setelah rekap terkirim). Tabel ini
+// tempat perbaikan itu.
 //
 // KENAPA TABEL SENDIRI, BUKAN MENIMPA `PresensiHarian`:
 // sinkronisasi e-Presensi MENGHAPUS sebulan penuh lalu menulis ulang
@@ -1351,11 +1361,25 @@ model KoreksiPresensiHarian {
   /// ketukan pulang malam yang ternyata bukan lembur.
   jamLembur Float? @map("jam_lembur")
 
-  /// WAJIB. Berisi dasar koreksinya - siapa yang melapor, lewat apa, bukti
-  /// apa yang dipegang. Foto & geotag-nya sendiri TIDAK disimpan di sini
-  /// (kebijakan penyimpanan dokumen masih terbuka, lihat TODO(confirm)
-  /// storage di CLAUDE.md); yang dicatat sistem adalah keputusannya.
+  /// WAJIB, minimal 15 karakter. Berisi dasar koreksinya - siapa yang
+  /// melapor, lewat apa, bukti apa yang dipegang.
   alasan String
+
+  /// Bukti absen MASUK: kunci berkas (foto/tangkapan layar/PDF) di penyimpanan
+  /// privat: `bukti-koreksi/<unit>/<tahun-bulan>/<tanggal>_<sisi>_<waktu>_<acak>.<ext>`.
+  /// Nama kolom DB `bukti_ref` dipertahankan (tanpa rename); artinya sekarang
+  /// khusus sisi masuk. Dibaca lewat /berkas/koreksi-presensi/[id]?sisi=masuk
+  /// yang memeriksa izin. Wajib untuk koreksi jam masuk yang baru; null pada
+  /// koreksi lama dan koreksi yang tidak menyentuh jam masuk. Catatan: baris
+  /// lama dari jalur koreksi lembur bisa saja menyimpan bukti lemburnya di sini.
+  buktiRef String? @map("bukti_ref")
+
+  /// Bukti absen PULANG (kunci berkas, bentuk sama dengan `buktiRef`). Wajib
+  /// untuk koreksi jam pulang yang baru.
+  buktiRefKeluar String? @map("bukti_ref_keluar")
+
+  /// Bukti OPSIONAL dari jalur koreksi lembur (Kalkulasi Unit, SPL).
+  buktiRefLembur String? @map("bukti_ref_lembur")
 
   dikoreksiOlehId String   @map("dikoreksi_oleh_id")
   dikoreksiOleh   User     @relation(fields: [dikoreksiOlehId], references: [id])

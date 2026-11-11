@@ -1,9 +1,11 @@
+import { TautanBuktiKoreksi, daftarTautanBukti } from "../../../../components/shared/TautanBuktiKoreksi";
 import Link from "next/link";
 import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
 import {
   canBukaHalamanPredikatKinerja,
   canEditDataPegawai,
+  canKoreksiJamPresensi,
   canUploadRekapPresensi,
   type AuthUser,
 } from "../../../../auth/permissions";
@@ -30,6 +32,7 @@ import {
 } from "../../../../business-logic/rincianJamKerjaHarian";
 import { HALAMAN } from "../../../../components/layout/layoutHalaman";
 import { catatGalat, denganSumber, pesanGalatAwam } from "../../../../lib/koneksi/galatSumber";
+import { rekapUnitTerkunciUntukTanggal } from "../../../../lib/koreksiPresensiDb";
 
 export const dynamic = "force-dynamic";
 
@@ -270,7 +273,12 @@ export default async function RincianPresensiPegawaiPage({
   const tanggalBelumBerlaku = [...new Set(perubahanBelumBerlaku.map((t) => t.toISOString().slice(0, 10)))].sort();
   const tanggalKendala = new Set(kendalaPeriode.map((k) => k.tanggal.toISOString().slice(0, 10)));
   const petaKoreksi = new Map(koreksiPeriode.map((k) => [k.tanggal.toISOString().slice(0, 10), k]));
-  const bolehKoreksi = canUploadRekapPresensi(authUser, pegawai.satuanKerja ?? "");
+  // Koreksi jam HANYA Kasubag TU unit pegawai ini (canKoreksiJamPresensi).
+  // PPABP/Admin tetap boleh MELIHAT halaman ini, koreksinya, dan buktinya.
+  const bolehKoreksi = canKoreksiJamPresensi(authUser, pegawai.satuanKerja ?? "");
+  // Rekap unit terkirim = koreksi dikunci. Periode halaman ini = bulan `awal`.
+  const rekapTerkunci = bolehKoreksi && pegawai.satuanKerja ? await rekapUnitTerkunciUntukTanggal(pegawai.satuanKerja, awal) : false;
+  const bolehUbahKoreksi = bolehKoreksi && !rekapTerkunci;
 
   const totalTelat = harian.reduce((a, h) => a + h.menitTerlambat, 0);
   const totalPulangCepat = harian.reduce((a, h) => a + h.menitPulangCepat, 0);
@@ -362,6 +370,16 @@ export default async function RincianPresensiPegawaiPage({
       ? {
           label: "Kembali ke Pegawai Unit",
           href: `/kasubag/pegawai?satker=${encodeURIComponent(satker ?? pegawai.satuanKerja)}`,
+        }
+      : dari === "tukin"
+      ? {
+          // Dari tabel rincian lengkap Dashboard Tukin (PPABP) - kembali ke
+          // tabel yang sama, bukan ke daftar Presensi.
+          label: "Kembali ke Rincian Tukin",
+          href:
+            `/tukin?bulan=${periodeBulan}&tahun=${periodeTahun}` +
+            (satker ? `&satker=${encodeURIComponent(satker)}` : "") +
+            "&rincian=1",
         }
       : dari === "kalkulasi"
       ? {
@@ -629,6 +647,12 @@ export default async function RincianPresensiPegawaiPage({
           <TabelRincianJamKerja baris={barisJamKerja} />
         </div>
       ) : (
+      <>
+      {bolehKoreksi && rekapTerkunci && (
+        <p className="mt-3 text-xs text-muted">
+          Rekap unit periode ini sudah dikirim ke PPABP dan terkunci - koreksi jam tidak dapat diubah.
+        </p>
+      )}
       <div className="card mt-3 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -641,22 +665,21 @@ export default async function RincianPresensiPegawaiPage({
               <th className="px-3 py-2.5">Kekurangan jam kerja</th>
               <th className="px-3 py-2.5">Lembur</th>
               <th className="px-3 py-2.5">Uang makan</th>
-              {bolehKoreksi && <th className="px-3 py-2.5">Koreksi</th>}
+              <th className="px-3 py-2.5">Koreksi</th>
             </tr>
           </thead>
           <tbody>
             {harian.length === 0 && (
               <tr>
-                <td colSpan={bolehKoreksi ? 9 : 8} className="px-3 py-6 text-center text-muted">
+                <td colSpan={9} className="px-3 py-6 text-center text-muted">
                   Periode ini belum dilakukan sinkronisasi.
                 </td>
               </tr>
             )}
-            {harian.map((h) => {
+            {harian.map((h, idxHarian) => {
               const hariKe = h.tanggal.getUTCDay();
               const akhirPekan = hariKe === 0 || hariKe === 6;
               const iso = h.tanggal.toISOString().slice(0, 10);
-              const kendala = tanggalKendala.has(iso);
               const koreksi = petaKoreksi.get(iso);
               // Sama persis dengan perbandingan yang menyusun panel peringatan
               // di atas tabel - satu aturan, bukan dua yang bisa berbeda.
@@ -712,48 +735,52 @@ export default async function RincianPresensiPegawaiPage({
                       <span className="text-muted">tidak</span>
                     )}
                   </td>
-                  {bolehKoreksi && (
-                    <td className="px-3 py-2">
-                      {/* FORMNYA SELALU TAMPIL sekarang, bahkan tanpa penanda
-                          kendala - yang dikunci cuma jam masuk & pulang.
-                          Koreksi JAM LEMBUR tidak menuntut penanda itu:
-                          dasarnya surat perintah lembur, bukan kerusakan mesin
-                          absensi, dan memaksa petugas menandai kerusakan yang
-                          tidak pernah terjadi hanya untuk mencatat lembur yang
-                          sah jelas keliru. Server menagih aturan yang sama
-                          (lihat actionsKoreksi.ts). */}
-                      {akhirPekan && !h.jamLembur ? (
-                        <span className="text-xs text-muted">-</span>
-                      ) : (
-                        <KoreksiJamForm
-                          nip={pegawai.nip}
-                          tanggalIso={iso}
-                          jamMasukAsli={jamTeks(h.jamMasuk)}
-                          jamKeluarAsli={jamTeks(h.jamKeluar)}
-                          jamLemburMesin={h.jamLembur}
-                          bolehUbahJam={!!kendala}
-                          koreksi={
-                            koreksi
-                              ? {
-                                  id: koreksi.id,
-                                  jamMasuk: koreksi.jamMasuk ? jamTeks(koreksi.jamMasuk) : null,
-                                  jamKeluar: koreksi.jamKeluar ? jamTeks(koreksi.jamKeluar) : null,
-                                  jamLembur: koreksi.jamLembur,
-                                  alasan: koreksi.alasan,
-                                  olehNama: koreksi.dikoreksiOleh.nama,
-                                }
-                              : null
-                          }
+                  <td className="px-3 py-2">
+                    {bolehUbahKoreksi && !(akhirPekan && !h.jamLembur) ? (
+                      <KoreksiJamForm
+                        nip={pegawai.nip}
+                        tanggalIso={iso}
+                        jamMasukAsli={jamTeks(h.jamMasuk)}
+                        jamKeluarAsli={jamTeks(h.jamKeluar)}
+                        jamLemburMesin={h.jamLembur}
+                        potonganHariIniPersen={barisJamKerja[idxHarian]?.potonganPersen ?? null}
+                        koreksi={
+                          koreksi
+                            ? {
+                                id: koreksi.id,
+                                jamMasuk: koreksi.jamMasuk ? jamTeks(koreksi.jamMasuk) : null,
+                                jamKeluar: koreksi.jamKeluar ? jamTeks(koreksi.jamKeluar) : null,
+                                jamLembur: koreksi.jamLembur,
+                                alasan: koreksi.alasan,
+                                olehNama: koreksi.dikoreksiOleh.nama,
+                                buktiMasuk: !!koreksi.buktiRef,
+                                buktiKeluar: !!koreksi.buktiRefKeluar,
+                                tautanBukti: daftarTautanBukti(koreksi).map(({ sisi, label, href }) => ({ sisi, label, href })),
+                              }
+                            : null
+                        }
+                      />
+                    ) : koreksi ? (
+                      <div className="text-xs">
+                        <span className="chip chip-navy">Dikoreksi</span>
+                        <p className="mt-1 text-ink-2">oleh {koreksi.dikoreksiOleh.nama}</p>
+                        <TautanBuktiKoreksi
+                          koreksi={koreksi}
+                          className="link block"
+                          kosong={<span className="text-muted">tanpa bukti</span>}
                         />
-                      )}
-                    </td>
-                  )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted">-</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      </>
       )}
 
       {modeBanding ? (

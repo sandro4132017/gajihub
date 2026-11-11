@@ -920,13 +920,48 @@ export function canPindahSatuanKerjaPegawai(user: AuthUser, satuanKerjaAsal: str
 }
 
 /**
+ * Mengoreksi jam presensi harian (jam masuk, pulang, lembur) - Pasal 10 ayat
+ * (2) Permenaker 15/2024. HANYA Kasubag TU unit pegawai yang dikoreksi.
+ *
+ * Tanpa bypass ADMIN dan tanpa hibah `satuanKerjaTambahan`, sama seperti
+ * `canTandatanganiSptjmUnit`: koreksi ini menyatakan "saya sudah memeriksa
+ * bukti kehadirannya dan bertanggung jawab", dan pernyataan semacam itu
+ * melekat pada orang yang memang memegang unitnya. PPABP/ADMIN hanya MELIHAT
+ * koreksi dan buktinya (`canLihatBuktiKoreksiPresensi`). Satuan kerja kosong
+ * ditolak supaya tidak jadi "cocok dengan kosong".
+ */
+export function canKoreksiJamPresensi(user: AuthUser, targetSatuanKerja: string): boolean {
+  if (!user.aktif) return false;
+  if (!targetSatuanKerja || !user.satuanKerja) return false;
+  return user.role === "KASUBAG_TU" && user.satuanKerja === targetSatuanKerja;
+}
+
+/**
+ * Melihat bukti sebuah koreksi jam presensi: pegawai yang bersangkutan,
+ * Kasubag TU unit itu, PPABP, dan ADMIN. OSDMA dan PIMPINAN tidak. Hibah
+ * `satuanKerjaTambahan` tidak ikut.
+ */
+export function canLihatBuktiKoreksiPresensi(
+  user: AuthUser,
+  target: { nipPegawai: string; satuanKerjaPegawai: string | null }
+): boolean {
+  if (canViewDataSendiri(user, target.nipPegawai)) return true;
+  if (canKoreksiJamPresensi(user, target.satuanKerjaPegawai ?? "")) return true;
+  return cekPpabpAtauAdmin(user, target.satuanKerjaPegawai ?? undefined);
+}
+
+/**
  * TIDAK ADA role yang boleh edit data presensi/kinerja secara LANGSUNG -
  * jalur koreksi yang SAH cuma: (1) Banding (ajukan -> diverifikasi
- * berjenjang), atau (2) KASUBAG_TU pakai
- * canTarikAtauUploadPresensiUnit/canUploadKoreksiPredikatKinerjaUnit (masih
- * di-scope unitnya, bukan "edit bebas"). Fungsi ini SENGAJA selalu false
- * dan TIDAK ikut kena bypass ADMIN - didokumentasikan eksplisit di sini
- * supaya tidak ada yang "lupa" nambahin fitur edit langsung tanpa jejak.
+ * berjenjang), (2) KASUBAG_TU unitnya memakai
+ * canUploadKoreksiPredikatKinerjaUnit untuk predikat, atau (3) KASUBAG_TU
+ * unitnya memakai `canKoreksiJamPresensi` untuk jam harian, dengan lima
+ * pengaman: bukti kehadiran terunggah (wajib bila jam masuk/pulang berubah),
+ * alasan minimal 15 karakter, pernyataan tanggung jawab, ditolak bila rekap
+ * unit periode itu sudah terkirim, dan AuditTrail memuat jam asli
+ * e-Presensi. Fungsi ini SENGAJA selalu false dan TIDAK ikut kena bypass
+ * ADMIN - didokumentasikan eksplisit di sini supaya tidak ada yang "lupa"
+ * nambahin fitur edit langsung tanpa jejak.
  */
 export function canEditPresensiKinerjaLangsung(_user: AuthUser): boolean {
   return false;

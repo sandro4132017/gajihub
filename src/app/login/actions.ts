@@ -2,15 +2,14 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { Pegawai, Role, User } from "@prisma/client";
+import type { Pegawai, User } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { SESSION_COOKIE_NAME } from "../../auth/session";
 // Opsi cookie & penerbitan token dipakai bareng login SSO (Route Handler)
 // - lihat src/auth/sesiCookie.ts. Dua salinan opsi cookie pasti berbeda
 // cepat atau lambat, dan gejalanya "login berhasil tapi langsung logout".
 import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../auth/sesiCookie";
-import { getSessionAccount } from "../../auth/getSessionAccount";
-import { daftarRoleTersedia, LANDING_ROLE } from "../../auth/roleAktif";
+import { LANDING_ROLE, pilihRoleBawaan } from "../../auth/roleAktif";
 import { LABEL_ROLE } from "../../auth/roleLabel";
 import { pesanGalatUntukLayar } from "../../lib/koneksi/galatSumber";
 import { ssoAktif } from "../../auth/sso";
@@ -98,14 +97,16 @@ export async function loginAction(
     }
 
     // Jabatan buat ditampilkan & dicatat di ApprovalLog
-    const jabatan = isPenguji ? JABATAN_PENGUJI : (pegawai?.jabatan ?? LABEL_ROLE[user.role]);
+    // Role bawaan login: urutan kewenangan, bukan otomatis role utama.
+    const roleBawaan = pilihRoleBawaan(user);
+    const jabatan = isPenguji ? JABATAN_PENGUJI : (pegawai?.jabatan ?? LABEL_ROLE[roleBawaan]);
 
-    const token = await buatTokenUntukUser(user, jabatan);
+    const token = await buatTokenUntukUser(user, jabatan, roleBawaan);
 
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
 
-    urlTujuan = LANDING_ROLE[user.role];
+    urlTujuan = LANDING_ROLE[roleBawaan];
   } catch (error) {
     return { error: pesanGalatUntukLayar("loginAction", error, "Gagal login") };
   }
@@ -115,56 +116,4 @@ export async function loginAction(
   }
 
   return {};
-}
-
-export async function logoutAction(): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE_NAME);
-  redirect("/login");
-}
-
-export interface GantiRoleFormState {
-  error?: string;
-}
-
-/**
- * Ganti ROLE AKTIF sesi (menu di tombol akun, sidebar kiri bawah) - buat
- * kemudahan TESTING: satu penguji bisa mencoba alur lintas role tanpa
- * logout-login pakai NIP orang lain. Lihat komentar panjang di model User
- * (schema.prisma) soal batasan & TODO(confirm) production-nya.
- *
- * Yang dilakukan: cuma menerbitkan ulang cookie sesi dengan role yang
- * dipilih. TIDAK mengubah data akun sama sekali (`User.role` di database
- * tetap role utama) - jadi ini murni "ganti sudut pandang", bukan promosi/
- * demosi role.
- *
- * Role tujuan diverifikasi ULANG ke database (daftarRoleTersedia), BUKAN
- * dipercaya dari form: tanpa itu, siapa pun bisa mengirim role="ADMIN" lewat
- * DevTools dan langsung memegang kewenangan penuh.
- */
-export async function gantiRoleAction(
-  _state: GantiRoleFormState,
-  formData: FormData
-): Promise<GantiRoleFormState> {
-  const roleTujuan = String(formData.get("role") ?? "") as Role;
-
-  const akun = await getSessionAccount();
-  if (!akun) return { error: "Sesi login sudah habis - silakan login ulang." };
-
-  const user = await prisma.user.findUnique({ where: { nip: akun.nip } });
-  if (!user || !user.aktif) return { error: "Akun tidak aktif - silakan login ulang." };
-
-  if (!daftarRoleTersedia(user).includes(roleTujuan)) {
-    return { error: `Akun kamu tidak punya peran ${LABEL_ROLE[roleTujuan] ?? roleTujuan}.` };
-  }
-
-  const token = await buatTokenUntukUser(user, akun.jabatan, roleTujuan);
-
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
-
-  // Diarahkan ke "rumah" role yang baru - kalau tetap di halaman lama,
-  // hampir pasti langsung kena "Akses ditolak" (mis. dari /admin ganti ke
-  // role Pegawai).
-  redirect(LANDING_ROLE[roleTujuan]);
 }

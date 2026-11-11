@@ -1,24 +1,40 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import type { Role } from "@prisma/client";
-import { ubahAssignmentRoleAction, type UbahAssignmentRoleFormState } from "./actions";
+import { putusSemuaSesiAction, ubahAssignmentRoleAction, type UbahAssignmentRoleFormState } from "./actions";
 import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
 import { SearchableSelect } from "../../../components/forms/SearchableSelect";
+import { Modal } from "../../../components/feedback/Modal";
+import { URUTAN_ROLE_BAWAAN, pilihRoleBawaan } from "../../../auth/roleAktif";
 import type { BarisAkun } from "./aturanAssignment";
 
 const INITIAL_STATE: UbahAssignmentRoleFormState = {};
 const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
 
+/** Aturan role bawaan login, diturunkan dari sumbernya (bukan ditulis tangan) supaya tak bisa beda. */
+export function teksAturanBawaan(): string {
+  const urutan = URUTAN_ROLE_BAWAAN.filter((r) => r !== "ADMIN")
+    .map((r) => LABEL_ROLE[r])
+    .join(", ");
+  return `Saat login, akun masuk sebagai peran pertama menurut urutan prioritas: ${urutan} (dari role utama dan tambahan). ${LABEL_ROLE.ADMIN} hanya bila akun tidak punya peran lain.`;
+}
+
 export function AssignmentRow({
   user: awal,
   satuanKerjaList,
   satuanKerjaPegawai,
+  punyaDataPegawai = false,
+  idSaya = null,
 }: {
   user: BarisAkun;
   satuanKerjaList: string[];
   /** Satuan kerja di data Pegawai - dipakai sebagai default kalau unit akunnya masih kosong. */
   satuanKerjaPegawai: string | null;
+  /** Ada baris Pegawai dengan NIP akun ini: role PEGAWAI wajib, tampil terkunci. */
+  punyaDataPegawai?: boolean;
+  /** id akun yang sedang login - untuk peringatan "kamu juga akan keluar". */
+  idSaya?: string | null;
 }) {
   const [state, formAction, pending] = useActionState(ubahAssignmentRoleAction, INITIAL_STATE);
   // Sesudah disimpan, keadaan akun diambil dari balasan aksi (hanya baris ini),
@@ -30,6 +46,15 @@ export function AssignmentRow({
   // Role TAMBAHAN - akun bisa ganti-ganti sudut pandang lewat menu di tombol
   // akun (sidebar). Disimpan di state supaya field "Satuan kerja" bisa ikut
   // muncul begitu Kasubag TU dicentang sebagai role tambahan.
+  const [konfirmPutus, setKonfirmPutus] = useState(false);
+  const [putusPending, mulaiPutus] = useTransition();
+  const [hasilPutus, setHasilPutus] = useState<{ error?: string; success?: string }>({});
+  const targetDiriSendiri = idSaya !== null && idSaya === user.id;
+  const jalankanPutus = () =>
+    mulaiPutus(async () => {
+      setHasilPutus(await putusSemuaSesiAction(user.id));
+      setKonfirmPutus(false);
+    });
   const [rolesTambahan, setRolesTambahan] = useState<Role[]>(user.rolesTambahan ?? []);
 
   const toggleRoleTambahan = (r: Role) =>
@@ -39,7 +64,8 @@ export function AssignmentRow({
   // relevan begitu KASUBAG_TU ada di role utama ATAU role tambahan.
   const butuhSatuanKerja = role === "KASUBAG_TU" || rolesTambahan.includes("KASUBAG_TU");
   const unitKosong = butuhSatuanKerja && !user.satuanKerja;
-  const tambahanTerpilih = rolesTambahan.filter((r) => r !== role);
+  const pegawaiWajib = (r: Role) => punyaDataPegawai && r === "PEGAWAI";
+  const tambahanTerpilih = rolesTambahan.filter((r) => r !== role && !pegawaiWajib(r));
   const unitLabel = user.satuanKerja ?? satuanKerjaPegawai;
   // Memberi ADMIN yang belum dimiliki akun ini wajib dicentang (F-01).
   const sudahAdmin = user.role === "ADMIN" || (user.rolesTambahan ?? []).includes("ADMIN");
@@ -65,6 +91,7 @@ export function AssignmentRow({
           {!user.aktif && <span className="chip chip-danger text-[11px]">Nonaktif</span>}
         </div>
       </div>
+      <p className="mt-1.5 text-[11px] text-muted">Masuk sebagai: {LABEL_ROLE[pilihRoleBawaan(user)]}</p>
 
       {/* Ubah */}
       <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -128,11 +155,25 @@ export function AssignmentRow({
           )}
         </summary>
         <p className="mt-2 text-[11px] text-muted">
-          Pemilik akun bisa berpindah sudut pandang lewat tombol akun di sidebar tanpa logout. Role utama tetap jadi
-          bawaan saat login.
+          Pemilik akun bisa berpindah sudut pandang lewat tombol akun di sidebar tanpa logout. {teksAturanBawaan()}
         </p>
         <div className="mt-2 flex flex-wrap gap-2 pb-1">
           {SEMUA_ROLE.filter((r) => r !== role).map((r) => {
+            if (pegawaiWajib(r)) {
+              // Terkunci: server selalu menambahkannya (rolePegawaiWajib.ts),
+              // jadi tidak ditawarkan sebagai pilihan yang bisa dihapus.
+              return (
+                <span
+                  key={r}
+                  title="Wajib untuk pegawai"
+                  className="flex items-center gap-1.5 rounded-full border border-navy/40 bg-surface-2 px-3 py-1 text-xs font-semibold text-ink-2"
+                >
+                  <input type="checkbox" checked disabled readOnly className="size-3.5" aria-label="Role Pegawai wajib" />
+                  {labelRole(r, unitLabel)}
+                  <span className="font-normal text-muted">wajib untuk pegawai</span>
+                </span>
+              );
+            }
             const dipilih = rolesTambahan.includes(r);
             return (
               <label
@@ -155,6 +196,41 @@ export function AssignmentRow({
           })}
         </div>
       </details>
+
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setKonfirmPutus(true)}
+          disabled={putusPending}
+          className="btn btn-secondary btn-sm"
+        >
+          Putus semua sesi
+        </button>
+      </div>
+      <Modal
+        terbuka={konfirmPutus}
+        judul="Putus semua sesi?"
+        subjudul={user.nama}
+        nada="bahaya"
+        onTutup={putusPending ? null : () => setKonfirmPutus(false)}
+        aksi={
+          <>
+            <button type="button" className="btn btn-ghost" disabled={putusPending} onClick={() => setKonfirmPutus(false)}>
+              Batal
+            </button>
+            <button type="button" className="btn btn-danger" disabled={putusPending} onClick={jalankanPutus}>
+              {putusPending ? "Memutus..." : "Putus semua sesi"}
+            </button>
+          </>
+        }
+      >
+        <p>
+          Akun ini keluar dari semua perangkat dan harus masuk lagi. Role dan data akun tidak berubah.
+          {targetDiriSendiri && " Akun ini adalah akunmu: kamu juga akan keluar."}
+        </p>
+      </Modal>
+      {hasilPutus.success && <p className="mt-3 text-xs font-semibold text-green">{hasilPutus.success}</p>}
+      {hasilPutus.error && <p className="mt-3 text-xs font-medium text-red">{hasilPutus.error}</p>}
 
       {state.success && <p className="mt-3 text-xs font-semibold text-green">{state.success}</p>}
       {state.error && <p className="mt-3 text-xs font-medium text-red">{state.error}</p>}

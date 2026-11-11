@@ -264,7 +264,7 @@ async function hapusSemua(p: PrismaClient, ids: string[]) {
       ]);
       akunDihapus = 1;
     } catch {
-      await p.user.update({ where: { id: user.id }, data: { aktif: false } });
+      await p.user.update({ where: { id: user.id }, data: { aktif: false, sesiVersi: { increment: 1 } } });
       akunDinonaktifkan = 1;
     }
   }

@@ -21,8 +21,8 @@ description: Use whenever touching presensi - sinkronisasi e-Presensi, Epresensi
 > - Akibat yang disetujui user: **menit meninggalkan kantor & tidak ikut
 >   upacara tidak bisa dimasukkan lagi** (template satu-satunya jalannya), jadi
 >   komponen potongan Pasal 13 itu selalu 0.
-> - Jalur manual saat e-Presensi bermasalah (Pasal 10 ayat (2)) tinggal tandai
->   kendala + koreksi jam per hari (`/tukin/presensi/kendala`).
+> - Jalur manual saat e-Presensi bermasalah (Pasal 10 ayat (2)) tinggal koreksi jam per hari oleh Kasubag TU unit, dengan bukti
+>   (`/tukin/presensi/[nip]`); penanda kendala tetap untuk gangguan massal.
 > - Mesin rekap PDF (`presensiPdf.ts`, `presensiPdfKeRekap.ts`) & parser template
 >   (`rekapPresensi.ts` `parseRekapPresensi`) TETAP ada: tipe & mesinnya dipakai
 >   rekonsiliasi rekap absensi petugas. `parsePdfPresensi` & `parseRekapPresensi`
@@ -47,7 +47,7 @@ yang saling menutup.
 **TIDAK ADA TULISAN KE DATABASE di seluruh alur ini** - nol `create`/`update`/
 `delete`, dan berkasnya tidak disimpan (dibaca di memori lalu dibuang, pola
 yang sama dengan gaji induk & predikat kinerja). Tidak ada migrasi. Perbaikan
-tetap lewat jalur yang sudah ada: tandai kendala + koreksi jam, atau betulkan
+tetap lewat jalur yang sudah ada: koreksi jam (Kasubag TU unit, dengan bukti), atau betulkan
 di e-Presensi lalu tarik ulang.
 
 - **`src/business-logic/rekapAbsensiManual.ts`** (PURE, 21 test) - membaca
@@ -718,9 +718,19 @@ dibayar"*. Yang SENGAJA TIDAK ada di sini:
   baris cuma memakan lebar. **Engine TETAP menghitung keduanya** dan keduanya
   tetap tampil di `/tukin/presensi/[nip]` - yang hilang cuma kolomnya di sini.
 
-**Kolom Cuti = total hari SEMUA jenis** (`jumlahHariCuti`), dengan **jenisnya
-disebut di bawah angkanya** (`uraiJenisCuti` + `LABEL_JENIS_CUTI`, plus "bln
-ke-N" untuk jenis bertingkat). "3 hari cuti" saja tidak cukup buat menilai -
+**Kolom Cuti = total hari SEMUA jenis** (`jumlahHariCuti`). Sejak 2026-11-11
+(keputusan user) jenisnya TIDAK lagi ditulis di bawah angka - sel berisi angka
+saja. Jenis dipindah ke **pop up**: angkanya bisa diklik (`RincianCutiTombol`)
+dan memunculkan "Rincian cuti {nama} - {periode}" berisi tabel jenis | hari |
+tanggal, dari `PresensiHarian.namaSistemKerja` (label e-Presensi, mis. "Cuti -
+Cuti Tahunan"). Logika di `src/lib/format/rincianCuti.ts` (`susunRincianCuti`,
+`rincianCutiAtauNull`); `page.tsx` memakai satu query per halaman.
+Pop up SENGAJA tanpa catatan soal Pasal 14 / jenis terbanyak (dicabut atas
+permintaan user 2026-11-11). Isinya: peringatan bila
+jumlah rincian tidak sama dengan rekap; dan "tidak tersedia" bila data harian
+tidak punya jenis (sebelum 2026-09-29). Latar: butir 1 laporan Biro Hukum
+Oktober 2026 (cuti campuran tampil sebagai jenis terbanyak). Perhitungan Tukin
+TIDAK berubah. "3 hari cuti" saja tidak cukup buat menilai -
 Pasal 14 memotong berbeda per jenis (cuti tahunan 0%, CLTN 100%). Diklat
 digabung ke sel Dinas luar (`+N diklat`) karena perlakuannya identik.
 
@@ -998,18 +1008,13 @@ yang dulu memaksa `kelasJabatanSelamaHukuman` punya kolom sendiri. Data mentah
 e-Presensi tetap utuh (jam 23:59 tetap tersimpan dan tetap ditampilkan di
 layar), koreksinya ditumpuk di atasnya saat rekap dihitung.
 
-**Tiga pengaman yang membuatnya bisa dipertanggungjawabkan:**
-1. **Hanya di tanggal yang sudah ditandai kendala.** Ini yang membedakannya
-   dari "edit presensi bebas" - invariant `canEditPresensiKinerjaLangsung =
-   false` untuk SEMUA role tetap utuh. Di tanggal biasa, kolomnya berbunyi
-   "tanggal belum ditandai kendala" dan action-nya menolak.
-2. **Otorisasi terhadap satuan kerja pegawai yang DIKOREKSI** (pakai
-   `canUploadRekapPresensi` yang sudah ada, jadi Kasubag TU bisa mengurus
-   unitnya sendiri, PPABP/Admin lintas unit) - id dari form tidak dipercaya.
-3. **AuditTrail memuat jam ASLI dari e-Presensi di `dataSebelum`.** Itu yang
-   membedakan "diperbaiki" dari "dikarang". Hasil rekap juga membawa
-   `tanggalDikoreksiManual` + catatan eksplisit, jadi angka ketikan manusia
-   tidak bisa menyamar sebagai angka e-Presensi.
+**Pengaman yang berlaku sekarang (2026-11-11, menggantikan versi "tiga pengaman" sebelumnya):**
+1. **Hanya Kasubag TU unit pegawai.** Izin `canKoreksiJamPresensi` (lihat `gajihub-role-otorisasi`): KASUBAG_TU dengan satker yang sama dengan pegawai. PPABP dan ADMIN TIDAK bisa mengoreksi, dan ADMIN tidak punya bypass; keduanya tetap bisa melihat koreksi dan buktinya. Dua jalur memakai izin yang sama: `/tukin/presensi/[nip]` dan tabel lembur di Kalkulasi Unit.
+2. **Gerbang kendala DICABUT.** Koreksi tidak lagi menunggu tanggal ditandai kendala e-Presensi. Fitur Kendala tetap dipakai untuk gangguan massal. `canEditPresensiKinerjaLangsung` tetap `false` untuk semua role.
+3. **Bukti wajib bila jam masuk atau pulang disentuh** (koreksi yang hanya mengubah jam lembur boleh tanpa bukti). Berkas JPG, PNG, atau PDF, maks 2 MB, magic byte dicek di server. Disimpan privat dengan jenis `bukti-koreksi` (`src/lib/storage/buktiKoreksi.ts`) dengan kunci `bukti-koreksi/<unit>/<periode>/<tanggal>_<waktu>_<acak>.<ext>`, tanpa NIP. Dibuka lewat `/berkas/koreksi-presensi/[id]` dengan izin `canLihatBuktiKoreksiPresensi`: pegawai ybs, Kasubag TU unit, PPABP, dan ADMIN. Kolom `KoreksiPresensiHarian.buktiRef`. Bukti lama tidak dihapus.
+4. **Alasan minimal 15 karakter** (jalur lembur sebelumnya 10). Centang pernyataan tanggung jawab dicek di server. Simpan lewat pop up konfirmasi dua langkah (Modal).
+5. **Ditolak bila rekap unit sudah TERKIRIM** untuk periode dari tanggal yang dikoreksi, baik simpan maupun hapus, di kedua jalur. Periode diturunkan dari tanggal, bukan dari form. Ini menutup celah lama jalur lembur yang memakai periode dari form.
+6. **AuditTrail** memuat `buktiRef`, jam ASLI dari e-Presensi di `dataSebelum`, dan pernyataan tanggung jawab. Itu yang membedakan "diperbaiki" dari "dikarang". Hasil rekap tetap membawa `tanggalDikoreksiManual` + catatan eksplisit.
 
 Jam hasil koreksi **selalu dipercaya** untuk menghitung terlambat/pulang cepat
 (itu keterangan terverifikasi, bukan tebakan atas ketukan hilang), TAPI
@@ -1018,17 +1023,9 @@ menit terlambat setelah toleransi. Ada test yang menguncinya. Kolom yang
 dikosongkan berarti "tidak dikoreksi" - petugas boleh memperbaiki jam pulang
 saja tanpa menyentuh jam masuk yang sudah benar.
 
-Foto & geotag-nya sendiri **TIDAK disimpan di Gajihub** (kebijakan
-penyimpanan dokumen masih terbuka - lihat TODO(confirm) storage). Yang dicatat
-sistem adalah keputusannya beserta dasar tertulisnya.
+Bukti (foto dan geotag dari pegawai) sekarang **disimpan** di penyimpanan privat. Sebelum 2026-11-11 berkasnya memang tidak disimpan; koreksi dari masa itu tidak punya bukti dan tidak dibackfill. Kebijakan retensi bukti masih menunggu TODO(confirm) storage.
 
-**Diverifikasi** (production build, akun PPABP, pegawai ACEP SJAIFULLOH R):
-sebelum tanggalnya ditandai, kolom Koreksi berbunyi "tanggal belum ditandai
-kendala" dan tombolnya tidak ada; setelah 15 Juli ditandai, tombol "Koreksi
-jam" muncul; setelah koreksi disimpan, badge "Dikoreksi manual" tampil
-**sementara jam asli 23:59 tetap terlihat di kolomnya**. Jembatan ke mesin
-hitung mengembalikan `{"2026-07-15":{jamMasukMenit:null,jamKeluarMenit:960}}`
-untuk NIP itu dan kosong untuk NIP lain. Semua baris uji sudah dihapus.
+**Verifikasi alur baru (2026-11-11):** test koreksi dan review LULUS; belum diverifikasi di production build. Hasil verifikasi gerbang kendala yang lama (2026-08, akun PPABP) tidak berlaku lagi karena gerbangnya sudah dicabut.
 
 **TODO(confirm) - dua hal yang masih menunggu manusia**:
 1. **Apa yang sebenarnya terjadi 15-16 Juli 2026 belum dipastikan** ke
