@@ -26,6 +26,8 @@
     "isi:hash-tte": "tsx src/jobs/isiHashDokumenTte.ts",
     "prelengkapi:role-pegawai": "prisma generate",
     "lengkapi:role-pegawai": "tsx src/jobs/lengkapiRolePegawai.ts",
+    "prerapikan:role-utama": "prisma generate",
+    "rapikan:role-utama": "tsx src/jobs/rapikanRoleUtama.ts",
     "prepindah:unggahan": "prisma generate",
     "pindah:unggahan": "tsx src/jobs/pindahUnggahanPrivat.ts",
     "hash:penguji": "node tools/buat-hash-penguji.mjs",
