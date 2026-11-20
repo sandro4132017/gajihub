@@ -131,9 +131,11 @@ akses resmi tersedia - tanpa refactor besar.
 | `src/jobs/` | importer & job scheduler (dijalankan lewat `tsx`, bukan Next) |
 | `src/validation/` | validation gate. (`src/approval/` DIHAPUS 2026-10-28 - sisa alur approval berjenjang yang sudah diganti "kirim rekap ke PPABP", lihat `gajihub-approval-siklus`) |
 | `src/app/` | Next.js App Router - halaman, Server Action, Route Handler. Komponen yang dipakai SATU halaman tinggal di folder halamannya |
+| `src/app/kepala-tim/` | halaman Kepala Tim: buat perintah lembur (SPKL) untuk anggota tim, lalu TTE per perintah. Gerbang `canBukaHalamanKepalaTim`. Lihat `gajihub-uang-makan-lembur` |
 | `src/components/` | komponen UI yang dipakai lintas role: `layout/` (AppShell, AccountMenu), `forms/` (FilterBar, SearchableSelect), `feedback/` (Modal, AksesDitolak), `tables/`, `charts/`, `shared/`, `dashboard/` |
 | `src/lib/format/` | format tampilan murni (bulan, tanggal, presensi, lembur) - tanpa prisma |
 | `src/lib/kabar/` | logika murni panel Kabar: kalimat audit, penggabungan, tautan, tampilan - tanpa prisma, tanpa I/O |
+| `src/lib/lembur/` | gerbang pilot SPKL (`gerbangSpkl.ts`, satu-satunya tempat nama satker pilot ditulis) - murni, tanpa I/O. Lihat `gajihub-uang-makan-lembur` |
 | `src/lib/storage/` | penyimpanan berkas privat (`storage/uploads/`, di luar `public/`); unduhan lewat `src/app/berkas/` yang berizin - jangan taruh berkas pegawai di `public/` |
 | `prisma/` | skema + migrasi (satu-satunya jalur perubahan database) |
 | `docs/` | teks peraturan & dokumen kirim-ke-pihak-luar |

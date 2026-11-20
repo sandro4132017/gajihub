@@ -9,7 +9,7 @@ import {
   pilihRoleBawaan,
 } from "../roleAktif";
 
-const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
+import { SEMUA_ROLE } from "../roleLabel";
 
 describe("daftarRoleTersedia", () => {
   it("akun single-role cuma punya role utamanya", () => {
@@ -100,8 +100,8 @@ describe("pilihRoleBawaan - role saat login", () => {
   it("ADMIN + [PEGAWAI] -> PEGAWAI (ADMIN hanya bila satu-satunya)", () => {
     expect(pilihRoleBawaan({ role: "ADMIN", rolesTambahan: ["PEGAWAI"] })).toBe("PEGAWAI");
   });
-  it("urutan: PIMPINAN > KASUBAG_TU > PPABP > OSDMA > PEGAWAI > ADMIN", () => {
-    expect([...URUTAN_ROLE_BAWAAN]).toEqual(["PIMPINAN", "KASUBAG_TU", "PPABP", "OSDMA", "PEGAWAI", "ADMIN"]);
+  it("urutan: PIMPINAN > KASUBAG_TU > PPABP > OSDMA > KEPALA_TIM > PEGAWAI > ADMIN", () => {
+    expect([...URUTAN_ROLE_BAWAAN]).toEqual(["PIMPINAN", "KASUBAG_TU", "PPABP", "OSDMA", "KEPALA_TIM", "PEGAWAI", "ADMIN"]);
   });
   it("urutan masukan tidak berpengaruh; role utama bukan prioritas", () => {
     const a = pilihRoleBawaan({ role: "PEGAWAI", rolesTambahan: ["OSDMA", "KASUBAG_TU"] });
@@ -111,5 +111,23 @@ describe("pilihRoleBawaan - role saat login", () => {
   });
   it("landing mengikuti role bawaan", () => {
     expect(LANDING_ROLE[pilihRoleBawaan({ role: "ADMIN", rolesTambahan: ["PPABP"] })]).toBe("/ppabp");
+  });
+});
+
+describe("KEPALA_TIM", () => {
+  it("landing ke /kepala-tim", () => {
+    expect(LANDING_ROLE.KEPALA_TIM).toBe("/kepala-tim");
+  });
+  it("urutan bawaan: sesudah OSDMA, sebelum PEGAWAI", () => {
+    const u = URUTAN_ROLE_BAWAAN;
+    expect(u.indexOf("KEPALA_TIM")).toBe(u.indexOf("OSDMA") + 1);
+    expect(u.indexOf("KEPALA_TIM")).toBeLessThan(u.indexOf("PEGAWAI"));
+  });
+  it("memuat setiap role persis sekali", () => {
+    expect([...URUTAN_ROLE_BAWAAN].sort()).toEqual([...SEMUA_ROLE].sort());
+  });
+  it("Kepala Tim + Pegawai masuk sebagai KEPALA_TIM; dengan OSDMA masuk OSDMA", () => {
+    expect(pilihRoleBawaan({ role: "PEGAWAI", rolesTambahan: ["KEPALA_TIM"] })).toBe("KEPALA_TIM");
+    expect(pilihRoleBawaan({ role: "KEPALA_TIM", rolesTambahan: ["OSDMA"] })).toBe("OSDMA");
   });
 });

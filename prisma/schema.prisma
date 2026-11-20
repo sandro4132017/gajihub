@@ -207,6 +207,7 @@ model Pegawai {
   koreksiPresensi   KoreksiPresensiHarian[]
   rekening          RekeningPegawai[]
   identitasWebGaji  IdentitasWebGaji?
+  perintahLemburAnggota PerintahLemburAnggota[]
 
   @@index([satuanKerja])
   @@index([statusPegawai])
@@ -252,6 +253,12 @@ model PresensiHarian {
   // sudah ada di baris ini, jadi klasifikasinya bisa diturunkan ulang kapan
   // pun. Menyimpannya dua kali cuma menciptakan kemungkinan keduanya beda.
   jamLembur               Float     @default(0) @map("jam_lembur")
+
+  /// Jam lembur NYATA menurut presensi (jam keluar dikurangi batas jam kerja),
+  /// sebelum dibatasi perintah lembur (SPKL).
+  /// null = SPKL tidak berlaku untuk baris ini (perilaku lama).
+  /// `jamLembur` di atas TETAP jam yang DIBAYAR dan itulah yang dibaca ADK.
+  jamLemburNyata          Float?    @map("jam_lembur_nyata")
 
   /// Teks status APA ADANYA dari e-Presensi (kolom `sistem_kerja.nama_sistem_kerja`),
   /// mis. "WFO", "Dinas Keluar", "Tidak Hadir", "Upacara Bendera".
@@ -578,6 +585,7 @@ enum Role {
   OSDMA // Biro OSDMA - approval final Banding & SK KGB, update SK pegawai
   PPABP // Tim PPABP Rokeu - validasi lintas unit, export ADK, dashboard kementerian
   PIMPINAN // dashboard kementerian read-only (sama dengan PPABP, tanpa approval/ubah data)
+  KEPALA_TIM // membuat perintah lembur (SPKL) untuk anggota timnya di satker yang sama; pilot Biro Keuangan dan BMN. BUKAN verifikator: tidak melihat rekap Tukin/Uang Makan/Uang Lembur unit, hanya data dirinya sendiri
 
   // TODO(confirm) - BUKAN DESAIN FINAL UNTUK PRODUCTION: role ADMIN di bawah
   // ini SENGAJA diberi akses PENUH ke SEMUA fitur (privilege seluruh role di
@@ -693,6 +701,7 @@ model User {
   pengecualianDitandai       PengecualianPegawai[]   @relation("PengecualianDitandaiOleh")
   dokumenTteDitandatangani   DokumenTte[]            @relation("DokumenTtePenandatangan")
   logGagalTte                LogGagalTte[]           @relation("LogGagalTteUser")
+  perintahLemburDibuat       PerintahLembur[]        @relation("PerintahLemburKepalaTim")
 
   @@index([role])
   @@index([satuanKerja])
@@ -1880,6 +1889,8 @@ model DokumenTte {
   // Log kegagalan jika ada
   logKegagalan LogGagalTte[]
 
+  perintahLembur PerintahLembur?
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -1913,3 +1924,80 @@ model LogGagalTte {
   @@map("log_gagal_tte")
 }
 
+// ---------------------------------------------------------------------------
+// Perintah lembur (SPKL)
+// ---------------------------------------------------------------------------
+
+enum StatusPerintahLembur {
+  DRAFT
+  TERKIRIM
+  GAGAL
+}
+
+/// Perintah lembur yang dibuat Kepala Tim untuk anggota timnya pada SATU tanggal.
+model PerintahLembur {
+  id String @id @default(uuid())
+
+  /// Diambil dari Pegawai.satuanKerja milik kepala tim, BUKAN User.satuanKerja
+  /// (kolom User itu untuk scoping Kasubag TU dan bisa kosong).
+  satuanKerja String @map("satuan_kerja")
+
+  /// Tanggal lembur, tengah malam UTC (konvensi sama dengan PresensiHarian.tanggal).
+  tanggal DateTime
+
+  kepalaTimId String @map("kepala_tim_id")
+  kepalaTim   User   @relation("PerintahLemburKepalaTim", fields: [kepalaTimId], references: [id])
+
+  uraianTugas String @map("uraian_tugas")
+
+  status StatusPerintahLembur @default(DRAFT)
+
+  /// TODO(confirm): format nomor surat belum diputuskan.
+  nomorSurat String? @map("nomor_surat")
+
+  dokumenTteId String?     @unique @map("dokumen_tte_id")
+  dokumenTte   DokumenTte? @relation(fields: [dokumenTteId], references: [id])
+
+  /// Kursor bot WA: terisi saat perintah sudah dikirim ke anggota.
+  dikirimPada DateTime? @map("dikirim_pada")
+
+  anggota PerintahLemburAnggota[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([satuanKerja, tanggal])
+  @@index([kepalaTimId, tanggal])
+  @@index([dikirimPada])
+  @@map("perintah_lembur")
+}
+
+model PerintahLemburAnggota {
+  id String @id @default(uuid())
+
+  perintahLemburId String         @map("perintah_lembur_id")
+  perintahLembur   PerintahLembur @relation(fields: [perintahLemburId], references: [id], onDelete: Cascade)
+
+  pegawaiId String  @map("pegawai_id")
+  pegawai   Pegawai @relation(fields: [pegawaiId], references: [id])
+
+  /// Salinan PerintahLembur.tanggal, untuk query periode dan cek bentrok tanpa join.
+  tanggal DateTime
+
+  jamDiperintahkan Int     @map("jam_diperintahkan")
+  keterangan       String?
+
+  /// Penanda perintah TERKIRIM: `true` saat perintahnya terkirim, `null` selain
+  /// itu - JANGAN PERNAH `false`. Bersama unique di bawah, ini yang menegakkan
+  /// "satu pegawai, satu perintah terkirim per tanggal" di tingkat database,
+  /// sehingga dua kepala tim yang mengirim bersamaan tidak bisa sama-sama lolos.
+  /// PostgreSQL menganggap NULL selalu berbeda, jadi baris DRAFT/GAGAL (null)
+  /// tidak pernah bentrok; hanya dua baris `true` untuk pegawai+tanggal yang
+  /// sama yang ditolak. Diisi bersama PerintahLembur.status dalam satu transaksi.
+  terkirim Boolean?
+
+  @@unique([perintahLemburId, pegawaiId])
+  @@unique([pegawaiId, tanggal, terkirim])
+  @@index([pegawaiId, tanggal])
+  @@map("perintah_lembur_anggota")
+}

@@ -1327,3 +1327,91 @@ describe("koreksi jam lembur per tanggal", () => {
     expect(polos.rekap.totalJamLembur).toBe(4);
   });
 });
+
+// ============================================================================
+// PERINTAH LEMBUR (SPKL) - keputusan user 2026-11-19. Parameter opsional
+// `perintahLembur`; null/tidak diisi = perilaku lama (dijaga test-test di atas).
+// ============================================================================
+describe("perintah lembur (SPKL) membatasi lembur", () => {
+  const jalankan = (
+    isi: BarisPresensiPdf[],
+    perintah: Map<string, number> | null,
+    koreksi: Map<string, { jamMasukMenit: number | null; jamKeluarMenit: number | null; jamLembur?: number | null }> = new Map()
+  ) =>
+    rekapDariLaporanPdf(laporan(isi), JADWAL_KERJA_DEFAULT, new Set<string>(), koreksi, new Map(), perintah);
+
+  it("null = perilaku lama; jamLemburNyata null", () => {
+    const hasil = jalankan([baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO")], null);
+    expect(hasil.rekap.totalJamLembur).toBe(4);
+    expect(hasil.hari[0].jamLemburNyata).toBeNull();
+    expect(hasil.hari[0].catatanLembur).toBeNull();
+  });
+
+  it("Map kosong = tanpa SPKL, semua 0", () => {
+    const hasil = jalankan(
+      [
+        baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO"),
+        baris("12-07-2025", "Sabtu", "08:00", "16:00", "Lembur"),
+      ],
+      new Map()
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+    expect(hasil.rekap.totalJamLemburHariLibur).toBe(0);
+    expect(hasil.rekap.jumlahHariMakanLembur).toBe(0);
+    expect(hasil.rekap.jumlahHariMakanLemburHariLibur).toBe(0);
+    expect(hasil.rekap.jumlahHariLemburHariKerja).toBe(0);
+    expect(hasil.catatan.join(" ")).toContain("tanpa perintah lembur (SPKL)");
+  });
+
+  it("total bulanan, hari lembur, dan makan lembur disusun ulang dari jam dibayar", () => {
+    const hasil = jalankan(
+      [
+        baris("10-07-2025", "Kamis", "07:30", "20:00", "WFO"), // nyata 4, perintah 2
+        baris("11-07-2025", "Jumat", "07:30", "19:00", "WFO"), // nyata 3, perintah 1 -> tidak berhak makan
+        baris("14-07-2025", "Senin", "07:30", "20:00", "WFO"), // nyata 4, tanpa perintah -> 0
+        baris("12-07-2025", "Sabtu", "08:00", "16:00", "Lembur"), // libur nyata 8, perintah 3
+      ],
+      new Map([
+        ["2025-07-10", 2],
+        ["2025-07-11", 1],
+        ["2025-07-12", 3],
+      ])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(3); // 2 + 1
+    expect(hasil.rekap.jumlahHariLemburHariKerja).toBe(2);
+    expect(hasil.rekap.jumlahHariMakanLembur).toBe(1);
+    expect(hasil.rekap.totalJamLemburHariLibur).toBe(3);
+    expect(hasil.rekap.jumlahHariMakanLemburHariLibur).toBe(1);
+    const h10 = hasil.hari.find((h) => h.tanggalIso === "2025-07-10")!;
+    expect(h10.jamLemburNyata).toBe(4);
+    expect(h10.jamLembur).toBe(2);
+  });
+
+  it("koreksi petugas 5 + perintah 3 -> 3", () => {
+    const hasil = jalankan(
+      [baris("10-07-2025", "Kamis", "09:10", "19:40", "WFO")],
+      new Map([["2025-07-10", 3]]),
+      new Map([["2025-07-10", { jamMasukMenit: null, jamKeluarMenit: null, jamLembur: 5 }]])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(3);
+    expect(hasil.hari[0].jamLemburNyata).toBe(5);
+  });
+
+  it("WFH dengan perintah tetap 0 + catatan", () => {
+    const hasil = jalankan(
+      [baris("07-07-2026", "Selasa", "08:00", "20:00", "WFH")],
+      new Map([["2026-07-07", 3]])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+    expect(hasil.catatan.join(" ")).toContain("bukan WFO");
+  });
+
+  it("perintah tanpa presensi dicatat, dibayar 0", () => {
+    const hasil = jalankan(
+      [baris("10-07-2025", "Kamis", "07:30", "16:00", "WFO")],
+      new Map([["2025-07-21", 2]])
+    );
+    expect(hasil.rekap.totalJamLembur).toBe(0);
+    expect(hasil.catatan.join(" ")).toContain("2025-07-21");
+  });
+});

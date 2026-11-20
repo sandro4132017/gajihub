@@ -1,9 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { tautanVerifikasiDokumen } from "@/lib/tte/alamatVerifikasi";
-import { hitungHashBerkas } from "@/lib/tte/hashBerkas";
-import { buatSpesimenQr, ambilTemplateSpesimen } from "@/lib/tte/spesimenTte";
+import { tandatanganiDokumen } from "@/lib/tte/tandatanganiDokumen";
 import { prisma } from "@/lib/prisma";
 import { ambilUserSesi } from "@/auth/getSessionAccount";
 import {
@@ -11,34 +9,22 @@ import {
   canTandatanganiSptjmUnit,
   type AuthUser,
 } from "@/auth/permissions";
-import { checkUserStatus, signPdf } from "@/lib/tte/esignClient";
+import { checkUserStatus } from "@/lib/tte/esignClient";
 import {
   generateDraftSptjm,
   generateNomorSptjmDefault,
   generateNamaFileSptjm,
-  terapkanStempelTteSimulasi,
   type JenisSptjm,
 } from "@/lib/tte/sptjmPdf";
-import {
-  bolehSimulasiTte,
-  idDokumenSimulasi,
-  izinkanNikDemo,
-  klasifikasiGagalBsre,
-  samarkanPassphrase,
-} from "@/lib/tte/simulasiTte";
 import { namaCetakPegawai } from "@/business-logic/namaPegawai";
-import { kunciSidikNik, sidikNik } from "@/auth/sidikNik";
 import {
   folderPeriode,
   jalurAman,
-  kunciDraftTte,
   kunciPratinjauTte,
-  kunciSignedTte,
 } from "@/lib/storage/berkasPrivat";
 import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import fs from "fs/promises";
 import path from "path";
-import { labelStatusSertifikat } from "../../lib/tte/labelStatusSertifikat";
 
 export interface TteActionResult {
   success?: boolean;
@@ -480,403 +466,39 @@ export async function signSptjmUnitAction(
     return { error: "Periode tidak sah." };
   }
 
-  // IDENTITAS PENANDA TANGAN DIAMBIL DARI TABEL PEGAWAI, bukan dari form.
-  //
-  // Nama, NIP, dan jabatan ini TERCETAK di dokumen dan tersimpan di
-  // DokumenTte sebagai jawaban atas "siapa yang menandatangani". Selama
-  // nilainya datang dari field tersembunyi di browser, jawabannya adalah apa
-  // kata browser - bukan siapa yang login. Bawaannya pun dulu satu nama
-  // sungguhan yang di-hardcode untuk SEMUA unit.
-  //
-  // TODO(confirm): NIK yang diketik saat menandatangani BELUM bisa dicocokkan
-  // ke orang ini. Jembatannya `Pegawai.sidikNik` (HMAC dari NIK) ada di skema
-  // tapi KOSONG - terukur 0 dari 5.302 baris, dan SIDIK_NIK_SECRET belum
-  // diisi. Jadi yang dijamin sekarang: penanda tangan adalah Kasubag TU unit
-  // ini, dan dia memegang passphrase sertifikat NIK tersebut. Yang BELUM
-  // dijamin: NIK itu benar-benar NIK miliknya. Dilewati dengan alasan, bukan
-  // ditebak - isi SIDIK_NIK_SECRET lalu jalankan sync:pegawai untuk menutupnya.
-  const pegawai = await prisma.pegawai.findUnique({
-    where: { nip: user.nip },
-    select: { nama: true, nip: true, jabatan: true, sidikNik: true },
-  });
-  if (!pegawai) {
-    return {
-      error:
-        "Data pegawai untuk akun ini tidak ditemukan, jadi identitas penanda tangan tidak bisa dipastikan.",
-    };
-  }
-  if (!pegawai.jabatan || !pegawai.jabatan.trim()) {
-    // Jabatan ikut tercetak di dokumen. Mengarangnya pada surat pernyataan
-    // tanggung jawab bukan pilihan - perbaiki datanya dulu.
-    return {
-      error:
-        "Jabatan pada data pegawai Anda masih kosong. Lengkapi dulu di Data Pegawai sebelum menandatangani SPTJM.",
-    };
-  }
-  // NAMA LENGKAP DENGAN GELAR - naskah SPTJM resmi memakai bentuk itu, dan
-  // SIAP menyimpan gelarnya di kolom terpisah. Memakai `nama` apa adanya
-  // menghilangkan gelar seseorang dari dokumen yang dia tanda tangani, dan
-  // mencetaknya KAPITAL SEMUA sebagaimana tersimpan di SIAP.
-  const namaPenandatangan = namaCetakPegawai(pegawai);
-  const nipPenandatangan = pegawai.nip;
-  const jabatanPenandatangan = pegawai.jabatan.trim();
-
-  // NIK YANG DIKETIK HARUS MILIK PEMEGANG SESI.
-  //
-  // Tanpa ini, siapa pun yang login sebagai Kasubag TU unit ini bisa
-  // menandatangani memakai NIK dan passphrase ORANG LAIN. Hasilnya dokumen
-  // yang bertentangan dengan dirinya sendiri: nama yang TERCETAK diambil
-  // dari akun yang login, sementara tanda tangan kriptografisnya milik
-  // pemegang sertifikat yang lain. Pada surat pernyataan tanggung jawab
-  // MUTLAK, itu berarti yang disebut bertanggung jawab bukan yang
-  // menandatangani.
-  //
-  // Pencocokannya lewat SIDIK (HMAC), bukan NIK tersimpan - proyek ini
-  // sengaja tidak pernah menyimpan NIK (lihat src/auth/sidikNik.ts).
-  //
-  // DILEWATI DENGAN ALASAN, BUKAN DIAM-DIAM, kalau jembatannya belum siap:
-  // SIDIK_NIK_SECRET belum diisi, atau pegawai ini belum punya sidik karena
-  // `sync:pegawai` belum dijalankan ulang sesudah kuncinya diisi. Memblokir
-  // penandatanganan karena konfigurasi yang belum lengkap akan mematikan
-  // fitur yang sedang dipakai; yang dilakukan: dicatat ke log server.
-  //
-  // Satu pengecualian: NIK demo BSrE saat sakelar TTE_IZINKAN_NIK_DEMO hidup
-  // (lihat izinkanNikDemo). Pemakaiannya dicatat tanpa NIK dan passphrase.
-  if (pegawai.sidikNik && izinkanNikDemo(nik)) {
-    console.warn("[tte] sertifikat demo BSrE dipakai oleh akun pegawai (sakelar TTE_IZINKAN_NIK_DEMO hidup).");
-  } else if (pegawai.sidikNik) {
-    let sidikDiketik: string | null = null;
-    try {
-      sidikDiketik = sidikNik(nik, kunciSidikNik());
-    } catch {
-      sidikDiketik = null; // kunci belum diisi - lihat catatan di bawah
-    }
-    if (sidikDiketik === null) {
-      console.warn(
-        "[tte] NIK tidak dapat dicocokkan ke pemegang sesi - SIDIK_NIK_SECRET belum diisi " +
-          "atau NIK-nya tidak berbentuk sah. Penandatanganan DILANJUTKAN."
-      );
-    } else if (sidikDiketik !== pegawai.sidikNik) {
-      return {
-        error:
-          "NIK yang dimasukkan bukan milik akun yang sedang login. SPTJM harus " +
-          "ditandatangani oleh pemiliknya sendiri - silakan login dengan akun Anda.",
-      };
-    }
-  } else {
-    console.warn(
-      `[tte] Pegawai ${user.nip} belum punya sidik NIK, jadi NIK yang diketik tidak ` +
-        "dapat dicocokkan. Isi SIDIK_NIK_SECRET lalu jalankan npm run sync:pegawai."
-    );
-  }
-
-  // STATUS SERTIFIKAT DIPERIKSA DI SERVER, bukan hanya di layar.
-  //
-  // Modal memang sudah memanggil cek status lebih dulu, tapi itu pemeriksaan
-  // SISI KLIEN: siapa pun yang memanggil /api/tte langsung melewatinya.
-  //
-  // Tanpa penjagaan ini akibatnya menyesatkan, bukan sekadar longgar: NIK
-  // yang belum terdaftar membuat BSrE membalas galat, galat itu BUKAN
-  // "passphrase salah", sehingga tanpa penjagaan ini penandatanganan
-  // diteruskan ke BSrE dengan sertifikat yang tidak ada. Lebih baik ditolak
-  // terang-terangan, dan penolakannya dicatat (Kriteria BSrE IX).
-  //
-  // Diukur langsung ke BSrE: NIK karangan membalas NOT_REGISTERED (2011)
-  // atau NO_CERTIFICATE (2021); akun yang sah membalas ISSUE (1111).
-  const statusSertifikat = await checkUserStatus(nik);
-  if (statusSertifikat.status !== "ISSUE") {
-    const gangguanLayanan =
-      statusSertifikat.status === "NETWORK_ERROR" ||
-      statusSertifikat.status === "SERVER_ERROR";
-    // Dicatat dengan NIP, tanpa NIK dan tanpa passphrase.
-    await prisma.logGagalTte
-      .create({
-        data: {
-          dokumenTteId: null,
-          userId: user.id,
-          nip: nipPenandatangan,
-          statusCode: statusSertifikat.statusCode ?? 0,
-          pesanError: `Pemeriksaan sertifikat ditolak: status ${statusSertifikat.status}.`,
-          kategoriError: gangguanLayanan
-            ? statusSertifikat.status === "NETWORK_ERROR"
-              ? "NETWORK_TIMEOUT"
-              : "BSRE_ERROR"
-            : "SERTIFIKAT_BELUM_SIAP",
-        },
-      })
-      .catch(() => {
-        /* pencatatan gagal tidak boleh mengubah jawaban */
-      });
-    if (gangguanLayanan) {
-      return {
-        error:
-          "Pemeriksaan sertifikat GAGAL: layanan BSrE tidak dapat dihubungi. " +
-          "SPTJM belum ditandatangani. Coba lagi beberapa menit lagi; bila berulang, " +
-          "laporkan ke Admin Gajihub. Kegagalan ini sudah tercatat.",
-      };
-    }
-    return {
-      error:
-        `Sertifikat elektronik untuk NIK ini belum siap dipakai (${labelStatusSertifikat(statusSertifikat.status)}). ` +
-        "Pastikan NIK-nya benar dan sudah terdaftar di BSrE sebelum menandatangani.",
-    };
-  }
-
-  if (!passphrase) {
-    return { error: "Passphrase wajib diisi untuk menandatangani dokumen." };
-  }
-
-  try {
-    // 1. Generate Draft PDF
-    const draftPdfBuffer = await generateDraftSptjm({
-      jenis,
-      nomorDokumen,
-      periodeBulan: bulan,
-      periodeTahun: tahun,
-      namaPenandatangan,
-      nipPenandatangan,
-      jabatanPenandatangan,
-      satuanKerja: satker,
-      unitEselon1: "Sekretariat Jenderal",
-    });
-
+  // Inti penandatanganan (identitas dari Pegawai, pencocokan NIK, status
+  // sertifikat, BSrE, pencatatan log_gagal_tte, penyimpanan) ada di
+  // src/lib/tte/tandatanganiDokumen.ts - dipakai bersama dokumen lembur.
+  // NIK demo BSrE (TTE_IZINKAN_NIK_DEMO) HANYA berlaku di jalur SPTJM ini.
+  return tandatanganiDokumen({
+    user: { id: user.id, nip: user.nip },
+    jenisDokumen: jenis,
+    satuanKerja: satker,
+    periodeBulan: bulan,
+    periodeTahun: tahun,
+    nomorDokumen,
     // Judulnya TIDAK lagi menyebut PPK: yang menandatangani Kasubag TU unit.
-    const judulDokumen = `SPTJM ${jenis.replace("SPTJM_", "")} ${satker} ${bulan}/${tahun}`;
-
-    // 2. Buat / Update record DokumenTte di DB
-    const recordDokumen = await prisma.dokumenTte.create({
-      data: {
-        jenisDokumen: jenis,
+    judulDokumen: `SPTJM ${jenis.replace("SPTJM_", "")} ${satker} ${bulan}/${tahun}`,
+    labelDokumen: "SPTJM",
+    namaBerkasResmi: generateNamaFileSptjm(jenis, bulan, tahun, satker),
+    namaBerkasKirim: `sptjm_${jenis.toLowerCase()}_${bulan}_${tahun}.pdf`,
+    nik,
+    passphrase,
+    izinkanNikDemoBsre: true,
+    buatPdf: (penandatangan) =>
+      generateDraftSptjm({
+        jenis,
         nomorDokumen,
-        judulDokumen,
         periodeBulan: bulan,
         periodeTahun: tahun,
+        namaPenandatangan: penandatangan.nama,
+        nipPenandatangan: penandatangan.nip,
+        jabatanPenandatangan: penandatangan.jabatan,
         satuanKerja: satker,
-        status: "MENUNGGU_TTE",
-        penandatanganId: user.id,
-        penandatanganNip: nipPenandatangan,
-        penandatanganNama: namaPenandatangan,
-        penandatanganJabatan: jabatanPenandatangan,
-      },
-    });
-
-    const kunciDraft = kunciDraftTte(satker, tahun, bulan, recordDokumen.id);
-    await tulisBerkasTte(kunciDraft, draftPdfBuffer);
-
-    await prisma.dokumenTte.update({
-      where: { id: recordDokumen.id },
-      data: { fileDraftPath: kunciDraft },
-    });
-
-    // 3. Panggil Server Esign Client BSrE
-    //
-    // Tautan QR diambil dari KONFIGURASI, bukan dari header permintaan.
-    // Header menceritakan bagaimana penandatangan membuka halaman ini;
-    // QR-nya dibaca orang lain dari HP, dan alamatnya terkunci permanen di
-    // dalam PDF. Lihat src/lib/tte/alamatVerifikasi.ts.
-    const linkQrVerifikasi = tautanVerifikasiDokumen(recordDokumen.id);
-
-    const signResultMentah = await signPdf({
-      fileBuffer: draftPdfBuffer,
-      fileName: `sptjm_${jenis.toLowerCase()}_${bulan}_${tahun}.pdf`,
-      nik,
-      passphrase, // Passphrase hanya di memori dan langsung dibuang setelah request
-      tampilan: "visible",
-      // SPESIMEN KUSTOM, bukan QR polos.
-      //
-      // Cabang image=false + linkQR hanya menghasilkan QR telanjang - renderer
-      // BSrE tidak punya tombol gaya apa pun di cabang itu. Cabang image=true
-      // menerima gambar yang kita susun sendiri, dan di situlah logo Gajihub
-      // bisa ditaruh di tengah QR. Tanda tangan kriptografisnya tetap milik
-      // BSrE; yang berpindah tangan hanya penggambaran visualnya.
-      image: true,
-      imageTTDBuffer: buatSpesimenQr(linkQrVerifikasi, ambilTemplateSpesimen()).png,
-      tagKoordinat: "#",
-      width: 60,
-      height: 60,
-      reason: `Penetapan Dokumen ${judulDokumen}`,
-      location: "Jakarta",
-    });
-
-    // Teks galat BSrE disamarkan SEBELUM dipakai di mana pun (log, respons):
-    // BSrE bisa saja menggemakan input, termasuk passphrase (Kriteria V & VIII).
-    const signResult = {
-      ...signResultMentah,
-      error:
-        signResultMentah.error === undefined
-          ? undefined
-          : samarkanPassphrase(signResultMentah.error, passphrase),
-    };
-
-    let signedPdfFinal: Buffer;
-    // Id BSrE HANYA diisi kalau BSrE memang menjawab. Cabang simulasi di
-    // bawah mengisinya dengan id berawalan SIMULASI-, supaya dokumen yang
-    // tidak pernah ditandatangani BSrE tidak bisa terbaca sebagai sah.
-    let idDokumenBsreFinal: string | null = signResult.idDokumen || null;
-    let isSimulasiMode = false;
-
-    if (signResult.success && signResult.signedPdfBuffer) {
-      // TTE Berhasil melalui server BSrE riil
-      signedPdfFinal = signResult.signedPdfBuffer;
-    } else {
-      // BSrE tidak menghasilkan tanda tangan. Kegagalan digolongkan sekali di
-      // sini; stempel simulasi hanya mungkin di luar production dengan
-      // TTE_SIMULASI="true" (lihat src/lib/tte/simulasiTte.ts).
-      const gagal = klasifikasiGagalBsre(signResult);
-      const isPassphraseError = gagal.kategori === "PASSPHRASE_SALAH";
-
-      // Passphrase salah tidak pernah disamarkan sebagai simulasi.
-      if (isPassphraseError) {
-        // KRITERIA IX: setiap kegagalan penandatanganan WAJIB tercatat di
-        // log_gagal_tte - dan passphrase salah justru kegagalan yang paling
-        // sering. Cabang ini dulu mengubah status jadi GAGAL lalu langsung
-        // `return`, jadi tidak ada satu pun barisnya tertulis. Terukur:
-        // 1 dokumen berstatus GAGAL, 0 baris log_gagal_tte.
-        //
-        // Pesan galatnya TIDAK BOLEH memuat passphrase - lihat peringatan di
-        // model LogGagalTte pada prisma/schema.prisma.
-        await prisma.$transaction([
-          prisma.dokumenTte.update({
-            where: { id: recordDokumen.id },
-            data: { status: "GAGAL" },
-          }),
-          prisma.logGagalTte.create({
-            data: {
-              dokumenTteId: recordDokumen.id,
-              userId: user.id,
-              nip: nipPenandatangan,
-              statusCode: signResult.statusCode ?? 0,
-              pesanError: signResult.error || "Passphrase BSrE salah.",
-              kategoriError: "PASSPHRASE_SALAH",
-            },
-          }),
-        ]);
-        return {
-          error: signResult.error || "Passphrase BSrE salah.",
-        };
-      }
-
-      if (bolehSimulasiTte()) {
-        isSimulasiMode = true;
-        idDokumenBsreFinal = idDokumenSimulasi(recordDokumen.id);
-        // KEGAGALAN BSrE TETAP DICATAT walau PDF-nya tetap terbit.
-        // Cabang ini dulu menelan galatnya sepenuhnya: dokumen tersimpan
-        // "TERTANDATANGANI" tanpa satu pun jejak bahwa BSrE tidak menjawab.
-        await prisma.logGagalTte
-          .create({
-            data: {
-              dokumenTteId: recordDokumen.id,
-              userId: user.id,
-              nip: nipPenandatangan,
-              statusCode: signResult.statusCode ?? 0,
-              pesanError:
-                (signResult.error || "Esign Client BSrE tidak menjawab") +
-                " - stempel SIMULASI diterapkan, BUKAN tanda tangan BSrE.",
-              kategoriError: "SIMULASI_DITERAPKAN",
-            },
-          })
-          .catch(() => {
-            /* pencatatan gagal tidak boleh menggagalkan dokumennya */
-          });
-        signedPdfFinal = await terapkanStempelTteSimulasi(draftPdfBuffer, {
-          namaPenandatangan,
-          nipPenandatangan,
-          idDokumenBsre: idDokumenBsreFinal,
-          verifyUrl: linkQrVerifikasi,
-        });
-      } else {
-        // Kriteria IX BSrE: kegagalan dicatat; dokumen tidak diterbitkan.
-        await prisma.$transaction([
-          prisma.dokumenTte.update({
-            where: { id: recordDokumen.id },
-            data: { status: "GAGAL" },
-          }),
-          prisma.logGagalTte.create({
-            data: {
-              dokumenTteId: recordDokumen.id,
-              userId: user.id,
-              nip: nipPenandatangan,
-              statusCode: signResult.statusCode ?? 0,
-              pesanError: signResult.error || "Gagal menandatangani dokumen.",
-              kategoriError: gagal.kategori,
-            },
-          }),
-        ]);
-
-        return { error: gagal.pesanPengguna };
-      }
-    }
-
-    // 4. Simpan berkas PDF tertandatangani.
-    //
-    // DITARUH DI SUBFOLDER BER-ID DOKUMEN, bukan langsung di satu folder.
-    // Nama resminya hanya diturunkan dari jenis + bulan + tahun + unit, jadi
-    // dua kali menandatangani periode yang SAMA menghasilkan nama yang sama
-    // dan berkas yang kedua MENIMPA yang pertama. Terukur: 3 baris
-    // dokumen_tte SPTJM_TUKIN 8/2026 semuanya menunjuk satu berkas yang
-    // sama, jadi dua di antaranya memeriksa berkas milik dokumen lain -
-    // dan verifikasi tanda tangan yang memeriksa berkas yang salah tidak
-    // ada gunanya.
-    //
-    // Nama dasarnya tetap nama resmi supaya tampil benar saat diunduh;
-    // atribut `download` di panel juga sudah menyetelnya sendiri.
-    const namaResmiSigned = generateNamaFileSptjm(jenis, bulan, tahun, satker);
-    const kunciSigned = kunciSignedTte(satker, tahun, bulan, recordDokumen.id, namaResmiSigned);
-    await tulisBerkasTte(kunciSigned, signedPdfFinal);
-
-    // Sidik diambil dari bita yang BENAR-BENAR ditulis ke disk, bukan dari
-    // draft sebelum ditandatangani - yang dibandingkan orang nanti adalah
-    // berkas yang mereka unduh dari sini.
-    const hashBerkas = hitungHashBerkas(signedPdfFinal);
-
-    await prisma.dokumenTte.update({
-      where: { id: recordDokumen.id },
-      data: {
-        status: "TERTANDATANGANI",
-        fileSignedPath: kunciSigned,
-        idDokumenBsre: idDokumenBsreFinal,
-        // JANGAN mengarang lama penandatanganan. Nilai bawaan 120 ms dulu
-        // dipakai juga saat simulasi - angka yang terlihat masuk akal untuk
-        // penandatanganan yang tidak pernah terjadi. null jauh lebih jujur.
-        signingTimeMs: isSimulasiMode ? null : signResult.signingTimeMs ?? null,
-        signedAt: new Date(),
-        hashBerkas,
-      },
-    });
-
-    revalidatePath("/ppabp/adk");
-    revalidatePath("/kasubag/kalkulasi");
-
-    return {
-      success: true,
-      dokumenId: recordDokumen.id,
-      idDokumenBsre: idDokumenBsreFinal ?? undefined,
-      // Rute berizin, bukan letak di disk (yang tidak pernah sampai ke klien).
-      downloadUrl: `/berkas/tte/${recordDokumen.id}`,
-      nomorDokumen,
-      penandatanganNama: namaPenandatangan,
-      isSimulasi: isSimulasiMode,
-    };
-  } catch (err) {
-    const pesanMentah = err instanceof Error ? err.message : String(err);
-    // Kriteria BSrE IX: kegagalan tetap dicatat (tanpa passphrase). Kalau
-    // pencatatannya sendiri gagal, itu tidak boleh menggantikan jawaban ke layar.
-    await prisma.logGagalTte
-      .create({
-        data: {
-          nip: nipPenandatangan,
-          userId: user.id,
-          statusCode: 500,
-          pesanError: samarkanPassphrase(pesanMentah || "Internal Server Error", passphrase),
-          kategoriError: "SYSTEM_EXCEPTION",
-        },
-      })
-      .catch(() => null);
-
-    return {
-      error: pesanGalatUntukLayar("tte.sign", err, "Terjadi kendala teknis", [passphrase]),
-    };
-  }
+        unitEselon1: "Sekretariat Jenderal",
+      }),
+    pathRevalidasi: ["/ppabp/adk", "/kasubag/kalkulasi"],
+  });
 }
 
 /**

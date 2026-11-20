@@ -59,7 +59,7 @@ export function resolveRoleAktif(user: PemilikRole, kandidat: Role | null | unde
 /**
  * Urutan role bawaan saat login, dari yang diutamakan (keputusan user
  * 2026-11-11, tabel konfigurasi akun): Pimpinan > Kasubag TU > PPABP > OSDMA >
- * Pegawai. Contoh: Kasubag TU + PPABP masuk sebagai Kasubag TU.
+ * Kepala Tim > Pegawai. Contoh: Kasubag TU + PPABP masuk sebagai Kasubag TU.
  *
  * ADMIN paling akhir: dipakai hanya bila akun tidak punya role lain, supaya
  * akun Admin yang juga memegang role kerja langsung mendarat di dashboard
@@ -71,6 +71,7 @@ export const URUTAN_ROLE_BAWAAN: readonly Role[] = [
   "KASUBAG_TU",
   "PPABP",
   "OSDMA",
+  "KEPALA_TIM",
   "PEGAWAI",
   "ADMIN",
 ];
@@ -100,5 +101,6 @@ export const LANDING_ROLE: Record<Role, string> = {
   OSDMA: "/osdma",
   PPABP: "/ppabp",
   PIMPINAN: "/pimpinan",
+  KEPALA_TIM: "/kepala-tim",
   ADMIN: "/admin",
 };

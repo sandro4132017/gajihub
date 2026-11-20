@@ -48,6 +48,7 @@ import {
   type HasilRekapDariPdf,
 } from "../business-logic/presensiPdfKeRekap";
 import type { BarisPresensiPdf, LaporanPresensiPdf } from "../business-logic/presensiPdf";
+import type { PerintahLemburPegawai } from "../lib/lembur/perintahPeriode";
 
 const NAMA_HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
@@ -448,7 +449,14 @@ export async function tarikPresensiPeriode(
    * satuan kerja), adapter hanya memetakan NIP tersebut di SIAP dan hanya
    * menarik baris presensi milik pegawai unit tersebut dari e-Presensi.
    */
-  filterNipSet?: ReadonlySet<string>
+  filterNipSet?: ReadonlySet<string>,
+  /**
+   * Perintah lembur (SPKL) pegawai ber-NIP itu, atau null kalau SPKL tidak
+   * berlaku untuknya di periode ini. Bentuk fungsi karena sumbernya database
+   * Gajihub (lihat `muatPerintahLemburPeriode`), yang tidak boleh disentuh
+   * adapter ini. Bawaan: SPKL tidak berlaku untuk siapa pun.
+   */
+  perintahLemburUntuk: (nip: string) => PerintahLemburPegawai | null = () => null
 ): Promise<HasilTarikPeriode> {
   const kunciLibur = new Set(hariLiburNasional.keys());
 
@@ -493,6 +501,7 @@ export async function tarikPresensiPeriode(
       });
       continue;
     }
+    const spkl = perintahLemburUntuk(nip);
     pegawai.push({
       nip,
       nama,
@@ -501,7 +510,9 @@ export async function tarikPresensiPeriode(
         JADWAL_KERJA_DEFAULT,
         tanggalKendalaUntuk(nip),
         koreksiJamUntuk(nip),
-        hariLiburNasional
+        hariLiburNasional,
+        spkl ? spkl.perintah : null,
+        spkl ? spkl.berlaku : null
       ),
     });
   }

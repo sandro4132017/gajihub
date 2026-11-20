@@ -2,6 +2,7 @@
 
 import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import type { Role } from "@prisma/client";
+import { SEMUA_ROLE } from "../../../auth/roleLabel";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../../auth/permissions";
@@ -15,7 +16,7 @@ export interface UbahAssignmentRoleFormState {
   baris?: BarisAkun;
 }
 
-const ROLE_VALID: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
+const ROLE_VALID: readonly Role[] = SEMUA_ROLE;
 
 /**
  * Kelola assignment role LANGSUNG (canKelolaAssignmentRole) - BEDA dari

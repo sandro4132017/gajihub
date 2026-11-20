@@ -28,7 +28,13 @@ import { hostSah } from "./auth/asalPublik";
  * Diekspor supaya bisa dijaga test - lihat `src/__tests__/middlewareMatcher.test.ts`.
  * Tiap penambahan di sini WAJIB disertai pemeriksaan izin di handler-nya.
  */
-export const RUTE_MESIN = ["/api/pengingat-absen"] as const;
+export const RUTE_MESIN = [
+  "/api/pengingat-absen",
+  // Bahan pesan grup WA perintah lembur; dibaca bot WA di luar Gajihub, jadi
+  // tidak punya sesi. Handler-nya wajib header PERINTAH_LEMBUR_SECRET (503 bila
+  // env kosong, 401 bila salah).
+  "/api/perintah-lembur/notifikasi",
+] as const;
 
 /**
  * Berkas privat (`/berkas/...`) boleh dibingkai OLEH HALAMAN GAJIHUB SENDIRI:

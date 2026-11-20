@@ -39,7 +39,7 @@ try {
 }
 
 const ROLE_PENGUJI: Role = "ADMIN";
-const ROLE_TAMBAHAN_PENGUJI: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"];
+const ROLE_TAMBAHAN_PENGUJI: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "KEPALA_TIM"];
 
 function arg(nama: string): string | undefined {
   return process.argv.find((a) => a.startsWith(`--${nama}=`))?.split("=")[1];

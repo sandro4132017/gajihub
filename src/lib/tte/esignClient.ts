@@ -17,6 +17,12 @@ interface SignPdfOptions {
   height?: number;
   reason?: string;
   location?: string;
+  /**
+   * Batas waktu (ms) menunggu jawaban BSrE pada panggilan sign. OPSIONAL:
+   * tanpa nilai, tidak ada timeout (perilaku SPTJM). Jalur lembur
+   * memasangnya karena berjalan di dalam transaksi database berbatas waktu.
+   */
+  batasWaktuMs?: number;
 }
 
 interface SignPdfResult {
@@ -229,6 +235,8 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
         Authorization: authHeader,
       },
       body: formData,
+      // Hanya bila diminta; tanpa opsi, argumen fetch sama persis seperti dulu.
+      ...(options.batasWaktuMs ? { signal: AbortSignal.timeout(options.batasWaktuMs) } : {}),
     });
 
     const idDokumen = res.headers.get("id_dokumen") || undefined;
@@ -264,11 +272,18 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
       idDokumen,
       signingTimeMs,
     };
-  } catch {
+  } catch (err) {
+    // Kata "timeout" dipakai klasifikasiGagalBsre -> kategori NETWORK_TIMEOUT.
+    const habisWaktu =
+      options.batasWaktuMs !== undefined &&
+      err instanceof Error &&
+      (err.name === "TimeoutError" || err.name === "AbortError");
     return {
       success: false,
       statusCode: 500,
-      error: "Terjadi kesalahan koneksi ke Esign Client BSrE.",
+      error: habisWaktu
+        ? "Batas waktu (timeout) menunggu jawaban Esign Client BSrE terlampaui."
+        : "Terjadi kesalahan koneksi ke Esign Client BSrE.",
     };
   }
 }

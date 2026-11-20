@@ -3,11 +3,10 @@
 import { useActionState, useState } from "react";
 import type { Role } from "@prisma/client";
 import { buatAkunBaruAction, type BuatAkunBaruFormState } from "./actions";
-import { LABEL_ROLE } from "../../../auth/roleLabel";
+import { LABEL_ROLE, SEMUA_ROLE } from "../../../auth/roleLabel";
 import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 
 const INITIAL_STATE: BuatAkunBaruFormState = {};
-const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
 
 export function BuatAkunBaruForm({
   pegawai,

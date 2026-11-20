@@ -16,8 +16,8 @@ import {
 export type { JenisSptjm, DataSptjmUniversal, DataSptjmLembur };
 export { BULAN_ROMAWI, NAMA_BULAN, generateNomorSptjmDefault, generateNamaFileSptjm };
 
-const PAGE_WIDTH = 595.32;
-const PAGE_HEIGHT = 841.92;
+export const PAGE_WIDTH = 595.32;
+export const PAGE_HEIGHT = 841.92;
 
 /**
  * Mencari PDF referensi asli yang memiliki Kop Surat vektor + font Arial Narrow tertanam
@@ -84,7 +84,7 @@ function cariAsetGambarKop(): { tipe: "kop" | "logo"; buffer: Buffer } | null {
  * Memecah paragraf menjadi baris-baris sesuai lebar maksimum `maxWidth`
  * dan merender dengan perataan kiri-kanan (Justify) untuk semua baris kecuali baris terakhir.
  */
-function renderParagrafJustify(
+export function renderParagrafJustify(
   page: PDFPage,
   text: string,
   font: PDFFont,
@@ -207,12 +207,18 @@ async function gambarQrCodeTte(
   });
 }
 
+export interface KertasBerkop {
+  doc: PDFDocument;
+  page: PDFPage;
+  fontRegular: PDFFont;
+  fontBold: PDFFont;
+}
+
 /**
- * Generator Draft PDF SPTJM Resmi (A4: 595.32 x 841.92 pt)
- * Mengikuti 100% spesifikasi tipografi, koordinat, font (ArialMT 12pt, Arial-BoldMT 14.04pt,
- * Kop Arial Narrow), justify isi pernyataan, serta posisi blok tanda tangan dokumen asli.
+ * Menyiapkan halaman pertama berkop surat Kemnaker (A4) beserta font bakunya.
+ * Dipakai bersama oleh SPTJM dan dokumen lembur supaya kop tidak digandakan.
  */
-export async function generateDraftSptjm(data: DataSptjmUniversal): Promise<Buffer> {
+export async function siapkanKertasBerkop(): Promise<KertasBerkop> {
   let doc: PDFDocument;
   let page: PDFPage;
 
@@ -283,6 +289,17 @@ export async function generateDraftSptjm(data: DataSptjmUniversal): Promise<Buff
       renderKopTeksFallback(page!, fontBold, fontRegular);
     }
   }
+
+  return { doc: doc!, page: page!, fontRegular, fontBold };
+}
+
+/**
+ * Generator Draft PDF SPTJM Resmi (A4: 595.32 x 841.92 pt)
+ * Mengikuti 100% spesifikasi tipografi, koordinat, font (ArialMT 12pt, Arial-BoldMT 14.04pt,
+ * Kop Arial Narrow), justify isi pernyataan, serta posisi blok tanda tangan dokumen asli.
+ */
+export async function generateDraftSptjm(data: DataSptjmUniversal): Promise<Buffer> {
+  const { doc, page, fontRegular, fontBold } = await siapkanKertasBerkop();
 
   // NILAI CADANGAN TIDAK BOLEH BERUPA ORANG SUNGGUHAN.
   //

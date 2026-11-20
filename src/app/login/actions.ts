@@ -87,7 +87,7 @@ export async function loginAction(
             nama: pegawai?.nama || "Alpha Sandro Adithyaswara",
             role: "ADMIN",
             satuanKerja: pegawai?.satuanKerja || null,
-            rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN"],
+            rolesTambahan: ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "KEPALA_TIM"],
             aktif: true,
           },
         });

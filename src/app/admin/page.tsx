@@ -21,7 +21,7 @@ import { prisma } from "../../lib/prisma";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../auth/permissions";
 import { getModeJaringan } from "../../auth/modeJaringan";
-import { LABEL_ROLE } from "../../auth/roleLabel";
+import { LABEL_ROLE, SEMUA_ROLE } from "../../auth/roleLabel";
 import { AksesDitolak } from "../../components/feedback/AksesDitolak";
 import { HALAMAN } from "../../components/layout/layoutHalaman";
 import { IkonBercahaya, KartuBercahaya } from "../../components/shared/KartuKpi";
@@ -42,7 +42,7 @@ export const dynamic = "force-dynamic";
 // akun) di bawahnya.
 // ============================================================================
 
-const URUTAN_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
+const URUTAN_ROLE: readonly Role[] = SEMUA_ROLE;
 
 /** Jendela hitungan kegagalan TTE, dalam hari. */
 const JENDELA_GAGAL_TTE_HARI = 7;

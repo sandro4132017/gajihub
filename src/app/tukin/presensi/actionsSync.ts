@@ -24,6 +24,7 @@ import { satkerTerkunciUntukAkun } from "../../dashboardScope";
 import { tarikPresensiPeriode } from "../../../adapters/EpresensiAdapter";
 import { simpanHasilPresensiMassal } from "../../../jobs/simpanRekapPresensi";
 import { muatKendalaPeriode, muatKoreksiPeriode } from "../../../lib/kendalaPresensi";
+import { muatPerintahLemburPeriode } from "../../../lib/lembur/muatPerintahLembur";
 import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 import {
   GalatPengguna,
@@ -89,13 +90,18 @@ export async function tarikPresensiEpresensiAction(
     const kendala = await muatKendalaPeriode(prisma, bulan, tahun);
     const koreksi = await muatKoreksiPeriode(prisma, bulan, tahun);
     const hariLibur = await muatHariLiburPeriode(bulan, tahun);
+    // Perintah lembur (SPKL) dimuat SEBELUM tarikan, sama seperti koreksi jam.
+    // Perintah yang terkirim SESUDAH tarikan ini baru berlaku setelah presensi
+    // ditarik ulang.
+    const perintahLembur = await muatPerintahLemburPeriode(prisma, bulan, tahun);
     const tarikan = await tarikPresensiPeriode(
       bulan,
       tahun,
       kendala.untukNip,
       koreksi.untukNip,
       hariLibur,
-      filterNipUnit
+      filterNipUnit,
+      perintahLembur.untukNip
     );
 
     const pegawaiDb = await prisma.pegawai.findMany({

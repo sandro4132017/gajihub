@@ -25,6 +25,7 @@ import { TabelRincianTukinLengkap } from "../../../components/tables/TabelRincia
 import { BadgePejabatEselon } from "../../../components/shared/BadgePejabatEselon";
 import { TAMPILKAN_NOMINAL_LEMBUR } from "../../../lib/format/tampilUangLembur";
 import { lemburTeks } from "../../../lib/format/presensiTampilan";
+import { spklBerlakuDiPeriode } from "../../../lib/lembur/perintahPeriode";
 import { PengecualianForm, BatalPengecualianForm } from "./PengecualianForm";
 import {
   alasanDariKode,
@@ -1016,6 +1017,7 @@ export default async function KalkulasiUnitPage({
                 {pegawaiHalaman.map((p) => {
                   const um = p.uangMakan[0];
                   const lembur = p.uangLembur[0];
+                  const lemburBerSpkl = spklBerlakuDiPeriode(p.satuanKerja, periodeBulan, periodeTahun);
                   return (
                     <tr key={p.id} className="border-b border-line-2 align-top">
                       <td className="col-nama px-4 py-2.5">
@@ -1048,6 +1050,7 @@ export default async function KalkulasiUnitPage({
                           pegawaiId={p.id}
                           periodeBulan={periodeBulan}
                           periodeTahun={periodeTahun}
+                          berSpkl={lemburBerSpkl}
                           totalJamLemburSaatIni={lembur?.totalJamLembur ?? 0}
                           tarifPerJam={
                             lembur?.tarifPerJam ?? TARIF_UANG_LEMBUR_DEFAULT
@@ -1305,6 +1308,21 @@ export default async function KalkulasiUnitPage({
               }
             />
           </div>
+          {/* SPKL bulanan (lembur) punya halaman sendiri, tanpa entri sidebar
+              (menu Kasubag TU sudah 11 entri). Hanya muncul di periode yang
+              sudah masuk gerbang pilot SPKL. */}
+          {spklBerlakuDiPeriode(satkerEfektif, periodeBulan, periodeTahun) && (
+            <p className="text-xs text-muted">
+              SPKL Bulanan (lembur) ditandatangani terpisah di{" "}
+              <Link
+                href={`/kasubag/spkl?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}
+                className="font-semibold text-teal-deep underline"
+              >
+                halaman SPKL Bulanan
+              </Link>
+              .
+            </p>
+          )}
         </div>
 
         {/* Pemisah vertikal HANYA dari lg ke atas. Di bawah itu keduanya

@@ -55,11 +55,17 @@ describe("matcher middleware - halaman yang WAJIB tetap terkunci", () => {
 });
 
 describe("RUTE_MESIN - jalur yang lolos sesi karena diautentikasi header rahasia", () => {
-  it("memuat pengingat absen, dan CUMA itu", () => {
+  it("memuat pengingat absen dan notifikasi perintah lembur, dan CUMA itu", () => {
     // Daftar ini yang paling berbahaya kalau melebar: tiap tambahan berarti
     // satu jalur yang bisa diakses tanpa login, dan izinnya HARUS diperiksa di
-    // handler-nya sendiri.
-    expect([...RUTE_MESIN]).toEqual(["/api/pengingat-absen"]);
+    // handler-nya sendiri. Notifikasi perintah lembur ditambahkan dengan
+    // sengaja (Tahap 7 SPKL): dibaca bot WhatsApp, diautentikasi header
+    // PERINTAH_LEMBUR_SECRET.
+    expect([...RUTE_MESIN]).toEqual(["/api/pengingat-absen", "/api/perintah-lembur/notifikasi"]);
+  });
+
+  it("route lembur lain (/api/lembur/*) TIDAK ikut - wajib bersesi", () => {
+    expect((RUTE_MESIN as readonly string[]).some((r) => r.startsWith("/api/lembur"))).toBe(false);
   });
 
   it("/api/kabar TIDAK ikut - isinya aktivitas per unit dan wajib bersesi", () => {

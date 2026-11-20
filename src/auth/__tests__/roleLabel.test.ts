@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LABEL_ROLE, labelPilihanRole, labelRole } from "../roleLabel";
+import { LABEL_ROLE, SEMUA_ROLE, labelPilihanRole, labelRole } from "../roleLabel";
 
 describe("labelRole", () => {
   it("Kasubag TU selalu menyebut unitnya", () => {
@@ -71,5 +71,18 @@ describe("labelPilihanRole", () => {
     // sebabnya.
     expect(labelRole("KASUBAG_TU", "Biro Umum")).toBe("Kasubag TU Biro Umum");
     expect(labelPilihanRole("KASUBAG_TU")).not.toContain("Biro Umum");
+  });
+});
+
+describe("KEPALA_TIM dan SEMUA_ROLE", () => {
+  it("label Kepala Tim, tanpa unit", () => {
+    expect(LABEL_ROLE.KEPALA_TIM).toBe("Kepala Tim");
+    expect(labelRole("KEPALA_TIM", "Biro Contoh")).toBe("Kepala Tim");
+    expect(labelPilihanRole("KEPALA_TIM")).toBe("Kepala Tim");
+  });
+  it("SEMUA_ROLE memuat KEPALA_TIM, tanpa duplikat, dan setiap role punya label", () => {
+    expect(SEMUA_ROLE).toContain("KEPALA_TIM");
+    expect(new Set(SEMUA_ROLE).size).toBe(SEMUA_ROLE.length);
+    expect(Object.keys(LABEL_ROLE).sort()).toEqual([...SEMUA_ROLE].sort());
   });
 });

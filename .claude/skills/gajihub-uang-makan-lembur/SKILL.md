@@ -123,6 +123,49 @@ baris, dan penyebabnya bukan bug:
   cutinya masuk e-Presensi setelah ADK dibuat.
 - 2 hari WFH Jumat yang Gajihub hitung tapi file asli tidak.
 
+### SPKL (perintah lembur) - keputusan user 2026-11-19
+
+Lembur sah hanya dengan **perintah lembur (SPKL)**; pulang malam bukan lembur
+(lihat peringatan ADK di atas). Ini mengatur pembayaran, bukan angka tarif.
+Status implementasi: tahap 1 (role, gerbang pilot), tahap 2 (tabel
+`perintah_lembur`, `jam_lembur_nyata`), tahap 3a-3b (pembayaran dan gerbang
+per tanggal), dan tahap 4 (dokumen TTE, lihat `gajihub-tte-bsre`) sudah ada di
+worktree `lembur`. Form pembuatan perintah (tahap 5) belum ada. Migrasi
+`20261119090000_role_kepala_tim` lalu `20261119100000_perintah_lembur` wajib
+diterapkan sebelum kode ini dipakai, karena tarik presensi membaca
+`jam_lembur_nyata`.
+
+Letak kode: `src/business-logic/perintahLembur.ts` (batas kirim 15:00:00.000 WIB
+inklusif, validasi, `cariBentrok`), `src/business-logic/lemburDiperintahkan.ts`
+(pembayaran min(perintah, nyata)), `src/lib/lembur/` (anggota tim, gerbang
+per tanggal, muat perintah). Hari kerja bukan WFO dibayar 0 mutlak, termasuk
+koreksi Kasubag. Koreksi uang lembur manual ditolak untuk satker+periode ber-SPKL.
+Yang masih terbuka: tarik ulang presensi belum memeriksa rekap terkunci
+(perilaku lama), dan perintah yang terkirim sesudah presensi ditarik baru
+berlaku setelah tarik ulang. Keduanya menunggu keputusan user.
+
+- **Tanpa perintah = tidak bisa lembur.** Jam tanpa perintah tidak dibayar.
+- **Perintah harian (surat tugas)** dibuat dan di-TTE kepala tim **paling lambat
+  15.00 WIB hari itu**.
+- **SPKL bulanan** = rekap dari perintah-perintah harian, bukan dokumen
+  terpisah.
+- **Jam dibayar = min(jam perintah, jam nyata).** Kalau jam nyata lebih kecil
+  dari perintah, bayar jam nyata dan beri catatan. Jam nyata lebih besar dari
+  perintah tidak dibayar lebih.
+- **Hari libur juga dibatasi perintah.** Lembur hari libur tanpa perintah tidak
+  dibayar, sama dengan hari kerja.
+- **Jam mulai lembur = "jam harus pulang"** (sama dengan aturan "tidak ada jeda
+  sebelum lembur" di bagian jam pulang wajib di bawah).
+- **Pilot**: semua pegawai Biro Keuangan dan BMN sebagai anggota. Gerbang di
+  `src/lib/lembur/gerbangSpkl.ts` (mulai 2026-12-01, `TODO(confirm)`).
+- **Notifikasi**: WA grup dengan pola pengingat absen (`docs/pengingat-absen-bot-whatsapp.md`).
+- **Nomor surat**: dummy sampai ada format resmi.
+- **Status "lembur ditunda" DICABUT untuk SPKL.** Sebelumnya uang lembur dan ADK
+  lembur tertahan sampai tata cara turun. Untuk lembur yang punya perintah SPKL,
+  penahanan itu tidak berlaku lagi. Yang tetap berlaku: tarif dan batas 40 jam
+  mengikuti SBM 2026 di bagian bawah. Kalau tata cara turun dan isinya bertentangan
+  dengan aturan SPKL di sini, minta keputusan user, jangan diam-diam ubah.
+
 ### Uang makan & uang lembur mengikuti SBM 2026
 
 Dipicu PDF "SBM 2026" + aturan dari user. Menutup sebagian open item #8
