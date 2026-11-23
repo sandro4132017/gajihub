@@ -1076,8 +1076,17 @@ describe("canBuatPerintahLembur", () => {
     expect(canBuatPerintahLembur({ ...kepala, aktif: false }, PILOT, PILOT, "2026-12-01")).toBe(false);
   });
 
-  it("ADMIN tanpa role aktif KEPALA_TIM ditolak; role lain juga", () => {
-    for (const role of ["ADMIN", "PEGAWAI", "KASUBAG_TU", "PPABP", "OSDMA", "PIMPINAN"] as const) {
+  it("PIMPINAN: boleh di satker pilot sendiri, ditolak untuk anggota satker lain / di luar pilot / nonaktif", () => {
+    const pimpinan = buatUser({ role: "PIMPINAN", satuanKerja: PILOT });
+    expect(canBuatPerintahLembur(pimpinan, PILOT, PILOT, "2026-12-01")).toBe(true);
+    expect(canBuatPerintahLembur(pimpinan, PILOT, "Biro Umum", "2026-12-01")).toBe(false);
+    expect(canBuatPerintahLembur(pimpinan, PILOT, PILOT, "2026-11-30")).toBe(false);
+    expect(canBuatPerintahLembur(buatUser({ role: "PIMPINAN", satuanKerja: BIRO_UMUM }), BIRO_UMUM, BIRO_UMUM, "2026-12-01")).toBe(false);
+    expect(canBuatPerintahLembur({ ...pimpinan, aktif: false }, PILOT, PILOT, "2026-12-01")).toBe(false);
+  });
+
+  it("ADMIN tanpa role aktif KEPALA_TIM/PIMPINAN ditolak; role lain juga", () => {
+    for (const role of ["ADMIN", "PEGAWAI", "KASUBAG_TU", "PPABP", "OSDMA"] as const) {
       expect(canBuatPerintahLembur(buatUser({ role, satuanKerja: PILOT }), PILOT, PILOT, "2026-12-01")).toBe(false);
     }
   });

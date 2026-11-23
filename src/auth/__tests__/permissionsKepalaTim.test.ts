@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canBukaHalamanKepalaTim, type AuthUser } from "../permissions";
+import { canBukaHalamanPerintahLembur, type AuthUser } from "../permissions";
 
 const user = (o: Partial<AuthUser> = {}): AuthUser => ({
   nip: "199001010000000011", // sensitive-ok
@@ -9,19 +9,23 @@ const user = (o: Partial<AuthUser> = {}): AuthUser => ({
   ...o,
 });
 
-describe("canBukaHalamanKepalaTim", () => {
+describe("canBukaHalamanPerintahLembur", () => {
   it("Kepala Tim aktif boleh", () => {
-    expect(canBukaHalamanKepalaTim(user())).toBe(true);
+    expect(canBukaHalamanPerintahLembur(user())).toBe(true);
   });
 
-  it.each(["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"] as const)(
+  it("Pimpinan aktif boleh (pengecualian lembur 2026-11-20)", () => {
+    expect(canBukaHalamanPerintahLembur(user({ role: "PIMPINAN" }))).toBe(true);
+  });
+
+  it.each(["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "ADMIN"] as const)(
     "role %s ditolak (tanpa bypass ADMIN)",
     (role) => {
-      expect(canBukaHalamanKepalaTim(user({ role }))).toBe(false);
+      expect(canBukaHalamanPerintahLembur(user({ role }))).toBe(false);
     },
   );
 
   it("akun nonaktif ditolak", () => {
-    expect(canBukaHalamanKepalaTim(user({ aktif: false }))).toBe(false);
+    expect(canBukaHalamanPerintahLembur(user({ aktif: false }))).toBe(false);
   });
 });

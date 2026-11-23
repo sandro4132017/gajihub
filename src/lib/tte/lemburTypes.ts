@@ -50,6 +50,16 @@ export function generateNomorSpklDefault(bulan: number, tahun: number): string {
   return `1/${DEFAULT_NOMOR_AGENDA_LEMBUR.SPKL_BULANAN}/${KLASIFIKASI_LEMBUR.SPKL_BULANAN}/${romawi(bulan)}/${tahun}`;
 }
 
+/**
+ * Nomor DUMMY SPKL harian, mengikuti pola SPKL bulanan (klasifikasi KU.02,
+ * bulan Romawi, tahun dari tanggal lembur).
+ * TODO(confirm): format dan nomor agenda sebenarnya diberikan persuratan.
+ */
+export function generateNomorSpklHarianDefault(tanggalIso: string): string {
+  const [tahun, bulan] = tanggalIso.split("-").map(Number);
+  return generateNomorSpklDefault(bulan, tahun);
+}
+
 function bersihkanNama(teks: string): string {
   return teks.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -63,6 +73,11 @@ export function generateNamaFileSuratTugasLembur(tanggalIso: string, satuanKerja
 export function generateNamaFileSpkl(bulan: number, tahun: number, satuanKerja: string): string {
   const namaBulan = NAMA_BULAN[Math.max(0, Math.min(11, bulan - 1))] || "Oktober";
   return `SPKL - ${namaBulan} ${tahun} ${bersihkanNama(satuanKerja)}.pdf`;
+}
+
+/** Nama berkas SPKL harian, mis. "SPKL Harian 2026-10-14 Nama Unit.pdf". */
+export function generateNamaFileSpklHarian(tanggalIso: string, satuanKerja: string, sementara = false): string {
+  return `SPKL Harian ${bersihkanNama(tanggalIso)} ${bersihkanNama(satuanKerja)}${sementara ? "-SEMENTARA" : ""}.pdf`;
 }
 
 export function generateNamaFileLembur(

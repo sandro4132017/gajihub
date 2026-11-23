@@ -1308,17 +1308,17 @@ export default async function KalkulasiUnitPage({
               }
             />
           </div>
-          {/* SPKL bulanan (lembur) punya halaman sendiri, tanpa entri sidebar
+          {/* SPKL harian (lembur) punya halaman sendiri, tanpa entri sidebar
               (menu Kasubag TU sudah 11 entri). Hanya muncul di periode yang
               sudah masuk gerbang pilot SPKL. */}
           {spklBerlakuDiPeriode(satkerEfektif, periodeBulan, periodeTahun) && (
             <p className="text-xs text-muted">
-              SPKL Bulanan (lembur) ditandatangani terpisah di{" "}
+              SPKL harian (lembur) dibentuk otomatis dan diunduh terpisah di{" "}
               <Link
                 href={`/kasubag/spkl?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}
                 className="font-semibold text-teal-deep underline"
               >
-                halaman SPKL Bulanan
+                halaman SPKL Harian
               </Link>
               .
             </p>

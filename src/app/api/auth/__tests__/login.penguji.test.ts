@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LANDING_ROLE } from "../../../../auth/roleAktif";
 
-const m = vi.hoisted(() => ({ findUser: vi.fn(), findPegawai: vi.fn(), createUser: vi.fn() }));
+const m = vi.hoisted(() => ({ findUser: vi.fn(), findPegawai: vi.fn(), createUser: vi.fn(), updateUser: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
-  prisma: { user: { findUnique: m.findUser, create: m.createUser }, pegawai: { findUnique: m.findPegawai } },
+  prisma: { user: { findUnique: m.findUser, create: m.createUser, update: m.updateUser }, pegawai: { findUnique: m.findPegawai } },
 }));
 vi.mock("../../../../lib/prisma", () => ({
-  prisma: { user: { findUnique: m.findUser, create: m.createUser }, pegawai: { findUnique: m.findPegawai } },
+  prisma: { user: { findUnique: m.findUser, create: m.createUser, update: m.updateUser }, pegawai: { findUnique: m.findPegawai } },
 }));
 
 import { POST } from "../login/route";
@@ -35,6 +35,12 @@ beforeEach(() => {
   m.findUser.mockReset();
   m.findPegawai.mockReset();
   m.createUser.mockReset();
+  m.updateUser.mockReset();
+  // update meniru Prisma: kembalikan user dengan push KEPALA_TIM diterapkan.
+  m.updateUser.mockImplementation(async ({ data }: { data: { rolesTambahan: { push: string } } }) => {
+    const lama = (await m.findUser.mock.results.at(-1)?.value) ?? {};
+    return { ...lama, rolesTambahan: [...(lama.rolesTambahan ?? []), data.rolesTambahan.push] };
+  });
   vi.stubEnv("SESSION_SECRET", "rahasia-uji-palsu-untuk-test-saja-32"); // sensitive-ok
   vi.stubEnv("PENGUJI_USER", "penguji-uji");
   vi.stubEnv("PENGUJI_PASS_HASH", buatHashPenguji(SANDI));
@@ -167,6 +173,21 @@ describe("POST /api/auth/login - akun dev", () => {
     m.findPegawai.mockResolvedValue(null);
     const res = await kirim("akun-uji", SANDI_DEV);
     expect((await res.json()).redirect).toBe(LANDING_PIMPINAN);
+  });
+
+  it("akun dev lama tanpa KEPALA_TIM: role itu ditambahkan sekali; yang sudah punya tidak di-update", async () => {
+    m.findUser.mockResolvedValue({ ...userUji, nip: NIP, rolesTambahan: ["PEGAWAI"] });
+    m.findPegawai.mockResolvedValue(null);
+    expect((await kirim("akun-uji", SANDI_DEV)).status).toBe(200);
+    expect(m.updateUser).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { rolesTambahan: { push: "KEPALA_TIM" } },
+    });
+
+    m.updateUser.mockClear();
+    m.findUser.mockResolvedValue({ ...userUji, nip: NIP, rolesTambahan: ["PEGAWAI", "KEPALA_TIM"] });
+    expect((await kirim("akun-uji", SANDI_DEV)).status).toBe(200);
+    expect(m.updateUser).not.toHaveBeenCalled();
   });
 
   it("5 gagal -> terkunci 15 menit; pesan sama persis dengan salah sandi biasa; log tanpa username/sandi", async () => {

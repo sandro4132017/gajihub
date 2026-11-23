@@ -83,7 +83,15 @@ const MENU_KASUBAG = [
   },
   { href: "/tukin", label: "Tukin", Ikon: RiMoneyDollarCircleLine },
   { href: "/uang-makan", label: "Uang Makan", Ikon: FaUtensils },
-  ...MENU_UANG_LEMBUR,
+  // Satu grup supaya jumlah entri menu tidak bertambah (gajihub-laws-of-ux bagian 3).
+  {
+    label: "Lembur",
+    Ikon: FaClock,
+    anak: [
+      ...(TAMPILKAN_MENU_LEMBUR ? [{ href: "/uang-lembur", label: "Uang Lembur" }] : []),
+      { href: "/kasubag/spkl", label: "SPKL Harian" },
+    ],
+  },
   {
     href: "/kasubag/banding",
     label: "Verifikasi Banding",
@@ -246,6 +254,16 @@ const MENU_PIMPINAN = [
     href: "/pimpinan",
     label: "Dashboard Lintas Unit",
     Ikon: MdSpaceDashboard,
+  },
+  // Pengecualian lembur (keputusan user 2026-11-20): Pimpinan memantau dan
+  // memberi perintah lembur di UNIT SENDIRI.
+  {
+    label: "Lembur",
+    Ikon: FaClock,
+    anak: [
+      { href: "/pimpinan/lembur", label: "Pemantauan" },
+      { href: "/kepala-tim", label: "Perintah Lembur" },
+    ],
   },
   {
     href: "/saya",

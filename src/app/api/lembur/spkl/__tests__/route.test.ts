@@ -13,6 +13,13 @@ const m = vi.hoisted(() => ({
   transaction: vi.fn(),
 }));
 
+// Sakelar TTE lembur: default menyala agar cabang TTE tetap teruji.
+const sakelar = vi.hoisted(() => ({ aktif: true }));
+vi.mock("@/lib/lembur/sakelarTteLembur", () => ({
+  get TTE_LEMBUR_AKTIF() {
+    return sakelar.aktif;
+  },
+}));
 vi.mock("@/auth/getSessionAccount", () => ({ ambilUserSesi: m.ambilUserSesi }));
 vi.mock("@/lib/tte/tandatanganiDokumen", () => ({ tandatanganiDokumen: m.sign }));
 vi.mock("@/lib/tte/spklBulananPdf", () => ({ generateSpklBulananPdf: m.pdf }));
@@ -73,6 +80,7 @@ const panggil = (b: Record<string, unknown>) =>
 let kunciDipegang: boolean;
 
 beforeEach(() => {
+  sakelar.aktif = true;
   Object.values(m).forEach((f) => f.mockReset());
   kunciDipegang = false;
   m.ambilUserSesi.mockResolvedValue(user());
@@ -349,5 +357,18 @@ describe("POST /api/lembur/spkl - pratinjau", () => {
   it("jabatan penanda tangan kosong -> 422", async () => {
     m.pegawaiFindUnique.mockResolvedValue({ nama: "KASUBAG UJI", nip: NIP_KASUBAG, jabatan: " " });
     expect((await panggil(badan({ action: "spkl-bulanan-pratinjau" }))).status).toBe(422);
+  });
+});
+
+describe("POST /api/lembur/spkl - sakelar TTE lembur mati", () => {
+  it("404 sebelum sesi dibaca, tanpa menyentuh BSrE, PDF, atau database", async () => {
+    sakelar.aktif = false;
+    const res = await panggil(badan());
+    expect(res.status).toBe(404);
+    expect(m.ambilUserSesi).not.toHaveBeenCalled();
+    expect(m.sign).not.toHaveBeenCalled();
+    expect(m.pdf).not.toHaveBeenCalled();
+    expect(m.transaction).not.toHaveBeenCalled();
+    expect(m.perintahFindMany).not.toHaveBeenCalled();
   });
 });

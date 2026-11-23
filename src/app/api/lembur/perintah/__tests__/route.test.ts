@@ -16,6 +16,13 @@ const m = vi.hoisted(() => ({
   transaction: vi.fn(),
 }));
 
+// Sakelar TTE lembur: nilainya diatur per describe lewat objek ini.
+const sakelar = vi.hoisted(() => ({ aktif: true }));
+vi.mock("@/lib/lembur/sakelarTteLembur", () => ({
+  get TTE_LEMBUR_AKTIF() {
+    return sakelar.aktif;
+  },
+}));
 vi.mock("@/auth/getSessionAccount", () => ({ ambilUserSesi: m.ambilUserSesi }));
 vi.mock("@/lib/tte/tandatanganiDokumen", () => ({ tandatanganiDokumen: m.sign }));
 vi.mock("@/lib/tte/suratTugasLemburPdf", () => ({ generateSuratTugasLemburPdf: m.pdf }));
@@ -87,6 +94,7 @@ const kirim = (b: Record<string, unknown>) =>
   );
 
 beforeEach(() => {
+  sakelar.aktif = true;
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(PUKUL_10_WIB);
   Object.values(m).forEach((f) => f.mockReset());
@@ -122,7 +130,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("POST /api/lembur/perintah - kirim", () => {
+describe("POST /api/lembur/perintah - kirim (jalur TTE, sakelar menyala)", () => {
   it("sukses: satu transaksi membuat perintah TERKIRIM dengan anggota terkirim=true", async () => {
     const res = await kirim(badanDasar());
     const json = await res.json();
@@ -148,6 +156,13 @@ describe("POST /api/lembur/perintah - kirim", () => {
     expect(audit.entitasId).not.toContain(NIP_KEPALA);
     // Tanpa revalidatePath: tandatanganiDokumen dipanggil tanpa jalur revalidasi.
     expect(m.sign.mock.calls[0][0].pathRevalidasi).toEqual([]);
+  });
+
+  it("PIMPINAN (role aktif) boleh memberi perintah; satker dari tabel Pegawai", async () => {
+    m.ambilUserSesi.mockResolvedValue(user({ role: "PIMPINAN", satuanKerja: "Satker Akun Lain" }));
+    const res = await kirim(badanDasar());
+    expect(res.status).toBe(200);
+    expect(m.txPerintahCreate.mock.calls[0][0].data.satuanKerja).toBe(SATKER);
   });
 
   it("jalur lembur memakai izinkanNikDemoBsre:false dan satker dari DB", async () => {
@@ -372,7 +387,7 @@ describe("POST /api/lembur/perintah - kirim", () => {
   });
 });
 
-describe("POST /api/lembur/perintah - pratinjau", () => {
+describe("POST /api/lembur/perintah - pratinjau (jalur TTE, sakelar menyala)", () => {
   it("mengembalikan PDF berpenanda pratinjau, tanpa BSrE dan tanpa tulis database", async () => {
     const res = await kirim(badanDasar({ action: "pratinjau", nik: undefined, passphrase: undefined }));
     const json = await res.json();
@@ -394,5 +409,104 @@ describe("POST /api/lembur/perintah - pratinjau", () => {
 
   it("aksi tidak dikenal: 400", async () => {
     expect((await kirim(badanDasar({ action: "hapus" }))).status).toBe(400);
+  });
+});
+
+describe("POST /api/lembur/perintah - kirim TANPA TTE (sakelar mati)", () => {
+  beforeEach(() => {
+    sakelar.aktif = false;
+  });
+
+  it("sukses tanpa NIK dan passphrase: dokumenTteId null, nomorSurat null, BSrE dan PDF tidak dipanggil", async () => {
+    const res = await kirim(badanDasar({ nik: undefined, passphrase: undefined }));
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.perintahId).toBe("perintah-1");
+    expect(m.transaction).toHaveBeenCalledTimes(1);
+    const { data } = m.txPerintahCreate.mock.calls[0][0];
+    expect(data.status).toBe("TERKIRIM");
+    expect(data.dokumenTteId).toBeNull();
+    expect(data.nomorSurat).toBeNull();
+    expect(data.satuanKerja).toBe(SATKER);
+    expect(data.kepalaTimId).toBe("u-kepala");
+    expect(data.dikirimPada).toBeInstanceOf(Date);
+    expect(data.anggota.create).toHaveLength(2);
+    for (const a of data.anggota.create) expect(a.terkirim).toBe(true);
+    expect(m.txAuditCreate.mock.calls[0][0].data.satuanKerja).toBe(SATKER);
+    expect(JSON.stringify(m.txAuditCreate.mock.calls)).not.toContain(NIP_A);
+    expect(m.sign).not.toHaveBeenCalled();
+    expect(m.pdf).not.toHaveBeenCalled();
+    expect(m.dokumenFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("NIK/passphrase yang dikirim tetap diabaikan (NIK tidak sah pun tidak menolak)", async () => {
+    const res = await kirim(badanDasar({ nik: "bukan-nik", passphrase: PASSPHRASE }));
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(m.txPerintahCreate.mock.calls)).not.toContain(PASSPHRASE);
+    expect(m.sign).not.toHaveBeenCalled();
+  });
+
+  it("lewat 15.00 WIB ditolak 422 sebelum transaksi", async () => {
+    vi.setSystemTime(new Date("2026-12-10T08:00:01Z"));
+    const res = await kirim(badanDasar());
+    expect(res.status).toBe(422);
+    expect(m.transaction).not.toHaveBeenCalled();
+  });
+
+  it("batas diperiksa ULANG di dalam transaksi: lolos di luar, lewat 15.00 saat menulis -> 422, tidak ada perintah", async () => {
+    vi.setSystemTime(new Date("2026-12-10T07:59:59.900Z")); // 14:59:59.9 WIB
+    m.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      vi.setSystemTime(new Date("2026-12-10T08:00:00.100Z")); // 15:00:00.1 WIB
+      return fn({ perintahLembur: { create: m.txPerintahCreate }, auditTrail: { create: m.txAuditCreate } });
+    });
+    const res = await kirim(badanDasar());
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toMatch(/15.00 WIB/);
+    expect(m.txPerintahCreate).not.toHaveBeenCalled();
+    expect(m.txAuditCreate).not.toHaveBeenCalled();
+  });
+
+  it("tepat 15.00.000 WIB masih diterima", async () => {
+    vi.setSystemTime(new Date("2026-12-10T08:00:00Z"));
+    expect((await kirim(badanDasar())).status).toBe(200);
+  });
+
+  it("kalah balapan (P2002): 409 menyebut nama", async () => {
+    m.anggotaFindMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ pegawaiId: "p-a" }]);
+    m.transaction.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }));
+    const res = await kirim(badanDasar());
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toContain("Anggota Satu");
+  });
+
+  it("bentrok yang sudah terlihat sebelum transaksi: 409", async () => {
+    m.anggotaFindMany.mockResolvedValue([{ pegawaiId: "p-b" }]);
+    const res = await kirim(badanDasar());
+    expect(res.status).toBe(409);
+    expect(m.transaction).not.toHaveBeenCalled();
+  });
+
+  it("galat lain dari transaksi: 500 tanpa membocorkan isi", async () => {
+    m.transaction.mockRejectedValue(new Error("koneksi putus"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await kirim(badanDasar());
+    expect(res.status).toBe(500);
+    log.mockRestore();
+  });
+
+  it("pratinjau: 404, sesi dan database tidak disentuh", async () => {
+    const res = await kirim(badanDasar({ action: "pratinjau" }));
+    expect(res.status).toBe(404);
+    expect(m.ambilUserSesi).not.toHaveBeenCalled();
+    expect(m.pdf).not.toHaveBeenCalled();
+  });
+
+  it("gerbang role dan satker tetap berlaku", async () => {
+    m.ambilUserSesi.mockResolvedValue(user({ role: "PEGAWAI" }));
+    expect((await kirim(badanDasar())).status).toBe(403);
+    m.ambilUserSesi.mockResolvedValue(null);
+    expect((await kirim(badanDasar())).status).toBe(401);
+    expect(m.transaction).not.toHaveBeenCalled();
   });
 });

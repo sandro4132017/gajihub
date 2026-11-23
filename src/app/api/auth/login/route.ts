@@ -107,6 +107,14 @@ export async function POST(req: NextRequest) {
           { ok: false, error: `Akun dengan NIP ${targetNip} sedang dinonaktifkan. Hubungi Admin Gajihub.` },
           { status: 403 }
         );
+      } else if (user.role !== "KEPALA_TIM" && !user.rolesTambahan.includes("KEPALA_TIM")) {
+        // Akun dev yang dibuat sebelum role KEPALA_TIM ada: tambahkan sekali,
+        // karena Admin tidak bisa mengubah role akunnya sendiri. Keputusan user
+        // 2026-11-20 (developer mencoba sisi Kepala Tim tanpa SSO).
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { rolesTambahan: { push: "KEPALA_TIM" } },
+        });
       }
     }
 

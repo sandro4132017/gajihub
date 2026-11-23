@@ -1952,9 +1952,13 @@ model PerintahLembur {
 
   status StatusPerintahLembur @default(DRAFT)
 
-  /// TODO(confirm): format nomor surat belum diputuskan.
+  /// TODO(confirm): format nomor surat belum diputuskan. NULL selama lembur
+  /// berjalan tanpa TTE (lib/lembur/sakelarTteLembur.ts): nomor SPKL hanya ada
+  /// pada SPKL harian yang dibentuk saat diunduh.
   nomorSurat String? @map("nomor_surat")
 
+  /// NULL selama lembur berjalan tanpa TTE (perintah terkirim tanpa dokumen
+  /// bertanda tangan); terisi hanya pada jalur TTE.
   dokumenTteId String?     @unique @map("dokumen_tte_id")
   dokumenTte   DokumenTte? @relation(fields: [dokumenTteId], references: [id])
 

@@ -11,6 +11,10 @@ export interface SpklAktif {
   satuanKerja: string;
   /** Tanggal ISO (YYYY-MM-DD), inklusif. */
   berlakuMulai: string;
+  /** Nama pendek untuk kalimat di dokumen. */
+  namaSingkat: string;
+  /** Jabatan penanda tangan SPKL di unit ini (tanpa nama orangnya). */
+  jabatanPenandatangan: string;
 }
 
 // TODO(confirm): tanggal mulai pilot SPKL di Biro Keuangan dan BMN belum
@@ -20,8 +24,18 @@ export interface SpklAktif {
 // berkas ADK), supaya alur Kepala Tim bisa dicoba sebelum pilot berlaku tanpa
 // menyentuh pegawai sungguhan. Satker pilot SELALU di indeks 0.
 export const SPKL_AKTIF: readonly SpklAktif[] = [
-  { satuanKerja: "Biro Keuangan dan Barang Milik Negara", berlakuMulai: "2026-12-01" },
-  { satuanKerja: SATKER_DUMMY, berlakuMulai: "2026-11-01" },
+  {
+    satuanKerja: "Biro Keuangan dan Barang Milik Negara",
+    berlakuMulai: "2026-12-01",
+    namaSingkat: "Biro Keuangan dan BMN",
+    jabatanPenandatangan: "Kepala Biro Keuangan dan BMN",
+  },
+  {
+    satuanKerja: SATKER_DUMMY,
+    berlakuMulai: "2026-11-01",
+    namaSingkat: SATKER_DUMMY,
+    jabatanPenandatangan: "Kepala Biro",
+  },
 ];
 
 const FORMAT_TANGGAL_ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -50,4 +64,11 @@ export function spklAktifUntuk(satuanKerja: string | null | undefined, tanggalIs
   if (!FORMAT_TANGGAL_ISO.test(tanggalIso)) return false;
   // Format ISO berurutan sama dengan urutan kronologis, jadi cukup dibandingkan sebagai teks.
   return SPKL_AKTIF.some((a) => a.satuanKerja === satker && tanggalIso >= a.berlakuMulai);
+}
+
+/** Data satker terdaftar (nama singkat, jabatan penanda tangan); null bila belum terdaftar. */
+export function spklAktifDataUntuk(satuanKerja: string | null | undefined): SpklAktif | null {
+  const satker = satuanKerja?.trim();
+  if (!satker) return null;
+  return SPKL_AKTIF.find((a) => a.satuanKerja === satker) ?? null;
 }

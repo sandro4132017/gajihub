@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { judulkanNama, namaCetakPegawai } from "../namaPegawai";
+import { namaBergelarSpkl } from "../namaPegawai";
 
 // Seluruh contoh di bawah DIAMBIL DARI SIAP, bukan dikarang - itu sebabnya
 // bentuknya tidak seragam.
@@ -47,5 +48,20 @@ describe("namaCetakPegawai", () => {
 
   it("nama kosong tidak melempar", () => {
     expect(namaCetakPegawai({ nama: "" })).toBe("");
+  });
+});
+
+describe("namaBergelarSpkl (pengecualian SPKL: bergelar, keputusan user 2026-11-20)", () => {
+  it("gelar depan + nama + gelar belakang, apa adanya", () => {
+    expect(namaBergelarSpkl({ nama: "BUDI CONTOH", gelarDepan: "Dr.", gelarBelakang: "S.E., M.Si" })).toBe(
+      "Dr. Budi Contoh, S.E., M.Si",
+    );
+  });
+  it("tanpa gelar -> nama saja; spasi dirapikan; koma awal gelar belakang tidak dobel", () => {
+    expect(namaBergelarSpkl({ nama: "Ani Contoh", gelarDepan: null, gelarBelakang: "  " })).toBe("Ani Contoh");
+    expect(namaBergelarSpkl({ nama: "Ani Contoh", gelarBelakang: ", S.Kom." })).toBe("Ani Contoh, S.Kom.");
+  });
+  it("tidak merapikan bentuk gelar (tidak menebak)", () => {
+    expect(namaBergelarSpkl({ nama: "Ani Contoh", gelarBelakang: "M.M. , S.Sos." })).toBe("Ani Contoh, M.M. , S.Sos.");
   });
 });

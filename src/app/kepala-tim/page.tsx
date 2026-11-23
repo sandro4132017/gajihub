@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import { getSessionAccount } from "../../auth/getSessionAccount";
-import { canBukaHalamanKepalaTim, type AuthUser } from "../../auth/permissions";
+import { canBukaHalamanPerintahLembur, type AuthUser } from "../../auth/permissions";
 import { AksesDitolak } from "../../components/feedback/AksesDitolak";
 import { HALAMAN } from "../../components/layout/layoutHalaman";
 import { Paginasi, hitungPaginasi } from "../../components/tables/Paginasi";
@@ -10,6 +10,7 @@ import { NAMA_BULAN } from "../../lib/format/bulan";
 import { anggotaTimUntuk } from "../../lib/lembur/anggotaTim";
 import { buatPilihanAnggota } from "../../lib/lembur/pilihanForm";
 import { berlakuMulaiSpkl } from "../../lib/lembur/gerbangSpkl";
+import { TTE_LEMBUR_AKTIF } from "../../lib/lembur/sakelarTteLembur";
 import { tanggalIsoTeks, waktuWibTeks } from "../../lib/lembur/waktuTampil";
 import { FormPerintahLembur, type PeringatanPresensi } from "./FormPerintahLembur";
 import { SisaWaktuKirim } from "./SisaWaktuKirim";
@@ -36,8 +37,8 @@ export default async function KepalaTimPage({
   const akun = await getSessionAccount();
   const authUser: AuthUser | null =
     akun && { nip: akun.nip, role: akun.role, satuanKerja: akun.satuanKerja, aktif: true };
-  if (!authUser || !canBukaHalamanKepalaTim(authUser)) {
-    return <AksesDitolak pesan="Halaman ini khusus Kepala Tim." />;
+  if (!authUser || !canBukaHalamanPerintahLembur(authUser)) {
+    return <AksesDitolak pesan="Halaman ini khusus Kepala Tim dan Pimpinan." />;
   }
 
   // Satker dari tabel Pegawai (bukan User.satuanKerja), sama dengan route kirim.
@@ -128,7 +129,15 @@ export default async function KepalaTimPage({
         {!belumBerlaku && <SisaWaktuKirim tanggalIso={hariIni} serverNowMs={sekarang.getTime()} hariIni />}
       </div>
 
+      {!TTE_LEMBUR_AKTIF && (
+        <p className="mt-1 text-xs text-muted">
+          Kirim perintah tanpa tanda tangan elektronik. SPKL harian dibentuk otomatis pukul 15.00 WIB dan
+          setelahnya tidak bisa diubah.
+        </p>
+      )}
+
       <FormPerintahLembur
+        tteAktif={TTE_LEMBUR_AKTIF}
         anggota={buatPilihanAnggota(anggota.map((a) => ({ id: a.id, nama: namaCetakPegawai(a), jabatan: a.jabatan })))}
         hariIni={hariIni}
         berlakuMulai={berlakuMulai}
@@ -165,7 +174,7 @@ export default async function KepalaTimPage({
                   <tr>
                     <td colSpan={7} className="px-3 py-6 text-center text-muted">
                       Belum ada perintah lembur terkirim atas nama Anda. Perintah baru muncul di sini setelah
-                      tanda tangannya berhasil.
+                      berhasil dikirim.
                     </td>
                   </tr>
                 )}

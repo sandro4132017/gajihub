@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ambilUserSesi } from "@/auth/getSessionAccount";
-import { canTandatanganiSpklBulanan, type AuthUser } from "@/auth/permissions";
+import { canTandatanganiSpklHarian, type AuthUser } from "@/auth/permissions";
 import { namaCetakPegawai } from "@/business-logic/namaPegawai";
 import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { spklBerlakuDiPeriode } from "@/lib/lembur/perintahPeriode";
@@ -12,6 +12,7 @@ import { izinkanNikDemoLembur } from "@/lib/lembur/izinNikDemoLembur";
 import { generateSpklBulananPdf } from "@/lib/tte/spklBulananPdf";
 import { BATAS_WAKTU_SIGN_LEMBUR_MS, generateNamaFileSpkl, generateNomorSpklDefault } from "@/lib/tte/lemburTypes";
 import { NAMA_BULAN } from "@/lib/tte/sptjmTypes";
+import { TTE_LEMBUR_AKTIF } from "@/lib/lembur/sakelarTteLembur";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export const dynamic = "force-dynamic";
  * maupun satker; yang dibaca dari badan permintaan hanya action, bulan, tahun,
  * nik, passphrase (daftar putih). Satker diambil dari akun pada sesi.
  *
- * Kedua aksi menuntut `canTandatanganiSpklBulanan`: pratinjau mencetak nama
+ * Kedua aksi menuntut `canTandatanganiSpklHarian`: pratinjau mencetak nama
  * pemegang sesi sebagai penanda tangan, jadi PPABP/ADMIN (lihat-saja) tidak
  * diberi pratinjau berpenanda tangan palsu.
  *
@@ -121,6 +122,12 @@ export async function POST(req: NextRequest) {
   // Passphrase di luar try supaya blok catch bisa menyamarkannya dari pesan galat.
   let passphrase = "";
   try {
+    // Penandatanganan SPKL ditutup selama TTE lembur mati (sakelarTteLembur.ts):
+    // SPKL kini harian dan tanpa TTE (lihat /berkas/spkl-harian). Dijawab SEBELUM
+    // sesi atau badan permintaan dibaca. Kode di bawah dibiarkan utuh untuk
+    // dipakai lagi bila sakelar dinyalakan.
+    if (!TTE_LEMBUR_AKTIF) return galat("Tidak ditemukan.", 404);
+
     const m = bacaMasukan(await req.json().catch(() => ({})));
     passphrase = m.passphrase;
 
@@ -138,7 +145,7 @@ export async function POST(req: NextRequest) {
     // Satker DARI AKUN pada sesi, bukan dari badan permintaan.
     const satker = user.satuanKerja?.trim() ?? "";
     const authUser: AuthUser = { nip: user.nip, role: user.role, satuanKerja: satker || null, aktif: user.aktif };
-    if (!satker || !canTandatanganiSpklBulanan(authUser, satker)) {
+    if (!satker || !canTandatanganiSpklHarian(authUser, satker)) {
       return galat("Anda tidak berwenang menandatangani SPKL bulanan unit ini.", 403);
     }
     if (!spklBerlakuDiPeriode(satker, m.bulan, m.tahun)) {

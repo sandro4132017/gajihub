@@ -3,7 +3,7 @@ import {
   canLihatDokumenLembur,
   canLihatDokumenSptjm,
   canLihatPerintahLemburUnit,
-  canTandatanganiSpklBulanan,
+  canTandatanganiSpklHarian,
   canTandatanganiSptjmUnit,
   type AuthUser,
 } from "../permissions";
@@ -20,9 +20,9 @@ const user = (o: Partial<AuthUser> = {}): AuthUser => ({
   ...o,
 });
 
-describe("canTandatanganiSpklBulanan", () => {
+describe("canTandatanganiSpklHarian", () => {
   it("Kasubag TU unit itu saja (TODO(confirm) pejabat final)", () => {
-    expect(canTandatanganiSpklBulanan(user({ role: "KASUBAG_TU" }), UNIT)).toBe(true);
+    expect(canTandatanganiSpklHarian(user({ role: "KASUBAG_TU" }), UNIT)).toBe(true);
   });
 
   it.each([
@@ -32,17 +32,17 @@ describe("canTandatanganiSpklBulanan", () => {
     ["ADMIN (tanpa bypass)", user({ role: "ADMIN", satuanKerja: null })],
     ["Kasubag TU nonaktif", user({ role: "KASUBAG_TU", aktif: false })],
   ])("%s ditolak", (_n, u) => {
-    expect(canTandatanganiSpklBulanan(u, UNIT)).toBe(false);
+    expect(canTandatanganiSpklHarian(u, UNIT)).toBe(false);
   });
 
   it("satuan kerja kosong ditolak", () => {
-    expect(canTandatanganiSpklBulanan(user({ role: "KASUBAG_TU", satuanKerja: null }), "")).toBe(false);
+    expect(canTandatanganiSpklHarian(user({ role: "KASUBAG_TU", satuanKerja: null }), "")).toBe(false);
   });
 
   it("selalu sama dengan canTandatanganiSptjmUnit", () => {
     for (const role of ["PEGAWAI", "KEPALA_TIM", "KASUBAG_TU", "PPABP", "ADMIN", "PIMPINAN", "OSDMA"] as const) {
       const u = user({ role });
-      expect(canTandatanganiSpklBulanan(u, UNIT)).toBe(canTandatanganiSptjmUnit(u, UNIT));
+      expect(canTandatanganiSpklHarian(u, UNIT)).toBe(canTandatanganiSptjmUnit(u, UNIT));
     }
   });
 });
@@ -106,10 +106,19 @@ describe("canLihatPerintahLemburUnit (lihat-saja)", () => {
     ["Kasubag TU unit lain", user({ role: "KASUBAG_TU", satuanKerja: "Biro Lain" })],
     ["Kepala Tim", user({ role: "KEPALA_TIM" })],
     ["PEGAWAI", user({ role: "PEGAWAI" })],
-    ["PIMPINAN", user({ role: "PIMPINAN" })],
+    ["PIMPINAN tanpa satker Pegawai", user({ role: "PIMPINAN" })],
     ["Kasubag TU nonaktif", user({ role: "KASUBAG_TU", aktif: false })],
   ])("%s ditolak", (_n, u) => {
     expect(canLihatPerintahLemburUnit(u, UNIT)).toBe(false);
+  });
+
+  it("PIMPINAN hanya unit milik Pegawai-nya (bukan User.satuanKerja)", () => {
+    const pimpinan = user({ role: "PIMPINAN", satuanKerja: "Biro Lain" });
+    expect(canLihatPerintahLemburUnit(pimpinan, UNIT, UNIT)).toBe(true);
+    expect(canLihatPerintahLemburUnit(pimpinan, UNIT, "Biro Lain")).toBe(false);
+    expect(canLihatPerintahLemburUnit(pimpinan, UNIT, null)).toBe(false);
+    expect(canLihatPerintahLemburUnit(user({ role: "PIMPINAN", aktif: false }), UNIT, UNIT)).toBe(false);
+    expect(canTandatanganiSpklHarian(pimpinan, UNIT)).toBe(false);
   });
 
   it("satuan kerja kosong ditolak walau ADMIN", () => {
@@ -119,6 +128,6 @@ describe("canLihatPerintahLemburUnit (lihat-saja)", () => {
   it("lihat tidak berarti boleh menandatangani", () => {
     const ppabp = user({ role: "PPABP", satuanKerja: null });
     expect(canLihatPerintahLemburUnit(ppabp, UNIT)).toBe(true);
-    expect(canTandatanganiSpklBulanan(ppabp, UNIT)).toBe(false);
+    expect(canTandatanganiSpklHarian(ppabp, UNIT)).toBe(false);
   });
 });

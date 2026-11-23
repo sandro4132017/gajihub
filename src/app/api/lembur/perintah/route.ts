@@ -24,6 +24,7 @@ import {
   generateNomorSuratTugasLemburDefault,
 } from "@/lib/tte/lemburTypes";
 import { hariTanggalId } from "@/lib/tte/pdfLemburBersama";
+import { TTE_LEMBUR_AKTIF } from "@/lib/lembur/sakelarTteLembur";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,15 @@ export const dynamic = "force-dynamic";
  * Route Handler JSON untuk perintah lembur (SPKL) Kepala Tim: `pratinjau` dan
  * `kirim`. JSON POST, bukan Server Action, supaya bebas dari HTTP 500 di balik
  * FortiWeb (lihat src/app/api/tte/route.ts).
+ *
+ * SAKELAR TTE (src/lib/lembur/sakelarTteLembur.ts). Selama TTE_LEMBUR_AKTIF
+ * mati (keputusan user 2026-11-20), `kirim` TIDAK memakai NIK/passphrase (field
+ * itu diabaikan), tanpa PDF dan tanpa BSrE: satu $transaction membuat
+ * PerintahLembur TERKIRIM (dokumenTteId dan nomorSurat null), anggota
+ * terkirim=true, dan AuditTrail. Batas 15.00 WIB diperiksa ULANG di dalam
+ * transaksi (422); unique (pegawai, tanggal, terkirim) yang kalah balapan
+ * dijawab 409. `pratinjau` dijawab 404. Uraian urutan di bawah ini berlaku
+ * untuk jalur TTE (sakelar menyala).
  *
  * TIDAK ADA DRAFT TERSIMPAN. Pratinjau membuat PDF di memori dan
  * mengembalikannya; baris PerintahLembur baru ada saat perintah SUDAH
@@ -114,6 +124,8 @@ function tanggalKeDate(iso: string): Date {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
+class BatasLewatError extends Error {}
+
 function kodePrisma(err: unknown): string | undefined {
   return typeof err === "object" && err !== null && "code" in err
     ? String((err as { code: unknown }).code)
@@ -130,6 +142,8 @@ export async function POST(req: NextRequest) {
     if (m.action !== "pratinjau" && m.action !== "kirim") {
       return galat("Aksi perintah lembur tidak dikenali.", 400);
     }
+    // Pratinjau PDF hanya ada di jalur TTE; tanpa TTE tidak ada PDF per perintah.
+    if (!TTE_LEMBUR_AKTIF && m.action === "pratinjau") return galat("Pratinjau tidak tersedia.", 404);
 
     const user = await ambilUserSesi();
     if (!user) return galat("Sesi tidak ditemukan. Silakan login kembali.", 401);
@@ -241,14 +255,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ---- KIRIM ----
-    // NIK tepat 16 digit KHUSUS jalur ini (NIP 18 digit sering terketik).
-    if (!FORMAT_NIK.test(m.nik)) return galat("NIK harus tepat 16 digit angka (bukan NIP).", 400);
-    if (m.nik === NIK_DEMO_BSRE && !izinkanNikDemoLembur({ satuanKerja: satkerKepala, nip: user.nip })) {
-      // Ditolak di pintu masuk; tandatanganiDokumen menolaknya lagi (izinkanNikDemoBsre:false).
-      return galat("NIK sertifikat demo BSrE tidak boleh dipakai untuk surat tugas lembur. Gunakan NIK Anda sendiri.", 400);
-    }
-    if (!m.passphrase) return galat("Passphrase wajib diisi untuk menandatangani dokumen.", 400);
-
     const idAnggota = m.anggota.map((a) => a.pegawaiId);
     const tanggalDb = tanggalKeDate(m.tanggal);
     const namaBentrok = async (): Promise<string[]> => {
@@ -264,6 +270,87 @@ export async function POST(req: NextRequest) {
 
     const sudah = await namaBentrok();
     if (sudah.length > 0) return galat(pesanBentrok(sudah), 409);
+
+
+    // ---- KIRIM TANPA TTE (sakelar mati) ----
+    // nik/passphrase dari klien DIABAIKAN: tidak divalidasi, tidak dipakai. Tanpa
+    // PDF dan tanpa BSrE; SPKL harian dibentuk otomatis pukul 15.00 WIB.
+    if (!TTE_LEMBUR_AKTIF) {
+      try {
+        const perintah = await prisma.$transaction(async (tx) => {
+          // Batas DIPERIKSA ULANG di dalam transaksi: pemeriksaan di atas bisa
+          // tertinggal beberapa detik dari penulisan, sedangkan SPKL terkunci 15.00.
+          const batasTx = batasKirimPerintah(m.tanggal, new Date());
+          if (!batasTx.boleh) throw new BatasLewatError(batasTx.alasan);
+          const dibuat = await tx.perintahLembur.create({
+            data: {
+              satuanKerja: satkerKepala,
+              tanggal: tanggalDb,
+              kepalaTimId: user.id,
+              uraianTugas: uraian,
+              status: "TERKIRIM",
+              nomorSurat: null,
+              dokumenTteId: null,
+              dikirimPada: new Date(),
+              anggota: {
+                create: m.anggota.map((a) => ({
+                  pegawaiId: a.pegawaiId,
+                  tanggal: tanggalDb,
+                  jamDiperintahkan: a.jam,
+                  terkirim: true,
+                })),
+              },
+            },
+            select: { id: true },
+          });
+          await tx.auditTrail.create({
+            data: {
+              entitas: "perintah_lembur",
+              entitasId: dibuat.id,
+              aksi: "CREATE",
+              aktor: user.nip,
+              satuanKerja: satkerKepala,
+              dataSesudah: {
+                tanggal: m.tanggal,
+                jumlahAnggota: m.anggota.length,
+                totalJam: m.anggota.reduce((s, a) => s + a.jam, 0),
+                tanpaTte: true,
+              },
+            },
+          });
+          return dibuat;
+        });
+        return NextResponse.json({
+          success: true,
+          perintahId: perintah.id,
+          jumlahAnggota: m.anggota.length,
+        });
+      } catch (err) {
+        if (err instanceof BatasLewatError) {
+          return galat(err.message || "Batas waktu kirim perintah sudah lewat.", 422);
+        }
+        if (kodePrisma(err) === "P2002") {
+          const nama = await namaBentrok().catch(() => [] as string[]);
+          return galat(
+            nama.length > 0
+              ? pesanBentrok(nama)
+              : "Perintah lain untuk salah satu anggota terkirim lebih dulu. Muat ulang halaman lalu periksa anggotanya.",
+            409,
+          );
+        }
+        throw err;
+      }
+    }
+
+    // ---- KIRIM DENGAN TTE BSrE (hanya bila TTE_LEMBUR_AKTIF) ----
+    // NIK tepat 16 digit KHUSUS jalur ini (NIP 18 digit sering terketik).
+    if (!FORMAT_NIK.test(m.nik)) return galat("NIK harus tepat 16 digit angka (bukan NIP).", 400);
+    if (m.nik === NIK_DEMO_BSRE && !izinkanNikDemoLembur({ satuanKerja: satkerKepala, nip: user.nip })) {
+      // Ditolak di pintu masuk; tandatanganiDokumen menolaknya lagi (izinkanNikDemoBsre:false).
+      return galat("NIK sertifikat demo BSrE tidak boleh dipakai untuk surat tugas lembur. Gunakan NIK Anda sendiri.", 400);
+    }
+    if (!m.passphrase) return galat("Passphrase wajib diisi untuk menandatangani dokumen.", 400);
+
 
     const hasil = await tandatanganiDokumen({
       user: { id: user.id, nip: user.nip },

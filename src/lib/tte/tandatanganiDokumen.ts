@@ -5,7 +5,7 @@
 //
 // FUNGSI INI TIDAK MEMERIKSA WEWENANG. Pemanggilnya WAJIB sudah memastikan
 // pemegang sesi berhak menandatangani jenis dokumen & satuan kerja itu
-// (canTandatanganiSptjmUnit, canTandatanganiSpklBulanan, dst.) SEBELUM
+// (canTandatanganiSptjmUnit, canTandatanganiSpklHarian, dst.) SEBELUM
 // memanggil. Yang dijaga di sini: identitas penanda tangan dari tabel Pegawai,
 // kecocokan NIK dengan pemegang sesi, status sertifikat, passphrase tidak
 // pernah bocor, dan SETIAP kegagalan tercatat di log_gagal_tte (Kriteria IX).

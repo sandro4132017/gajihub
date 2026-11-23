@@ -32,7 +32,7 @@ Sistem Gajihub terhubung ke **Esign Client Service v2.2.2** (`http://192.168.221
 | `src/lib/tte/esignClient.ts` | Adapter API Esign Client BSrE (`checkUserStatus`, `signPdf`, `verifyPdf`). Pure HTTP fetch layer dengan Basic Auth. |
 | `src/lib/tte/sptjmPdf.ts` | Generator berkas PDF SPTJM A4 menggunakan `pdf-lib`. Menempatkan tag koordinat `#` untuk QR code dan footer resmi BSrE. |
 | `src/lib/tte/tandatanganiDokumen.ts` | Inti tanda tangan BERSAMA (SPTJM dan dokumen lembur). Memeriksa NIK, sidik, lalu memanggil Esign Client. SPTJM memanggilnya tanpa perubahan perilaku. |
-| `src/lib/tte/suratTugasLemburPdf.ts`, `spklBulananPdf.ts`, `pdfLemburBersama.ts`, `lemburTypes.ts` | PDF Surat Tugas lembur harian, SPKL bulanan, dan bagian bersama (`#` di teks bebas menjadi "No."). Nomor dummy dan nomor DIPA/akun masih placeholder (`TODO(confirm)`). |
+| `src/lib/tte/suratTugasLemburPdf.ts`, `spklBulananPdf.ts`, `spklHarianPdf.ts`, `pdfLemburBersama.ts`, `lemburTypes.ts` | PDF Surat Tugas lembur harian & SPKL bulanan (jalur TTE, kini di balik sakelar mati), SPKL harian (dibentuk tanpa TTE selama `TTE_LEMBUR_AKTIF` mati, opsi `tanpaTte`; layout = template SPKL Oktober 2026 tanpa kolom JAM, lihat `gajihub-uang-makan-lembur`), dan bagian bersama (`#` di teks bebas menjadi "No."). Nomor dummy dan nomor DIPA/akun masih placeholder (`TODO(confirm)`). |
 | `src/app/tte/actions.ts` | Server Action untuk alur signing: agregasi nominal lembur satker, buat draft PDF, panggil Esign Client, simpan file ke storage, catat `DokumenTte` & `LogGagalTte`. |
 | `src/app/tte/ModalPassphraseTte.tsx` | Dialog interaktif input passphrase bertopeng (`autocomplete="off"`), pengecekan status sertifikat, dan penanganan error BSrE. |
 | `src/app/kasubag/kalkulasi/PanelTteSptjm.tsx` | Panel UI di halaman Kalkulasi Kasubag TU sebelum kirim rekap ke PPABP. |
@@ -133,9 +133,13 @@ ditolak walau sakelar hidup (ada test di `signSptjmSimulasi.test.ts`).
   `jenisDokumen`. Jenis lembur memakai `canLihatDokumenLembur` (penandatangan
   sendiri, atau yang boleh melihat SPTJM unit itu). Jenis lain tetap
   `canLihatDokumenSptjm`.
-- **Penanda tangan SPKL bulanan**: `canTandatanganiSpklBulanan` sementara sama
-  dengan Kasubag TU unit (`TODO(confirm)`: template asli ditandatangani Kepala
-  Biro). Kalau diubah, ubah di `src/auth/permissions.ts` saja.
+- **TTE lembur MATI sementara** (keputusan user 2026-11-20): sakelar
+  `TTE_LEMBUR_AKTIF = false` di `src/lib/lembur/sakelarTteLembur.ts`; perintah
+  dan SPKL harian berjalan tanpa TTE (lihat `gajihub-uang-makan-lembur`).
+- **Penanda tangan SPKL harian** (saat TTE dinyalakan) = KEPALA BIRO,
+  keputusan user 2026-11-20. `canTandatanganiSpklHarian` MASIH berisi Kasubag
+  TU unit (`TODO(confirm)`: cara mengenali akun Kepala Biro). Ubah di
+  `src/auth/permissions.ts` saja.
 - **Modal passphrase**: `ModalPassphraseTte` memakai mode demo bila prop
   `kirimTandaTangan` tidak diisi. Pemanggil lembur WAJIB mengirim prop itu agar
   tidak jatuh ke demo.

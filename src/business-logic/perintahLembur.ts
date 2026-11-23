@@ -46,6 +46,34 @@ export function batasKirimPerintah(tanggalIso: string, sekarang: Date): HasilBat
   };
 }
 
+/**
+ * SPKL harian satu tanggal sudah TERKUNCI: hanya sesudah 15:00:00.000 WIB pada
+ * tanggal itu (kebalikan `batasKirimPerintah`: tepat 15:00:00.000 masih
+ * terbuka, 15:00:00.001 terkunci). Tanggal yang akan datang tidak terkunci.
+ * Berbasis waktu, tanpa job; tidak bergantung zona waktu proses.
+ */
+export function spklHarianTerkunci(tanggalIso: string, sekarang: Date): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(tanggalIso);
+  if (!m) return false;
+  const batas = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), JAM_BATAS_KIRIM_WIB) - OFFSET_WIB_MS;
+  return sekarang.getTime() > batas;
+}
+
+/**
+ * Tenggang sesudah pengunci sebelum PDF/pesan dilayani: perintah yang lolos
+ * pemeriksaan batas pada 14:59:59.9 masih sedang ditulis ke database.
+ * TODO(confirm): 60 detik adalah perkiraan, bukan angka resmi.
+ */
+export const TENGGANG_SIAP_MS = 60_000;
+
+/** SPKL harian siap diunduh / dikirim ke grup: terkunci + masa tenggang lewat. */
+export function spklHarianSiap(tanggalIso: string, sekarang: Date): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(tanggalIso);
+  if (!m) return false;
+  const batas = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), JAM_BATAS_KIRIM_WIB) - OFFSET_WIB_MS;
+  return sekarang.getTime() > batas + TENGGANG_SIAP_MS;
+}
+
 /** Tanggal hari ini menurut WIB, `YYYY-MM-DD`; tidak bergantung zona waktu proses. */
 export function tanggalIsoWib(sekarang: Date): string {
   return new Date(sekarang.getTime() + OFFSET_WIB_MS).toISOString().slice(0, 10);

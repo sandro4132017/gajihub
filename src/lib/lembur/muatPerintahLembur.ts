@@ -1,4 +1,5 @@
-// Pemuat perintah lembur (SPKL) dari database Gajihub. Bagian murninya di
+// Pemuat perintah lembur (SPKL) dari database Gajihub. Perintah TERKIRIM sah
+// walau tanpa dokumen TTE (dokumenTteId null) selama sakelar TTE lembur mati. Bagian murninya di
 // perintahPeriode.ts. Hanya membaca database Gajihub - tidak menyentuh SIAP
 // maupun e-Presensi.
 

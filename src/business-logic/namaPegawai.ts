@@ -53,3 +53,28 @@ export function judulkanNama(nama: string): string {
 export function namaCetakPegawai(p: SumberNamaPegawai): string {
   return judulkanNama(p.nama ?? "");
 }
+
+export interface SumberNamaBergelar extends SumberNamaPegawai {
+  gelarDepan?: string | null;
+  gelarBelakang?: string | null;
+}
+
+function rapikanSpasi(s: string | null | undefined): string {
+  return (s ?? "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Nama BERGELAR untuk SPKL (lembur): "<gelar depan> <nama>, <gelar belakang>".
+ *
+ * PENGECUALIAN TERCATAT atas aturan "tanpa gelar" di kepala berkas: keputusan
+ * user 2026-11-20 - SPKL mengikuti template resminya, yang mencetak gelar pada
+ * penanda tangan dan daftar pegawai. Gelar dipakai APA ADANYA dari SIAP (hanya
+ * spasi dirapikan, titik/urutan tidak ditebak). Dokumen lain tetap memakai
+ * `namaCetakPegawai`.
+ */
+export function namaBergelarSpkl(p: SumberNamaBergelar): string {
+  const depan = rapikanSpasi(p.gelarDepan);
+  const belakang = rapikanSpasi(p.gelarBelakang).replace(/^,\s*/, "");
+  const nama = judulkanNama(p.nama ?? "");
+  return `${depan ? depan + " " : ""}${nama}${belakang ? ", " + belakang : ""}`;
+}

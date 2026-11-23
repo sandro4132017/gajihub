@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FiAlertTriangle, FiDownload, FiSend } from "react-icons/fi";
+import { Modal } from "@/components/feedback/Modal";
 import { SearchableSelect, type OpsiSelect } from "@/components/forms/SearchableSelect";
 import { validasiPerintah } from "@/business-logic/perintahLembur";
 import { keadaanTanggal, labelAnggota, type AnggotaPilihan } from "@/lib/lembur/pilihanForm";
@@ -59,6 +61,7 @@ export function FormPerintahLembur({
   peringatanPresensi,
   namaPenandatangan,
   satuanKerja,
+  tteAktif,
 }: {
   anggota: AnggotaPilihan[];
   /** Tanggal hari ini menurut WIB (dari server), `YYYY-MM-DD`. */
@@ -69,7 +72,10 @@ export function FormPerintahLembur({
   peringatanPresensi: PeringatanPresensi | null;
   namaPenandatangan: string;
   satuanKerja: string;
+  /** TTE lembur menyala (sakelarTteLembur.ts). Mati = kirim tanpa passphrase lewat modal konfirmasi. */
+  tteAktif: boolean;
 }) {
+  const router = useRouter();
   const tanggalMin = hariIni >= berlakuMulai ? hariIni : berlakuMulai;
   const [tanggal, setTanggal] = useState(tanggalMin);
   const [uraian, setUraian] = useState("");
@@ -79,6 +85,9 @@ export function FormPerintahLembur({
   const [pratinjauMemuat, setPratinjauMemuat] = useState(false);
   const [modalTerbuka, setModalTerbuka] = useState(false);
   const [sudahTerkirim, setSudahTerkirim] = useState(false);
+  // Jalur tanpa TTE: konfirmasi -> mengirim -> berhasil.
+  const [fase, setFase] = useState<"tutup" | "konfirmasi" | "mengirim" | "berhasil">("tutup");
+  const [galatKirim, setGalatKirim] = useState<string | null>(null);
 
   const sekarang = useJamServer(serverNowMs);
   const { kosong: tanggalKosong, terkunci, alasan: alasanKunci } = keadaanTanggal({
@@ -144,7 +153,35 @@ export function FormPerintahLembur({
   function bukaTandaTangan(e: React.FormEvent) {
     e.preventDefault();
     if (terkunci) return;
-    if (periksa()) setModalTerbuka(true);
+    if (!periksa()) return;
+    if (tteAktif) setModalTerbuka(true);
+    else {
+      setGalatKirim(null);
+      setFase("konfirmasi");
+    }
+  }
+
+  /** Jalur TANPA TTE: tanpa NIK/passphrase; keputusan diambil di modal konfirmasi. */
+  async function kirimTanpaTte() {
+    setFase("mengirim");
+    setGalatKirim(null);
+    try {
+      const res = await panggilApi({ action: "kirim", ...badanDasar() });
+      if (res.success === true) {
+        setFase("berhasil");
+        // Kosongkan isian supaya tidak terkirim ganda, lalu muat ulang riwayat.
+        setBaris([]);
+        setUraian("");
+        setGalat([]);
+        router.refresh();
+      } else {
+        setGalatKirim(typeof res.error === "string" ? res.error : "Perintah gagal dikirim.");
+        setFase("konfirmasi");
+      }
+    } catch {
+      setGalatKirim("Tidak bisa menghubungi server. Periksa koneksi lalu coba lagi.");
+      setFase("konfirmasi");
+    }
   }
 
   async function kirimTandaTangan(nik: string, passphrase: string): Promise<TteActionResult> {
@@ -218,7 +255,7 @@ export function FormPerintahLembur({
         <fieldset className="mt-4">
           <legend className="text-xs font-semibold text-ink">Anggota dan jam lembur</legend>
           <p className="mt-0.5 text-xs text-muted">
-            Pilih anggota tim, lalu isi jumlah jam lembur per orang (bilangan bulat 1-24).
+            Pilih pegawai, lalu isi jumlah jam lembur per orang (bilangan bulat 1-24).
           </p>
           <div className="mt-2 max-w-md">
             <SearchableSelect
@@ -318,21 +355,76 @@ export function FormPerintahLembur({
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button type="button" onClick={pratinjau} disabled={pratinjauMemuat || terkunci} className="btn btn-secondary flex items-center gap-1.5">
-            <FiDownload className="size-4" aria-hidden="true" />
-            {pratinjauMemuat ? "Menyiapkan..." : "Unduh pratinjau PDF"}
-          </button>
+          {tteAktif && (
+            <button type="button" onClick={pratinjau} disabled={pratinjauMemuat || terkunci} className="btn btn-secondary flex items-center gap-1.5">
+              <FiDownload className="size-4" aria-hidden="true" />
+              {pratinjauMemuat ? "Menyiapkan..." : "Unduh pratinjau PDF"}
+            </button>
+          )}
           <button type="submit" disabled={terkunci} className="btn btn-primary flex flex-1 items-center justify-center gap-1.5 sm:flex-none sm:min-w-64">
             <FiSend className="size-4" aria-hidden="true" />
-            Tanda tangani dan kirim
+            {tteAktif ? "Tanda tangani dan kirim" : "Kirim perintah"}
           </button>
         </div>
         <p className="mt-2 text-xs text-muted">
-          Perintah yang sudah terkirim tidak bisa dibatalkan atau diubah. Periksa pratinjau lebih dulu.
+          {tteAktif
+            ? "Perintah yang sudah terkirim tidak bisa dibatalkan atau diubah. Periksa pratinjau lebih dulu."
+            : "Perintah yang sudah terkirim tidak bisa dibatalkan atau diubah. Periksa isiannya sebelum mengirim."}
         </p>
       </form>
 
+      {/* Jalur tanpa TTE: konfirmasi lalu hasil, tanpa passphrase. */}
+      {!tteAktif && (
+        <Modal
+          terbuka={fase !== "tutup"}
+          nada={fase === "berhasil" ? "sukses" : "netral"}
+          judul={fase === "berhasil" ? "Perintah terkirim" : "Kirim perintah lembur?"}
+          subjudul={
+            fase === "berhasil"
+              ? undefined
+              : [tanggalIsoTeks(tanggal), `${baris.length} anggota, total ${totalJam} jam`]
+          }
+          onTutup={fase === "mengirim" ? null : () => setFase("tutup")}
+          aksi={
+            fase === "berhasil" ? (
+              <button type="button" onClick={() => setFase("tutup")} className="btn btn-primary">
+                Tutup
+              </button>
+            ) : (
+              <>
+                <button type="button" onClick={() => setFase("tutup")} disabled={fase === "mengirim"} className="btn btn-secondary">
+                  Batal
+                </button>
+                <button type="button" onClick={kirimTanpaTte} disabled={fase === "mengirim"} className="btn btn-primary">
+                  {fase === "mengirim" ? "Mengirim..." : "Kirim perintah"}
+                </button>
+              </>
+            )
+          }
+        >
+          {fase === "berhasil" ? (
+            <p>
+              Perintah lembur sudah terkirim. SPKL harian tanggal ini dibentuk otomatis pukul 15.00 WIB dan
+              bisa diunduh Kasubag TU setelahnya.
+            </p>
+          ) : (
+            <>
+              <p>
+                Perintah yang sudah dikirim <strong className="text-ink">tidak bisa dibatalkan atau diubah</strong>.
+              </p>
+              <p className="mt-1.5">SPKL harian terkunci otomatis pukul 15.00 WIB pada tanggal lembur.</p>
+              {galatKirim && (
+                <p role="alert" className="mt-3 border-l-4 border-l-red bg-red-tint px-3 py-2 font-medium text-red">
+                  {galatKirim}
+                </p>
+              )}
+            </>
+          )}
+        </Modal>
+      )}
+
       {/* Di luar <form>: modal membawa form-nya sendiri, dan form tidak boleh bersarang. */}
+      {tteAktif && (
       <ModalPassphraseTte
         terbuka={modalTerbuka}
         onTutup={tutupModal}
@@ -346,6 +438,7 @@ export function FormPerintahLembur({
         labelDokumen="Surat Tugas Lembur"
         ringkasan={`Tanggal lembur ${tanggalIsoTeks(tanggal)} - ${baris.length} anggota, ${totalJam} jam`}
       />
+      )}
     </>
   );
 }

@@ -560,7 +560,7 @@ canApprove/canUbah apapun buat role ini, SENGAJA, sesuai role matrix
 | `OSDMA` | Privilege Pegawai + approval final banding & SK KGB, update SK pegawai baru dilantik/naik pangkat. |
 | `KEPALA_TIM` (2026-11-19) | Privilege Pegawai (hanya data diri sendiri) + membuat perintah lembur (SPKL) untuk anggota timnya di satker yang sama, khusus satker yang ada di `SPKL_AKTIF`. TIDAK masuk dashboard approver Tukin/Uang Makan/Uang Lembur, TIDAK masuk panel Kabar. |
 | `PPABP` (Tim PPABP Rokeu) | Privilege Pegawai + tarik/upload manual presensi (fallback kalau Kasubag TU tidak bisa), upload rekap predikat kinerja e-Kinerja BKN lintas unit (`/predikat-kinerja`, fallback yang sama pola dengan presensi), telaah & validasi pengajuan Tukin/Uang Makan/Uang Lembur SEMUA unit, export ADK (3 jenis terpisah), upload Anggaran & Realisasi Belanja Pegawai, monitoring lintas unit + ubah status pengajuan, LIHAT & USULKAN perubahan role (eksekusi final di Admin), dashboard lintas unit (+ total Anggaran vs Realisasi), upload riwayat gaji induk dari ADK GPP + input honorarium (bahan slip gaji pegawai - lihat "Riwayat gaji pegawai (gaji induk) & slip gaji format asli"). |
-| `PIMPINAN` | Privilege Pegawai + dashboard lintas unit SAMA seperti PPABP, read-only (tanpa approval/ubah data apapun). |
+| `PIMPINAN` | Privilege Pegawai + dashboard lintas unit SAMA seperti PPABP, read-only (tanpa approval/ubah data apapun). **PENGECUALIAN LEMBUR (keputusan user 2026-11-20)**: memantau dan MEMBUAT perintah lembur untuk unit sendiri, lihat bagian "PIMPINAN - pengecualian lembur" di bawah. |
 | `ADMIN` | Privilege Pegawai + dashboard lintas unit (sama PPABP/Pimpinan) + konfigurasi sistem + **privilege SEMUA role di atas** + eksekusi final perubahan role. **BUKAN DESAIN FINAL production** - lihat TODO(confirm) besar di bawah. |
 
 ### TODO(confirm) / asumsi yang WAJIB dikonfirmasi sebelum production
@@ -842,7 +842,14 @@ DI-REVERT.
   - `ROLE_PANEL_KABAR` (`src/lib/kabar/rolePanelKabar.ts`): KASUBAG_TU, OSDMA, PPABP, PIMPINAN, ADMIN. Panel Kabar di AppShell memakai ini.
   - `tentukanCakupan` (`src/app/kabarData.ts`): memakai `ROLE_PANEL_KABAR` yang sama; KASUBAG_TU tanpa unit tetap tidak dapat panel.
   - KEPALA_TIM tidak ada di ketiganya: ditolak dashboard approver dan panel Kabar.
-- **`canBuatPerintahLembur(user, satkerKepalaTim, satkerAnggota, tanggalIso)`** (`src/auth/permissions.ts`): akun aktif, role aktif KEPALA_TIM, satker kepala tim dan anggota sama dan tidak kosong, dan SPKL berlaku di satker itu pada tanggal perintah (`spklAktifUntuk`). ADMIN SENGAJA tanpa bypass.
+- **`canBuatPerintahLembur(user, satkerKepalaTim, satkerAnggota, tanggalIso)`** (`src/auth/permissions.ts`): akun aktif, role aktif KEPALA_TIM atau PIMPINAN (PIMPINAN: lihat bagian di bawah), satker kepala tim dan anggota sama dan tidak kosong, dan SPKL berlaku di satker itu pada tanggal perintah (`spklAktifUntuk`). ADMIN SENGAJA tanpa bypass.
+- **PIMPINAN - pengecualian lembur** (keputusan user 2026-11-20). Pengecualian dari "PIMPINAN read-only" HANYA untuk lembur:
+  - Boleh memantau (`/pimpinan/lembur`, menu "Pemantauan") dan MEMBUAT perintah lembur (`/kepala-tim`, menu "Perintah Lembur") untuk UNIT SENDIRI saja.
+  - Unit diambil dari tabel `Pegawai` lewat NIP akun (`satkerPegawaiAkun`), BUKAN dari `User.satuanKerja`. Tanpa baris Pegawai, atau beda unit, ditolak.
+  - ADMIN tetap ditolak. Tidak ada pengecualian lain untuk PIMPINAN (tetap read-only di luar lembur).
+  - `canBukaHalamanPerintahLembur(user)` (menggantikan `canBukaHalamanKepalaTim`) membuka `/kepala-tim` untuk KEPALA_TIM dan PIMPINAN. Guard role saja, gerbang satker tetap lewat `berlakuMulaiSpkl`.
+  - `canLihatPerintahLemburUnit(user, targetSatuanKerja, satkerPegawaiAkun?)`: untuk PIMPINAN, cocok bila `satkerPegawaiAkun` sama dengan unit target. Untuk role lain, komposisi `canExportRekapUnit`. Dipakai `/pimpinan/lembur` dan `/berkas/spkl-harian`.
+- **Akun dev dan role KEPALA_TIM**: login akun dev (`src/app/login/actions.ts`, `src/app/api/auth/login/route.ts`) menambahkan role KEPALA_TIM ke `rolesTambahan` SEKALI bila belum ada. Alasan: Admin tidak bisa mengubah role akunnya sendiri, jadi sisi Kepala Tim tidak bisa dicoba tanpa SSO. Akun non-dev tidak tersentuh.
 - **Gerbang pilot SPKL satu tempat**: `src/lib/lembur/gerbangSpkl.ts` (`SPKL_AKTIF`: Biro Keuangan dan Barang Milik Negara, berlaku mulai 2026-12-01, `TODO(confirm)`). Nama satker pilot tidak ditulis di berkas lain; menambah satker = menambah satu baris di sana.
 - **Daftar role tunggal**: `SEMUA_ROLE` (`src/auth/roleLabel.ts`) menggantikan daftar role manual di `/admin/role-assignment` dan `/ppabp/usulan-role`. Role baru cukup ditambah di `roleLabel.ts`, lalu daftar diizinkan di atas diputuskan sendiri.
 - Enam kepala tim diberi role `KEPALA_TIM` lewat UI admin oleh user (bukan lewat seed atau repo). NIP tidak boleh masuk repo.

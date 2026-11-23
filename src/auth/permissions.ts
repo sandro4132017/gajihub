@@ -313,28 +313,45 @@ export function canLihatDokumenSptjm(user: AuthUser, targetSatuanKerja: string):
 }
 
 /**
- * Menandatangani SPKL BULANAN unit dengan TTE BSrE.
+ * Menandatangani SPKL unit dengan TTE BSrE (nama lama: SPKL bulanan; kini SPKL harian,
+ * dan sementara TTE lembur mati: lihat sakelarTteLembur.ts).
  *
- * TODO(confirm): sementara SAMA dengan `canTandatanganiSptjmUnit` (Kasubag TU
- * unit itu, tanpa bypass ADMIN, tanpa hibah). Template SPKL aslinya
- * ditandatangani Kepala Biro; pejabat penanda tangan final menunggu
- * konfirmasi. Kalau diubah, ubah di sini saja.
+ * Keputusan user 2026-11-20: penanda tangan SPKL harian = KEPALA BIRO (sesuai
+ * template SPKL). Perintah boleh dibuat Kepala Tim maupun Kepala Biro sendiri
+ * (Kepala Biro memegang role KEPALA_TIM), tetapi TTE tetap di Kepala Biro.
+ * TODO(confirm): isi fungsi ini MASIH Kasubag TU (`canTandatanganiSptjmUnit`)
+ * dan baru diganti ke Kepala Biro saat TTE lembur dinyalakan - cara
+ * mengenali akun Kepala Biro (role/jabatan) belum ditentukan. Ubah di sini saja.
  */
-export function canTandatanganiSpklBulanan(user: AuthUser, targetSatuanKerja: string): boolean {
+export function canTandatanganiSpklHarian(user: AuthUser, targetSatuanKerja: string): boolean {
   return canTandatanganiSptjmUnit(user, targetSatuanKerja);
 }
 
 /**
- * MELIHAT rekap perintah lembur (SPKL bulanan) sebuah unit - lihat-saja.
+ * MELIHAT dan MENGUNDUH SPKL harian (rekap perintah lembur) sebuah unit - lihat-saja.
  *
  * KOMPOSISI `canExportRekapUnit` (Kasubag TU unit itu, PPABP, ADMIN), bukan
  * aturan baru: isinya nama, golongan, tanggal, dan uraian lembur pegawai satu
  * unit, setara dengan rekap unit yang sudah boleh dilihat orang-orang itu.
- * Tidak memberi wewenang menandatangani (itu `canTandatanganiSpklBulanan`).
+ * Tidak memberi wewenang menandatangani (itu `canTandatanganiSpklHarian`).
  * KEPALA_TIM dan PEGAWAI tidak; satuan kerja kosong ditolak.
+ *
+ * PENGECUALIAN keputusan user 2026-11-20: PIMPINAN biasanya read-only dan
+ * dibatasi ke dashboard agregat, tetapi untuk lembur boleh memantau dan
+ * memberi perintah di UNIT SENDIRI saja. Unit itu diambil dari tabel Pegawai
+ * lewat NIP-nya (`satkerPegawaiAkun`), BUKAN dari `User.satuanKerja`; tanpa
+ * baris Pegawai atau beda unit -> ditolak.
  */
-export function canLihatPerintahLemburUnit(user: AuthUser, targetSatuanKerja: string): boolean {
+export function canLihatPerintahLemburUnit(
+  user: AuthUser,
+  targetSatuanKerja: string,
+  satkerPegawaiAkun?: string | null,
+): boolean {
   if (!targetSatuanKerja) return false;
+  if (user.role === "PIMPINAN") {
+    const satker = satkerPegawaiAkun?.trim();
+    return user.aktif && !!satker && satker === targetSatuanKerja.trim();
+  }
   return canExportRekapUnit(user, targetSatuanKerja);
 }
 
@@ -901,19 +918,23 @@ export function canViewApproverDashboard(user: AuthUser): boolean {
 
 /**
  * Membuka halaman perintah lembur (/kepala-tim): akun aktif dengan role AKTIF
- * KEPALA_TIM. Tanpa bypass ADMIN (alasan sama dengan `canBuatPerintahLembur`).
- * Ini guard role saja; gerbang satker pilot dicek terpisah lewat
- * `berlakuMulaiSpkl` supaya penolakannya bisa menyebut satker yang belum aktif.
+ * KEPALA_TIM atau PIMPINAN (pengecualian user 2026-11-20, lihat
+ * `canBuatPerintahLembur`). Tanpa bypass ADMIN. Ini guard role saja; gerbang
+ * satker pilot dicek terpisah lewat `berlakuMulaiSpkl` supaya penolakannya
+ * bisa menyebut satker yang belum aktif.
  */
-export function canBukaHalamanKepalaTim(user: AuthUser): boolean {
-  return user.aktif && user.role === "KEPALA_TIM";
+export function canBukaHalamanPerintahLembur(user: AuthUser): boolean {
+  return user.aktif && (user.role === "KEPALA_TIM" || user.role === "PIMPINAN");
 }
 
 /**
  * Membuat perintah lembur (SPKL) dari seorang Kepala Tim untuk anggota
  * timnya.
  *
- * Syarat: akun aktif, role aktif KEPALA_TIM, satker kepala tim dan satker
+ * Syarat: akun aktif, role aktif KEPALA_TIM atau PIMPINAN (pengecualian
+ * keputusan user 2026-11-20: Pimpinan biasanya read-only, untuk lembur boleh
+ * memberi perintah di UNIT SENDIRI; unit diambil pemanggil dari tabel
+ * Pegawai), satker pemberi perintah dan satker
  * anggota sama dan tidak kosong, dan SPKL sudah berlaku di satker itu pada
  * tanggal perintah (lihat `spklAktifUntuk`).
  *
@@ -928,7 +949,7 @@ export function canBuatPerintahLembur(
   satkerAnggota: string | null | undefined,
   tanggalIso: string,
 ): boolean {
-  if (!user.aktif || user.role !== "KEPALA_TIM") return false;
+  if (!user.aktif || (user.role !== "KEPALA_TIM" && user.role !== "PIMPINAN")) return false;
   const satker = satkerKepalaTim?.trim();
   if (!satker || satker !== satkerAnggota?.trim()) return false;
   return spklAktifUntuk(satker, tanggalIso);

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatSisaWaktu, sisaMenujuBatasMs, tanggalIsoWib } from "../perintahLembur";
+import {
+  TENGGANG_SIAP_MS,
+  batasKirimPerintah,
+  formatSisaWaktu,
+  sisaMenujuBatasMs,
+  spklHarianSiap,
+  spklHarianTerkunci,
+  tanggalIsoWib,
+} from "../perintahLembur";
 
 describe("tanggalIsoWib", () => {
   it("memakai tanggal WIB, bukan UTC", () => {
@@ -29,5 +37,40 @@ describe("formatSisaWaktu", () => {
     [50 * 3600_000, "2 hari 2 jam"],
   ])("%d ms -> %s", (ms, teks) => {
     expect(formatSisaWaktu(ms)).toBe(teks);
+  });
+});
+
+describe("spklHarianTerkunci", () => {
+  it("terbuka sampai 15:00:00.000 WIB, terkunci mulai 15:00:00.001", () => {
+    expect(spklHarianTerkunci("2026-12-10", new Date("2026-12-10T07:59:59.999Z"))).toBe(false); // 14:59:59.999
+    expect(spklHarianTerkunci("2026-12-10", new Date("2026-12-10T08:00:00.000Z"))).toBe(false); // 15:00:00.000
+    expect(spklHarianTerkunci("2026-12-10", new Date("2026-12-10T08:00:00.001Z"))).toBe(true); // 15:00:00.001
+  });
+  it("tanggal di depan tidak terkunci; tanggal lampau terkunci", () => {
+    expect(spklHarianTerkunci("2026-12-11", new Date("2026-12-10T20:00:00Z"))).toBe(false);
+    expect(spklHarianTerkunci("2026-12-09", new Date("2026-12-10T01:00:00Z"))).toBe(true);
+  });
+  it("tanggal tidak sah: tidak terkunci", () => {
+    expect(spklHarianTerkunci("10-12-2026", new Date())).toBe(false);
+  });
+  it("kebalikan persis batasKirimPerintah", () => {
+    for (const iso of ["2026-12-10T07:59:59.999Z", "2026-12-10T08:00:00.000Z", "2026-12-10T08:00:00.001Z"]) {
+      const t = new Date(iso);
+      expect(spklHarianTerkunci("2026-12-10", t)).toBe(!batasKirimPerintah("2026-12-10", t).boleh);
+    }
+  });
+});
+
+describe("spklHarianSiap", () => {
+  it("siap hanya sesudah terkunci + tenggang", () => {
+    const batas = Date.parse("2026-12-10T08:00:00.000Z");
+    expect(spklHarianSiap("2026-12-10", new Date(batas + 1))).toBe(false);
+    expect(spklHarianSiap("2026-12-10", new Date(batas + TENGGANG_SIAP_MS))).toBe(false);
+    expect(spklHarianSiap("2026-12-10", new Date(batas + TENGGANG_SIAP_MS + 1))).toBe(true);
+  });
+  it("tenggang 60 detik, tanggal depan dan tanggal tidak sah tidak siap", () => {
+    expect(TENGGANG_SIAP_MS).toBe(60_000);
+    expect(spklHarianSiap("bukan-tanggal", new Date())).toBe(false);
+    expect(spklHarianSiap("2026-12-11", new Date("2026-12-10T20:00:00Z"))).toBe(false);
   });
 });

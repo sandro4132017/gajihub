@@ -149,14 +149,48 @@ export const X_ISI_BUTIR = 153;
 export const MARGIN_KANAN = 525;
 
 /**
+ * Tulis satu baris rata kiri-kanan: sisa lebar dibagi rata ke celah antarkata.
+ * Baris terakhir paragraf dan baris satu kata ditulis rata kiri biasa.
+ */
+function tulisBaris(
+  k: KonteksTulis,
+  teks: string,
+  x: number,
+  y: number,
+  lebar: number,
+  rataPenuh: boolean,
+  terakhir: boolean,
+): void {
+  const kata = teks.split(" ").filter(Boolean);
+  if (!rataPenuh || terakhir || kata.length < 2) {
+    tulis(k, teks, x, y);
+    return;
+  }
+  const total = kata.reduce((n, kt) => n + k.font.widthOfTextAtSize(kt, k.ukuran), 0);
+  const celah = (lebar - total) / (kata.length - 1);
+  // Celah yang terlalu lebar terlihat janggal: kembali ke rata kiri.
+  if (celah < 0 || celah > k.ukuran * 2.5) {
+    tulis(k, teks, x, y);
+    return;
+  }
+  let cx = x;
+  for (const kt of kata) {
+    tulis(k, kt, cx, y);
+    cx += k.font.widthOfTextAtSize(kt, k.ukuran) + celah;
+  }
+}
+
+/**
  * Satu baris berlabel ("Dasar :", "Kepada :", ...) dengan butir bernomor atau
- * teks tunggal. Mengembalikan y baris kosong berikutnya.
+ * teks tunggal. Mengembalikan y baris kosong berikutnya. `rataPenuh` (opt-in,
+ * template SPKL) memberi teks rata kiri-kanan; bawaannya rata kiri.
  */
 export function gambarBaris(
   k: KonteksTulis,
   label: string,
   butir: readonly { no?: string; teks: string }[],
   yAwal: number,
+  rataPenuh = false,
 ): number {
   let y = yAwal;
   tulis(k, label, MARGIN_KIRI, y);
@@ -165,21 +199,28 @@ export function gambarBaris(
     const xTeks = b.no ? X_ISI_BUTIR : X_ISI;
     if (b.no) tulis(k, b.no, X_ISI, y);
     const baris = bungkusTeks(k.font, b.teks, k.ukuran, MARGIN_KANAN - xTeks);
-    for (const l of baris) {
-      tulis(k, l, xTeks, y);
+    baris.forEach((l, i) => {
+      tulisBaris(k, l, xTeks, y, MARGIN_KANAN - xTeks, rataPenuh, i === baris.length - 1);
       y -= k.jarakBaris;
-    }
+    });
   }
   return y;
 }
 
-/** Paragraf polos (tanpa label) dari `x` selebar sampai margin kanan. */
-export function gambarParagraf(k: KonteksTulis, teks: string, x: number, yAwal: number): number {
+/** Paragraf polos (tanpa label) dari `x` selebar sampai margin kanan. `rataPenuh` opt-in. */
+export function gambarParagraf(
+  k: KonteksTulis,
+  teks: string,
+  x: number,
+  yAwal: number,
+  rataPenuh = false,
+): number {
   let y = yAwal;
-  for (const l of bungkusTeks(k.font, teks, k.ukuran, MARGIN_KANAN - x)) {
-    tulis(k, l, x, y);
+  const baris = bungkusTeks(k.font, teks, k.ukuran, MARGIN_KANAN - x);
+  baris.forEach((l, i) => {
+    tulisBaris(k, l, x, y, MARGIN_KANAN - x, rataPenuh, i === baris.length - 1);
     y -= k.jarakBaris;
-  }
+  });
   return y;
 }
 
@@ -262,6 +303,26 @@ export interface KolomTabel {
   judul: string;
   lebar: number;
   rata?: "kiri" | "tengah";
+  /**
+   * Opt-in: baris "\n" di sel dipisah garis horizontal di dalam sel
+   * (mis. NAMA di atas, NIP di bawah). Bawaan: "\n" hanya pindah baris.
+   */
+  pemisahSel?: boolean;
+  /** Opt-in: isi sel baris data diletakkan di tengah tinggi baris. Bawaan: rata atas. */
+  tengahVertikal?: boolean;
+}
+
+/** Penanda internal satu baris sel yang digambar sebagai garis pemisah. */
+const BARIS_GARIS = "\u0001GARIS";
+
+function bungkusSel(font: PDFFont, teks: string, ukuran: number, lebar: number, pemisah: boolean): string[] {
+  if (!pemisah) return bungkusTeks(font, teks, ukuran, lebar);
+  const hasil: string[] = [];
+  teks.split("\n").forEach((bagian, i) => {
+    if (i > 0) hasil.push(BARIS_GARIS);
+    hasil.push(...bungkusTeks(font, bagian, ukuran, lebar));
+  });
+  return hasil;
 }
 
 /**
@@ -283,7 +344,7 @@ export function gambarTabel(
     ukuranHalaman: [number, number];
     batasBawah?: number;
   },
-): void {
+): { halaman: PDFPage; y: number } {
   const pad = 3;
   const lh = o.ukuran * 1.3;
   const batasBawah = o.batasBawah ?? 50;
@@ -303,9 +364,16 @@ export function gambarTabel(
     });
   };
 
-  const gambarSel = (teksBaris: string[], kol: KolomTabel, x: number, yAtas: number, tebal: boolean) => {
+  const gambarSel = (teksBaris: string[], kol: KolomTabel, x: number, yAtas: number, tebal: boolean, tinggiBaris = 0) => {
     const f = tebal ? fontBold : font;
+    const geser = !tebal && kol.tengahVertikal ? Math.max(0, (tinggiBaris - 2 * pad - teksBaris.length * lh) / 2) : 0;
+    yAtas -= geser;
     teksBaris.forEach((t, i) => {
+      if (t === BARIS_GARIS) {
+        const yg = yAtas - pad - (i + 0.5) * lh;
+        page.drawLine({ start: { x, y: yg }, end: { x: x + kol.lebar, y: yg }, thickness: 0.6, color: rgb(0, 0, 0) });
+        return;
+      }
       const tx =
         kol.rata === "tengah" || tebal
           ? x + (kol.lebar - f.widthOfTextAtSize(t, o.ukuran)) / 2
@@ -336,7 +404,9 @@ export function gambarTabel(
   gambarHeader();
 
   for (const row of o.baris) {
-    let sisa = row.map((teks, i) => bungkusTeks(font, teks, o.ukuran, o.kolom[i].lebar - 2 * pad));
+    let sisa = row.map((teks, i) =>
+      bungkusSel(font, teks, o.ukuran, o.kolom[i].lebar - 2 * pad, o.kolom[i].pemisahSel === true),
+    );
     while (sisa.some((c) => c.length > 0)) {
       const butuh = Math.max(...sisa.map((c) => c.length));
       const muat = Math.floor((y - batasBawah - 2 * pad) / lh);
@@ -350,12 +420,27 @@ export function gambarTabel(
       let x = o.kiri;
       o.kolom.forEach((c, i) => {
         kotak(x, y, c.lebar, h, false);
-        gambarSel(sisa[i].slice(0, n), c, x, y, false);
+        gambarSel(sisa[i].slice(0, n), c, x, y, false, h);
         x += c.lebar;
       });
       y -= h;
       sisa = sisa.map((c) => c.slice(n));
       if (sisa.some((c) => c.length > 0)) halamanBaru();
     }
+  }
+  return { halaman: page, y };
+}
+
+/**
+ * Opt-in: baris cap di kepala SETIAP halaman (mis. dokumen SEMENTARA yang
+ * isinya masih bisa bertambah). Dipanggil setelah semua halaman ada.
+ */
+export function gambarCapSemuaHalaman(doc: PDFDocument, fontBold: PDFFont, teks: string): void {
+  const aman = amankanTeks(teks);
+  for (const page of doc.getPages()) {
+    const { width, height } = page.getSize();
+    const ukuran = 8;
+    const lebar = fontBold.widthOfTextAtSize(aman, ukuran);
+    page.drawText(aman, { x: (width - lebar) / 2, y: height - 11, size: ukuran, font: fontBold, color: rgb(0.7, 0.1, 0.1) });
   }
 }

@@ -9,9 +9,30 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-11-11** - sesi berbatas & role bawaan login (migrasi `user_sesi_versi` belum dijalankan, lihat butir 0000), lalu koreksi jam presensi dipersempit ke Kasubag TU (migrasi belum dijalankan, lihat butir 000), lalu rincian lengkap PPABP di `/tukin` (2026-11-11, belum di-commit), lalu rangkuman commit `64d9a46`..`9e3886e`, plus perbaikan pentest Pusdatik (2026-11-06, lihat bagian 3 butir 20)
+Terakhir diperbarui: **2026-11-20** - SPKL harian tanpa TTE sementara (lihat butir 00000), lalu **2026-11-11** - sesi berbatas & role bawaan login (migrasi `user_sesi_versi` belum dijalankan, lihat butir 0000), lalu koreksi jam presensi dipersempit ke Kasubag TU (migrasi belum dijalankan, lihat butir 000), lalu rincian lengkap PPABP di `/tukin` (2026-11-11, belum di-commit), lalu rangkuman commit `64d9a46`..`9e3886e`, plus perbaikan pentest Pusdatik (2026-11-06, lihat bagian 3 butir 20)
 (2026-10-21 s.d. 2026-10-29), plus akun penguji Tim Pusdatik dan penghapusan login
 NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-log.md`.
+
+00000. **SPKL harian tanpa TTE (2026-11-20, belum di-commit, tanpa migrasi baru)**:
+   - TTE lembur DIMATIKAN sementara: `TTE_LEMBUR_AKTIF = false` di `src/lib/lembur/sakelarTteLembur.ts`.
+     Route `/api/lembur/spkl` dan pratinjau menjawab 404. Kode BSrE tetap ada.
+   - SPKL bulanan diganti SPKL HARIAN (satu dokumen per satker per tanggal). PDF di `GET /berkas/spkl-harian`
+     kapan saja, inline, `no-store`. Sebelum 15.00 WIB + 60 dtk ada cap SEMENTARA dan nama `-SEMENTARA`
+     (TIDAK ADA 409 lagi). Halaman `/kasubag/spkl` kini "SPKL Harian". `PanelSpklBulanan` dihapus.
+   - Lanjutan 2026-11-20 (sudah di kode, belum di-commit, tanpa migrasi):
+     - Layout PDF = template SPKL Oktober 2026 hanya tanggal harian. Lampiran NO | NAMA/NIP | GOL | TANGGAL | KETERANGAN, tanpa kolom JAM dan tanpa nama kepala tim. Catatan "dibentuk otomatis" dihapus.
+     - Penanda tangan = Kepala Biro dari tabel Pegawai (tepat satu kandidat; 0 atau >1 = titik-titik, Plt/Plh tidak ditebak).
+     - Gelar dicetak untuk SPKL: PENGECUALIAN TERCATAT atas keputusan 2026-10-20 "nama cetak tanpa gelar" (`namaBergelarSpkl`).
+     - Role PIMPINAN boleh memantau (`/pimpinan/lembur`) dan membuat perintah lembur untuk unit sendiri (`canBukaHalamanPerintahLembur`, `canLihatPerintahLemburUnit`). Satker dari tabel Pegawai lewat NIP.
+     - Login akun dev menambah role KEPALA_TIM sekali bila belum ada.
+     - Tim bukan data DB. Satu pegawai satu perintah per tanggal (409). Label WA "Pemberi perintah:".
+     - TTE nanti = Kepala Biro manual di menu Pimpinan (passphrase tidak disimpan). Belum dibangun, tahap 3.
+     - Opsi tabel tim = pekerjaan masa depan.
+   - WA: satu pesan gabungan per hari per satker. Bot WA yang lama HARUS menyesuaikan `sejak=YYYY-MM-DD`.
+   - Penanda tangan TTE nanti = Kepala Biro. `canTandatanganiSpklHarian` masih Kasubag TU.
+   - TODO(confirm) terbuka: tanggal TTE dinyalakan; tenggang 60 dtk; jabatan/catatan PDF tanpa TTE;
+     format nomor SPKL harian; apakah TTE sebelum 15.00 sekaligus mengunci hari itu.
+   - Detail: `gajihub-uang-makan-lembur` (bagian "Keputusan 2026-11-20"). Verifikasi belum dijalankan pencatat.
 
 0000. **Sesi berbatas, role bawaan login, role Pegawai wajib (2026-11-11, belum di-commit, MIGRASI BELUM DIJALANKAN)**:
    - Sesi: menganggur 30 menit (sliding, env `SESI_MENGANGGUR_MENIT`) dan mutlak 8 jam sejak login.
