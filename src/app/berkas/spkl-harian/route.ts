@@ -4,10 +4,9 @@
 // Satu dokumen per (satker, tanggal): semua perintah lembur TERKIRIM hari itu
 // dari semua pemberi perintah. Tidak ada berkas tersimpan; PDF disusun dari
 // database pada tiap permintaan, jadi isinya selalu sama dengan halaman SPKL
-// Harian. Boleh dibuka KAPAN SAJA: sebelum batas 15.00 WIB + tenggang
-// (spklHarianSiap) dokumen berlabel SEMENTARA di tiap halaman dan nama
-// berkasnya berakhiran -SEMENTARA karena isinya masih bisa bertambah;
-// sesudahnya final. Selalu inline dan no-store.
+// Harian. Boleh dibuka KAPAN SAJA; sebelum 15.00 WIB isinya masih bisa
+// bertambah, tapi dokumen TIDAK diberi cap (keputusan user 2026-11-23) -
+// status Sementara/Selesai ditampilkan di halaman. Selalu inline dan no-store.
 //
 // Urutan: sesi (401) -> tanggal sah (400) -> satker + izin
 // `canLihatPerintahLemburUnit` (403) -> gerbang pilot (404) -> ada perintah
@@ -16,15 +15,17 @@
 // lintas-unit (PPABP/ADMIN), pola sama dengan halaman /kasubag/spkl.
 // PIMPINAN: satker diambil dari tabel Pegawai lewat NIP dan `?satker=`
 // diabaikan (pengecualian lembur user 2026-11-20); tanpa baris Pegawai -> 403.
-// KEPALA_TIM dan PEGAWAI tidak boleh membuka.
+// KEPALA_TIM (keputusan user 2026-11-23): satker dari Pegawai lewat NIP, `?satker=`
+// diabaikan, dan HANYA bila akun itu sendiri punya PerintahLembur TERKIRIM di
+// (satker, tanggal) itu (`canLihatSpklHarianSebagaiPemberi`); selain itu 403.
+// PDF tetap memuat semua pegawai hari itu. PEGAWAI tidak boleh membuka.
 //
 // URL TIDAK BOLEH berakhiran ekstensi gambar/font (matcher middleware).
 // ============================================================================
 
 import type { NextRequest } from "next/server";
 import { ambilUserSesi } from "@/auth/getSessionAccount";
-import { canLihatPerintahLemburUnit, type AuthUser } from "@/auth/permissions";
-import { spklHarianSiap } from "@/business-logic/perintahLembur";
+import { canLihatPerintahLemburUnit, canLihatSpklHarianSebagaiPemberi, type AuthUser } from "@/auth/permissions";
 import { resolveSatkerEfektif } from "@/app/dashboardScope";
 import { spklAktifDataUntuk, spklAktifUntuk } from "@/lib/lembur/gerbangSpkl";
 import { muatKepalaBiro } from "@/lib/lembur/penandatanganSpkl";
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
   };
   let satkerPegawaiAkun: string | null = null;
   let satker: string;
-  if (authUser.role === "PIMPINAN") {
+  if (authUser.role === "PIMPINAN" || authUser.role === "KEPALA_TIM") {
     const pegawai = await prisma.pegawai.findUnique({ where: { nip: authUser.nip }, select: { satuanKerja: true } });
     satkerPegawaiAkun = pegawai?.satuanKerja?.trim() || null;
     if (!satkerPegawaiAkun) return GALAT.tanpaIzin();
@@ -76,10 +77,25 @@ export async function GET(req: NextRequest) {
       ? responTeks(400, "Satuan kerja wajib dipilih.")
       : GALAT.tanpaIzin();
   }
-  if (!canLihatPerintahLemburUnit(authUser, satker, satkerPegawaiAkun)) return GALAT.tanpaIzin();
+  if (authUser.role === "KEPALA_TIM") {
+    const [y, mo, d] = tanggal.split("-").map(Number);
+    const milikSendiri = await prisma.perintahLembur.findFirst({
+      where: {
+        kepalaTimId: user.id,
+        satuanKerja: satker,
+        tanggal: new Date(Date.UTC(y, mo - 1, d)),
+        status: "TERKIRIM",
+      },
+      select: { id: true },
+    });
+    if (!canLihatSpklHarianSebagaiPemberi(authUser, satker, satkerPegawaiAkun, !!milikSendiri)) {
+      return GALAT.tanpaIzin();
+    }
+  } else if (!canLihatPerintahLemburUnit(authUser, satker, satkerPegawaiAkun)) {
+    return GALAT.tanpaIzin();
+  }
 
   if (!spklAktifUntuk(satker, tanggal)) return GALAT.tidakAda();
-  const sementara = !spklHarianSiap(tanggal, new Date());
 
   const rekap = await muatRekapSpklHarian(prisma, satker, tanggal);
   if (rekap.baris.length === 0) return GALAT.tidakAda();
@@ -95,7 +111,6 @@ export async function GET(req: NextRequest) {
     baris: rekap.baris,
     kepalaBiro,
     tanpaTte: true,
-    sementara,
   });
-  return responBerkas(pdf, generateNamaFileSpklHarian(tanggal, satker, sementara), true);
+  return responBerkas(pdf, generateNamaFileSpklHarian(tanggal, satker), true);
 }

@@ -17,7 +17,7 @@ NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-
    - TTE lembur DIMATIKAN sementara: `TTE_LEMBUR_AKTIF = false` di `src/lib/lembur/sakelarTteLembur.ts`.
      Route `/api/lembur/spkl` dan pratinjau menjawab 404. Kode BSrE tetap ada.
    - SPKL bulanan diganti SPKL HARIAN (satu dokumen per satker per tanggal). PDF di `GET /berkas/spkl-harian`
-     kapan saja, inline, `no-store`. Sebelum 15.00 WIB + 60 dtk ada cap SEMENTARA dan nama `-SEMENTARA`
+     kapan saja, inline, `no-store`. Sebelum 15.00 WIB isinya masih bisa bertambah (PDF tanpa cap, sejak 2026-11-23)
      (TIDAK ADA 409 lagi). Halaman `/kasubag/spkl` kini "SPKL Harian". `PanelSpklBulanan` dihapus.
    - Lanjutan 2026-11-20 (sudah di kode, belum di-commit, tanpa migrasi):
      - Layout PDF = template SPKL Oktober 2026 hanya tanggal harian. Lampiran NO | NAMA/NIP | GOL | TANGGAL | KETERANGAN, tanpa kolom JAM dan tanpa nama kepala tim. Catatan "dibentuk otomatis" dihapus.

@@ -7,13 +7,14 @@ import { SPKL_AKTIF } from "../../../../lib/lembur/gerbangSpkl";
 const m = vi.hoisted(() => ({
   ambilUserSesi: vi.fn(),
   findMany: vi.fn(),
+  findFirst: vi.fn(),
   pegawaiFindMany: vi.fn(),
   pegawaiFindUnique: vi.fn(),
 }));
 vi.mock("@/auth/getSessionAccount", () => ({ ambilUserSesi: m.ambilUserSesi }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    perintahLembur: { findMany: m.findMany },
+    perintahLembur: { findMany: m.findMany, findFirst: m.findFirst },
     pegawai: { findMany: m.pegawaiFindMany, findUnique: m.pegawaiFindUnique },
   },
 }));
@@ -80,8 +81,8 @@ describe("GET /berkas/spkl-harian", () => {
     expect(m.findMany).not.toHaveBeenCalled();
   });
 
-  it.each(["KEPALA_TIM", "PEGAWAI"])("role %s -> 403", async (role) => {
-    m.ambilUserSesi.mockResolvedValue(sesi({ role }));
+  it("role PEGAWAI -> 403", async () => {
+    m.ambilUserSesi.mockResolvedValue(sesi({ role: "PEGAWAI" }));
     expect((await GET(req({ satker: SATKER }))).status).toBe(403);
     expect(m.findMany).not.toHaveBeenCalled();
   });
@@ -97,17 +98,17 @@ describe("GET /berkas/spkl-harian", () => {
     expect((await GET(req({ tanggal: "bukan" }))).status).toBe(400);
   });
 
-  it("sebelum siap (sebelum 15.00 atau dalam tenggang) -> 200 SEMENTARA: inline, no-store, cap di tiap halaman, nama -SEMENTARA", async () => {
+  it("sebelum siap (sebelum 15.00 atau dalam tenggang) -> 200: inline, no-store, TANPA cap sementara", async () => {
     for (const saat of [DALAM_TENGGANG, SEBELUM_BATAS]) {
       vi.setSystemTime(saat);
       const res = await GET(req());
       expect(res.status).toBe(200);
       const cd = res.headers.get("Content-Disposition") ?? "";
       expect(cd).toContain("inline");
-      expect(cd).toContain("SEMENTARA");
+      expect(cd).not.toContain("SEMENTARA");
       expect(res.headers.get("Cache-Control")).toBe("private, no-store");
       const halaman = await teksPdf(res);
-      expect(halaman.every((t) => t.includes("SEMENTARA - masih bisa bertambah sampai 15.00 WIB"))).toBe(true);
+      expect(halaman.join(" ")).not.toContain("SEMENTARA");
     }
   });
 
@@ -162,6 +163,48 @@ describe("GET /berkas/spkl-harian", () => {
     const kosong = (await teksPdf(await GET(req()))).join(" ");
     expect(kosong).not.toContain("Kepala Biro Palsu");
     expect(kosong).toContain("....");
+  });
+});
+
+describe("GET /berkas/spkl-harian - KEPALA_TIM (pemberi perintah di tanggal itu)", () => {
+  const kt = (o: Record<string, unknown> = {}) => sesi({ role: "KEPALA_TIM", satuanKerja: "Satker Akun Lain", ...o });
+
+  it("punya perintah TERKIRIM di tanggal itu -> 200; cek kepemilikan memakai id akun, satker Pegawai, tanggal", async () => {
+    m.ambilUserSesi.mockResolvedValue(kt());
+    m.pegawaiFindUnique.mockResolvedValue({ satuanKerja: SATKER });
+    m.findFirst.mockResolvedValue({ id: "pl-1" });
+    expect((await GET(req())).status).toBe(200);
+    expect(m.findFirst.mock.calls[0][0].where).toEqual({
+      kepalaTimId: "u-1",
+      satuanKerja: SATKER,
+      tanggal: new Date(Date.UTC(2026, 11, 10)),
+      status: "TERKIRIM",
+    });
+  });
+
+  it("tanpa perintah di tanggal itu -> 403, rekap tidak dibaca", async () => {
+    m.ambilUserSesi.mockResolvedValue(kt());
+    m.pegawaiFindUnique.mockResolvedValue({ satuanKerja: SATKER });
+    m.findFirst.mockResolvedValue(null);
+    expect((await GET(req())).status).toBe(403);
+    expect(m.findMany).not.toHaveBeenCalled();
+  });
+
+  it("?satker= lain diabaikan: satker tetap dari Pegawai", async () => {
+    m.ambilUserSesi.mockResolvedValue(kt());
+    m.pegawaiFindUnique.mockResolvedValue({ satuanKerja: SATKER });
+    m.findFirst.mockResolvedValue({ id: "pl-1" });
+    expect((await GET(req({ satker: "Biro Lain Sekali" }))).status).toBe(200);
+    expect(m.findFirst.mock.calls[0][0].where.satuanKerja).toBe(SATKER);
+    expect(m.findMany.mock.calls[0][0].where.satuanKerja).toBe(SATKER);
+  });
+
+  it("tanpa baris Pegawai -> 403, perintah tidak dicek", async () => {
+    m.ambilUserSesi.mockResolvedValue(kt());
+    m.pegawaiFindUnique.mockResolvedValue(null);
+    expect((await GET(req({ satker: SATKER }))).status).toBe(403);
+    expect(m.findFirst).not.toHaveBeenCalled();
+    expect(m.findMany).not.toHaveBeenCalled();
   });
 });
 

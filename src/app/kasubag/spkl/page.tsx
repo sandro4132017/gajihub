@@ -7,7 +7,7 @@ import { SpklHarianUnit } from "../../../components/shared/SpklHarianUnit";
 import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { SPKL_AKTIF, berlakuMulaiSpkl } from "../../../lib/lembur/gerbangSpkl";
 import { spklBerlakuDiPeriode } from "../../../lib/lembur/perintahPeriode";
-import { muatDaftarSpklHarian, muatRekapSpklHarian } from "../../../lib/lembur/rekapSpklHarian";
+import { muatDaftarSpklHarianDenganUnik, muatRekapSpklHarian } from "../../../lib/lembur/rekapSpklHarian";
 import { tanggalIsoTeks } from "../../../lib/lembur/waktuTampil";
 import { satkerTerkunciUntukAkun } from "../../dashboardScope";
 import { resolvePeriode, type Periode } from "../../periodeDefault";
@@ -58,8 +58,8 @@ export default async function SpklHarianPage({
   if (!satkerEfektif) {
     return (
       <main className={HALAMAN}>
-        <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">SPKL Harian</h1>
-        <p className="mt-2 text-sm text-biru">Pilih satuan kerja dan periode dulu.</p>
+        <h1 className="text-2xl font-black tracking-tight text-ink sm:text-3xl">SPKL Harian</h1>
+        <p className="mt-1 text-xs text-muted sm:text-sm">Pilih satuan kerja dan periode dulu.</p>
         <FilterBar wajibPeriode wajibSatker satuanKerjaList={satuanKerjaList} bulan={bulan} tahun={tahun} satker={satker} />
       </main>
     );
@@ -82,13 +82,12 @@ export default async function SpklHarianPage({
 
   const kepala = (
     <>
-      <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">SPKL Harian</h1>
-      <p className="mt-0.5 text-sm font-bold text-ink">
-        {satkerEfektif} &middot; {labelPeriode}
-      </p>
-      <p className="mt-2 text-sm text-biru">
-        Satu SPKL per tanggal, dibentuk otomatis dari semua perintah lembur yang terkirim hari itu. Boleh dibuka kapan saja;
-        sebelum 15.00 WIB berlabel SEMENTARA.
+      <div className="flex flex-wrap items-center gap-2.5">
+        <h1 className="text-2xl font-black tracking-tight text-ink sm:text-3xl">SPKL Harian</h1>
+        <span className="chip chip-navy text-xs font-semibold">{satkerEfektif}</span>
+      </div>
+      <p className="mt-1 text-xs text-muted sm:text-sm">
+        SPKL harian terbentuk otomatis berdasarkan perintah lembur yang diterbitkan pada tanggal terkait.
       </p>
       <div className="card mt-4 p-4">
         <FilterBar
@@ -121,8 +120,8 @@ export default async function SpklHarianPage({
   }
 
   const tanggalDipilih = tanggal && FORMAT_TANGGAL.test(tanggal) ? tanggal : null;
-  const [daftar, rekap] = await Promise.all([
-    muatDaftarSpklHarian(prisma, satkerEfektif, periodeBulan, periodeTahun),
+  const [{ daftar, jumlahPegawaiUnik }, rekap] = await Promise.all([
+    muatDaftarSpklHarianDenganUnik(prisma, satkerEfektif, periodeBulan, periodeTahun),
     tanggalDipilih ? muatRekapSpklHarian(prisma, satkerEfektif, tanggalDipilih) : Promise.resolve(null),
   ]);
 
@@ -141,6 +140,7 @@ export default async function SpklHarianPage({
         satuanKerja={satkerEfektif}
         labelPeriode={labelPeriode}
         daftar={daftar}
+        jumlahPegawaiUnik={jumlahPegawaiUnik}
         tanggalDipilih={tanggalDipilih}
         rekap={rekap}
         sekarang={sekarang}

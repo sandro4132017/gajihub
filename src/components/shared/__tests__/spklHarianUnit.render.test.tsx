@@ -28,6 +28,7 @@ function render(o: Partial<SpklHarianUnitProps> = {}) {
       satuanKerja="Biro Uji Coba"
       labelPeriode="Desember 2026"
       daftar={daftar}
+      jumlahPegawaiUnik={2}
       tanggalDipilih={null}
       rekap={null}
       sekarang={SEBELUM_BATAS}
@@ -40,29 +41,46 @@ function render(o: Partial<SpklHarianUnitProps> = {}) {
 describe("SpklHarianUnit", () => {
   it("tabel tanggal: status, pegawai, total jam, rincian per pemberi perintah", () => {
     const html = render();
-    expect(html).toContain("Terbuka");
+    expect(html).toContain("Sementara");
+    expect(html).toContain("15.00 WIB");
+    expect(html).toContain("Pemberi Perintah");
     expect(html).toContain("Kepala Satu");
-    expect(html).toContain("2 pegawai, 5 jam");
     expect(html).toContain("Kepala Dua");
-    expect(html).toContain("1 pegawai, 4 jam");
+    // Kolom Pemberi Perintah hanya nama (keputusan user 2026-11-23), tanpa rincian pegawai/jam.
+    expect(html).not.toContain("2 pegawai, 5 jam");
+    expect(html).not.toContain("1 pegawai, 4 jam");
   });
 
-  it("tombol buka SELALU ada: sementara sebelum siap, biasa sesudahnya; target tab baru", () => {
+  it("tombol Lihat SPKL SELALU ada, sebelum maupun sesudah siap; target tab baru", () => {
     const sebelum = render();
-    expect(sebelum.match(/Buka \(sementara\)/g)).toHaveLength(2);
+    expect(sebelum.match(/Lihat SPKL/g)).toHaveLength(2);
+    expect(sebelum.match(/Lihat Lampiran/g)).toHaveLength(2);
     expect(sebelum).toContain('target="_blank"');
     expect(sebelum).toContain("/berkas/spkl-harian?tanggal=2026-12-10");
 
     const sesudah = render({ sekarang: SESUDAH_SIAP });
-    expect(sesudah).toContain("Terkunci");
-    expect(sesudah).toContain(">Buka<");
-    // 2026-12-11 belum lewat: tetap sementara.
-    expect(sesudah.match(/Buka \(sementara\)/g)).toHaveLength(1);
+    expect(sesudah).toContain("Selesai");
+    expect(sesudah.match(/Lihat SPKL/g)).toHaveLength(2);
+    // 2026-12-11 belum lewat: tetap sementara, 2026-12-10 selesai.
+    expect(sesudah.match(/>Sementara</g)).toHaveLength(1);
+    expect(sesudah.match(/Selesai/g)).toHaveLength(1);
   });
 
-  it("banner sementara dan daftar kosong", () => {
-    expect(render()).toContain("SEMENTARA");
-    expect(render({ daftar: [] })).toContain("Belum ada perintah lembur terkirim");
+  it("kartu metrik dan daftar kosong", () => {
+    const html = render();
+    expect(html).toContain("Belum Final");
+    expect(html).toContain("Jumlah Pegawai");
+    expect(html).toContain("Total Jam Perintah");
+    expect(html).not.toContain("Total Jam Lembur");
+    expect(html).toContain("Tanggal Perintah (2)");
+    expect(html).toContain("Periode Desember 2026. Perintah lembur masih dapat diterbitkan hingga pukul 15.00 WIB.");
+    expect(render({ daftar: [] })).toContain("Belum ada perintah lembur yang diterbitkan");
+  });
+
+  it("kartu Jumlah Pegawai memakai pegawai unik, bukan jumlah orang-hari", () => {
+    // Orang-hari pada fixture = 4; unik dikirim pemanggil = 2.
+    const html = render({ jumlahPegawaiUnik: 2 });
+    expect(html).toMatch(/Jumlah Pegawai<\/span><p[^>]*>2<\/p>/);
   });
 
   it("lampiran di layar tanpa kolom Jam dan tanpa nama pemberi perintah", () => {
@@ -77,7 +95,8 @@ describe("SpklHarianUnit", () => {
         perPemberi: [],
       },
     });
-    expect(html).toContain("Lampiran");
+    expect(html).toContain("Lampiran Perintah Lembur – ");
+    expect(html).toContain("Golongan");
     expect(html).toContain("Pegawai Uji");
     expect(html).toContain("-Laporan");
     expect(html).toContain("-Rapat");

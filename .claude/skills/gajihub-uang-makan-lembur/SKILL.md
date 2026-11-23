@@ -184,7 +184,7 @@ berlaku setelah tarik ulang. Keduanya menunggu keputusan user.
   `spklHarianTerkunci` (sesudah 15.00:00.000 WIB) dan `spklHarianSiap` (terkunci
   + tenggang `TENGGANG_SIAP_MS` 60 dtk, `TODO(confirm)`).
 - **PDF** diunduh di `GET /berkas/spkl-harian` kapan saja, inline, `no-store`.
-  Sebelum `spklHarianSiap` ada cap SEMENTARA dan nama file berakhiran `-SEMENTARA`
+  Sebelum `spklHarianSiap` isinya masih bisa bertambah, tapi PDF TANPA cap (keputusan user 2026-11-23)
   (lihat "Lanjutan 2026-11-20"). TIDAK ADA lagi jawaban 409. Izinnya
   `canLihatPerintahLemburUnit`: Kasubag TU unit itu, PPABP, ADMIN, dan PIMPINAN
   untuk unit sendiri. KEPALA_TIM tidak. Kasubag TU dikunci ke satker akunnya.
@@ -205,6 +205,27 @@ berlaku setelah tarik ulang. Keduanya menunggu keputusan user.
 - **TODO(confirm) terbuka**: tanggal TTE dinyalakan; tenggang 60 dtk; jabatan dan
   catatan PDF tanpa TTE; format nomor SPKL harian; apakah TTE sebelum 15.00
   sekaligus mengunci hari itu.
+
+#### Ukuran PDF mengikuti berkas asli (keputusan user 2026-11-23)
+
+Sumber: Word "SPKL Lembur September 2026" (halaman 1) dan Excel "SPK LEMBUR BIRO
+KEUANGAN 2026" sheet September (lampiran) milik Biro Keuangan - TIDAK disimpan di
+repo (berisi nama & NIP). Disetujui user setelah melihat contoh ("Sudah sesuai").
+
+- **Halaman 1 kertas LEGAL 612x1008** (`siapkanKertasBerkop({ukuran})`, opt-in;
+  SPTJM tetap A4). Helvetica 12 (pengganti Arial), judul & nomor 13 tidak tebal.
+  Margin kiri 56.7 / kanan 49.6. Tab dari margin: ":" +66, nomor +76, isi +99.25
+  (Pembiayaan & Akun +85). Baris kosong antarbagian 1/2/1/0/3/1/2 seperti docx.
+  Blok TTD: "Ditetapkan/Pada tanggal" rata kiri di margin+276.45; jabatan & nama
+  rata tengah di x 454.85 (`TENGAH_TTD_SPKL_HARIAN`, dicatat sebagai SIGN_X di
+  keywords; dokumen tanpa SIGN_X tetap 412.67), 5 baris kosong. Penyusutan:
+  baris kosong dulu, lalu font sampai 9; masih tidak muat -> galat, bukan
+  teks bertumpuk.
+- **Lampiran A4**, Helvetica 9 (aslinya Calibri 12 dicetak skala +-70%; Calibri
+  sengaja TIDAK ditanam - butuh fontkit & lisensi). Kolom NO 3 / NAMA-NIP 32 /
+  GOL 5 / TANGGAL 10 / KETERANGAN 50 % (TANGGAL dipersempit, keputusan user).
+  Semua sel rata tengah vertikal. Kolom JABATAN di Excel asli tersembunyi ->
+  tidak dicetak. TTD lampiran di tengah kolom KETERANGAN.
 
 #### Lanjutan 2026-11-20: layout PDF, penanda tangan, gelar, PIMPINAN
 
@@ -231,9 +252,9 @@ Keputusan user 2026-11-20, sudah di kode (belum di-commit). Tidak ada migrasi.
 - **Gelar dicetak untuk SPKL** (`namaBergelarSpkl` di `src/business-logic/namaPegawai.ts`),
   untuk daftar pegawai dan Kepala Biro. Ini PENGECUALIAN TERCATAT atas keputusan
   2026-10-20 "nama cetak tanpa gelar". Dokumen lain tetap tanpa gelar.
-- **PDF sementara**: sebelum `spklHarianSiap` (15.00 WIB + 60 dtk), tiap halaman
-  diberi cap merah "SEMENTARA - masih bisa bertambah sampai 15.00 WIB" dan nama
-  file berakhiran `-SEMENTARA`. Respons 409 DIHAPUS. WA tetap hanya setelah siap.
+- **PDF sementara**: sebelum `spklHarianSiap` (15.00 WIB + 60 dtk) isinya masih bisa bertambah. Cap
+  "SEMENTARA" di PDF dan akhiran nama file DIHAPUS (keputusan user 2026-11-23); status cukup di halaman
+  (lencana kuning "Sementara s.d. 15.00" / hijau "Selesai", tanpa merah - keputusan user 2026-11-23; tombol "Buka (sementara)"). Respons 409 DIHAPUS. WA tetap hanya setelah siap.
 - **Role PIMPINAN** (pengecualian dari read-only, lihat `gajihub-role-otorisasi`):
   boleh memantau dan MEMBUAT perintah lembur untuk unit sendiri. Halaman
   `/pimpinan/lembur` (Pemantauan) dan `/kepala-tim` (Perintah Lembur) di sidebar

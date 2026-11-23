@@ -3,6 +3,7 @@ import {
   canLihatDokumenLembur,
   canLihatDokumenSptjm,
   canLihatPerintahLemburUnit,
+  canLihatSpklHarianSebagaiPemberi,
   canTandatanganiSpklHarian,
   canTandatanganiSptjmUnit,
   type AuthUser,
@@ -90,6 +91,38 @@ describe("canLihatDokumenLembur", () => {
 
   it("canLihatDokumenSptjm tidak berubah: penandatangan non-Kasubag tetap ditolak", () => {
     expect(canLihatDokumenSptjm(user({ nip: NIP_KT, role: "KEPALA_TIM" }), UNIT)).toBe(false);
+  });
+});
+
+describe("canLihatSpklHarianSebagaiPemberi (keputusan user 2026-11-23)", () => {
+  const kt = user({ role: "KEPALA_TIM" });
+
+  it("KEPALA_TIM aktif, satker Pegawai cocok, punya perintah di tanggal itu -> boleh", () => {
+    expect(canLihatSpklHarianSebagaiPemberi(kt, UNIT, UNIT, true)).toBe(true);
+  });
+
+  it("tanpa perintah di tanggal itu -> ditolak", () => {
+    expect(canLihatSpklHarianSebagaiPemberi(kt, UNIT, UNIT, false)).toBe(false);
+  });
+
+  it("satker Pegawai kosong atau beda unit -> ditolak (User.satuanKerja tidak dipakai)", () => {
+    expect(canLihatSpklHarianSebagaiPemberi(kt, UNIT, null, true)).toBe(false);
+    expect(canLihatSpklHarianSebagaiPemberi(kt, UNIT, "Biro Lain", true)).toBe(false);
+  });
+
+  it("KEPALA_TIM nonaktif ditolak", () => {
+    expect(canLihatSpklHarianSebagaiPemberi(user({ role: "KEPALA_TIM", aktif: false }), UNIT, UNIT, true)).toBe(false);
+  });
+
+  it.each(["PEGAWAI", "KASUBAG_TU", "PIMPINAN", "PPABP", "ADMIN"] as const)(
+    "role %s tidak lewat jalur ini",
+    (role) => {
+      expect(canLihatSpklHarianSebagaiPemberi(user({ role }), UNIT, UNIT, true)).toBe(false);
+    },
+  );
+
+  it("canLihatPerintahLemburUnit tetap menolak KEPALA_TIM", () => {
+    expect(canLihatPerintahLemburUnit(kt, UNIT, UNIT)).toBe(false);
   });
 });
 

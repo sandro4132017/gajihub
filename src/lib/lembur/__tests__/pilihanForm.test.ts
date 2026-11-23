@@ -2,27 +2,19 @@ import { describe, expect, it } from "vitest";
 import { buatPilihanAnggota, keadaanTanggal, labelAnggota } from "../pilihanForm";
 
 describe("buatPilihanAnggota", () => {
-  it("hanya id, nama, jabatan, penanda: tanpa NIP", () => {
-    const hasil = buatPilihanAnggota([{ id: "a", nama: "Budi Uji", jabatan: "Analis" }]);
-    expect(Object.keys(hasil[0]).sort()).toEqual(["id", "jabatan", "nama", "penanda"]);
-    expect(labelAnggota(hasil[0])).toBe("Budi Uji - Analis");
+  it("hanya id, nama, penanda: tanpa NIP dan tanpa jabatan", () => {
+    const hasil = buatPilihanAnggota([{ id: "a", nama: "Budi Uji" }]);
+    expect(Object.keys(hasil[0]).sort()).toEqual(["id", "nama", "penanda"]);
+    expect(labelAnggota(hasil[0])).toBe("Budi Uji");
   });
 
-  it("nama kembar dengan jabatan beda dibedakan jabatan, tanpa penanda", () => {
+  it("nama kembar diberi penanda urutan; nama unik tanpa penanda", () => {
     const h = buatPilihanAnggota([
-      { id: "a", nama: "Budi Uji", jabatan: "Analis" },
-      { id: "b", nama: "Budi Uji", jabatan: "Pranata" },
+      { id: "a", nama: "Budi Uji" },
+      { id: "b", nama: "budi uji " },
+      { id: "c", nama: "Sari Uji" },
     ]);
-    expect(h.map(labelAnggota)).toEqual(["Budi Uji - Analis", "Budi Uji - Pranata"]);
-  });
-
-  it("nama+jabatan kembar diberi penanda urutan", () => {
-    const h = buatPilihanAnggota([
-      { id: "a", nama: "Budi Uji", jabatan: "Analis" },
-      { id: "b", nama: "Budi Uji", jabatan: "Analis" },
-      { id: "c", nama: "Sari Uji", jabatan: null },
-    ]);
-    expect(h.map(labelAnggota)).toEqual(["Budi Uji - Analis (1)", "Budi Uji - Analis (2)", "Sari Uji"]);
+    expect(h.map(labelAnggota)).toEqual(["Budi Uji (1)", "budi uji  (2)", "Sari Uji"]);
   });
 });
 

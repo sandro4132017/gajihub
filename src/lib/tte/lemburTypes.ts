@@ -76,8 +76,8 @@ export function generateNamaFileSpkl(bulan: number, tahun: number, satuanKerja: 
 }
 
 /** Nama berkas SPKL harian, mis. "SPKL Harian 2026-10-14 Nama Unit.pdf". */
-export function generateNamaFileSpklHarian(tanggalIso: string, satuanKerja: string, sementara = false): string {
-  return `SPKL Harian ${bersihkanNama(tanggalIso)} ${bersihkanNama(satuanKerja)}${sementara ? "-SEMENTARA" : ""}.pdf`;
+export function generateNamaFileSpklHarian(tanggalIso: string, satuanKerja: string): string {
+  return `SPKL Harian ${bersihkanNama(tanggalIso)} ${bersihkanNama(satuanKerja)}.pdf`;
 }
 
 export function generateNamaFileLembur(

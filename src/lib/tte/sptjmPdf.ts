@@ -1,4 +1,4 @@
-import { PDFDocument, PDFDict, PDFName, PDFRawStream, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFArray, PDFDocument, PDFDict, PDFName, PDFRawStream, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { buatSpesimenQr, ambilTemplateSpesimen } from "./spesimenTte";
 import fs from "fs";
 import path from "path";
@@ -218,13 +218,17 @@ export interface KertasBerkop {
  * Menyiapkan halaman pertama berkop surat Kemnaker (A4) beserta font bakunya.
  * Dipakai bersama oleh SPTJM dan dokumen lembur supaya kop tidak digandakan.
  */
-export async function siapkanKertasBerkop(): Promise<KertasBerkop> {
+export async function siapkanKertasBerkop(
+  opsi: { ukuran?: readonly [number, number] } = {},
+): Promise<KertasBerkop> {
   let doc: PDFDocument;
   let page: PDFPage;
 
   // 1. KOP SURAT (Prioritas 1: Vektor + Font Arial Narrow asli dari PDF referensi)
   const tplKopBytes = cariTemplateKopPdfAsli();
   let kopBerhasilDariTemplate = false;
+  // Pemotongan stream kop bisa meninggalkan `q` yang belum ditutup `Q`.
+  let qTerbuka = 0;
 
   if (tplKopBytes) {
     try {
@@ -240,6 +244,8 @@ export async function siapkanKertasBerkop(): Promise<KertasBerkop> {
           Buffer.from(kopOnly, "latin1")
         );
         page.node.delete(PDFName.of("StructParents"));
+        qTerbuka =
+          (kopOnly.match(/(?:^|\s)q(?=\s)/g)?.length ?? 0) - (kopOnly.match(/(?:^|\s)Q(?=\s)/g)?.length ?? 0);
         kopBerhasilDariTemplate = true;
       }
     } catch {
@@ -288,6 +294,26 @@ export async function siapkanKertasBerkop(): Promise<KertasBerkop> {
     } else {
       renderKopTeksFallback(page!, fontBold, fontRegular);
     }
+  }
+
+  // Opt-in: kertas selain A4 (mis. Legal). Kop tetap menempel di tepi atas
+  // dan ditengahkan secara horizontal; bawaan A4 tidak disentuh.
+  if (opsi.ukuran && (opsi.ukuran[0] !== PAGE_WIDTH || opsi.ukuran[1] !== PAGE_HEIGHT)) {
+    const { width, height } = page!.getSize();
+    page!.setMediaBox(0, 0, opsi.ukuran[0], opsi.ukuran[1]);
+    page!.node.delete(PDFName.of("CropBox"));
+    // Hanya kop yang bergeser: konten yang ada dibungkus q ... cm ... Q supaya
+    // teks yang digambar sesudahnya memakai koordinat halaman baru.
+    const dx = (opsi.ukuran[0] - width) / 2;
+    const dy = opsi.ukuran[1] - height;
+    const ctx = doc!.context;
+    const awal = page!.node.get(PDFName.of("Contents"));
+    const daftar = awal instanceof PDFArray ? awal.asArray() : awal ? [awal] : [];
+    const pra = ctx.register(ctx.flateStream(`q 1 0 0 1 ${dx} ${dy} cm`));
+    const pasca = ctx.register(ctx.flateStream(Array(1 + Math.max(0, qTerbuka)).fill("Q").join(" ")));
+    page!.node.set(PDFName.of("Contents"), ctx.obj([pra, ...daftar, pasca]));
+    // Gambar berikutnya harus masuk stream baru (di luar pembungkus), bukan stream kop.
+    (page as unknown as { getContentStream(useExisting?: boolean): unknown }).getContentStream(false);
   }
 
   return { doc: doc!, page: page!, fontRegular, fontBold };
@@ -618,15 +644,19 @@ export async function terapkanStempelTteSimulasi(
   const page = doc.getPages()[0];
 
   let yNama = 110.42;
+  let tengahX = 412.67;
   const kw = doc.getKeywords();
   if (kw) {
     const match = kw.match(/SIGN_Y:([\d.]+)/);
     if (match) {
       yNama = parseFloat(match[1]);
     }
+    // Opt-in: dokumen dengan titik tengah tanda tangan lain (SPKL harian) mencatat SIGN_X.
+    const matchX = kw.match(/SIGN_X:([\d.]+)/);
+    if (matchX) tengahX = parseFloat(matchX[1]);
   }
 
-  await gambarQrCodeTte(doc, page, 412.67, yNama, options.verifyUrl);
+  await gambarQrCodeTte(doc, page, tengahX, yNama, options.verifyUrl);
 
   const signedBytes = await doc.save();
   return Buffer.from(signedBytes);

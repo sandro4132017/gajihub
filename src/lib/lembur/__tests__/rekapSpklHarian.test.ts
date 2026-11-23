@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   urutanGolongan,
+  hitungPegawaiUnikSpklHarian,
   muatDaftarSpklHarian,
+  muatDaftarSpklHarianDenganUnik,
   muatRekapSpklHarian,
   susunDaftarSpklHarian,
   susunRekapSpklHarian,
@@ -193,6 +195,24 @@ describe("susunDaftarSpklHarian", () => {
   });
 });
 
+describe("hitungPegawaiUnikSpklHarian", () => {
+  it("pegawai yang lembur di beberapa tanggal/perintah dihitung sekali", () => {
+    const n = hitungPegawaiUnikSpklHarian(
+      [
+        perintah("2026-12-10", "K1", "u", [A, B]),
+        perintah("2026-12-11", "K1", "u", [A]),
+        perintah("2026-12-11", "K2", "u", [A, C]),
+      ],
+      SATKER,
+    );
+    expect(n).toBe(3); // orang-hari = 5
+  });
+
+  it("tanggal di luar gerbang tidak dihitung", () => {
+    expect(hitungPegawaiUnikSpklHarian([perintah("2026-11-20", "K", "u", [A])], SATKER)).toBe(0);
+  });
+});
+
 describe("pemuat", () => {
   const dbPalsu = (baris: unknown[]) => {
     const findMany = vi.fn().mockResolvedValue(baris);
@@ -224,6 +244,14 @@ describe("pemuat", () => {
     expect(arg.select.anggota.where).toEqual({ terkirim: true });
     expect(hasil.baris).toHaveLength(1);
     expect(hasil.perPemberi[0].nama).toBe("Kepala Uji");
+  });
+
+  it("muatDaftarSpklHarianDenganUnik: tetap satu query, mengembalikan jumlah pegawai unik", async () => {
+    const { db, findMany } = dbPalsu([rowDb("2026-12-10"), rowDb("2026-12-11")]);
+    const hasil = await muatDaftarSpklHarianDenganUnik(db, SATKER, 12, 2026);
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(hasil.daftar).toHaveLength(2);
+    expect(hasil.jumlahPegawaiUnik).toBe(1); // pegawai yang sama di dua tanggal
   });
 
   it("muatDaftarSpklHarian: rentang satu bulan", async () => {

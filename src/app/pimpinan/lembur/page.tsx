@@ -8,7 +8,7 @@ import { SpklHarianUnit } from "../../../components/shared/SpklHarianUnit";
 import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { berlakuMulaiSpkl } from "../../../lib/lembur/gerbangSpkl";
 import { spklBerlakuDiPeriode } from "../../../lib/lembur/perintahPeriode";
-import { muatDaftarSpklHarian, muatRekapSpklHarian } from "../../../lib/lembur/rekapSpklHarian";
+import { muatDaftarSpklHarianDenganUnik, muatRekapSpklHarian } from "../../../lib/lembur/rekapSpklHarian";
 import { tanggalIsoTeks } from "../../../lib/lembur/waktuTampil";
 import { resolvePeriode, type Periode } from "../../periodeDefault";
 
@@ -68,12 +68,12 @@ export default async function PemantauanLemburPimpinanPage({
 
   const kepala = (
     <>
-      <h1 className="text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">Pemantauan Lembur</h1>
-      <p className="mt-0.5 text-sm font-bold text-ink">
-        {satker} &middot; {labelPeriode}
-      </p>
-      <p className="mt-2 text-sm text-biru">
-        SPKL harian unit kamu, dibentuk otomatis dari semua perintah lembur yang terkirim hari itu.
+      <div className="flex flex-wrap items-center gap-2.5">
+        <h1 className="text-2xl font-black tracking-tight text-ink sm:text-3xl">Pemantauan Lembur</h1>
+        <span className="chip chip-navy text-xs font-semibold">{satker}</span>
+      </div>
+      <p className="mt-1 text-xs text-muted sm:text-sm">
+        SPKL harian unit terbentuk otomatis berdasarkan perintah lembur yang diterbitkan pada tanggal terkait.
       </p>
       <div className="card mt-4 p-4">
         <FilterBar
@@ -105,8 +105,8 @@ export default async function PemantauanLemburPimpinanPage({
   }
 
   const tanggalDipilih = tanggal && FORMAT_TANGGAL.test(tanggal) ? tanggal : null;
-  const [daftar, rekap] = await Promise.all([
-    muatDaftarSpklHarian(prisma, satker, periodeBulan, periodeTahun),
+  const [{ daftar, jumlahPegawaiUnik }, rekap] = await Promise.all([
+    muatDaftarSpklHarianDenganUnik(prisma, satker, periodeBulan, periodeTahun),
     tanggalDipilih ? muatRekapSpklHarian(prisma, satker, tanggalDipilih) : Promise.resolve(null),
   ]);
 
@@ -118,6 +118,7 @@ export default async function PemantauanLemburPimpinanPage({
         satuanKerja={satker}
         labelPeriode={labelPeriode}
         daftar={daftar}
+        jumlahPegawaiUnik={jumlahPegawaiUnik}
         tanggalDipilih={tanggalDipilih}
         rekap={rekap}
         sekarang={new Date()}

@@ -180,10 +180,33 @@ function tulisBaris(
   }
 }
 
+/** Kolom tab satu halaman (opt-in; bawaan = konstanta di atas). */
+export interface TataLetakBaris {
+  kiri: number;
+  xTitikDua: number;
+  /** x nomor butir ("1."). */
+  xNo: number;
+  /** x isi tanpa nomor. */
+  xIsi: number;
+  /** x isi butir bernomor. */
+  xIsiButir: number;
+  kanan: number;
+}
+
+const TATA_BAWAAN: TataLetakBaris = {
+  kiri: MARGIN_KIRI,
+  xTitikDua: X_TITIK_DUA,
+  xNo: X_ISI,
+  xIsi: X_ISI,
+  xIsiButir: X_ISI_BUTIR,
+  kanan: MARGIN_KANAN,
+};
+
 /**
  * Satu baris berlabel ("Dasar :", "Kepada :", ...) dengan butir bernomor atau
  * teks tunggal. Mengembalikan y baris kosong berikutnya. `rataPenuh` (opt-in,
- * template SPKL) memberi teks rata kiri-kanan; bawaannya rata kiri.
+ * template SPKL) memberi teks rata kiri-kanan; bawaannya rata kiri. `tata`
+ * (opt-in) menggantikan kolom tab bawaan.
  */
 export function gambarBaris(
   k: KonteksTulis,
@@ -191,16 +214,17 @@ export function gambarBaris(
   butir: readonly { no?: string; teks: string }[],
   yAwal: number,
   rataPenuh = false,
+  tata: TataLetakBaris = TATA_BAWAAN,
 ): number {
   let y = yAwal;
-  tulis(k, label, MARGIN_KIRI, y);
-  tulis(k, ":", X_TITIK_DUA, y);
+  tulis(k, label, tata.kiri, y);
+  tulis(k, ":", tata.xTitikDua, y);
   for (const b of butir) {
-    const xTeks = b.no ? X_ISI_BUTIR : X_ISI;
-    if (b.no) tulis(k, b.no, X_ISI, y);
-    const baris = bungkusTeks(k.font, b.teks, k.ukuran, MARGIN_KANAN - xTeks);
+    const xTeks = b.no ? tata.xIsiButir : tata.xIsi;
+    if (b.no) tulis(k, b.no, tata.xNo, y);
+    const baris = bungkusTeks(k.font, b.teks, k.ukuran, tata.kanan - xTeks);
     baris.forEach((l, i) => {
-      tulisBaris(k, l, xTeks, y, MARGIN_KANAN - xTeks, rataPenuh, i === baris.length - 1);
+      tulisBaris(k, l, xTeks, y, tata.kanan - xTeks, rataPenuh, i === baris.length - 1);
       y -= k.jarakBaris;
     });
   }
@@ -214,11 +238,12 @@ export function gambarParagraf(
   x: number,
   yAwal: number,
   rataPenuh = false,
+  kanan = MARGIN_KANAN,
 ): number {
   let y = yAwal;
-  const baris = bungkusTeks(k.font, teks, k.ukuran, MARGIN_KANAN - x);
+  const baris = bungkusTeks(k.font, teks, k.ukuran, kanan - x);
   baris.forEach((l, i) => {
-    tulisBaris(k, l, x, y, MARGIN_KANAN - x, rataPenuh, i === baris.length - 1);
+    tulisBaris(k, l, x, y, kanan - x, rataPenuh, i === baris.length - 1);
     y -= k.jarakBaris;
   });
   return y;
@@ -241,36 +266,50 @@ export function gambarBlokTtd(
     nama: string;
     nip: string;
     previewTte?: boolean;
+    /**
+     * Opt-in (SPKL harian): titik tengah lain, dua baris pertama rata kiri di
+     * `xKiriAtas`, jarak baris sendiri, dan jumlah baris kosong sebelum nama.
+     * SIGN_X dicatat supaya stempel simulasi mengikuti titik tengah ini.
+     */
+    tata?: { tengahX: number; xKiriAtas: number; jarak: number; barisKosong: number; lebarJabatan: number };
   },
 ): { yNama: number; yNip: number } {
+  const tata = p.tata;
+  const tengahX = tata?.tengahX ?? TENGAH_TTD_X;
+  const jarak = tata?.jarak ?? 13.82;
   let y = p.yAtas;
-  for (const teks of p.barisAtas) {
-    for (const l of bungkusTeks(k.font, teks, k.ukuran, 210)) {
-      tulisTengah(k, l, TENGAH_TTD_X, y);
-      y -= 13.82;
+  p.barisAtas.forEach((teks, idx) => {
+    if (tata && idx < 2) {
+      tulis(k, teks, tata.xKiriAtas, y);
+      y -= jarak;
+      return;
     }
-  }
-  // y kini satu baris di bawah baris jabatan terakhir (jarak 13.82).
-  const yNama = y + 13.82 - 88.47;
+    for (const l of bungkusTeks(k.font, teks, k.ukuran, tata?.lebarJabatan ?? 210)) {
+      tulisTengah(k, l, tengahX, y);
+      y -= jarak;
+    }
+  });
+  // y kini satu baris di bawah baris jabatan terakhir.
+  const yNama = tata ? y + jarak - (tata.barisKosong + 1) * jarak : y + 13.82 - 88.47;
   const yNip = yNama - 14.28;
 
-  doc.setKeywords([`SIGN_Y:${yNama.toFixed(2)}`]);
+  doc.setKeywords(tata ? [`SIGN_Y:${yNama.toFixed(2)}`, `SIGN_X:${tengahX.toFixed(2)}`] : [`SIGN_Y:${yNama.toFixed(2)}`]);
 
   if (p.previewTte) {
-    tulisTengah(k, "[ ruang QR tanda tangan elektronik BSrE ]", TENGAH_TTD_X, yNama + 44, { ukuran: 7 });
+    tulisTengah(k, "[ ruang QR tanda tangan elektronik BSrE ]", tengahX, yNama + 44, { ukuran: 7 });
   } else {
     // Kotak QR 60x60 berpusat di (TENGAH_TTD_X, yNama + 48): bebas dari
     // teks jabatan (di atas) dan nama (di bawah).
     k.page.drawText("#", {
-      x: TENGAH_TTD_X,
+      x: tengahX,
       y: yNama + 48,
       size: 2,
       font: k.font,
       color: rgb(1, 1, 1),
     });
   }
-  tulisTengah(k, p.nama, TENGAH_TTD_X, yNama);
-  tulisTengah(k, `NIP ${p.nip}`, TENGAH_TTD_X, yNip);
+  tulisTengah(k, p.nama, tengahX, yNama);
+  tulisTengah(k, `NIP ${p.nip}`, tengahX, yNip);
   return { yNama, yNip };
 }
 
@@ -310,6 +349,8 @@ export interface KolomTabel {
   pemisahSel?: boolean;
   /** Opt-in: isi sel baris data diletakkan di tengah tinggi baris. Bawaan: rata atas. */
   tengahVertikal?: boolean;
+  /** Opt-in: judul kolom rata kiri (bawaan: tengah). */
+  headerKiri?: boolean;
 }
 
 /** Penanda internal satu baris sel yang digambar sebagai garis pemisah. */
@@ -343,12 +384,20 @@ export function gambarTabel(
     ukuran: number;
     ukuranHalaman: [number, number];
     batasBawah?: number;
+    /** Opt-in: y awal tabel di halaman lanjutan (bawaan: tinggi halaman - 45). */
+    atasHalamanBaru?: number;
+    /** Opt-in: judul kolom di tengah tinggi header (bawaan: rata atas). */
+    headerTengahVertikal?: boolean;
+    /** Opt-in: bantalan sel dan ukuran font judul (bawaan 3 dan = ukuran). */
+    pad?: number;
+    ukuranHeader?: number;
   },
 ): { halaman: PDFPage; y: number } {
-  const pad = 3;
+  const pad = o.pad ?? 3;
+  const ukH = o.ukuranHeader ?? o.ukuran;
   const lh = o.ukuran * 1.3;
   const batasBawah = o.batasBawah ?? 50;
-  const atasHalamanBaru = o.ukuranHalaman[1] - 45;
+  const atasHalamanBaru = o.atasHalamanBaru ?? o.ukuranHalaman[1] - 45;
   let page = o.halaman;
   let y = o.yAwal;
 
@@ -366,7 +415,8 @@ export function gambarTabel(
 
   const gambarSel = (teksBaris: string[], kol: KolomTabel, x: number, yAtas: number, tebal: boolean, tinggiBaris = 0) => {
     const f = tebal ? fontBold : font;
-    const geser = !tebal && kol.tengahVertikal ? Math.max(0, (tinggiBaris - 2 * pad - teksBaris.length * lh) / 2) : 0;
+    const tengah = tebal ? o.headerTengahVertikal === true : kol.tengahVertikal;
+    const geser = tengah ? Math.max(0, (tinggiBaris - 2 * pad - teksBaris.length * lh) / 2) : 0;
     yAtas -= geser;
     teksBaris.forEach((t, i) => {
       if (t === BARIS_GARIS) {
@@ -375,21 +425,21 @@ export function gambarTabel(
         return;
       }
       const tx =
-        kol.rata === "tengah" || tebal
-          ? x + (kol.lebar - f.widthOfTextAtSize(t, o.ukuran)) / 2
+        kol.rata === "tengah" || (tebal && !kol.headerKiri)
+          ? x + (kol.lebar - f.widthOfTextAtSize(t, (tebal ? ukH : o.ukuran))) / 2
           : x + pad;
-      page.drawText(t, { x: tx, y: yAtas - pad - o.ukuran - i * lh + (lh - o.ukuran) / 2, size: o.ukuran, font: f, color: rgb(0, 0, 0) });
+      page.drawText(t, { x: tx, y: yAtas - pad - (tebal ? ukH : o.ukuran) - i * lh + (lh - (tebal ? ukH : o.ukuran)) / 2, size: (tebal ? ukH : o.ukuran), font: f, color: rgb(0, 0, 0) });
     });
   };
 
   const gambarHeader = () => {
-    const sel = o.kolom.map((c) => bungkusTeks(fontBold, c.judul, o.ukuran, c.lebar - 2 * pad));
+    const sel = o.kolom.map((c) => bungkusTeks(fontBold, c.judul, ukH, c.lebar - 2 * pad));
     const n = Math.max(...sel.map((s) => s.length));
     const h = n * lh + 2 * pad;
     let x = o.kiri;
     o.kolom.forEach((c, i) => {
       kotak(x, y, c.lebar, h, true);
-      gambarSel(sel[i], c, x, y, true);
+      gambarSel(sel[i], c, x, y, true, h);
       x += c.lebar;
     });
     y -= h;

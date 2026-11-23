@@ -209,10 +209,14 @@ export function FormPerintahLembur({
 
   return (
     <>
-      <form onSubmit={bukaTandaTangan} className="card mt-4 p-4 sm:p-5" noValidate>
+      <form onSubmit={bukaTandaTangan} className="card mt-6 p-4 sm:p-5" noValidate>
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-extrabold uppercase tracking-wider text-ink">
+          <span className="size-2 rounded-full bg-biru" aria-hidden="true" />
+          Buat perintah lembur
+        </h2>
         <div className="grid gap-4 sm:grid-cols-[14rem_1fr]">
           <div>
-            <label htmlFor="lembur-tanggal" className="block text-xs font-semibold text-ink">
+            <label htmlFor="lembur-tanggal" className="field-label">
               Tanggal lembur
             </label>
             <input
@@ -253,7 +257,7 @@ export function FormPerintahLembur({
         )}
 
         <fieldset className="mt-4">
-          <legend className="text-xs font-semibold text-ink">Anggota dan jam lembur</legend>
+          <legend className="field-label">Anggota dan jam lembur</legend>
           <p className="mt-0.5 text-xs text-muted">
             Pilih pegawai, lalu isi jumlah jam lembur per orang (bilangan bulat 1-24).
           </p>
@@ -262,13 +266,13 @@ export function FormPerintahLembur({
               key={kunciPilih}
               name="tambah-anggota"
               options={opsi}
-              placeholder={opsi.length === 0 ? "Semua anggota sudah dipilih" : "Ketik nama atau jabatan anggota..."}
+              placeholder={opsi.length === 0 ? "Semua anggota sudah dipilih" : ""}
               onValueChange={tambah}
             />
           </div>
 
           {baris.length > 0 && (
-            <div className="mt-3 overflow-x-auto rounded-lg border border-line-2">
+            <div className="card mt-3 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
@@ -288,7 +292,6 @@ export function FormPerintahLembur({
                         <td className="px-3 py-2 font-mono text-xs text-muted">{i + 1}</td>
                         <td className="col-nama px-3 py-2">
                           <span className="font-semibold text-ink">{a ? `${a.nama}${a.penanda ? ` ${a.penanda}` : ""}` : "-"}</span>
-                          <span className="block text-xs text-muted">{a?.jabatan}</span>
                         </td>
                         <td className="px-3 py-2">
                           <input
@@ -332,7 +335,7 @@ export function FormPerintahLembur({
         </fieldset>
 
         <div className="mt-4">
-          <label htmlFor="lembur-uraian" className="block text-xs font-semibold text-ink">
+          <label htmlFor="lembur-uraian" className="field-label">
             Uraian tugas
           </label>
           <textarea
@@ -341,7 +344,6 @@ export function FormPerintahLembur({
             onChange={(e) => setUraian(e.target.value)}
             rows={3}
             maxLength={1000}
-            placeholder="Pekerjaan yang harus diselesaikan saat lembur"
             className="field-input mt-1 w-full"
           />
         </div>
@@ -356,7 +358,7 @@ export function FormPerintahLembur({
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {tteAktif && (
-            <button type="button" onClick={pratinjau} disabled={pratinjauMemuat || terkunci} className="btn btn-secondary flex items-center gap-1.5">
+            <button type="button" onClick={pratinjau} disabled={pratinjauMemuat || terkunci} className="btn btn-ghost flex items-center gap-1.5">
               <FiDownload className="size-4" aria-hidden="true" />
               {pratinjauMemuat ? "Menyiapkan..." : "Unduh pratinjau PDF"}
             </button>
@@ -392,7 +394,7 @@ export function FormPerintahLembur({
               </button>
             ) : (
               <>
-                <button type="button" onClick={() => setFase("tutup")} disabled={fase === "mengirim"} className="btn btn-secondary">
+                <button type="button" onClick={() => setFase("tutup")} disabled={fase === "mengirim"} className="btn btn-ghost">
                   Batal
                 </button>
                 <button type="button" onClick={kirimTanpaTte} disabled={fase === "mengirim"} className="btn btn-primary">

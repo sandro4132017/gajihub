@@ -356,6 +356,29 @@ export function canLihatPerintahLemburUnit(
 }
 
 /**
+ * KEPALA_TIM membuka SPKL harian sebuah (satker, tanggal) sebagai PEMBERI PERINTAH.
+ *
+ * Keputusan user 2026-11-23: selama TTE lembur mati, Kepala Tim boleh membuka
+ * SPKL harian yang memuat perintahnya. Syaratnya, akun itu sendiri punya
+ * PerintahLembur berstatus TERKIRIM pada satker + tanggal tsb
+ * (`punyaPerintahDiTanggal`, dicek pemanggil dari DB per baris). PDF memuat
+ * SEMUA pegawai hari itu; user menerima NIP pegawai tim lain ikut terlihat.
+ * Satker = `Pegawai.satuanKerja` lewat NIP akun (`satkerPegawaiAkun`), bukan
+ * User.satuanKerja; tanpa baris Pegawai atau beda unit -> ditolak.
+ * Hanya KEPALA_TIM; role lain tetap lewat `canLihatPerintahLemburUnit`.
+ */
+export function canLihatSpklHarianSebagaiPemberi(
+  user: AuthUser,
+  targetSatuanKerja: string,
+  satkerPegawaiAkun: string | null | undefined,
+  punyaPerintahDiTanggal: boolean,
+): boolean {
+  if (user.role !== "KEPALA_TIM" || !user.aktif || !punyaPerintahDiTanggal) return false;
+  const satker = satkerPegawaiAkun?.trim();
+  return !!satker && satker === targetSatuanKerja.trim();
+}
+
+/**
  * Melihat / mengunduh dokumen lembur (Surat Tugas harian, SPKL bulanan).
  *
  * Dua jalan masuk: (1) penandatangannya sendiri - Kepala Tim yang menerbitkan

@@ -3,8 +3,8 @@ import { PDFDocument } from "pdf-lib";
 import { extractText } from "unpdf";
 import { tambalMathSumPrecise } from "../../pdfTeks";
 import {
-  CAP_SEMENTARA,
   JABATAN_TTD_TANPA_TTE,
+  TENGAH_TTD_SPKL_HARIAN,
   generateSpklHarianPdf,
   susunBarisLampiranSpklHarian,
   susunDasarSpklHarian,
@@ -68,12 +68,9 @@ describe("susunBarisLampiranSpklHarian", () => {
 });
 
 describe("lemburTypes SPKL harian", () => {
-  it("nomor dummy dan nama berkas (akhiran -SEMENTARA opsional)", () => {
+  it("nomor dummy dan nama berkas (tanpa akhiran sementara)", () => {
     expect(generateNomorSpklHarianDefault("2026-12-10")).toBe("1/1771/KU.02/XII/2026");
     expect(generateNamaFileSpklHarian("2026-12-10", "Biro A/B")).toBe("SPKL Harian 2026-12-10 Biro A B.pdf");
-    expect(generateNamaFileSpklHarian("2026-12-10", "Biro A/B", true)).toBe(
-      "SPKL Harian 2026-12-10 Biro A B-SEMENTARA.pdf",
-    );
   });
 });
 
@@ -118,6 +115,23 @@ describe("generateSpklHarianPdf", () => {
     expect(semua).not.toContain("s/d");
     // Halaman 1 tanpa NIP.
     expect(halaman[0]).not.toMatch(/NIP/);
+  });
+
+  it("halaman 1 kertas Legal (612x1008), lampiran A4 portrait, di kedua jalur", async () => {
+    for (const d of [data(), data({ tanpaTte: undefined, penandatangan })]) {
+      const doc = await PDFDocument.load(await generateSpklHarianPdf(d));
+      const p1 = doc.getPage(0).getSize();
+      expect([p1.width, p1.height]).toEqual([612, 1008]);
+      const p2 = doc.getPage(1).getSize();
+      expect(p2.width).toBeCloseTo(595.32, 1);
+      expect(p2.height).toBeCloseTo(841.92, 1);
+    }
+  });
+
+  it("jalur TTE: SIGN_X dan SIGN_Y tersimpan untuk titik tengah tanda tangan SPKL harian", async () => {
+    const kw = (await PDFDocument.load(await generateSpklHarianPdf(data({ tanpaTte: undefined, penandatangan })))).getKeywords() ?? "";
+    expect(kw).toMatch(/SIGN_Y:\d+\.\d+/);
+    expect(kw).toContain(`SIGN_X:${TENGAH_TTD_SPKL_HARIAN.toFixed(2)}`);
   });
 
   it("tahun 2027: nomor DIPA dan akun dicetak sebagai penanda belum dikonfirmasi", async () => {
@@ -185,13 +199,7 @@ describe("generateSpklHarianPdf", () => {
     expect(akhir).toContain("NIP. 198001010000000009");
   });
 
-  it("sementara: cap di SETIAP halaman dan judul metadata; tanpa sementara: tanpa cap", async () => {
-    const buf = await generateSpklHarianPdf(data({ baris: baris(60), sementara: true }));
-    const { halaman } = await teks(buf);
-    expect(halaman.length).toBeGreaterThan(2);
-    for (const h of halaman) expect(h).toContain(CAP_SEMENTARA);
-    expect((await PDFDocument.load(buf)).getTitle()).toContain("SEMENTARA");
-
+  it("tanpa cap SEMENTARA di halaman maupun judul metadata (keputusan user 2026-11-23)", async () => {
     const final = await generateSpklHarianPdf(data({ baris: baris(60) }));
     const hasil = await teks(final);
     expect(hasil.semua).not.toContain("SEMENTARA");

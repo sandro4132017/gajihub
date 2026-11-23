@@ -1,3 +1,4 @@
+import { FiCheckCircle, FiExternalLink, FiInbox } from "react-icons/fi";
 import { prisma } from "../../lib/prisma";
 import { getSessionAccount } from "../../auth/getSessionAccount";
 import { canBukaHalamanPerintahLembur, type AuthUser } from "../../auth/permissions";
@@ -16,6 +17,15 @@ import { FormPerintahLembur, type PeringatanPresensi } from "./FormPerintahLembu
 import { SisaWaktuKirim } from "./SisaWaktuKirim";
 
 export const dynamic = "force-dynamic";
+
+function KartuMetrik({ label, nilai }: { label: string; nilai: number }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-muted">{label}</span>
+      <p className="mt-1 font-mono text-2xl font-black text-ink">{nilai}</p>
+    </div>
+  );
+}
 
 function tanggalDb(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
@@ -107,10 +117,31 @@ export default async function KepalaTimPage({
   const anggotaHariIni = hariIniRows.reduce((s, r) => s + r._count.anggota, 0);
   const belumBerlaku = hariIni < berlakuMulai;
 
+  const jamHalaman = riwayat.reduce((n, p) => n + p.anggota.reduce((s, a) => s + a.jamDiperintahkan, 0), 0);
+
   return (
     <main className={HALAMAN}>
-      <h1 className="text-xl font-extrabold tracking-tight text-ink">Perintah Lembur</h1>
-      <p className="mt-1 text-sm text-muted">{kepala.satuanKerja}</p>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <h1 className="text-2xl font-black tracking-tight text-ink sm:text-3xl">Perintah Lembur</h1>
+        <span className="chip chip-navy text-xs font-semibold">{kepala.satuanKerja}</span>
+      </div>
+      <p className="mt-1 text-xs text-muted sm:text-sm">
+        Buat perintah lembur untuk anggota tim dan pantau riwayatnya.
+        {!TTE_LEMBUR_AKTIF && (
+          <>
+            {" "}
+            Kirim perintah tanpa tanda tangan elektronik. SPKL harian dibentuk otomatis pukul 15.00 WIB dan
+            setelahnya tidak bisa diubah.
+          </>
+        )}
+      </p>
+
+      <section className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Ringkasan perintah lembur">
+        <KartuMetrik label="Perintah terkirim" nilai={totalRiwayat} />
+        <KartuMetrik label="Perintah hari ini" nilai={jumlahHariIni} />
+        <KartuMetrik label="Anggota hari ini" nilai={anggotaHariIni} />
+        <KartuMetrik label="Total jam (halaman riwayat)" nilai={jamHalaman} />
+      </section>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
         <p className="text-sm text-ink-2">
@@ -129,16 +160,9 @@ export default async function KepalaTimPage({
         {!belumBerlaku && <SisaWaktuKirim tanggalIso={hariIni} serverNowMs={sekarang.getTime()} hariIni />}
       </div>
 
-      {!TTE_LEMBUR_AKTIF && (
-        <p className="mt-1 text-xs text-muted">
-          Kirim perintah tanpa tanda tangan elektronik. SPKL harian dibentuk otomatis pukul 15.00 WIB dan
-          setelahnya tidak bisa diubah.
-        </p>
-      )}
-
       <FormPerintahLembur
         tteAktif={TTE_LEMBUR_AKTIF}
-        anggota={buatPilihanAnggota(anggota.map((a) => ({ id: a.id, nama: namaCetakPegawai(a), jabatan: a.jabatan })))}
+        anggota={buatPilihanAnggota(anggota.map((a) => ({ id: a.id, nama: namaCetakPegawai(a) })))}
         hariIni={hariIni}
         berlakuMulai={berlakuMulai}
         serverNowMs={sekarang.getTime()}
@@ -147,42 +171,57 @@ export default async function KepalaTimPage({
         satuanKerja={kepala.satuanKerja}
       />
 
-      <section className="mt-8" aria-labelledby="riwayat-judul">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="riwayat-judul" className="text-lg font-extrabold tracking-tight text-navy">
-            Riwayat perintah
+      <section className="mt-6 space-y-3" aria-labelledby="riwayat-judul">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+          <h2
+            id="riwayat-judul"
+            className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wider text-ink"
+          >
+            <span className="size-2 rounded-full bg-biru" aria-hidden="true" />
+            Riwayat perintah ({totalRiwayat})
           </h2>
           <span className="text-xs text-muted">{totalRiwayat} perintah terkirim</span>
         </div>
 
-        <div className="card mt-3 overflow-hidden">
+        {riwayat.length === 0 ? (
+          <div className="rounded-2xl border border-line bg-surface p-8 text-center shadow-xs">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-surface-2 text-muted">
+              <FiInbox className="size-6" aria-hidden="true" />
+            </div>
+            <h3 className="mt-3 text-sm font-black text-ink">Belum ada perintah lembur terkirim</h3>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-muted">
+              Belum ada perintah lembur terkirim atas nama Anda. Perintah baru muncul di sini setelah berhasil
+              dikirim.
+            </p>
+          </div>
+        ) : (
+        <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
                   <th className="px-3 py-2.5">No.</th>
                   <th className="px-3 py-2.5">Tanggal lembur</th>
+                  <th className="px-3 py-2.5">Status</th>
                   <th className="col-nama px-3 py-2.5">Nomor surat</th>
                   <th className="px-3 py-2.5">Anggota</th>
                   <th className="px-3 py-2.5">Total jam</th>
                   <th className="px-3 py-2.5">Terkirim</th>
-                  <th className="px-3 py-2.5">Dokumen</th>
+                  <th className="px-3 py-2.5">SPKL</th>
                 </tr>
               </thead>
               <tbody>
-                {riwayat.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-3 py-6 text-center text-muted">
-                      Belum ada perintah lembur terkirim atas nama Anda. Perintah baru muncul di sini setelah
-                      berhasil dikirim.
-                    </td>
-                  </tr>
-                )}
                 {riwayat.map((p, i) => (
                   <tr key={p.id} className="border-b border-line-2">
                     <td className="px-3 py-2.5 font-mono text-xs text-muted">{paginasi.mulai + i + 1}</td>
                     <td className="px-3 py-2.5 font-mono text-ink-2">
                       {tanggalIsoTeks(p.tanggal.toISOString().slice(0, 10))}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className="chip chip-ok">
+                        <FiCheckCircle className="size-3.5" aria-hidden="true" />
+                        Terkirim
+                      </span>
                     </td>
                     <td className="col-nama px-3 py-2.5 font-mono text-xs text-ink-2">{p.nomorSurat ?? "-"}</td>
                     <td className="px-3 py-2.5 font-mono text-ink-2">{p.anggota.length}</td>
@@ -193,18 +232,31 @@ export default async function KepalaTimPage({
                       {p.dikirimPada ? waktuWibTeks(p.dikirimPada) : "-"}
                     </td>
                     <td className="px-3 py-2.5">
-                      {p.dokumenTteId ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <a
-                          href={`/berkas/tte/${p.dokumenTteId}`}
+                          href={`/berkas/spkl-harian?${new URLSearchParams({
+                            tanggal: p.tanggal.toISOString().slice(0, 10),
+                            satker: kepala.satuanKerja,
+                          }).toString()}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-semibold text-teal-deep underline"
+                          className="btn btn-ghost btn-sm whitespace-nowrap"
                         >
-                          Unduh
+                          <FiExternalLink className="size-3.5" aria-hidden="true" />
+                          Buka SPKL
                         </a>
-                      ) : (
-                        "-"
-                      )}
+                        {TTE_LEMBUR_AKTIF && p.dokumenTteId && (
+                          <a
+                            href={`/berkas/tte/${p.dokumenTteId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-ghost btn-sm whitespace-nowrap"
+                          >
+                            <FiExternalLink className="size-3.5" aria-hidden="true" />
+                            Surat tugas
+                          </a>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -221,6 +273,7 @@ export default async function KepalaTimPage({
             />
           </div>
         </div>
+        )}
       </section>
     </main>
   );

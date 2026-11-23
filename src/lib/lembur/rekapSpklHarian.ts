@@ -151,6 +151,20 @@ export function susunDaftarSpklHarian(
   return hasil;
 }
 
+/**
+ * Jumlah pegawai UNIK (NIP berbeda) di seluruh perintah pada daftar tanggal
+ * yang lolos gerbang pilot; pegawai yang lembur di beberapa tanggal dihitung
+ * sekali. Dasar kartu "Jumlah Pegawai" (bukan orang-hari).
+ */
+export function hitungPegawaiUnikSpklHarian(perintah: readonly BarisPerintahHarian[], satuanKerja: string): number {
+  const nips = new Set<string>();
+  for (const p of perintah) {
+    if (!spklAktifUntuk(satuanKerja, p.tanggalIso)) continue;
+    for (const a of p.anggota) nips.add(a.nip);
+  }
+  return nips.size;
+}
+
 const PILIH_PERINTAH = {
   tanggal: true,
   uraianTugas: true,
@@ -213,13 +227,13 @@ export async function muatRekapSpklHarian(
   return susunRekapSpklHarian(keBarisPerintah(baris), satuanKerja, tanggalIso);
 }
 
-/** Daftar tanggal ber-perintah dalam satu bulan (satu query), terurut naik. */
-export async function muatDaftarSpklHarian(
+/** Daftar tanggal ber-perintah dalam satu bulan plus jumlah pegawai unik (satu query). */
+export async function muatDaftarSpklHarianDenganUnik(
   db: Pick<PrismaClient, "perintahLembur">,
   satuanKerja: string,
   bulan: number,
   tahun: number,
-): Promise<BarisDaftarSpklHarian[]> {
+): Promise<{ daftar: BarisDaftarSpklHarian[]; jumlahPegawaiUnik: number }> {
   const baris = await db.perintahLembur.findMany({
     where: {
       satuanKerja,
@@ -228,5 +242,19 @@ export async function muatDaftarSpklHarian(
     },
     select: PILIH_PERINTAH,
   });
-  return susunDaftarSpklHarian(keBarisPerintah(baris), satuanKerja);
+  const perintah = keBarisPerintah(baris);
+  return {
+    daftar: susunDaftarSpklHarian(perintah, satuanKerja),
+    jumlahPegawaiUnik: hitungPegawaiUnikSpklHarian(perintah, satuanKerja),
+  };
+}
+
+/** Daftar tanggal ber-perintah dalam satu bulan (satu query), terurut naik. */
+export async function muatDaftarSpklHarian(
+  db: Pick<PrismaClient, "perintahLembur">,
+  satuanKerja: string,
+  bulan: number,
+  tahun: number,
+): Promise<BarisDaftarSpklHarian[]> {
+  return (await muatDaftarSpklHarianDenganUnik(db, satuanKerja, bulan, tahun)).daftar;
 }

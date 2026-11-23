@@ -9,26 +9,22 @@ import { batasKirimPerintah } from "../../business-logic/perintahLembur";
 export interface AnggotaPilihan {
   id: string;
   nama: string;
-  jabatan: string;
-  /** "" kalau nama+jabatan unik; selain itu "(1)", "(2)", ... Bukan NIP. */
+  /** "" kalau nama unik; selain itu "(1)", "(2)", ... Bukan NIP. */
   penanda: string;
 }
 
 export function labelAnggota(a: AnggotaPilihan): string {
-  const dasar = a.jabatan ? `${a.nama} - ${a.jabatan}` : a.nama;
-  return a.penanda ? `${dasar} ${a.penanda}` : dasar;
+  return a.penanda ? `${a.nama} ${a.penanda}` : a.nama;
 }
 
 /**
- * Siapkan pilihan anggota. Nama yang kembar dibedakan lewat jabatan (sudah
- * ada di label); kalau nama+jabatan pun kembar, semua anggota kelompok itu
- * diberi penanda urutan netral.
+ * Siapkan pilihan anggota. Label hanya NAMA, tanpa jabatan (keputusan user
+ * 2026-11-23); nama yang kembar diberi penanda urutan netral "(1)", "(2)".
  */
 export function buatPilihanAnggota(
-  sumber: { id: string; nama: string; jabatan: string | null }[],
+  sumber: { id: string; nama: string }[],
 ): AnggotaPilihan[] {
-  const kunci = (s: { nama: string; jabatan: string | null }) =>
-    `${s.nama.trim().toLowerCase()}|${(s.jabatan ?? "").trim().toLowerCase()}`;
+  const kunci = (s: { nama: string }) => s.nama.trim().toLowerCase();
   const jumlah = new Map<string, number>();
   for (const s of sumber) jumlah.set(kunci(s), (jumlah.get(kunci(s)) ?? 0) + 1);
   const urutan = new Map<string, number>();
@@ -39,7 +35,6 @@ export function buatPilihanAnggota(
     return {
       id: s.id,
       nama: s.nama,
-      jabatan: (s.jabatan ?? "").trim(),
       penanda: (jumlah.get(k) ?? 0) > 1 ? `(${ke})` : "",
     };
   });
