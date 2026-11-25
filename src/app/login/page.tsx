@@ -5,6 +5,8 @@ import { adaLoginKataSandi } from "../../auth/kredensialLogin";
 import { PesanSso } from "./PesanSso";
 import { PesanSesi } from "./PesanSesi";
 import { SlideFitur } from "./SlideFitur";
+import { headers } from "next/headers";
+import { HEADER_PESAN_SESI } from "../../auth/tujuanKembali";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +15,10 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ sso?: string; pesan?: string; sesi?: string }>;
 }) {
-  const { sso, pesan, sesi } = await searchParams;
+  const { sso, pesan, sesi: sesiLama } = await searchParams;
+  // Pesan sesi berakhir datang dari middleware (cookie sekali pakai). `?sesi=`
+  // tetap dibaca untuk tautan lama yang masih beredar.
+  const sesi = (await headers()).get(HEADER_PESAN_SESI) ?? sesiLama;
   const adaSso = ssoAktif();
   // Form username/password hanya untuk akun uji coba atau akun penguji.
   const tampilkanFormLokal = adaLoginKataSandi(process.env);

@@ -121,11 +121,12 @@ describe("POST /api/auth/ganti-role", () => {
 });
 
 describe("GET /api/auth/keluar", () => {
-  it.each(["dicabut", "nonaktif"])("alasan %s: cookie dibuang dan ke /login?sesi=", async (alasan) => {
+  it.each(["dicabut", "nonaktif"])("alasan %s: cookie dibuang, ke /login bersih, alasan lewat cookie", async (alasan) => {
     // NextRequest dibutuhkan untuk nextUrl
     const { NextRequest } = await import("next/server");
     const res = await keluar(new NextRequest(`http://localhost:3000/api/auth/keluar?alasan=${alasan}`));
-    expect(new URL(res.headers.get("location") ?? "").searchParams.get("sesi")).toBe(alasan);
+    expect(new URL(res.headers.get("location") ?? "").search).toBe("");
+    expect(res.headers.get("set-cookie") ?? "").toContain(`gajihub_pesan_sesi=${alasan}`);
     expect(res.headers.get("set-cookie") ?? "").toContain("gajihub_session=;");
     expect(m.userUpdate).not.toHaveBeenCalled(); // versi tidak dinaikkan
   });
@@ -134,6 +135,7 @@ describe("GET /api/auth/keluar", () => {
     const { NextRequest } = await import("next/server");
     const res = await keluar(new NextRequest("http://localhost:3000/api/auth/keluar?alasan=<x>"));
     expect(new URL(res.headers.get("location") ?? "").searchParams.has("sesi")).toBe(false);
+    expect(res.headers.get("set-cookie") ?? "").not.toContain("gajihub_pesan_sesi=");
     expect(res.headers.get("set-cookie") ?? "").toContain("gajihub_session=;");
   });
 });

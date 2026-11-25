@@ -37,6 +37,15 @@ export function opsiCookieSampai(exp: number, now = Date.now()) {
 }
 
 /**
+ * Opsi cookie pendamping yang berumur pendek (pesan sesi berakhir, tujuan
+ * kembali sesudah login). httpOnly/secure/sameSite dari sumber yang sama
+ * dengan cookie sesi, supaya ikut jalan di jalur HTTP internal.
+ */
+export function opsiCookieSingkat(detik: number) {
+  return { ...OPSI_COOKIE_SESI, secure: cookieSecure(), maxAge: detik };
+}
+
+/**
  * Menerbitkan token sesi untuk satu akun `User`.
  *
  * INI TITIK PENTING DALAM PERPINDAHAN KE SSO: yang berubah waktu SSO

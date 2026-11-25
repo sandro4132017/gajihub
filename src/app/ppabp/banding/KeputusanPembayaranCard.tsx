@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { labelReferensiBanding } from "../../../business-logic/bandingData";
 import { KeputusanPembayaranForm } from "./KeputusanPembayaranForm";
 import {
@@ -135,9 +136,9 @@ export function KeputusanPembayaranCard({
                 <span className="min-w-0 flex-1 truncate text-muted" title={b.alasan}>
                   {b.alasan}
                 </span>
-                <a href={hrefBuka(b.id)} className="shrink-0 font-semibold text-biru hover:underline">
+                <Link href={hrefBuka(b.id)} className="shrink-0 font-semibold text-biru hover:underline">
                   Lihat bukti
-                </a>
+                </Link>
               </li>
             ))}
           </ul>

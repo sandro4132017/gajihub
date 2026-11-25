@@ -534,11 +534,14 @@ export default async function PresensiTukinPage({
                       {r.totalMenitPulangCepat} mnt
                     </td>
                     <td className={`px-3 py-2.5 font-mono ${kosong(r.jumlahHariCuti)}`}>
-                      {/* Angka saja; jenis cutinya (bisa lebih dari satu dalam
-                          sebulan) dibaca lewat pop up saat angkanya diklik. */}
+                      {/* Kartu kecil angka + label ringkasan (desain user
+                          2026-11-16); semua jenis cutinya di pop up. */}
                       {r.jumlahHariCuti > 0 ? (
                         <RincianCutiTombol
                           nama={r.pegawai.nama}
+                          nip={r.pegawai.nip}
+                          periodeBulan={periodeBulan}
+                          periodeTahun={periodeTahun}
                           periodeLabel={`${NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} ${periodeTahun}`}
                           jumlahRekap={r.jumlahHariCuti}
                           labelRekap={labelCuti}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canApproveBandingFinal, type AuthUser } from "../../../auth/permissions";
@@ -124,7 +125,7 @@ export default async function OsdmaBandingPage({
 
       {/* STAT TILES / FILTER CEPAT */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <a
+        <Link
           href={`/osdma/banding${satker ? `?satker=${encodeURIComponent(satker)}` : ""}`}
           className={`rounded-xl border p-3 transition ${
             !statusFilter
@@ -134,9 +135,9 @@ export default async function OsdmaBandingPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Total Banding</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-ink">{countTotal}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={`/osdma/banding?status=MENUNGGU_APPROVAL_FINAL${satker ? `&satker=${encodeURIComponent(satker)}` : ""}`}
           className={`rounded-xl border p-3 transition ${
             statusFilter === "MENUNGGU_APPROVAL_FINAL"
@@ -151,9 +152,9 @@ export default async function OsdmaBandingPage({
             )}
           </div>
           <p className="mt-1 font-mono text-xl font-extrabold text-gold-deep">{countMenunggu}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={`/osdma/banding?status=DISETUJUI${satker ? `&satker=${encodeURIComponent(satker)}` : ""}`}
           className={`rounded-xl border p-3 transition ${
             statusFilter === "DISETUJUI"
@@ -163,9 +164,9 @@ export default async function OsdmaBandingPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Disetujui Final</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-green">{countDisetujui}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={`/osdma/banding?status=DITOLAK${satker ? `&satker=${encodeURIComponent(satker)}` : ""}`}
           className={`rounded-xl border p-3 transition ${
             statusFilter === "DITOLAK"
@@ -175,7 +176,7 @@ export default async function OsdmaBandingPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Ditolak</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-red">{countDitolak}</p>
-        </a>
+        </Link>
       </div>
 
       {/* DAFTAR KARTU APPROVAL OSDMA (LANDSCAPE TRACKER CARD) */}

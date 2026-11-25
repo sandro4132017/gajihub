@@ -1,6 +1,20 @@
 import { bolehFallbackAkunDemo } from "./simulasiTte";
 
+/**
+ * Batas waktu penandatanganan ke Esign Client BSrE.
+ *
+ * Tanpa batas, permintaan yang tidak dijawab membuat dialog TTE menunggu
+ * tanpa kabar (terukur 2026-11-16: 101 detik, padahal BSrE sendiri melapor
+ * signing_time 8,6 detik - sisanya habis di jaringan/antrean). 60 detik
+ * cukup longgar untuk BSrE yang lambat tapi hidup. Kalau BSrE ternyata
+ * selesai sesudah batas ini, dokumennya tidak tersimpan di Gajihub dan
+ * cukup ditandatangani ulang - tidak ada data yang rusak.
+ */
+export const BATAS_WAKTU_SIGN_MS = 60_000;
+
 interface SignPdfOptions {
+  /** Batas waktu menunggu BSrE (ms); bawaan BATAS_WAKTU_SIGN_MS. */
+  timeoutMs?: number;
   fileBuffer: Buffer;
   fileName?: string;
   nik: string;
@@ -229,6 +243,8 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
         Authorization: authHeader,
       },
       body: formData,
+      // Mencakup juga pembacaan isi balasan (PDF bertanda tangan) di bawah.
+      signal: AbortSignal.timeout(options.timeoutMs ?? BATAS_WAKTU_SIGN_MS),
     });
 
     const idDokumen = res.headers.get("id_dokumen") || undefined;
@@ -264,7 +280,17 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
       idDokumen,
       signingTimeMs,
     };
-  } catch {
+  } catch (err) {
+    const habisWaktu =
+      err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+    if (habisWaktu) {
+      const detik = Math.round((options.timeoutMs ?? BATAS_WAKTU_SIGN_MS) / 1000);
+      return {
+        success: false,
+        statusCode: 504,
+        error: `Batas waktu habis (timeout): Esign Client BSrE tidak menjawab dalam ${detik} detik.`,
+      };
+    }
     return {
       success: false,
       statusCode: 500,

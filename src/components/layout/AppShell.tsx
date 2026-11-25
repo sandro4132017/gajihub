@@ -1,7 +1,8 @@
 "use client";
 
 import { DetakSesi } from "./DetakSesi";
-import { type ReactNode, useState } from "react";
+import { BarProgresNavigasi } from "./BarProgresNavigasi";
+import { type ReactNode, Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AccountMenu } from "./AccountMenu";
@@ -589,6 +590,12 @@ export function AppShell({
 
       {/* Detak interaksi: hanya mengirim bila pengguna benar-benar berinteraksi. */}
       <DetakSesi />
+
+      {/* Garis progres saat pindah halaman. Suspense: useSearchParams di
+          layout wajib dibungkus supaya halaman statis tetap bisa dirender. */}
+      <Suspense fallback={null}>
+        <BarProgresNavigasi />
+      </Suspense>
 
       {/* Panel kanan Notifikasi & Aktivitas - tombolnya mengambang di kanan
           atas, panelnya tertutup sampai diklik. PEGAWAI tidak dapat: ditolak

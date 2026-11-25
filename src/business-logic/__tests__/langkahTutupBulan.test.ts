@@ -9,6 +9,19 @@ import {
   type KeadaanDaftarLangkah,
 } from "../langkahTutupBulan";
 import { statusUnit, cekBolehKirim, TABEL_WAJIB_DIVERIFIKASI } from "../pengirimanUnit";
+import type { MasukanSyaratTte } from "../sptjmUnit";
+
+// Sejak 2026-11-16 langkah PERIKSA = tanda tangan SPTJM (centang tabel tidak
+// lagi wajib). SPTJM wajib selama lembur ditunda: Tukin & Uang Makan.
+const TTE_SAH: MasukanSyaratTte = {
+  dokumen: {
+    SPTJM_TUKIN: { status: "TERTANDATANGANI", signedAt: new Date("2026-08-01T00:00:00Z") },
+    SPTJM_UANG_MAKAN: { status: "TERTANDATANGANI", signedAt: new Date("2026-08-01T00:00:00Z") },
+  },
+  dikembalikanPada: null,
+  lemburWajib: false,
+};
+const TTE_KOSONG: MasukanSyaratTte = { dokumen: {}, dikembalikanPada: null, lemburWajib: false };
 
 const lengkap: KeadaanTutupBulan = {
   totalPegawai: 47,
@@ -100,6 +113,7 @@ const siap: KeadaanDaftarLangkah = {
   jumlahBasi: 0,
   jumlahUangMakan: 10,
   tabelDiverifikasi: [...TABEL_WAJIB_DIVERIFIKASI],
+  sptjm: TTE_SAH,
   status: BELUM,
 };
 const kosong: KeadaanDaftarLangkah = {
@@ -109,6 +123,7 @@ const kosong: KeadaanDaftarLangkah = {
   jumlahTukin: 0,
   jumlahUangMakan: 0,
   tabelDiverifikasi: [],
+  sptjm: TTE_KOSONG,
 };
 const status = (k: KeadaanDaftarLangkah) => daftarLangkahTutupBulan(k).map((l) => l.status);
 
@@ -118,7 +133,8 @@ describe("daftarLangkahTutupBulan", () => {
     expect(d.map((l) => l.kode)).toEqual(["PRESENSI", "PREDIKAT", "HITUNG", "PERIKSA", "KIRIM"]);
     expect(d.map((l) => l.status)).toEqual(["AKTIF", "BISA_DIKERJAKAN", "TERKUNCI", "TERKUNCI", "TERKUNCI"]);
     expect(d[0].angka).toEqual({ x: 0, y: 10 });
-    expect(d[3].angka).toEqual({ x: 0, y: TABEL_WAJIB_DIVERIFIKASI.length });
+    expect(d[3].angka).toEqual({ x: 0, y: 2 }); // 0 dari 2 SPTJM wajib
+    expect(d[3].judul).toBe("Tanda tangani SPTJM");
     expect(d[4].angka).toBeNull();
   });
 
@@ -134,31 +150,41 @@ describe("daftarLangkahTutupBulan", () => {
   });
 
   it("HITUNG aktif begitu bahan lengkap", () => {
-    const d = daftarLangkahTutupBulan({ ...siap, jumlahTukin: 4, tabelDiverifikasi: [] });
+    const d = daftarLangkahTutupBulan({ ...siap, jumlahTukin: 4, sptjm: TTE_KOSONG });
     expect(d.map((l) => l.status)).toEqual(["SELESAI", "SELESAI", "AKTIF", "TERKUNCI", "TERKUNCI"]);
   });
 
   it("angka basi menahan langkah 3 dan diberi catatan", () => {
-    const d = daftarLangkahTutupBulan({ ...siap, jumlahBasi: 2, tabelDiverifikasi: [] });
+    const d = daftarLangkahTutupBulan({ ...siap, jumlahBasi: 2, sptjm: TTE_KOSONG });
     expect(d[2].status).toBe("AKTIF");
     expect(d[2].catatan).toEqual(["2 angka perlu dihitung ulang"]);
     expect(d[3].status).toBe("TERKUNCI");
   });
 
-  it("PERIKSA terkunci sebelum HITUNG selesai, lalu AKTIF", () => {
-    const terkunci = daftarLangkahTutupBulan({ ...siap, jumlahTukin: 5, tabelDiverifikasi: [] });
+  it("PERIKSA (TTE SPTJM) terkunci sebelum HITUNG selesai, lalu AKTIF", () => {
+    const terkunci = daftarLangkahTutupBulan({ ...siap, jumlahTukin: 5, sptjm: TTE_KOSONG });
     expect(terkunci[3].status).toBe("TERKUNCI");
-    expect(terkunci[3].alasan).toBeTruthy();
-    const d = daftarLangkahTutupBulan({ ...siap, tabelDiverifikasi: ["TUKIN"] });
+    expect(terkunci[3].alasan).toContain("SPTJM");
+    const d = daftarLangkahTutupBulan({
+      ...siap,
+      sptjm: { ...TTE_KOSONG, dokumen: { SPTJM_TUKIN: TTE_SAH.dokumen.SPTJM_TUKIN } },
+    });
     expect(d[3].status).toBe("AKTIF");
-    expect(d[3].angka).toEqual({ x: 1, y: TABEL_WAJIB_DIVERIFIKASI.length });
+    expect(d[3].angka).toEqual({ x: 1, y: 2 });
+  });
+
+  it("centang tabel tidak lagi menahan apa pun", () => {
+    expect(TABEL_WAJIB_DIVERIFIKASI).toEqual([]);
+    const d = daftarLangkahTutupBulan({ ...siap, tabelDiverifikasi: [] });
+    expect(d[3].status).toBe("SELESAI");
+    expect(d[4].status).toBe("AKTIF");
   });
 
   it("KIRIM memakai alasan cekBolehKirim apa adanya", () => {
-    const k = { ...siap, tabelDiverifikasi: ["TUKIN" as const] };
+    const k = { ...siap, sptjm: TTE_KOSONG };
     const d = daftarLangkahTutupBulan(k);
     const cek = cekBolehKirim(
-      { totalPegawai: 10, jumlahKalkulasi: 10, jumlahBasi: 0, tabelDiverifikasi: k.tabelDiverifikasi },
+      { totalPegawai: 10, jumlahKalkulasi: 10, jumlahBasi: 0, tabelDiverifikasi: k.tabelDiverifikasi, sptjm: k.sptjm },
       BELUM
     );
     expect(d[4].status).toBe("TERKUNCI");
@@ -209,11 +235,10 @@ describe("daftarLangkahTutupBulan", () => {
     expect(d[2].catatan?.[0].startsWith(AWALAN_CATATAN_UANG_MAKAN)).toBe(true);
   });
 
-  it("lembur bukan langkah sendiri; tabelnya hanya bagian PERIKSA", () => {
+  it("lembur bukan langkah sendiri", () => {
     const d = daftarLangkahTutupBulan(siap);
     expect(d).toHaveLength(5);
     expect(d.some((l) => /lembur/i.test(l.judul))).toBe(false);
-    expect(TABEL_WAJIB_DIVERIFIKASI).toContain("UANG_LEMBUR");
   });
 
   it("tepat satu AKTIF di setiap tahap, nol bila semua selesai", () => {
@@ -221,7 +246,7 @@ describe("daftarLangkahTutupBulan", () => {
       kosong,
       { ...kosong, jumlahPresensi: 10 },
       { ...kosong, jumlahPresensi: 10, jumlahPredikat: 10 },
-      { ...siap, tabelDiverifikasi: [] },
+      { ...siap, sptjm: TTE_KOSONG },
       siap,
     ];
     for (const t of tahap) {
@@ -231,7 +256,7 @@ describe("daftarLangkahTutupBulan", () => {
   });
 
   it("ringkasLangkah menghitung selesai dan aktif", () => {
-    const r = ringkasLangkah(daftarLangkahTutupBulan({ ...siap, tabelDiverifikasi: [] }));
+    const r = ringkasLangkah(daftarLangkahTutupBulan({ ...siap, sptjm: TTE_KOSONG }));
     expect(r.selesai).toBe(3);
     expect(r.total).toBe(5);
     expect(r.aktif?.kode).toBe("PERIKSA");

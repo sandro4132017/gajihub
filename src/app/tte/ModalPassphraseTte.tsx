@@ -64,6 +64,18 @@ export function ModalPassphraseTte({
   const router = useRouter();
   const [state, setState] = useState<TteActionResult>(INITIAL_STATE);
   const [pending, setPending] = useState(false);
+  // Detik berjalan selama menunggu BSrE - supaya tunggu yang lama terbaca
+  // sebagai "sedang diproses", bukan aplikasi yang macet.
+  const [detikTunggu, setDetikTunggu] = useState(0);
+  useEffect(() => {
+    if (!pending) {
+      setDetikTunggu(0);
+      return;
+    }
+    const mulai = Date.now();
+    const t = setInterval(() => setDetikTunggu(Math.floor((Date.now() - mulai) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [pending]);
   const [passphrase, setPassphrase] = useState(
     defaultNik === "0803202100007062" ? "Bsre2026.#!" : ""
   );
@@ -629,6 +641,34 @@ export function ModalPassphraseTte({
 
           {/* Status layanan BSrE: hanya peringatan, tombol tetap aktif. */}
           <StatusKoneksiBsre paksaSaatMuat denganPeringatan />
+
+          {/* PROGRES - server memutus sendiri sesudah 60 detik
+              (BATAS_WAKTU_SIGN_MS), jadi tunggu ini selalu berujung. */}
+          {pending && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-start gap-2 rounded-lg border border-biru/25 bg-biru/5 p-2.5 text-xs text-ink-2"
+            >
+              <span
+                aria-hidden
+                className="mt-0.5 size-3.5 shrink-0 animate-spin rounded-full border-2 border-biru/30 border-t-biru"
+              />
+              <span>
+                {detikTunggu < 3 ? (
+                  "Memeriksa sertifikat dan menyiapkan dokumen..."
+                ) : (
+                  <>
+                    Menunggu tanda tangan dari BSrE...{" "}
+                    <span className="font-mono font-semibold text-ink">{detikTunggu} detik</span>
+                    <span className="mt-0.5 block text-muted">
+                      Bisa sampai 1 menit bila layanan BSrE sedang lambat. Jangan tutup halaman ini.
+                    </span>
+                  </>
+                )}
+              </span>
+            </div>
+          )}
 
           {/* Tombol Aksi */}
           <div className="mt-5 flex items-center justify-end gap-2 pt-2 border-t border-line-2">

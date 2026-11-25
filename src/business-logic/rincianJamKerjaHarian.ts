@@ -36,6 +36,7 @@ import {
   JADWAL_KERJA_DEFAULT,
   JAM_TAP_PULANG_HILANG,
   batasCheckoutMenit,
+  batasJamMasukDipercayaMenit,
   batasLemburMenit,
   tapKetukanGanda,
   tapKeluarMustahil,
@@ -194,7 +195,7 @@ export function rincianJamKerjaHari(
   // Predikatnya SAMA PERSIS dengan yang dipakai mesin yang membayar (fungsi
   // yang sama, bukan salinan), jadi tabel ini tidak bisa lagi berbeda darinya.
   const tapTidakWajar =
-    tapMasukMustahil(jamMasukMenit, jamPulangWajibMenit, input.masukDikoreksi) ||
+    tapMasukMustahil(jamMasukMenit, jamPulangWajibMenit, input.masukDikoreksi, jadwal) ||
     tapKeluarMustahil(jamKeluarMenit, jadwal, input.keluarDikoreksi) ||
     tapKetukanGanda(jamMasukMenit, jamKeluarMenit, input.masukDikoreksi, input.keluarDikoreksi);
 
@@ -407,4 +408,133 @@ export function keteranganTidakPresensiHari(input: {
     return `${tglTeks} (masuk)`;
   }
   return `${tglTeks} (pulang)`;
+}
+
+/** Status hari yang mewajibkan presensi masuk & pulang (sama dengan halaman rincian pegawai). */
+export const STATUS_WAJIB_PRESENSI: readonly string[] = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA", "TIDAK_PRESENSI"];
+
+/** Satu hari presensi, jam SUDAH memakai koreksi petugas bila ada. */
+export interface HariTapTidakWajar {
+  tanggalIso: string;
+  indeksHari: number;
+  statusKehadiran: string;
+  /** Tanggal merah (Sabtu/Minggu sudah ditangani `rincianJamKerjaHari`). */
+  hariLibur: boolean;
+  jamMasukMenit: number | null;
+  jamKeluarMenit: number | null;
+  masukDikoreksi: boolean;
+  keluarDikoreksi: boolean;
+  /** Tanggal kendala e-Presensi - Pasal 10 ayat (2) membatalkan tagihannya. */
+  dikecualikanKendala: boolean;
+}
+
+/**
+ * Jumlah hari "tap tidak wajar" yang DITAGIH dalam satu periode.
+ *
+ * Hanya keterangan: tiap hari itu sudah ikut terhitung 1 kejadian tidak
+ * melakukan presensi (Pasal 13 ayat (2), 1%) di "Lupa Absen". Predikatnya
+ * memakai `rincianJamKerjaHari` + `kejadianTidakPresensiHari` - fungsi yang
+ * sama dengan halaman rincian pegawai, jadi angkanya tidak bisa berbeda.
+ */
+export function jumlahTapTidakWajarDitagih(
+  hari: readonly HariTapTidakWajar[],
+  jadwal: JadwalKerja = JADWAL_KERJA_DEFAULT
+): number {
+  let jumlah = 0;
+  for (const h of hari) {
+    const r = rincianJamKerjaHari(
+      {
+        tanggalIso: h.tanggalIso,
+        indeksHari: h.indeksHari,
+        hariLibur: h.hariLibur,
+        jamMasukMenit: h.jamMasukMenit,
+        jamKeluarMenit: h.jamKeluarMenit,
+        masukDikoreksi: h.masukDikoreksi,
+        keluarDikoreksi: h.keluarDikoreksi,
+      },
+      jadwal
+    );
+    if (!r.tapTidakWajar) continue;
+    const ditagih = kejadianTidakPresensiHari({
+      wajibPresensi: STATUS_WAJIB_PRESENSI.includes(h.statusKehadiran),
+      hariLibur: r.hariLibur,
+      jamMasukMenit: r.jamMasukMenit,
+      jamKeluarMenit: r.jamKeluarMenit,
+      dikecualikanKendala: h.dikecualikanKendala,
+      dikoreksiManual: h.masukDikoreksi || h.keluarDikoreksi,
+      tapTidakWajar: true,
+    });
+    jumlah += ditagih;
+  }
+  return jumlah;
+}
+
+/** Satu jenis potongan Pasal 13 pada satu hari. `persen` = PECAHAN bobot kehadiran (0,006 = 0,6%). */
+export interface BagianPotonganHarian {
+  teks: string;
+  persen: number;
+}
+
+const persenTeks = (pecahan: number) =>
+  `${(pecahan * 100).toLocaleString("id-ID", { maximumFractionDigits: 2 })}%`;
+const jamTitik = (menit: number) => (jamDariMenit(menit) ?? "").replace(":", ".");
+
+/**
+ * Uraian potongan SATU hari, satu butir per jenis - supaya hari yang kena
+ * dua potongan berbeda (mis. masuk lewat 10.10 = lupa absen masuk 1%, DAN
+ * pulang sebelum 17.00 = kekurangan jam kerja per menit) terbaca jelas.
+ * Jumlah `persen`-nya sama persis dengan `potonganHarianPersen(p)`.
+ */
+export function keteranganPotonganHarian(
+  p: PelanggaranHarian,
+  r: BarisRincianJamKerja,
+  jadwal: JadwalKerja = JADWAL_KERJA_DEFAULT
+): BagianPotonganHarian[] {
+  const t = TARIF_POTONGAN_PASAL_13;
+  const bagian: BagianPotonganHarian[] = [];
+  if (p.hariAlpha) bagian.push({ teks: "Tidak hadir", persen: t.perHariAlpha });
+
+  if (p.kejadianTidakPresensi > 0) {
+    const persen = p.kejadianTidakPresensi * t.perKejadianTidakPresensi;
+    let teks: string;
+    if (r.tapTidakWajar) {
+      const batas =
+        r.jamPulangWajibMenit === null ? null : batasJamMasukDipercayaMenit(r.jamPulangWajibMenit, jadwal);
+      const masukLewatBatas =
+        batas !== null &&
+        r.jamMasukMenit !== null &&
+        r.jamPulangWajibMenit !== null &&
+        r.jamMasukMenit >= batas &&
+        r.jamMasukMenit < r.jamPulangWajibMenit;
+      teks = masukLewatBatas
+        ? `Terlambat lewat ${jamTitik(batas!)}`
+        : r.jamKeluarMenit === JAM_TAP_PULANG_HILANG
+          ? "Lupa absen pulang"
+          : "Jam absen tidak wajar";
+    } else if (r.jamMasukMenit === null && p.kejadianTidakPresensi >= 2) {
+      teks = "Lupa absen masuk & pulang";
+    } else if (r.jamMasukMenit === null) {
+      teks = "Lupa absen masuk";
+    } else {
+      teks = "Lupa absen pulang";
+    }
+    bagian.push({ teks, persen });
+  }
+
+  if (p.menitTerlambat > 0)
+    bagian.push({ teks: `Terlambat ${p.menitTerlambat} menit`, persen: p.menitTerlambat * t.perMenit });
+  if (p.menitPulangCepat > 0)
+    bagian.push({ teks: `Kekurangan jam kerja ${p.menitPulangCepat} menit`, persen: p.menitPulangCepat * t.perMenit });
+  if (p.menitMeninggalkanKantor > 0)
+    bagian.push({
+      teks: `Meninggalkan kantor ${p.menitMeninggalkanKantor} menit`,
+      persen: p.menitMeninggalkanKantor * t.perMenit,
+    });
+  if (p.tidakIkutUpacara) bagian.push({ teks: "Tidak ikut upacara", persen: t.perKejadianTidakUpacara });
+  return bagian;
+}
+
+/** "Terlambat lewat 10.10 (1%) + Kekurangan jam kerja 60 menit (0,6%)". */
+export function teksKeteranganPotongan(bagian: readonly BagianPotonganHarian[]): string {
+  return bagian.map((b) => `${b.teks} (${persenTeks(b.persen)})`).join(" + ");
 }

@@ -9,11 +9,86 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-11-11** - sesi berbatas & role bawaan login (migrasi `user_sesi_versi` belum dijalankan, lihat butir 0000), lalu koreksi jam presensi dipersempit ke Kasubag TU (migrasi belum dijalankan, lihat butir 000), lalu rincian lengkap PPABP di `/tukin` (2026-11-11, belum di-commit), lalu rangkuman commit `64d9a46`..`9e3886e`, plus perbaikan pentest Pusdatik (2026-11-06, lihat bagian 3 butir 20)
-(2026-10-21 s.d. 2026-10-29), plus akun penguji Tim Pusdatik dan penghapusan login
-NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-log.md`.
+Terakhir diperbarui: **2026-11-25** - lihat butir 000000 (pekerjaan 2026-11-16 s.d. 2026-11-25, SEMUANYA belum di-commit di `main`). Riwayat sebelumnya: rombak Kalkulasi Unit 4 tahap & gerbang TTE (butir 00000, 2026-11-16, BELUM di-commit), sesi berbatas & role bawaan login (butir 0000) dan koreksi jam presensi khusus Kasubag TU (butir 000) - dua yang terakhir SUDAH di-commit di `f074e91` (2026-11-11, `main` = `origin/main`). Detail per perubahan ada di `docs/ai-log.md`.
 
-0000. **Sesi berbatas, role bawaan login, role Pegawai wajib (2026-11-11, belum di-commit, MIGRASI BELUM DIJALANKAN)**:
+000000. **Pekerjaan 2026-11-16 s.d. 2026-11-25 (BELUM di-commit di `main`, TANPA MIGRASI BARU)**:
+   - **Keadaan git** (diukur 2026-11-25): `main` = `origin/main` = `f074e91` (2026-11-11);
+     **109 berkas** berubah/baru belum di-commit di checkout `main`. Branch `lembur`
+     (`origin/lembur`, commit `13fad39` 20 Nov, `b6fbbf9` & `3cd259b` 23 Nov: SPKL, role
+     Kepala Tim, perintah lembur ber-TTE, notifikasi WA) BELUM digabung ke `main`.
+   - **Typecheck merah HANYA di `src/auth/roleAktif.ts` & `roleLabel.ts`** (`KEPALA_TIM`
+     hilang): Prisma client di `node_modules` dihasilkan dari skema branch `lembur`. Bukan bug
+     kode `main`; selesai dengan `npx prisma generate` di checkout `main`, atau hilang sendiri
+     begitu `lembur` digabung. Test: 2.419 lulus (168 berkas); check-sensitive 71 temuan lama.
+   - **Kalkulasi Unit (lanjutan mockup)**: tahap Kesiapan pakai laci pengecualian kanan; daftar
+     dikecualikan & rincian kesiapan dihapus; tabel Tukin/Uang Makan berwarna & full-bleed;
+     tahap TTE SPTJM ringkas dengan ikon (i); `SpandukPengembalian` saat dikembalikan PPABP; mode
+     terkunci. `TABEL_WAJIB_DIVERIFIKASI = []` - **TTE SPTJM dihitung setara "sudah diperiksa"**
+     (keputusan user); langkah dashboard "Periksa" jadi "Tanda tangani SPTJM".
+   - **TTE lambat**: `esignClient.signPdf` diberi batas 60 detik (504), pesan timeout, dan
+     penghitung detik di modal. Diukur: lambatnya jaringan ke BSrE, bukan Gajihub.
+   - **`PilPredikat`** (pil predikat berwarna) dipakai tabel Tukin; memperbaiki "SANGAT_BAIK"
+     mentah di `/tukin` PPABP.
+   - **Sesi kedaluwarsa**: URL login bersih; pesan & tujuan kembali lewat cookie singkat
+     (`src/auth/tujuanKembali.ts`, anti open-redirect).
+   - **Export ADK PPABP dirombak** (`/ppabp/adk`): tab tersegmen, filter otomatis satu baris
+     (`FilterAdk`), kotak Unit Terkunci, 3 kartu ringkas, daftar berkas per bank SPAN + gabungan,
+     kartu SPTJM PPK baru, panduan sebagai pop up (`PanduanAdk`), papan progres unit dengan tab
+     status, cari, paginasi, Kembalikan sebaris (`PapanProgres`).
+   - **Excel presensi perorangan**: tombol Unduh Excel di `/tukin/presensi/[nip]`
+     (route `.../[nip]/export`), kolom sama dengan tabel Rincian harian + Potongan (%) &
+     Keterangan potongan.
+   - **Rincian Tukin 45 kolom**: kolom N "Anomali/Tap Tidak Wajar" & O "% Pot Anomali" sesudah
+     Alpa, di Excel DAN tabel "Lihat rincian lengkap". HANYA KETERANGAN (sudah termasuk di Lupa
+     Absen & % Pot). Hitungan bersama: `src/lib/tapTidakWajarDb.ts`.
+   - **ATURAN POTONGAN BARU - MENGUBAH UANG - `TODO(legal-confirm)`**: jam masuk **10.10 ke
+     atas** = 1 kejadian lupa absen masuk (1%), bukan 0,01%/menit (keputusan Kasubag TU, atasan
+     user, 2026-11-25). Jam harus checkout TETAP ikut jam masuk asli, berbatas 17.00 (Jumat
+     17.30). Sakelar `BATAS_MASUK_SETARA_LUPA_ABSEN_AKTIF` di `presensiPdfKeRekap.ts`. Status
+     dicatat di butir B-batas-maksimal `docs/permintaan-data-dan-konfirmasi-osdma.md` -
+     **menunggu konfirmasi tertulis OSDMA**. **Belum berlaku ke periode lama sampai presensinya
+     ditarik ulang & Tukin dihitung ulang** (unit yang sudah terkirim tidak ikut berubah).
+   - **Rincian potongan per hari**: kolom Potongan di tabel Rincian harian & Rincian jam kerja
+     berupa pil %, uraiannya di kotak hover (`SelPotongan`). Hitungan per hari halaman & Excel
+     satu sumber: `barisHarianPegawai.ts`.
+   - **DIHAPUS**: tab "Banding e-Presensi" beserta `TabelBandingEpresensi.tsx`,
+     `bandingPotonganEpresensi.ts` (+test), `src/adapters/potonganEpresensi.ts` (permintaan user).
+   - **Belum dicek di browser** (halaman minta login): Export ADK baru, Excel perorangan, hover
+     potongan, kolom Anomali.
+   - **Open items** (kode belum diubah):
+     - Halaman pegawai belum memperingatkan bila jumlah lupa absen di rekap tersimpan berbeda
+       dengan yang disusun dari presensi harian (kasus 3 vs 6 sebelum tarik ulang).
+     - Hari dengan tap masuk DAN pulang sama-sama tidak sah ditagih 1 kejadian, sementara tanpa
+       tap sama sekali 2 kejadian - perlu keputusan bila mau disamakan.
+     - Export presensi per unit (9 kolom, `exportPresensiHarian.ts`): keterangan potongannya
+       belum memuat lupa absen / aturan 10.10.
+     - 7 hari (data lokal) tanpa tap masuk tapi ada tap pulang: jam harus checkout diukur ke
+       16.00. Belum diputuskan, kasusnya sangat jarang.
+     - Status migrasi di VPS belum diketahui (`user_sesi_versi`, bukti koreksi presensi) -
+       `npx prisma migrate status` di VPS sebelum deploy.
+
+00000. **Kalkulasi Unit 4 tahap, gerbang TTE sebelum kirim, pop up presensi (2026-11-16, belum di-commit, TANPA MIGRASI BARU)**:
+   - `/kasubag/kalkulasi` dirombak mengikuti mockup user: kepala, stepper 4 tahap (Ringkasan
+     Kesiapan, Kalkulasi, TTE SPTJM, Pengiriman & Penguncian). Panel gabungan `VerifikasiTabelPanel`
+     DIHAPUS; centang per tab pindah ke `KontrolVerifikasiTabel`. Detail: `gajihub-ui-konvensi`.
+   - Gerbang kirim ke PPABP: SPTJM Tukin dan Uang Makan WAJIB tertandatangani (Uang Lembur bila
+     nominalnya ditampilkan). Tanpa jalan darurat bila BSrE gangguan (keputusan user). SPTJM basi
+     (PERLU_TTE_ULANG) bila ditandatangani sebelum rekap dikembalikan atau sebelum kalkulasi terakhir
+     komponennya (keputusan user 2026-11-16). Dashboard `/kasubag` memakai aturan yang sama. Detail:
+     `gajihub-tte-bsre`.
+   - Presensi: kolom Cuti jadi angka yang diklik ke pop up rincian cuti (`RincianCutiTombol`). Rincian
+     harian: koreksi jam jadi pil kuning dengan kotak "Rincian koreksi"; dialog koreksi dirombak; bukti
+     dibuka di pop up `PenampilBukti`. Detail: `gajihub-presensi-epresensi`.
+   - Verifikasi (dilaporkan user, belum diulang pencatat): review LULUS; typecheck dan 2.387 test
+     lulus; check-sensitive 71 temuan lama.
+   - **Open items** (kode belum diubah):
+     - Server memeriksa "basi" hanya dari tanpa-predikat, sementara UI memakai basi penuh. UI lebih
+       ketat, bukan regresi.
+     - Dokumen TTE terbaru yang GAGAL/DRAFT menimpa yang sah (sesuai aturan dokumen terbaru).
+     - `daftarTeks` dan `rupiah` terduplikasi.
+     - Langkah review "satu blok berkotak per kartu" sebagian dilonggarkan demi mockup.
+
+0000. **Sesi berbatas, role bawaan login, role Pegawai wajib (2026-11-11, di-commit `f074e91`, status migrasi di VPS belum diketahui)**:
    - Sesi: menganggur 30 menit (sliding, env `SESI_MENGANGGUR_MENIT`) dan mutlak 8 jam sejak login.
      Token format lama DITOLAK, jadi semua pengguna login ulang sekali setelah deploy. Logout, nonaktif
      akun, dan "Putus semua sesi" (Admin) memutus semua perangkat. Detail: `gajihub-akses-sso-deploy`.
@@ -40,7 +115,7 @@ NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-
        `/tte/verify` (tanpa garis miring) di middleware dengan `src/auth/halamanPublik.ts`; GET
        `/api/auth/keluar` bisa dipakai logout-CSRF ringan (dampak gangguan saja).
 
-000. **Koreksi jam presensi dipersempit (2026-11-11, belum di-commit, MIGRASI BELUM DIJALANKAN)**:
+000. **Koreksi jam presensi dipersempit (2026-11-11, di-commit `f074e91`, status migrasi di VPS belum diketahui)**:
    - Hanya KASUBAG_TU unit pegawai yang bisa mengoreksi jam (`canKoreksiJamPresensi`,
      tanpa bypass ADMIN, tanpa hibah). PPABP dan ADMIN tetap bisa melihat koreksi dan
      buktinya. Gerbang "tanggal harus ditandai kendala" DICABUT; penggantinya bukti wajib
@@ -73,7 +148,8 @@ NIP (2026-11-05, lihat bagian 3 butir 15). Detail per perubahan ada di `docs/ai-
 
 0a. **Rincian lengkap PPABP di `/tukin` (2026-11-11, belum di-commit)**:
    - PPABP memilih satu satker, lalu "Lihat rincian lengkap" (`?rincian=1`)
-     menampilkan tabel 38 kolom yang sama dengan Kalkulasi Unit Kasubag TU.
+     menampilkan tabel rincian lengkap yang sama dengan Kalkulasi Unit Kasubag TU
+     (`TabelRincianTukinLengkap`, 41 `<th>` per 2026-11-16).
      Hanya unit yang sudah mengirim rekap. "Tampilkan ringkas" kembali ke 7 kolom
      (bawaan).
    - Tabel pindah ke `src/components/tables/TabelRincianTukinLengkap.tsx` (dipakai

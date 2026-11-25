@@ -7,6 +7,9 @@ import {
   keteranganTidakPresensiHari,
   potonganHarianPersen,
   rincianJamKerjaHari,
+  jumlahTapTidakWajarDitagih,
+  keteranganPotonganHarian,
+  teksKeteranganPotongan,
 } from "../rincianJamKerjaHarian";
 import { hitungPotonganKehadiranPersen } from "../tukin";
 
@@ -383,9 +386,10 @@ describe("rincianJamKerjaHari - ketukan yang tidak dipercaya", () => {
 
   it("masuk pada/sesudah jam pulang wajib ditandai - mustahil sebagai kedatangan", () => {
     expect(rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(16, 0), jamKeluarMenit: MENIT(17, 0) }).tapTidakWajar).toBe(true);
-    // Jumat jam pulang wajibnya 16:30, jadi 16:00 di Jumat BELUM mustahil -
-    // ambangnya ikut jadwal hari itu, bukan angka tetap.
-    expect(rincianJamKerjaHari({ ...JUMAT, jamMasukMenit: MENIT(16, 0), jamKeluarMenit: MENIT(17, 0) }).tapTidakWajar).toBe(false);
+    expect(rincianJamKerjaHari({ ...JUMAT, jamMasukMenit: MENIT(16, 0), jamKeluarMenit: MENIT(17, 0) }).tapTidakWajar).toBe(true);
+    // Batas 10:10 (keputusan Kasubag TU, TODO(legal-confirm)).
+    expect(rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(10, 9), jamKeluarMenit: MENIT(17, 0) }).tapTidakWajar).toBe(false);
+    expect(rincianJamKerjaHari({ ...SENIN, jamMasukMenit: MENIT(10, 10), jamKeluarMenit: MENIT(17, 0) }).tapTidakWajar).toBe(true);
   });
 
   it("satu ketukan tersalin ke dua kolom ditandai", () => {
@@ -411,5 +415,78 @@ describe("rincianJamKerjaHari - ketukan yang tidak dipercaya", () => {
     expect(r.tapTidakWajar).toBe(false);
     expect(r.menitTerlambat).toBe(0);
     expect(r.kekuranganJamKerjaMenit).toBe(45);
+  });
+});
+
+describe("jumlahTapTidakWajarDitagih", () => {
+  const dasar = {
+    tanggalIso: "2026-10-05",
+    indeksHari: 1,
+    statusKehadiran: "WFO",
+    hariLibur: false,
+    jamMasukMenit: 450,
+    jamKeluarMenit: 970,
+    masukDikoreksi: false,
+    keluarDikoreksi: false,
+    dikecualikanKendala: false,
+  };
+  // Satu ketukan tersalin ke dua kolom = tap tidak wajar.
+  const ganda = { ...dasar, jamMasukMenit: 600, jamKeluarMenit: 600 };
+
+  it("menghitung hari tap tidak wajar yang ditagih", () => {
+    expect(jumlahTapTidakWajarDitagih([dasar, ganda, { ...ganda, tanggalIso: "2026-10-06", indeksHari: 2 }])).toBe(2);
+  });
+
+  it("tidak dihitung pada tanggal kendala, tanggal merah, atau status tanpa kewajiban presensi", () => {
+    expect(jumlahTapTidakWajarDitagih([{ ...ganda, dikecualikanKendala: true }])).toBe(0);
+    expect(jumlahTapTidakWajarDitagih([{ ...ganda, hariLibur: true }])).toBe(0);
+    expect(jumlahTapTidakWajarDitagih([{ ...ganda, statusKehadiran: "CUTI" }])).toBe(0);
+  });
+
+  it("koreksi petugas mematikan tap tidak wajar", () => {
+    expect(jumlahTapTidakWajarDitagih([{ ...ganda, jamMasukMenit: 450, masukDikoreksi: true }])).toBe(0);
+  });
+});
+
+describe("keteranganPotonganHarian", () => {
+  const SENIN_K = { tanggalIso: "2026-10-05", indeksHari: 1, hariLibur: false };
+  const pel = (o: Partial<Parameters<typeof keteranganPotonganHarian>[0]> = {}) => ({
+    hariAlpha: false,
+    kejadianTidakPresensi: 0,
+    menitTerlambat: 0,
+    menitPulangCepat: 0,
+    menitMeninggalkanKantor: 0,
+    tidakIkutUpacara: false,
+    ...o,
+  });
+
+  it("masuk 11:30 pulang 16:00: dua potongan berbeda, jumlahnya sama dengan potonganHarianPersen", () => {
+    const r = rincianJamKerjaHari({ ...SENIN_K, jamMasukMenit: 11 * 60 + 30, jamKeluarMenit: 16 * 60 });
+    const p = pel({ kejadianTidakPresensi: 1, menitPulangCepat: 60 });
+    const b = keteranganPotonganHarian(p, r);
+    expect(b.map((x) => x.teks)).toEqual([
+      "Terlambat lewat 10.10",
+      "Kekurangan jam kerja 60 menit",
+    ]);
+    expect(b.reduce((t, x) => t + x.persen, 0)).toBeCloseTo(potonganHarianPersen(p), 10);
+    expect(teksKeteranganPotongan(b)).toBe(
+      "Terlambat lewat 10.10 (1%) + Kekurangan jam kerja 60 menit (0,6%)"
+    );
+  });
+
+  it("lupa absen biasa & terlambat per menit", () => {
+    const kosong = rincianJamKerjaHari({ ...SENIN_K, jamMasukMenit: null, jamKeluarMenit: null });
+    expect(keteranganPotonganHarian(pel({ kejadianTidakPresensi: 2 }), kosong)[0].teks).toBe("Lupa absen masuk & pulang");
+    const telat = rincianJamKerjaHari({ ...SENIN_K, jamMasukMenit: 9 * 60, jamKeluarMenit: 17 * 60 });
+    expect(keteranganPotonganHarian(pel({ menitTerlambat: 30 }), telat)).toEqual([
+      { teks: "Terlambat 30 menit", persen: 30 * 0.0001 },
+    ]);
+  });
+
+  it("tap pulang 23:59 dibaca lupa absen pulang", () => {
+    const r = rincianJamKerjaHari({ ...SENIN_K, jamMasukMenit: 7 * 60 + 30, jamKeluarMenit: 23 * 60 + 59 });
+    expect(keteranganPotonganHarian(pel({ kejadianTidakPresensi: 1 }), r)[0].teks).toBe(
+      "Lupa absen pulang"
+    );
   });
 });

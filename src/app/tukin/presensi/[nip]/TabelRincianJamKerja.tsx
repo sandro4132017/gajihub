@@ -1,5 +1,10 @@
 import type { ReactNode } from "react";
-import { jamDariMenit, type BarisRincianJamKerja } from "../../../../business-logic/rincianJamKerjaHarian";
+import {
+  jamDariMenit,
+  type BagianPotonganHarian,
+  type BarisRincianJamKerja,
+} from "../../../../business-logic/rincianJamKerjaHarian";
+import { SelPotongan } from "./SelPotongan";
 import { lemburTeks } from "../../../../lib/format/presensiTampilan";
 
 /**
@@ -21,6 +26,8 @@ export interface BarisTabelRincianJamKerja {
   rincian: BarisRincianJamKerja;
   /** Pecahan dari bobot kehadiran (0,0099 = 0,99%). */
   potonganPersen: number;
+  /** Uraian potongan hari itu, satu butir per jenis - lihat `keteranganPotonganHarian`. */
+  bagianPotongan: BagianPotonganHarian[];
   /** Kejadian Pasal 13 ayat (2) hari itu - ikut menyusun % potongan. */
   kejadianTidakPresensi: number;
   /**
@@ -196,12 +203,12 @@ export function TabelRincianJamKerja({ baris }: { baris: BarisTabelRincianJamKer
                   <td className={`px-3 py-2 ${pisah}`} colSpan={4}>
                     <span
                       className="rounded bg-gold-tint px-1.5 py-0.5 text-[11px] font-semibold text-gold-deep"
-                      title="Jam masuk/pulang di baris ini tidak mungkin - mustahil sebagai kedatangan, mustahil sebagai kepulangan, atau satu ketukan tersalin ke dua kolom. Terlambat & pulang cepat TIDAK ditagih per menit; hari ini dihitung 1 kejadian tidak melakukan presensi (Pasal 13 ayat (2))."
+                      title="Jam masuk/pulang di baris ini tidak dipakai - masuk pukul 10:10 ke atas (keterlambatan sudah setara lupa absen), mustahil sebagai kepulangan, atau satu ketukan tersalin ke dua kolom. Hari ini dihitung 1 kejadian tidak melakukan presensi (Pasal 13 ayat (2)); kalau jam pulangnya sah dan sebelum jam harus checkout, kekurangan jam kerjanya tetap ditagih per menit - lihat kolom % Potongan."
                     >
                       Tap tidak wajar
                     </span>
                     <span className="ml-2 text-[11px] text-muted">
-                      ditagih 1 kejadian Pasal 13 ayat (2), bukan per menit
+                      terlambat tidak ditagih per menit - lihat % Potongan
                     </span>
                   </td>
                 ) : (
@@ -213,13 +220,13 @@ export function TabelRincianJamKerja({ baris }: { baris: BarisTabelRincianJamKer
                   </>
                 )}
                 <td className="px-3 py-2">
-                  {b.potonganPersen > 0 ? (
-                    <span className="font-mono text-red">
-                      {(b.potonganPersen * 100).toLocaleString("id-ID", { maximumFractionDigits: 2 })}%
-                    </span>
-                  ) : (
-                    <span className="text-muted">-</span>
-                  )}
+                  <SelPotongan
+                    persen={b.potonganPersen}
+                    bagian={b.bagianPotongan}
+                    tanggalLabel={`${String(b.tanggal.getUTCDate()).padStart(2, "0")}/${String(
+                      b.tanggal.getUTCMonth() + 1
+                    ).padStart(2, "0")} ${NAMA_HARI[b.tanggal.getUTCDay()]}`}
+                  />
                 </td>
               </tr>
             );

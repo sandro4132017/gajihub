@@ -126,15 +126,15 @@ export function KartuSambutanUnit({
   const persen = ringkas.total > 0 ? Math.round((ringkas.selesai / ringkas.total) * 100) : 0;
 
   // Tombol SELALU menunjuk langkah aktif, juga saat rekap dikembalikan PPABP:
-  // pekerjaan berikutnya sesudah pengembalian bisa periksa tabel (centangnya
-  // direset) atau hitung ulang - bukan membaca catatan, yang sudah tampil di
+  // pekerjaan berikutnya sesudah pengembalian bisa TTE SPTJM ulang
+  // atau hitung ulang - bukan membaca catatan, yang sudah tampil di
   // langkah Kirim.
   const tombol = ringkas.aktif
     ? { label: LABEL_TOMBOL_LANGKAH[ringkas.aktif.kode], href: tautanLangkah(ringkas.aktif.kode, qPeriode) }
     : null;
 
   // "Komponen lengkap" BUKAN "semua beres": sesudah data lengkap masih ada
-  // pekerjaan manusia (periksa tabel, kirim). Kalimatnya menyebut sisanya,
+  // pekerjaan manusia (tanda tangan SPTJM, kirim). Kalimatnya menyebut sisanya,
   // supaya tidak terbaca seperti tidak ada lagi yang harus dikerjakan.
   const kecil = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
   const judulSisa = sisaLangkah.map((l) => l.judul);

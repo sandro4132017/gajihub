@@ -21,6 +21,7 @@ export function KembalikanRekapForm({
   periodeBulan,
   periodeTahun,
   bisaDikembalikan,
+  sebaris = false,
 }: {
   satuanKerja: string;
   periodeBulan: number;
@@ -35,6 +36,8 @@ export function KembalikanRekapForm({
    * terbaca.
    */
   bisaDikembalikan: boolean;
+  /** Kolom alasan & tombol bersebelahan (papan progres Export ADK). */
+  sebaris?: boolean;
 }) {
   // Lewat Route Handler JSON (/api/ppabp/kembalikan-rekap), bukan Server
   // Action: firewall jaringan memblokir body multipart Server Action.
@@ -132,7 +135,10 @@ export function KembalikanRekapForm({
   }
 
   return (
-    <form onSubmit={kembalikan} className="flex flex-col items-stretch gap-1.5">
+    <form
+      onSubmit={kembalikan}
+      className={sebaris ? "flex items-stretch gap-2" : "flex flex-col items-stretch gap-1.5"}
+    >
       {/* Placeholder dipendekkan supaya terbaca utuh di kolom yang sempit -
           yang panjang terpotong di tengah kata dan tidak menerangkan apa pun.
           Kalimat lengkapnya pindah ke `title`, muncul saat kursor berhenti. */}
@@ -143,9 +149,17 @@ export function KembalikanRekapForm({
         minLength={10}
         placeholder="Yang harus diperbaiki?"
         title="Tulis apa yang harus diperbaiki unit ini - ini satu-satunya keterangan yang mereka terima."
-        className="field-input w-full min-w-0 py-1 text-xs"
+        className={sebaris ? "field-input min-w-0 flex-1 text-xs" : "field-input w-full min-w-0 py-1 text-xs"}
       />
-      <button type="submit" disabled={sibuk} className="btn btn-ghost btn-sm w-full">
+      <button
+        type="submit"
+        disabled={sibuk}
+        className={
+          sebaris
+            ? "shrink-0 rounded-lg bg-navy px-4 text-xs font-bold text-white transition hover:bg-navy-deep disabled:opacity-60"
+            : "btn btn-ghost btn-sm w-full"
+        }
+      >
         {sibuk ? "..." : "Kembalikan"}
       </button>
       {popupHasil}

@@ -1,4 +1,4 @@
-import { TautanBuktiKoreksi, daftarTautanBukti } from "../../../../components/shared/TautanBuktiKoreksi";
+import { daftarTautanBukti } from "../../../../components/shared/TautanBuktiKoreksi";
 import Link from "next/link";
 import { prisma } from "../../../../lib/prisma";
 import { getSessionAccount } from "../../../../auth/getSessionAccount";
@@ -19,19 +19,15 @@ import { dikecualikanPotonganKehadiran } from "../../../../business-logic/pejaba
 import { BadgePejabatEselon } from "../../../../components/shared/BadgePejabatEselon";
 import { LABEL_STATUS, NAMA_HARI, jamTeks, lemburTeks } from "../../../../lib/format/presensiTampilan";
 import { KoreksiJamForm } from "./KoreksiJamForm";
+import { SelJamKoreksi } from "./SelJamKoreksi";
 import { TabelRincianJamKerja, type BarisTabelRincianJamKerja } from "./TabelRincianJamKerja";
-import { TabelBandingEpresensi } from "./TabelBandingEpresensi";
-import { bandingkanPotongan, type HasilBandingPotongan } from "../../../../business-logic/bandingPotonganEpresensi";
-import { ambilPotonganEpresensi, pegawaiIdEpresensiUntukNip } from "../../../../adapters/potonganEpresensi";
+import { susunBarisHarianPegawai } from "./barisHarianPegawai";
+import { SelPotongan } from "./SelPotongan";
 import { muatHariLiburPeriode } from "../../../../lib/hariLibur";
 import {
-  kejadianTidakPresensiHari,
   keteranganTidakPresensiHari,
-  potonganHarianPersen,
-  rincianJamKerjaHari,
 } from "../../../../business-logic/rincianJamKerjaHarian";
 import { HALAMAN } from "../../../../components/layout/layoutHalaman";
-import { catatGalat, denganSumber, pesanGalatAwam } from "../../../../lib/koneksi/galatSumber";
 import { rekapUnitTerkunciUntukTanggal } from "../../../../lib/koreksiPresensiDb";
 
 export const dynamic = "force-dynamic";
@@ -40,43 +36,6 @@ const BERHAK_UANG_MAKAN = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
 
 const WAJIB_JAM_KERJA = ["WFO", "HADIR", "TERLAMBAT", "WFH", "WFA"];
 const WAJIB_PRESENSI = [...WAJIB_JAM_KERJA, "TIDAK_PRESENSI"];
-
-function SelJam({
-  asli,
-  koreksi,
-  alasan,
-  oleh,
-  belumDiterapkan,
-}: {
-  asli: string;
-  koreksi: string | null;
-  alasan: string | null;
-  oleh: string | null;
-  belumDiterapkan: boolean;
-}) {
-  if (!koreksi) return <td className="px-3 py-2 font-mono text-ink-2">{asli}</td>;
-  return (
-    <td className="px-3 py-2 font-mono">
-      <span
-        className={`rounded px-1 font-semibold text-gold-deep ${
-          belumDiterapkan ? "border border-dashed border-gold bg-gold-tint" : "bg-gold-tint"
-        }`}
-        title={
-          `e-Presensi mencatat ${asli === "-" ? "tidak ada ketukan" : asli}, dikoreksi manual jadi ${koreksi}` +
-          `${oleh ? ` oleh ${oleh}` : ""}${alasan ? ` - ${alasan}` : ""}.` +
-          (belumDiterapkan ? " BELUM diterapkan: tarik ulang presensi periode ini supaya ikut menghitung." : "")
-        }
-      >
-        {koreksi}
-      </span>
-      {asli !== koreksi && (
-        <span className="mt-0.5 block text-[11px] text-muted line-through">
-          {asli === "-" ? "tanpa ketukan" : asli}
-        </span>
-      )}
-    </td>
-  );
-}
 
 const formatTanggal = (tanggal: Date) =>
   new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "long", year: "numeric" }).format(tanggal);
@@ -189,13 +148,11 @@ export default async function RincianPresensiPegawaiPage({
     dari?: string;
     satker?: string;
     rinci?: string;
-    banding?: string;
   }>;
 }) {
   const { nip } = await params;
-  const { bulan, tahun, dari, satker, rinci, banding } = await searchParams;
-  const modeJamKerja = rinci === "1" && banding !== "1";
-  const modeBanding = banding === "1";
+  const { bulan, tahun, dari, satker, rinci } = await searchParams;
+  const modeJamKerja = rinci === "1";
 
   const akun = await getSessionAccount();
   const authUser: AuthUser | null =
@@ -283,52 +240,10 @@ export default async function RincianPresensiPegawaiPage({
   const totalTelat = harian.reduce((a, h) => a + h.menitTerlambat, 0);
   const totalPulangCepat = harian.reduce((a, h) => a + h.menitPulangCepat, 0);
 
-  const menitDariWaktu = (w: Date | null) => (w === null ? null : w.getUTCHours() * 60 + w.getUTCMinutes());
-
-  const barisJamKerja: BarisTabelRincianJamKerja[] = harian.map((h) => {
-    const iso = h.tanggal.toISOString().slice(0, 10);
-    const keteranganLibur = hariLiburPeriode.get(iso) ?? null;
-    const koreksiHari = petaKoreksi.get(iso);
-    const rincian = rincianJamKerjaHari({
-      tanggalIso: iso,
-      indeksHari: h.tanggal.getUTCDay(),
-      hariLibur: keteranganLibur !== null,
-      jamMasukMenit: menitDariWaktu(koreksiHari?.jamMasuk ?? h.jamMasuk),
-      jamKeluarMenit: menitDariWaktu(koreksiHari?.jamKeluar ?? h.jamKeluar),
-      masukDikoreksi: koreksiHari?.jamMasuk != null,
-      keluarDikoreksi: koreksiHari?.jamKeluar != null,
-    });
-
-    const kejadianTidakPresensi = kejadianTidakPresensiHari({
-      wajibPresensi: WAJIB_PRESENSI.includes(h.statusKehadiran),
-      hariLibur: rincian.hariLibur,
-      jamMasukMenit: rincian.jamMasukMenit,
-      jamKeluarMenit: rincian.jamKeluarMenit,
-      dikecualikanKendala: tanggalKendala.has(iso),
-      dikoreksiManual: petaKoreksi.has(iso),
-      tapTidakWajar: rincian.tapTidakWajar,
-    });
-
-    return {
-      tanggal: h.tanggal,
-      statusLabel: LABEL_STATUS[h.statusKehadiran] ?? h.statusKehadiran,
-      rincian,
-      potonganPersen: potonganHarianPersen({
-        hariAlpha: h.statusKehadiran === "ALPHA" && !rincian.hariLibur,
-        kejadianTidakPresensi,
-        menitTerlambat: h.menitTerlambat,
-        menitPulangCepat: h.menitPulangCepat,
-        menitMeninggalkanKantor: h.menitMeninggalkanKantor,
-        tidakIkutUpacara: h.tidakIkutUpacara,
-      }),
-      keteranganLibur,
-      dikoreksiManual: petaKoreksi.has(iso),
-      masukDikoreksi: koreksiHari?.jamMasuk != null,
-      keluarDikoreksi: koreksiHari?.jamKeluar != null,
-      jamLembur: koreksiHari?.jamLembur ?? h.jamLembur,
-      jamLemburMesin: h.jamLembur,
-      kejadianTidakPresensi,
-    };
+  const barisJamKerja: BarisTabelRincianJamKerja[] = susunBarisHarianPegawai(harian, {
+    petaKoreksi,
+    tanggalKendala,
+    hariLibur: hariLiburPeriode,
   });
 
   // Cek silang per komponen. Yang diperiksa BUKAN totalnya saja: dua selisih
@@ -393,51 +308,13 @@ export default async function RincianPresensiPegawaiPage({
           href: `/tukin/presensi?bulan=${periodeBulan}&tahun=${periodeTahun}`,
         };
 
-  const hrefMode = (mode: "presensi" | "jamKerja" | "banding") => {
+  const hrefMode = (mode: "presensi" | "jamKerja") => {
     const q = new URLSearchParams({ bulan: String(periodeBulan), tahun: String(periodeTahun) });
     if (dari) q.set("dari", dari);
     if (satker) q.set("satker", satker);
     if (mode === "jamKerja") q.set("rinci", "1");
-    if (mode === "banding") q.set("banding", "1");
     return `/tukin/presensi/${encodeURIComponent(pegawai.nip)}?${q.toString()}`;
   };
-
-  let hasilBanding: HasilBandingPotongan | null = null;
-  let galatBanding: string | null = null;
-  if (modeBanding) {
-    try {
-      const idEpresensi = await denganSumber("SIAP", () => pegawaiIdEpresensiUntukNip(pegawai.nip));
-      if (idEpresensi === null) {
-        galatBanding =
-          "NIP ini tidak ketemu di SIAP, jadi id pegawai e-Presensi-nya tidak bisa ditentukan. Perbandingan tidak bisa dibuat.";
-      } else {
-        const potonganEpresensi = await denganSumber("EPRESENSI", () =>
-          ambilPotonganEpresensi(idEpresensi, periodeBulan, periodeTahun)
-        );
-        hasilBanding = bandingkanPotongan({
-          epresensi: potonganEpresensi,
-          gajihub: harian.map((h, i) => {
-            const libur = barisJamKerja[i].rincian.hariLibur;
-            return {
-              tanggalIso: barisJamKerja[i].rincian.tanggalIso,
-              hariAlpha: h.statusKehadiran === "ALPHA" && !libur,
-              kejadianTidakPresensi: barisJamKerja[i].kejadianTidakPresensi,
-              menitTerlambat: h.menitTerlambat,
-              menitPulangCepat: h.menitPulangCepat,
-              menitMeninggalkanKantor: h.menitMeninggalkanKantor,
-              tidakIkutUpacara: h.tidakIkutUpacara,
-            };
-          }),
-          bobotKehadiranRupiah: bobotKehadiranPenuh,
-        });
-      }
-    } catch (e) {
-      const { ref, info } = catatGalat("presensi-detail", e);
-      galatBanding =
-        pesanGalatAwam(info, ref, "Perbandingan dengan e-Presensi tidak bisa dibuat") +
-        " Perbandingan ini membaca SIAP dan e-Presensi langsung (read-only), jadi butuh jaringan kantor.";
-    }
-  }
 
   return (
     <main className={HALAMAN}>
@@ -583,16 +460,31 @@ export default async function RincianPresensiPegawaiPage({
       )}
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-bold text-ink">Rincian harian</h2>
+        <div>
+          <h2 className="text-base font-bold text-ink">Rincian harian</h2>
+          {koreksiPeriode.length > 0 && !modeJamKerja && (
+            <p className="mt-0.5 text-xs text-muted">
+              Arahkan kursor ke jam berlabel kuning untuk melihat jam lama, siapa yang mengoreksi, dan buktinya.
+            </p>
+          )}
+        </div>
         {/* Tautan GET biasa, bukan tombol berstate - tetap jalan tanpa
             JavaScript dan tautannya bisa dibagikan, pola yang sama dengan
             toggle ringkas/rinci di /kasubag/kalkulasi. */}
+        <div className="flex flex-wrap items-center gap-2">
+        {harian.length > 0 && (
+          <a
+            href={`/tukin/presensi/${encodeURIComponent(pegawai.nip)}/export?bulan=${periodeBulan}&tahun=${periodeTahun}`}
+            className="btn btn-secondary text-xs"
+          >
+            Unduh Excel
+          </a>
+        )}
         <div className="flex gap-0.5 rounded-lg border border-line bg-surface-2 p-0.5 text-xs font-semibold">
           {(
             [
-              ["presensi", "Presensi", !modeJamKerja && !modeBanding],
+              ["presensi", "Presensi", !modeJamKerja],
               ["jamKerja", "Rincian jam kerja", modeJamKerja],
-              ["banding", "Banding e-Presensi", modeBanding],
             ] as const
           ).map(([mode, label, aktif]) => (
             <Link
@@ -606,6 +498,7 @@ export default async function RincianPresensiPegawaiPage({
               {label}
             </Link>
           ))}
+        </div>
         </div>
       </div>
 
@@ -631,18 +524,7 @@ export default async function RincianPresensiPegawaiPage({
         </div>
       )}
 
-      {modeBanding ? (
-        <div className="mt-3">
-          {galatBanding !== null ? (
-            <div className="card border-gold/40 bg-gold-tint p-4">
-              <p className="text-sm font-bold text-ink">Perbandingan tidak bisa dibuat</p>
-              <p className="mt-1 text-xs text-ink-2">{galatBanding}</p>
-            </div>
-          ) : hasilBanding !== null ? (
-            <TabelBandingEpresensi hasil={hasilBanding} bobotKehadiranRupiah={bobotKehadiranPenuh} />
-          ) : null}
-        </div>
-      ) : modeJamKerja ? (
+      {modeJamKerja ? (
         <div className="mt-3">
           <TabelRincianJamKerja baris={barisJamKerja} />
         </div>
@@ -664,6 +546,7 @@ export default async function RincianPresensiPegawaiPage({
               <th className="px-3 py-2.5">Telat</th>
               <th className="px-3 py-2.5">Kekurangan jam kerja</th>
               <th className="px-3 py-2.5">Lembur</th>
+              <th className="px-3 py-2.5">Potongan</th>
               <th className="px-3 py-2.5">Uang makan</th>
               <th className="px-3 py-2.5">Koreksi</th>
             </tr>
@@ -671,7 +554,7 @@ export default async function RincianPresensiPegawaiPage({
           <tbody>
             {harian.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-muted">
+                <td colSpan={10} className="px-3 py-6 text-center text-muted">
                   Periode ini belum dilakukan sinkronisasi.
                 </td>
               </tr>
@@ -694,20 +577,30 @@ export default async function RincianPresensiPegawaiPage({
                     <span className="ml-1.5 text-xs text-muted">{NAMA_HARI[hariKe]}</span>
                   </td>
                   <td className="px-3 py-2 text-ink-2">{LABEL_STATUS[h.statusKehadiran] ?? h.statusKehadiran}</td>
-                  <SelJam
-                    asli={jamTeks(h.jamMasuk)}
-                    koreksi={koreksi?.jamMasuk ? jamTeks(koreksi.jamMasuk) : null}
-                    alasan={koreksi?.alasan ?? null}
-                    oleh={koreksi?.dikoreksiOleh.nama ?? null}
-                    belumDiterapkan={koreksiBelumBerlaku}
-                  />
-                  <SelJam
-                    asli={jamTeks(h.jamKeluar)}
-                    koreksi={koreksi?.jamKeluar ? jamTeks(koreksi.jamKeluar) : null}
-                    alasan={koreksi?.alasan ?? null}
-                    oleh={koreksi?.dikoreksiOleh.nama ?? null}
-                    belumDiterapkan={koreksiBelumBerlaku}
-                  />
+                  {(["masuk", "pulang"] as const).map((sisi) => (
+                    <SelJamKoreksi
+                      key={sisi}
+                      sisi={sisi}
+                      asli={jamTeks(sisi === "masuk" ? h.jamMasuk : h.jamKeluar)}
+                      koreksi={
+                        sisi === "masuk"
+                          ? koreksi?.jamMasuk
+                            ? jamTeks(koreksi.jamMasuk)
+                            : null
+                          : koreksi?.jamKeluar
+                            ? jamTeks(koreksi.jamKeluar)
+                            : null
+                      }
+                      tanggalLabel={`${String(h.tanggal.getUTCDate()).padStart(2, "0")}/${String(
+                        h.tanggal.getUTCMonth() + 1
+                      ).padStart(2, "0")} ${NAMA_HARI[hariKe]}`}
+                      oleh={koreksi?.dikoreksiOleh.nama ?? null}
+                      belumDiterapkan={koreksiBelumBerlaku}
+                      tautanBukti={koreksi ? daftarTautanBukti(koreksi) : []}
+                      tanggalIso={iso}
+                      bolehUbah={bolehUbahKoreksi && !(akhirPekan && !h.jamLembur)}
+                    />
+                  ))}
                   <td className="px-3 py-2 font-mono">
                     {h.menitTerlambat > 0 ? <span className="text-red">{h.menitTerlambat} mnt</span> : <span className="text-muted">-</span>}
                   </td>
@@ -726,6 +619,16 @@ export default async function RincianPresensiPegawaiPage({
                       <span className="text-muted">-</span>
                     )}
                   </td>
+                  {/* % potongan hari itu; uraian per jenis muncul saat disorot. */}
+                  <td className="px-3 py-2 text-xs">
+                    <SelPotongan
+                      persen={barisJamKerja[idxHarian]?.potonganPersen ?? 0}
+                      bagian={barisJamKerja[idxHarian]?.bagianPotongan ?? []}
+                      tanggalLabel={`${String(h.tanggal.getUTCDate()).padStart(2, "0")}/${String(
+                        h.tanggal.getUTCMonth() + 1
+                      ).padStart(2, "0")} ${NAMA_HARI[hariKe]}`}
+                    />
+                  </td>
                   <td className="px-3 py-2 text-xs">
                     {akhirPekan ? (
                       <span className="text-muted">akhir pekan</span>
@@ -740,6 +643,11 @@ export default async function RincianPresensiPegawaiPage({
                       <KoreksiJamForm
                         nip={pegawai.nip}
                         tanggalIso={iso}
+                        tanggalLabel={`${String(h.tanggal.getUTCDate()).padStart(2, "0")}/${String(
+                          h.tanggal.getUTCMonth() + 1
+                        ).padStart(2, "0")} ${NAMA_HARI[hariKe]}`}
+                        namaPegawai={pegawai.nama}
+                        statusLabel={LABEL_STATUS[h.statusKehadiran] ?? h.statusKehadiran}
                         jamMasukAsli={jamTeks(h.jamMasuk)}
                         jamKeluarAsli={jamTeks(h.jamKeluar)}
                         jamLemburMesin={h.jamLembur}
@@ -755,21 +663,19 @@ export default async function RincianPresensiPegawaiPage({
                                 olehNama: koreksi.dikoreksiOleh.nama,
                                 buktiMasuk: !!koreksi.buktiRef,
                                 buktiKeluar: !!koreksi.buktiRefKeluar,
-                                tautanBukti: daftarTautanBukti(koreksi).map(({ sisi, label, href }) => ({ sisi, label, href })),
+                                tautanBukti: daftarTautanBukti(koreksi),
                               }
                             : null
                         }
                       />
                     ) : koreksi ? (
-                      <div className="text-xs">
-                        <span className="chip chip-navy">Dikoreksi</span>
-                        <p className="mt-1 text-ink-2">oleh {koreksi.dikoreksiOleh.nama}</p>
-                        <TautanBuktiKoreksi
-                          koreksi={koreksi}
-                          className="link block"
-                          kosong={<span className="text-muted">tanpa bukti</span>}
-                        />
-                      </div>
+                      // Rincian & bukti ada di kotak keterangan saat jamnya disorot.
+                      <span
+                        className="inline-flex rounded-full border border-biru/30 bg-biru/5 px-2.5 py-0.5 text-xs font-semibold text-navy"
+                        title={`Dikoreksi oleh ${koreksi.dikoreksiOleh.nama}`}
+                      >
+                        Dikoreksi
+                      </span>
                     ) : (
                       <span className="text-xs text-muted">-</span>
                     )}
@@ -783,13 +689,7 @@ export default async function RincianPresensiPegawaiPage({
       </>
       )}
 
-      {modeBanding ? (
-        <p className="mt-3 text-xs text-muted">
-          Membaca <strong>SIAP</strong> (memetakan NIP ke id pegawai e-Presensi) dan tabel{" "}
-          <span className="font-mono">potongan_tukin</span> di <strong>e-Presensi</strong> secara langsung - keduanya
-          READ-ONLY, tidak ada yang ditulis. Hanya tanggal yang berbeda yang ditampilkan.
-        </p>
-      ) : modeJamKerja ? (
+      {modeJamKerja ? (
         <div className="card mt-3 p-4 text-xs text-ink-2">
           <p className="font-bold text-ink">Cara membaca tabel ini</p>
           <p className="mt-1.5">

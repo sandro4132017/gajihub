@@ -13,6 +13,9 @@ import {
   type BarisRekapTukinLengkap,
 } from "../../../../business-logic/rekapUnitExcel";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../../business-logic/tarifTukinPokok";
+import { TARIF_POTONGAN_PASAL_13 } from "../../../../business-logic/tukin";
+import { dikecualikanPotonganKehadiran } from "../../../../business-logic/pejabatPimpinanTinggi";
+import { hitungTapTidakWajarUnit } from "../../../../lib/tapTidakWajarDb";
 import { rincianTukinTersimpan } from "../../../../business-logic/rincianTukinTersimpan";
 import { LABEL_PREDIKAT } from "../../../tukin/predikat-kinerja/predikat";
 import { responseRekapExcel } from "../responseRekapExcel";
@@ -22,10 +25,11 @@ import type { AuthUser } from "../../../../auth/permissions";
 /**
  * Unduh rekap Tunjangan Kinerja satu unit untuk satu periode, sebagai Excel.
  *
- * Menggunakan FORMAT RINCIAN LENGKAP (43 kolom) yang mencakup:
+ * Menggunakan FORMAT RINCIAN LENGKAP (45 kolom) yang mencakup:
  * - Identitas pegawai (Nama, NIP, Golongan, Kelas Jabatan, Status Kepegawaian)
  * - Detail presensi & potongan (Hari kerja, WFO, WFH, Terlambat, Lupa absen,
- *   Alpa, Dinas luar, 12 breakdown cuti, Tugas belajar, Diklat, Upacara)
+ *   Alpa, Anomali/tap tidak wajar + % potongannya (keterangan, sudah termasuk
+ *   di Lupa absen), Dinas luar, 12 breakdown cuti, Tugas belajar, Diklat, Upacara)
  * - Komponen Kehadiran 30% (% Potongan, % Kehadiran riil, Nominal kehadiran,
  *   Jumlah potongan rupiah)
  * - Komponen Kinerja 70% (Hasil kerja, Perilaku kerja, Capaian predikat,
@@ -130,6 +134,15 @@ export async function GET(req: NextRequest) {
 
   const pegawaiExport = pegawaiList.filter((p) => !setDikecualikan.has(p.id));
 
+  // Tap tidak wajar per pegawai - dihitung ulang dari baris harian dengan
+  // fungsi yang sama dengan halaman rincian presensi pegawai.
+  const tapTidakWajarPerPegawai = await hitungTapTidakWajarUnit(
+    pegawaiExport.map((p) => p.id),
+    satkerEfektif,
+    bulan,
+    tahun
+  );
+
   const barisLengkap: BarisRekapTukinLengkap[] = pegawaiExport.map((p) => {
     const tukin = p.tukinCalc[0];
     const rekap = p.rekapPresensi[0];
@@ -171,6 +184,12 @@ export async function GET(req: NextRequest) {
       totalMenitTerlambat: rekap?.totalMenitTerlambat ?? 0,
       jumlahTidakPresensi: rekap?.jumlahTidakPresensi ?? 0,
       jumlahHariAlpha: rekap?.jumlahHariAlpha ?? 0,
+      jumlahTapTidakWajar: tapTidakWajarPerPegawai.get(p.id) ?? 0,
+      // Pasal 13 ayat (2): 1% per kejadian. JPT yang dikecualikan dari
+      // potongan kehadiran tidak dipotong apa pun.
+      persenPotonganAnomali: dikecualikanPotonganKehadiran(p.kelasJabatan)
+        ? 0
+        : (tapTidakWajarPerPegawai.get(p.id) ?? 0) * TARIF_POTONGAN_PASAL_13.perKejadianTidakPresensi * 100,
       jumlahHariDinasLuar: rekap?.jumlahHariDinasLuar ?? 0,
       ctGugurKandungan1: selCuti("GUGUR_1", rekap),
       ctGugurKandungan2: selCuti("GUGUR_2", rekap),

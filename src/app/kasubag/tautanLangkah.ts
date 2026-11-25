@@ -2,7 +2,7 @@ import {
   RiAwardLine,
   RiCalculatorLine,
   RiCalendarCheckLine,
-  RiCheckboxMultipleLine,
+  RiQuillPenLine,
   RiSendPlaneLine,
 } from "react-icons/ri";
 import type { IconType } from "react-icons";
@@ -13,7 +13,7 @@ export const IKON_LANGKAH: Record<KodeLangkah, IconType> = {
   PRESENSI: RiCalendarCheckLine,
   PREDIKAT: RiAwardLine,
   HITUNG: RiCalculatorLine,
-  PERIKSA: RiCheckboxMultipleLine,
+  PERIKSA: RiQuillPenLine,
   KIRIM: RiSendPlaneLine,
 };
 
@@ -22,8 +22,8 @@ export const IKON_LANGKAH: Record<KodeLangkah, IconType> = {
  * sambutan dan baris di stepper) supaya keduanya tidak pernah menunjuk halaman
  * yang berbeda untuk langkah yang sama.
  *
- * PERIKSA dan KIRIM sama-sama bermuara di panel `#kirim` pada halaman
- * kalkulasi: centang tabel dan tombol Kirim hidup di panel itu.
+ * PERIKSA (kini: tanda tangan SPTJM) menuju Tahap 3 halaman kalkulasi;
+ * KIRIM ke panel `#kirim`.
  */
 export function qPeriodeUnit(bulan: number, tahun: number, satker: string): string {
   return `bulan=${bulan}&tahun=${tahun}&satker=${encodeURIComponent(satker)}`;
@@ -38,6 +38,7 @@ export function tautanLangkah(kode: KodeLangkah, q: string): string {
     case "HITUNG":
       return `/kasubag/kalkulasi?${q}`;
     case "PERIKSA":
+      return `/kasubag/kalkulasi?${q}#tahap-3`;
     case "KIRIM":
       return `/kasubag/kalkulasi?${q}#kirim`;
   }
@@ -48,6 +49,6 @@ export const LABEL_TOMBOL_LANGKAH: Record<KodeLangkah, string> = {
   PRESENSI: "Tarik presensi",
   PREDIKAT: "Lengkapi predikat",
   HITUNG: "Hitung unit",
-  PERIKSA: "Periksa tabel",
+  PERIKSA: "Tanda tangani SPTJM",
   KIRIM: "Kirim rekap",
 };

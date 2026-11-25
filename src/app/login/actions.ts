@@ -10,6 +10,7 @@ import { SESSION_COOKIE_NAME } from "../../auth/session";
 // cepat atau lambat, dan gejalanya "login berhasil tapi langsung logout".
 import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../auth/sesiCookie";
 import { LANDING_ROLE, pilihRoleBawaan } from "../../auth/roleAktif";
+import { COOKIE_KEMBALI, tujuanKembaliSah } from "../../auth/tujuanKembali";
 import { LABEL_ROLE } from "../../auth/roleLabel";
 import { pesanGalatUntukLayar } from "../../lib/koneksi/galatSumber";
 import { ssoAktif } from "../../auth/sso";
@@ -106,7 +107,11 @@ export async function loginAction(
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
 
-    urlTujuan = LANDING_ROLE[roleBawaan];
+    // Kembali ke halaman yang sedang dibuka saat sesi berakhir (sekali pakai);
+    // tanpa itu, ke halaman awal role bawaan.
+    const kembali = tujuanKembaliSah(cookieStore.get(COOKIE_KEMBALI)?.value);
+    if (cookieStore.has(COOKIE_KEMBALI)) cookieStore.delete(COOKIE_KEMBALI);
+    urlTujuan = kembali ?? LANDING_ROLE[roleBawaan];
   } catch (error) {
     return { error: pesanGalatUntukLayar("loginAction", error, "Gagal login") };
   }

@@ -109,9 +109,11 @@ describe("presensi saya", () => {
     expect(html).toContain("jam hasil koreksi itu yang dipakai");
     expect(html).toContain("dikoreksi Kasubag TU unit berdasarkan bukti kehadiran");
     expect(html).not.toContain("e-Presensi bermasalah");
-    expect(html).toContain("/berkas/koreksi-presensi/k-uji-1");
+    // Bukti dibuka lewat pop up (tombol), bukan tautan tab baru.
+    expect(html).toContain(">Bukti masuk</button>");
+    expect(html).not.toContain('target="_blank"');
     expect(html).toContain("Bukti masuk");
-    expect(html).toContain("?sisi=keluar");
+    expect(html).toContain(">Bukti pulang</button>");
     expect(html).toContain("Bukti pulang");
     expect(html).not.toContain("Bukti lembur");
     expect(html).not.toContain("tidak pernah mengubah data presensi");

@@ -21,6 +21,8 @@ import {
   TABEL_KALKULASI,
   type JenisTabelKalkulasi,
 } from "../../../business-logic/pengirimanUnit";
+import { pilihDokumenTerbaru } from "../../../business-logic/sptjmUnit";
+import { TAMPILKAN_NOMINAL_LEMBUR } from "../../../lib/format/tampilUangLembur";
 
 export interface KirimFormState {
   error?: string;
@@ -111,6 +113,23 @@ export async function kirimRekapUnitAction(
     where: kunciPeriode,
     select: { jenisTabel: true },
   });
+  // TTE SPTJM juga dibaca dari database, bukan dari form. Sengaja TANPA
+  // `.catch`: kalau pembacaannya gagal, kirim ikut gagal (gerbang tertutup) -
+  // bukan dianggap "tidak ada dokumen" lalu lolos diam-diam.
+  const dokumenTte = await prisma.dokumenTte.findMany({
+    where: { ...kunciPeriode, jenisDokumen: { in: ["SPTJM_TUKIN", "SPTJM_UANG_MAKAN", "SPTJM_LEMBUR"] } },
+    orderBy: { createdAt: "desc" },
+    select: { jenisDokumen: true, status: true, signedAt: true, createdAt: true },
+  });
+
+  // Hitungan terakhir tiap komponen - SPTJM yang ditandatangani sebelum
+  // hitung ulang sudah basi. Juga tanpa `.catch` (gagal baca = gagal kirim).
+  const unitPeriode = { ...periodeAktif, pegawai: { satuanKerja } };
+  const [maxTukin, maxMakan, maxLembur] = await Promise.all([
+    prisma.tukinCalculation.aggregate({ where: unitPeriode, _max: { calculatedAt: true } }),
+    prisma.uangMakan.aggregate({ where: unitPeriode, _max: { calculatedAt: true } }),
+    prisma.uangLembur.aggregate({ where: unitPeriode, _max: { calculatedAt: true } }),
+  ]);
 
   const cek = cekBolehKirim(
     {
@@ -118,6 +137,18 @@ export async function kirimRekapUnitAction(
       jumlahKalkulasi,
       jumlahBasi: jumlahTanpaPredikat,
       tabelDiverifikasi: verifikasi.map((v) => v.jenisTabel as JenisTabelKalkulasi),
+      // Sumber yang SAMA dengan halaman Kalkulasi Unit (sptjmUnit.ts).
+      // SPTJM Lembur hanya wajib bila nominal lembur sudah berlaku.
+      sptjm: {
+        dokumen: pilihDokumenTerbaru(dokumenTte),
+        dikembalikanPada: barisLama?.dikembalikanPada ?? null,
+        lemburWajib: TAMPILKAN_NOMINAL_LEMBUR,
+        dihitungTerakhir: {
+          SPTJM_TUKIN: maxTukin?._max?.calculatedAt ?? null,
+          SPTJM_UANG_MAKAN: maxMakan?._max?.calculatedAt ?? null,
+          SPTJM_LEMBUR: maxLembur?._max?.calculatedAt ?? null,
+        },
+      },
     },
     status
   );
@@ -180,7 +211,7 @@ export async function kirimRekapUnitAction(
         // Bunyi pernyataan yang disetujui ikut disimpan, bukan cuma "true".
         // Kalau redaksinya berubah suatu saat, baris audit lama tetap
         // menunjukkan apa yang SEBENARNYA disetujui waktu itu.
-        pernyataan: `Sudah memeriksa presensi, predikat kinerja, dan hasil kalkulasi ${jumlahKalkulasi} pegawai; menyatakan datanya benar untuk dikirim ke PPABP.`,
+        pernyataan: `Menyatakan data ${jumlahKalkulasi} pegawai telah diperiksa dengan benar dan memahami bahwa periode yang dikirim akan terkunci otomatis serta hanya dapat dibuka kembali melalui pengembalian oleh PPABP.`,
       },
     },
   });

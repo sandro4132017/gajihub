@@ -203,14 +203,18 @@ export function susunRekapTukinExcel(rows: readonly BarisRekapTukin[]): HasilRek
 // ============================================================================
 // FORMAT RINCIAN LENGKAP TUNJANGAN KINERJA
 //
-// Format rincian lengkap mencakup 43 kolom: detail presensi (kehadiran, WFO,
-// WFH, keterlambatan, lupa absen, alpa, dinas luar, 12 jenis cuti, diklat,
+// Format rincian lengkap mencakup 45 kolom: detail presensi (kehadiran, WFO,
+// WFH, keterlambatan, lupa absen, alpa, anomali/tap tidak wajar + % potongannya,
+// dinas luar, 12 jenis cuti, diklat,
 // upacara), perhitungan potongan & bobot 30% kehadiran, capaian hasil &
 // perilaku kinerja serta bobot 70% kinerja, hingga rincian nominal dan status.
 //
-// Kolom 1-40 sejalan 1:1 dengan tabel "Lihat rincian lengkap" di
+// Kolom 1-13 dan 16-42 sejalan 1:1 dengan tabel "Lihat rincian lengkap" di
 // `/kasubag/kalkulasi` dan arsip Biro Keuangan (PMK 32/2025 & Permenaker 15/2024).
-// Kolom 41-43 memuat Potongan PPh, Status Pengajuan, dan Catatan Anomali
+// Kolom 14-15 (N-O, sesudah Alpa) HANYA KETERANGAN: jumlah hari tap tidak wajar
+// dan potongannya (1%/kejadian, Pasal 13 ayat (2)). Hari-hari itu SUDAH ikut
+// terhitung di "Lupa Absen" dan "% Pot" - jangan dijumlahkan lagi.
+// Kolom 43-45 memuat Potongan PPh, Status Pengajuan, dan Catatan Anomali
 // untuk transparansi audit sebelum rekap dikirim ke PPABP.
 // ============================================================================
 
@@ -228,6 +232,10 @@ export interface BarisRekapTukinLengkap {
   totalMenitTerlambat: number;
   jumlahTidakPresensi: number;
   jumlahHariAlpha: number;
+  /** Keterangan: hari tap tidak wajar yang ditagih (sudah termasuk di Lupa Absen). */
+  jumlahTapTidakWajar: number;
+  /** Keterangan: potongan dari tap tidak wajar, dalam persen (1 kejadian = 1). */
+  persenPotonganAnomali: number;
   jumlahHariDinasLuar: number;
   // 12 Kolom Cuti (Pasal 14)
   ctGugurKandungan1: string;
@@ -279,6 +287,8 @@ export const KOLOM_REKAP_TUKIN_LENGKAP = [
   "Terlambat (Menit)",
   "Lupa Absen",
   "Alpa",
+  "Anomali/Tap Tidak Wajar",
+  "% Pot Anomali",
   "Dinas Luar",
   "CT Gugur Kandungan",
   "CT Gugur Kandungan >1 Bulan",
@@ -322,19 +332,20 @@ export const KOLOM_REKAP_TUKIN_LENGKAP = [
  * 10: Terlambat (Menit)
  * 11: Lupa Absen
  * 12: Alpa
- * 13: Dinas Luar
- * 26: TB
- * 27: Diklat
- * 28: TDK UPC
- * 29: WFO + WFH
- * 32: Nominal Kehadiran
- * 33: Jumlah Potongan Kehadiran
- * 38: Nominal Kinerja
- * 39: Dibayarkan
- * 40: Potongan PPh
+ * 13: Anomali/Tap Tidak Wajar (14: % Pot Anomali TIDAK dijumlah)
+ * 15: Dinas Luar
+ * 28: TB
+ * 29: Diklat
+ * 30: TDK UPC
+ * 31: WFO + WFH
+ * 34: Nominal Kehadiran
+ * 35: Jumlah Potongan Kehadiran
+ * 40: Nominal Kinerja
+ * 41: Dibayarkan
+ * 42: Potongan PPh
  */
-export const KOLOM_TOTAL_TUKIN_LENGKAP = [5, 7, 8, 9, 10, 11, 12, 13, 26, 27, 28, 29, 32, 33, 38, 39, 40];
-export const KOLOM_RUPIAH_TUKIN_LENGKAP = [5, 32, 33, 38, 39, 40];
+export const KOLOM_TOTAL_TUKIN_LENGKAP = [5, 7, 8, 9, 10, 11, 12, 13, 15, 28, 29, 30, 31, 34, 35, 40, 41, 42];
+export const KOLOM_RUPIAH_TUKIN_LENGKAP = [5, 34, 35, 40, 41, 42];
 
 export function susunRekapTukinLengkapExcel(
   rows: readonly BarisRekapTukinLengkap[]
@@ -353,6 +364,8 @@ export function susunRekapTukinLengkapExcel(
     r.totalMenitTerlambat,
     r.jumlahTidakPresensi,
     r.jumlahHariAlpha,
+    r.jumlahTapTidakWajar,
+    formatPersenDesimal(r.persenPotonganAnomali, 2),
     r.jumlahHariDinasLuar,
     r.ctGugurKandungan1,
     r.ctGugurKandungan2,

@@ -144,11 +144,12 @@ export function klasifikasiGagalBsre(signResult: {
     pesan.includes("network") ||
     pesan.includes("koneksi");
   if (jaringan) {
+    const habisWaktu = kode === 504 || pesan.includes("batas waktu");
     return {
       kategori: "NETWORK_TIMEOUT",
-      pesanPengguna:
-        "Penandatanganan GAGAL: layanan tanda tangan BSrE tidak dapat dihubungi (batas waktu/koneksi)." +
-        akhir,
+      pesanPengguna: habisWaktu
+        ? "Penandatanganan GAGAL: layanan tanda tangan BSrE tidak menjawab dalam batas waktu (60 detik)." + akhir
+        : "Penandatanganan GAGAL: layanan tanda tangan BSrE tidak dapat dihubungi (batas waktu/koneksi)." + akhir,
     };
   }
 

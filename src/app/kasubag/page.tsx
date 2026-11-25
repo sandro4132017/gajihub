@@ -10,6 +10,7 @@ import {
   type JenisTabelKalkulasi,
   type KeadaanPeriode,
 } from "../../business-logic/pengirimanUnit";
+import { URUTAN_SPTJM, pilihDokumenTerbaru, waktuTerakhir } from "../../business-logic/sptjmUnit";
 import { RiwayatKirimPeriode } from "./kirim/RiwayatKirimPeriode";
 import { periodePunyaRekapPresensi, resolvePeriode } from "../periodeDefault";
 import { ambilAksesUnit } from "./access";
@@ -141,6 +142,7 @@ export default async function KasubagDashboardPage({
     kalkulasiPerPeriode,
     pengirimanUnitIni,
     pegawaiSesi,
+    dokumenTte,
   ] = await Promise.all([
     prisma.pegawai.count({ where: { satuanKerja: satkerEfektif, statusPegawai: "AKTIF" } }),
     // Satu query untuk SEMUA hitungan bahan & kalkulasi: tiap relasi disaring
@@ -150,8 +152,8 @@ export default async function KasubagDashboardPage({
       select: {
         nip: true,
         tukinCalc: { where: periodeAktif, select: { calculatedAt: true } },
-        uangMakan: { where: periodeAktif, select: { id: true } },
-        uangLembur: { where: periodeAktif, select: { id: true } },
+        uangMakan: { where: periodeAktif, select: { id: true, calculatedAt: true } },
+        uangLembur: { where: periodeAktif, select: { id: true, calculatedAt: true } },
         rekapPresensi: { where: periodeAktif, select: { diunggahPada: true } },
         predikatKinerja: { where: periodeAktif, select: { sourceSyncedAt: true } },
       },
@@ -241,6 +243,16 @@ export default async function KasubagDashboardPage({
     }),
     // Hanya untuk memilih ilustrasi panel "semua lengkap" (laki-laki/perempuan).
     prisma.pegawai.findUnique({ where: { nip: authUser.nip }, select: { jenisKelamin: true } }),
+    // TTE SPTJM: langkah Kirim menagihnya, sama dengan gerbang di server.
+    prisma.dokumenTte.findMany({
+      where: {
+        satuanKerja: satkerEfektif,
+        ...periodeAktif,
+        jenisDokumen: { in: [...URUTAN_SPTJM] },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { jenisDokumen: true, status: true, signedAt: true, createdAt: true },
+    }),
   ]);
 
   const status = statusUnit(barisKirim);
@@ -306,6 +318,16 @@ export default async function KasubagDashboardPage({
     jumlahBasi,
     jumlahUangMakan,
     tabelDiverifikasi: verifikasiTabel.map((v) => v.jenisTabel as JenisTabelKalkulasi),
+    sptjm: {
+      dokumen: pilihDokumenTerbaru(dokumenTte),
+      dikembalikanPada: barisKirim?.dikembalikanPada ?? null,
+      lemburWajib: TAMPILKAN_NOMINAL_LEMBUR,
+      dihitungTerakhir: {
+        SPTJM_TUKIN: waktuTerakhir(pegawaiRows.map((p) => p.tukinCalc[0]?.calculatedAt)),
+        SPTJM_UANG_MAKAN: waktuTerakhir(pegawaiRows.map((p) => p.uangMakan[0]?.calculatedAt)),
+        SPTJM_LEMBUR: waktuTerakhir(pegawaiRows.map((p) => p.uangLembur[0]?.calculatedAt)),
+      },
+    },
     status,
   };
   const langkah = daftarLangkahTutupBulan(keadaanLangkah);

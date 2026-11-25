@@ -59,8 +59,10 @@ export function BantuanRincianTukin({ tampilRinci = false }: { tampilRinci?: boo
         </ul>
 
         <p className="mt-2 text-xs leading-relaxed text-muted">
-          <strong>Potongan %</strong> sesuai <strong>Pasal 13</strong> dihitung dari <em>bobot kehadiran</em>, bukan
-          dari total Tukin.
+          <strong>Potongan (%)</strong> di tabel ringkas = (Tunjangan penuh &minus; Tunjangan bersih) &divide; Tunjangan
+          penuh, jadi dihitung dari <em>total Tukin</em> dan sudah mencakup potongan kehadiran serta capaian kinerja.
+          Di <strong>rincian lengkap</strong>, kolom Potongan % menurut <strong>Pasal 13</strong> dihitung dari{" "}
+          <em>bobot kehadiran</em>.
         </p>
 
         <p className="mt-2 rounded-lg bg-surface-2 px-2.5 py-1.5 font-mono text-xs text-ink-2">

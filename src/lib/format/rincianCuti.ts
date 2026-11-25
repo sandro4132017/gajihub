@@ -68,3 +68,24 @@ export function rincianCutiAtauNull(baris: BarisCutiHarian[]): RincianJenisCuti[
   if (!baris.some((b) => b.namaSistemKerja?.trim())) return null;
   return susunRincianCuti(baris);
 }
+
+const BULAN_PENDEK = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"] as const;
+
+/**
+ * Tanggal-tanggal satu jenis cuti sebagai rentang yang mudah dibaca:
+ * [14, 15, 16, 20] (Okt 2026) -> "14 - 16 Okt 2026, 20 Okt 2026".
+ * Tanggal berurutan digabung; urutan masukan tidak berpengaruh.
+ */
+export function formatRentangTanggal(tanggal: readonly number[], bulan: number, tahun: number): string {
+  const urut = [...new Set(tanggal)].sort((a, b) => a - b);
+  const akhiran = `${BULAN_PENDEK[bulan - 1] ?? bulan} ${tahun}`;
+  const bagian: string[] = [];
+  let i = 0;
+  while (i < urut.length) {
+    let j = i;
+    while (j + 1 < urut.length && urut[j + 1] === urut[j] + 1) j++;
+    bagian.push(i === j ? `${urut[i]} ${akhiran}` : `${urut[i]} - ${urut[j]} ${akhiran}`);
+    i = j + 1;
+  }
+  return bagian.join(", ");
+}

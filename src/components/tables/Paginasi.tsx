@@ -85,6 +85,7 @@ export function Paginasi({
   labelBaris = "baris",
   namaParam = { hal: "hal", per: "per" },
   anchor,
+  varian = "bawaan",
 }: {
   /** Path halaman tanpa query, mis. "/kasubag/kalkulasi". */
   basePath: string;
@@ -101,6 +102,8 @@ export function Paginasi({
   namaParam?: { hal: string; per: string };
   /** Id elemen tujuan gulir setelah pindah halaman (tanpa "#"). */
   anchor?: string;
+  /** "ringan": tombol tanpa latar, tiga kelompok kiri-tengah-kanan (Kalkulasi Unit). */
+  varian?: "bawaan" | "ringan";
 }) {
   const url = (halaman: number, perHalaman: number) => {
     const q = new URLSearchParams(params);
@@ -110,12 +113,28 @@ export function Paginasi({
   };
 
   const { halaman, perHalaman, totalHalaman, mulai, selesai } = info;
-  const tombol =
-    "rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-3";
-  const mati = "rounded-lg border border-line-2 px-2.5 py-1.5 text-xs font-semibold text-muted/50";
+  const ringan = varian === "ringan";
+  const tombol = ringan
+    ? "rounded-md border border-transparent px-2 py-1 text-xs font-medium text-ink-2 hover:bg-surface-2"
+    : "rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-3";
+  const aktif = ringan
+    ? "rounded-md border border-ink-2/40 bg-surface px-2 py-1 text-xs font-bold text-ink"
+    : "rounded-lg border border-teal-deep bg-teal-deep/10 px-2.5 py-1.5 text-xs font-bold text-teal-deep";
+  const panah = ringan
+    ? "rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 hover:border-muted"
+    : tombol;
+  const mati = ringan
+    ? "px-2.5 py-1 text-xs font-medium text-muted/50"
+    : "rounded-lg border border-line-2 px-2.5 py-1.5 text-xs font-semibold text-muted/50";
 
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+    <div
+      className={
+        ringan
+          ? "flex flex-wrap items-center justify-between gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr]"
+          : "mt-3 flex flex-wrap items-center justify-between gap-3"
+      }
+    >
       <p className="text-xs text-muted">
         Menampilkan <strong className="text-ink-2">{totalBaris === 0 ? 0 : mulai + 1}</strong>
         {"-"}
@@ -123,7 +142,7 @@ export function Paginasi({
         <strong className="text-ink-2">{totalBaris}</strong> {labelBaris}
       </p>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className={ringan ? "contents" : "flex flex-wrap items-center gap-3"}>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted">Tampilkan</span>
           {UKURAN_HALAMAN.map((n) => (
@@ -135,9 +154,7 @@ export function Paginasi({
               href={url(1, n)}
               aria-current={n === perHalaman ? "true" : undefined}
               className={
-                n === perHalaman
-                  ? "rounded-lg border border-teal-deep bg-teal-deep/10 px-2.5 py-1.5 text-xs font-bold text-teal-deep"
-                  : tombol
+                n === perHalaman ? aktif : tombol
               }
             >
               {n}
@@ -146,9 +163,9 @@ export function Paginasi({
         </div>
 
         {totalHalaman > 1 && (
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className={`flex flex-wrap items-center gap-1.5 ${ringan ? "lg:justify-end" : ""}`}>
             {halaman > 1 ? (
-              <Link href={url(halaman - 1, perHalaman)} className={tombol} rel="prev">
+              <Link href={url(halaman - 1, perHalaman)} className={panah} rel="prev">
                 Sebelumnya
               </Link>
             ) : (
@@ -166,9 +183,7 @@ export function Paginasi({
                   href={url(n, perHalaman)}
                   aria-current={n === halaman ? "page" : undefined}
                   className={
-                    n === halaman
-                      ? "rounded-lg border border-teal-deep bg-teal-deep/10 px-2.5 py-1.5 text-xs font-bold text-teal-deep"
-                      : tombol
+                    n === halaman ? aktif : tombol
                   }
                 >
                   {n}
@@ -177,7 +192,7 @@ export function Paginasi({
             )}
 
             {halaman < totalHalaman ? (
-              <Link href={url(halaman + 1, perHalaman)} className={tombol} rel="next">
+              <Link href={url(halaman + 1, perHalaman)} className={panah} rel="next">
                 Berikutnya
               </Link>
             ) : (

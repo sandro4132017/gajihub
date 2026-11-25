@@ -1,6 +1,7 @@
 /**
- * Alasan pengunjung tiba di /login karena sesinya berakhir, dibaca dari
- * `?sesi=` (diisi middleware, layout, dan /api/auth/keluar). Nadanya info
+ * Alasan pengunjung tiba di /login karena sesinya berakhir. Dibawa cookie
+ * sekali pakai (middleware & /api/auth/keluar, lihat src/auth/tujuanKembali.ts);
+ * `?sesi=` lama masih dibaca. Nadanya info
  * netral - bukan galat: sesi berakhir adalah keadaan biasa, bukan kesalahan
  * pengguna. Kode yang tidak dikenal tidak menampilkan apa pun, supaya tautan
  * rekaan tidak bisa memasang kalimat sembarang di halaman login.

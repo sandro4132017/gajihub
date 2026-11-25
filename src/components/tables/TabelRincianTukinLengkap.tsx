@@ -3,14 +3,15 @@ import type { ReactNode } from "react";
 import type { RekapPresensiPeriode } from "@prisma/client";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
 import { TARIF_POTONGAN_PASAL_13 } from "../../business-logic/tukin";
+import { dikecualikanPotonganKehadiran } from "../../business-logic/pejabatPimpinanTinggi";
 import { rincianTukinTersimpan, type BarisTukinTersimpan } from "../../business-logic/rincianTukinTersimpan";
 import { selCuti, jenisKepegawaian } from "../../business-logic/rekapUnitExcel";
-import { LABEL_PREDIKAT } from "../../app/tukin/predikat-kinerja/predikat";
+import { PilPredikat } from "../shared/PilPredikat";
 import { BadgePejabatEselon } from "../shared/BadgePejabatEselon";
 
 // ============================================================================
 // TABEL RINCIAN TUKIN LENGKAP - gaya rekap Excel Biro Keuangan, satu baris per
-// pegawai, 38 kolom (identitas, rekap presensi, 12 kolom cuti Pasal 14, hasil
+// pegawai, 40 kolom (identitas, rekap presensi, 12 kolom cuti Pasal 14, hasil
 // kalkulasi).
 //
 // Dipakai DUA halaman dengan isi yang sama: Kalkulasi Unit (Kasubag TU,
@@ -31,6 +32,12 @@ export interface BarisRincianTukinLengkap {
   tukin: BarisTukinTersimpan | null;
   rekap: RekapPresensiPeriode | null;
   predikat: { predikat: string; hasilKerja: string | null; perilakuKerja: string | null } | null;
+  /**
+   * Hari tap tidak wajar yang ditagih (`hitungTapTidakWajarUnit`). HANYA
+   * keterangan - sudah termasuk di "Lupa Absen" dan "% Pot". undefined =
+   * pemanggil tidak menghitungnya.
+   */
+  tapTidakWajar?: number;
   /** Sebab angka perlu dihitung ulang (Kasubag TU); null/undefined = tidak basi. */
   basi?: string | null;
 }
@@ -119,6 +126,8 @@ export function TabelRincianTukinLengkap({
               <th className={th}>Terlambat (Menit)</th>
               <th className={th}>Lupa Absen</th>
               <th className={th}>Alpa</th>
+              <th className={th} title="Keterangan - sudah termasuk di Lupa Absen dan % Pot">Anomali/Tap Tidak Wajar</th>
+              <th className={th} title="1% per kejadian, Pasal 13 ayat (2) - sudah termasuk di % Pot">% Pot Anomali</th>
               <th className={th}>Dinas Luar</th>
               <th className={th}>CT Gugur Kandungan</th>
               <th className={th}>CT Gugur Kandungan &gt;1 Bulan</th>
@@ -205,6 +214,27 @@ export function TabelRincianTukinLengkap({
                   <td className={td}>{rekap ? rekap.totalMenitTerlambat : <BelumAda judul="Rekap presensi periode ini belum ada" />}</td>
                   <td className={td}>{rekap ? rekap.jumlahTidakPresensi : <BelumAda judul="Rekap presensi periode ini belum ada" />}</td>
                   <td className={td}>{rekap ? rekap.jumlahHariAlpha : <BelumAda judul="Rekap presensi periode ini belum ada" />}</td>
+                  {/* Keterangan saja: hari-hari ini SUDAH ditagih sebagai
+                      lupa absen (Pasal 13 ayat (2)), jangan dijumlah lagi. */}
+                  <td className={td}>
+                    {b.tapTidakWajar !== undefined ? (
+                      <span className={b.tapTidakWajar > 0 ? "font-semibold text-gold-deep" : undefined}>{b.tapTidakWajar}</span>
+                    ) : (
+                      <BelumAda judul="Tidak dihitung" />
+                    )}
+                  </td>
+                  <td className={td}>
+                    {b.tapTidakWajar !== undefined ? (
+                      formatPersen(
+                        dikecualikanPotonganKehadiran(b.kelasJabatan)
+                          ? 0
+                          : b.tapTidakWajar * TARIF_POTONGAN_PASAL_13.perKejadianTidakPresensi * 100,
+                        2
+                      )
+                    ) : (
+                      <BelumAda judul="Tidak dihitung" />
+                    )}
+                  </td>
                   <td className={td}>{rekap ? rekap.jumlahHariDinasLuar : <BelumAda judul="Rekap presensi periode ini belum ada" />}</td>
 
                   {/* --- Cuti (Pasal 14) ---
@@ -258,9 +288,9 @@ export function TabelRincianTukinLengkap({
 
                   <td className="whitespace-nowrap px-3 py-2 text-ink-2">
                     {predikat ? (
-                      // Ditulis seperti di rekap Excel ("Sangat Baik"), bukan
-                      // nilai mentah enum-nya ("SANGAT_BAIK").
-                      LABEL_PREDIKAT[predikat.predikat] ?? predikat.predikat
+                      // Pil berwarna dengan label ("Sangat Baik"), bukan nilai
+                      // mentah enum-nya ("SANGAT_BAIK").
+                      <PilPredikat nilai={predikat.predikat} />
                     ) : (
                       <BelumAda judul="Predikat kinerja periode ini belum diupload" />
                     )}

@@ -313,7 +313,14 @@ hari), cuma **belum diterapkan ke periode 7/2026**.
 mereproduksi cara kerjanya. Yang JANGAN ditiru cuma kolom persentase
 berjenjangnya - itu memang tidak dipakai membayar.
 
-#### Banding potongan e-Presensi di `/tukin/presensi/[nip]?banding=1`
+#### Banding potongan e-Presensi di `/tukin/presensi/[nip]?banding=1` - DIHAPUS 2026-11-25
+
+**FITUR INI SUDAH DIHAPUS** atas permintaan user ("kolom banding e-presensi
+hapus aja"): tab-nya, `TabelBandingEpresensi.tsx`,
+`bandingPotonganEpresensi.ts` + test-nya, dan `src/adapters/potonganEpresensi.ts`.
+Catatan di bawah dipertahankan sebagai PENGETAHUAN (temuan rumus e-Presensi
+tetap berlaku), bukan petunjuk bahwa kodenya ada. Kalau dibangun lagi, ambil
+dari riwayat git, jangan ditulis ulang dari nol.
 
 Alat masa TRANSISI. Keterangan user: e-Presensi dibangun **pihak ketiga
 yang kini TIDAK BISA DIHUBUNGI**, dan rumus potongannya salah paham terhadap
@@ -501,7 +508,9 @@ bukan nol. 6 test baru, total **557**.
 **Berlaku setelah presensi periode itu DITARIK ULANG**, seperti perubahan mesin
 lainnya.
 
-**TODO(confirm) BARU - TIDAK ADA BATAS MAKSIMAL POTONGAN HARIAN.** Sisa **113 baris** (jam masuk
+**BERLAKU SEJAK 2026-11-25 (keputusan Kasubag TU, TODO(legal-confirm))**: jam masuk 10:10 ke atas = 1 kejadian tidak presensi masuk (1%), bukan per menit; kewajiban pulang TETAP ikut jam masuk asli, berbatas 17:00 (Jumat 17:30) - pulang sebelum itu kena 0,01%/menit. Sakelar `BATAS_MASUK_SETARA_LUPA_ABSEN_AKTIF` + `batasJamMasukDipercayaMenit()` di `presensiPdfKeRekap.ts`, dipakai lewat `tapMasukMustahil`. Penolakan lama di bawah dipertahankan sebagai riwayat alasan - JANGAN dicabut tanpa jawaban OSDMA.
+
+**(Riwayat, sebelum 2026-11-25) TODO(confirm) BARU - TIDAK ADA BATAS MAKSIMAL POTONGAN HARIAN.** Sisa **113 baris** (jam masuk
 12:01-16:00) masih bisa dipotong di atas tarif alpha 3%. Pertanyaannya ada di
 **B-batas-maksimal** `docs/permintaan-data-dan-konfirmasi-osdma.md` - dampaknya ~Rp 1,4
 juta/bulan pada 111 baris. Ada test yang mengunci ketiadaan batas ini supaya

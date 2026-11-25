@@ -20,6 +20,8 @@ const { palsu } = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../lib/prisma", () => ({ prisma: palsu }));
+const tapPalsu = vi.hoisted(() => vi.fn(async (): Promise<Map<string, number>> => new Map()));
+vi.mock("../../../lib/tapTidakWajarDb", () => ({ hitungTapTidakWajarUnit: tapPalsu }));
 vi.mock("../../../auth/getSessionAccount", () => ({
   getSessionAccount: vi.fn(async () => ({
     nip: "198100000000000009", // sensitive-ok
@@ -90,13 +92,17 @@ describe("/tukin PPABP - rincian lengkap", () => {
     expect(palsu.rekapPresensiPeriode.findMany).not.toHaveBeenCalled();
   });
 
-  it("?rincian=1 menampilkan tabel 38 kolom dan tombol Tampilkan ringkas", async () => {
+  it("?rincian=1 menampilkan tabel 40 kolom dan tombol Tampilkan ringkas", async () => {
     const html = await render({ bulan: "7", tahun: "2026", satker: SATKER, rincian: "1" });
     expect(html).toContain("Persentase Kehadiran (30%)");
     expect(html).toContain("Tampilkan ringkas");
     expect(html).toContain("Pegawai Terkirim");
     // Nama pegawai membawa dari=tukin supaya tombol Kembali kembali ke tabel ini.
     expect(html).toContain("dari=tukin");
+    // Kolom keterangan tap tidak wajar sesudah Alpa.
+    expect(html.indexOf(">Alpa<")).toBeLessThan(html.indexOf("Anomali/Tap Tidak Wajar"));
+    expect(html).toContain("% Pot Anomali");
+    expect(tapPalsu).toHaveBeenCalled();
   });
 
   it("unit yang belum mengirim tidak muncul di tabel lengkap", async () => {

@@ -3,6 +3,7 @@ import { prisma } from "../../../../lib/prisma";
 import { SESSION_COOKIE_NAME } from "../../../../auth/session";
 import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../../../auth/sesiCookie";
 import { LANDING_ROLE, pilihRoleBawaan } from "../../../../auth/roleAktif";
+import { COOKIE_KEMBALI, tujuanKembaliSah } from "../../../../auth/tujuanKembali";
 import { LABEL_ROLE } from "../../../../auth/roleLabel";
 import {
   ambilInfoPengguna,
@@ -192,9 +193,11 @@ export async function GET(req: NextRequest) {
     // Sama seperti login kata sandi: selalu mulai dari role bawaan (urutan
     // kewenangan atas role utama + tambahan, lihat pilihRoleBawaan), bukan role
     // yang terakhir dipakai.
-    const res = NextResponse.redirect(new URL(LANDING_ROLE[roleBawaan], asalPublik(req.headers, req.url)));
+    const tujuan = tujuanKembaliSah(req.cookies.get(COOKIE_KEMBALI)?.value) ?? LANDING_ROLE[roleBawaan];
+    const res = NextResponse.redirect(new URL(tujuan, asalPublik(req.headers, req.url)));
     res.cookies.set(SESSION_COOKIE_NAME, sesi, OPSI_COOKIE_SESI);
     res.cookies.delete(COOKIE_STATE_SSO);
+    if (req.cookies.has(COOKIE_KEMBALI)) res.cookies.delete(COOKIE_KEMBALI);
     return res;
   } catch (e) {
     // Pesan mentah Naco (bisa memuat alamat/redirect_uri) hanya tampil bila

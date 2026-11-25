@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME } from "../../../../auth/session";
 import { asalPublik } from "../../../../auth/asalPublik";
+import { opsiCookieSingkat } from "../../../../auth/sesiCookie";
+import { COOKIE_PESAN_SESI, UMUR_PESAN_SESI_DETIK } from "../../../../auth/tujuanKembali";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +17,11 @@ const ALASAN = ["dicabut", "nonaktif"] as const;
  */
 export async function GET(req: NextRequest) {
   const alasan = req.nextUrl.searchParams.get("alasan");
-  const url = new URL("/login", asalPublik(req.headers, req.url));
-  if (alasan && (ALASAN as readonly string[]).includes(alasan)) url.searchParams.set("sesi", alasan);
-  const res = NextResponse.redirect(url);
+  // Alamat /login bersih; alasannya lewat cookie sekali pakai (tujuanKembali.ts).
+  const res = NextResponse.redirect(new URL("/login", asalPublik(req.headers, req.url)));
   res.cookies.delete(SESSION_COOKIE_NAME);
+  if (alasan && (ALASAN as readonly string[]).includes(alasan)) {
+    res.cookies.set(COOKIE_PESAN_SESI, alasan, opsiCookieSingkat(UMUR_PESAN_SESI_DETIK));
+  }
   return res;
 }

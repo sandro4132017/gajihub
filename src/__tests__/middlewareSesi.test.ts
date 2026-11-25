@@ -82,13 +82,19 @@ describe("batas menganggur di middleware", () => {
     return buatTokenSesi({ ...PAYLOAD, v: 0, lp: now - lpMenitLalu * MENIT, ak: now - akMenitLalu * MENIT }, now);
   };
 
-  it("menganggur: redirect /login?sesi=menganggur DAN cookie dihapus", async () => {
+  /** Nilai cookie dari header Set-Cookie (gabungan). */
+  const cookieDari = (res: Response, nama: string) =>
+    new RegExp(`${nama}=([^;]*)`).exec(res.headers.get("set-cookie") ?? "")?.[1] ?? null;
+
+  it("menganggur: redirect ke /login BERSIH, alasan & tujuan lewat cookie, sesi dihapus", async () => {
     const token = await tokenAktif(31);
-    const res = await jalankan("http://localhost:3000/tukin", { token, headers: navigasi });
+    const res = await jalankan("http://localhost:3000/tukin?bulan=8&tahun=2026", { token, headers: navigasi });
     expect(res.status).toBe(307);
     const lokasi = new URL(res.headers.get("location") ?? "");
     expect(lokasi.pathname).toBe("/login");
-    expect(lokasi.searchParams.get("sesi")).toBe("menganggur");
+    expect(lokasi.search).toBe(""); // alamat bersih
+    expect(cookieDari(res, "gajihub_pesan_sesi")).toBe("menganggur");
+    expect(decodeURIComponent(cookieDari(res, "gajihub_kembali") ?? "")).toBe("/tukin?bulan=8&tahun=2026");
     const sc = res.headers.get("set-cookie") ?? "";
     expect(sc).toContain("gajihub_session=;");
     expect(sc.toLowerCase()).toMatch(/max-age=0|expires=thu, 01 jan 1970/);
@@ -97,7 +103,7 @@ describe("batas menganggur di middleware", () => {
   it("melewati 8 jam sejak login: sesi=kedaluwarsa", async () => {
     const token = await tokenAktif(1, 8 * 60 + 1);
     const res = await jalankan("http://localhost:3000/tukin", { token, headers: navigasi });
-    expect(new URL(res.headers.get("location") ?? "").searchParams.get("sesi")).toBe("kedaluwarsa");
+    expect(cookieDari(res, "gajihub_pesan_sesi")).toBe("kedaluwarsa");
   });
 
   it("token format lama: sesi=format-lama dan cookie dihapus", async () => {
@@ -112,8 +118,31 @@ describe("batas menganggur di middleware", () => {
     const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payloadB64));
     const token = `${payloadB64}.${Buffer.from(sig).toString("base64url")}`; // sensitive-ok
     const res = await jalankan("http://localhost:3000/tukin", { token, headers: navigasi });
-    expect(new URL(res.headers.get("location") ?? "").searchParams.get("sesi")).toBe("format-lama");
+    expect(cookieDari(res, "gajihub_pesan_sesi")).toBe("format-lama");
     expect(res.headers.get("set-cookie") ?? "").toContain("gajihub_session=;");
+  });
+
+  it("prefetch tidak diingat sebagai tujuan kembali", async () => {
+    const token = await tokenAktif(31);
+    const res = await jalankan("http://localhost:3000/ppabp/adk", {
+      token,
+      headers: { rsc: "1", "next-router-prefetch": "1" },
+    });
+    expect(cookieDari(res, "gajihub_kembali")).toBeNull();
+  });
+
+  it("/login membaca pesan sekali pakai lalu menghapus cookie-nya", async () => {
+    const { NextRequest } = await import("next/server");
+    const { middleware } = await import("../middleware");
+    const res = await middleware(
+      new NextRequest("http://localhost:3000/login", {
+        headers: { ...navigasi, cookie: "gajihub_pesan_sesi=menganggur", "x-pesan-sesi": "palsu" },
+      })
+    );
+    expect(res.status).toBe(200);
+    // header diteruskan ke halaman (bukan nilai kiriman klien)
+    expect(res.headers.get("x-middleware-request-x-pesan-sesi")).toBe("menganggur");
+    expect(res.headers.get("set-cookie") ?? "").toMatch(/gajihub_pesan_sesi=;/);
   });
 
   it("/login sendiri TIDAK dialihkan ke /login walau sesinya menganggur (tanpa loop)", async () => {

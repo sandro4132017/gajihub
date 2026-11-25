@@ -26,7 +26,7 @@ const SATUAN_ANGKA: Record<KodeLangkah, string> = {
   PRESENSI: "pegawai",
   PREDIKAT: "pegawai",
   HITUNG: "pegawai",
-  PERIKSA: "tabel",
+  PERIKSA: "SPTJM",
   KIRIM: "",
 };
 

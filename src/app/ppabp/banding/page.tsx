@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canLihatTembusanBanding, type AuthUser } from "../../../auth/permissions";
@@ -303,7 +304,7 @@ export default async function TembusanBandingPpabpPage({
 
       {/* STAT TILES / FILTER CEPAT PPABP */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <a
+        <Link
           href={hrefHalaman({})}
           className={`col-span-2 sm:col-span-1 ${tileDasar} ${
             statusFilter === "SEMUA"
@@ -313,9 +314,9 @@ export default async function TembusanBandingPpabpPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Total Tembusan</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-ink">{countTotal}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={hrefHalaman({ status: "DIAJUKAN" })}
           className={`${tileDasar} ${
             statusFilter === "DIAJUKAN"
@@ -325,9 +326,9 @@ export default async function TembusanBandingPpabpPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-biru">Menunggu Kasubag TU</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-biru">{countKasubag}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={hrefHalaman({ status: "MENUNGGU_APPROVAL_FINAL" })}
           className={`${tileDasar} ${
             statusFilter === "MENUNGGU_APPROVAL_FINAL"
@@ -337,9 +338,9 @@ export default async function TembusanBandingPpabpPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-gold-deep">Menunggu OSDMA</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-gold-deep">{countMenunggu}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={hrefHalaman({ status: "PERLU_KEPUTUSAN" })}
           className={`${tileDasar} ${
             statusFilter === "PERLU_KEPUTUSAN"
@@ -354,9 +355,9 @@ export default async function TembusanBandingPpabpPage({
             )}
           </div>
           <p className="mt-1 font-mono text-xl font-extrabold text-amber-900">{countKeputusan}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={hrefHalaman({ status: "SELESAI" })}
           className={`${tileDasar} ${
             statusFilter === "SELESAI"
@@ -366,7 +367,7 @@ export default async function TembusanBandingPpabpPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Banding selesai</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-green">{countSelesai}</p>
-        </a>
+        </Link>
       </div>
 
       {/* BANNER: pembayaran terkunci pada pasangan yang menunggu keputusan */}

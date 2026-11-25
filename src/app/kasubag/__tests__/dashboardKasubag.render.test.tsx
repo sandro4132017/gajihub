@@ -25,6 +25,7 @@ const { palsu, izin, akses } = vi.hoisted(() => ({
     skHukumanDisiplin: { count: vi.fn() },
     pengirimanUnit: { findUnique: vi.fn(), findMany: vi.fn() },
     rekapPresensiPeriode: { findMany: vi.fn() },
+    dokumenTte: { findMany: vi.fn() },
   },
   izin: { export: true },
   akses: { satker: "Biro Keuangan dan BMN" as string | undefined },
@@ -144,6 +145,7 @@ function siapkan(opsi: Opsi = {}) {
   );
   palsu.pengirimanUnit.findMany.mockResolvedValue([]);
   palsu.rekapPresensiPeriode.findMany.mockResolvedValue(kosong ? [] : [PERIODE]);
+  palsu.dokumenTte.findMany.mockResolvedValue([]);
 }
 
 async function render(
@@ -283,13 +285,13 @@ describe("dashboard Kasubag TU - render", () => {
     const kepala = html.slice(html.indexOf(">Langkah tutup bulan</h2>"), html.indexOf('<ol aria-label="Langkah tutup bulan'));
     expect(kepala).toContain(">Dikembalikan</span>");
     expect(html).not.toContain("Periksa ulang kelas jabatan pegawai");
-    // Tombol menunjuk pekerjaan berikutnya (centang direset saat dikembalikan),
+    // Tombol menunjuk pekerjaan berikutnya (TTE SPTJM ulang sesudah dikembalikan),
     // bukan "Lihat catatan PPABP".
     expect(html).not.toContain("Lihat catatan PPABP");
     const hero = html.slice(html.indexOf('aria-label="Ringkasan tutup bulan"'), html.indexOf("</section>"));
-    expect(hero).toContain(">Periksa tabel</a>");
+    expect(hero).toContain(">Tanda tangani SPTJM</a>");
     // Data lengkap TIDAK boleh terbaca "semua beres" - sisa langkah disebut.
-    expect(hero).toContain("Data semua komponen sudah lengkap. Tinggal periksa tabel, lalu kirim rekap ke PPABP.");
+    expect(hero).toContain("Data semua komponen sudah lengkap. Tinggal tanda tangani SPTJM, lalu kirim rekap ke PPABP.");
   });
 
   it("kartu Nilai Kalkulasi memuat rincian Tukin & Uang Makan, tanpa lembur selama nominalnya ditahan", async () => {

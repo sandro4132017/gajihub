@@ -79,9 +79,37 @@ predikat = periode terbaru yang benar-benar bisa dihitung.
 13 unit test, termasuk penjagaan bahwa periode pilihan user tidak dipindahkan
 dan bahwa database kosong tidak membuat halaman gagal dibuka.
 
+### Halaman Kalkulasi Unit: 4 tahap bernomor (rombak 2026-11-16, mengikuti mockup user)
+
+`/kasubag/kalkulasi` disusun sebagai alur kerja berurutan, bukan tumpukan kartu lepas.
+Urutannya dikunci mockup user; jangan dikembalikan ke kartu-kartu lepas.
+
+| Bagian | Komponen | Isi |
+|---|---|---|
+| Kepala | `KepalaKalkulasi` (+ `KepalaTahap` untuk kepala tiap tahap) | judul, periode, satker |
+| Stepper | `StepperKalkulasi` | empat kartu bernomor dengan status tiap tahap (`tahapKalkulasiUnit.ts`) |
+| Tahap 1 Ringkasan Kesiapan | `TahapKesiapan` (+ `PanelKesiapan`) | ringkasan kesiapan, kotak Anomali "perlu ditinjau", Tinjau & Kecualikan |
+| Tahap 2 Kalkulasi | `TahapKalkulasi` | tab Tukin / Uang Makan / Jam Lembur, pencarian `?q=`, Total Bersih, tombol Hitung, centang verifikasi per tab |
+| Tahap 3 TTE SPTJM | `TahapTteSptjm` (membungkus `PanelTteSptjm`) | berbingkai merah muda; "Hapus Draft" hanya bila ada draft; `ModalPassphraseTte` tidak berubah |
+| Tahap 4 Pengiriman & Penguncian | `TahapPengiriman` (memakai `KirimRekapForm`) | checklist, catatan, pernyataan (selalu tampil), label tombol dinamis (`labelTombolKirim`) |
+
+- Centang "Tandai sudah diperiksa" per tab = `KontrolVerifikasiTabel` (`src/app/kasubag/kirim/`),
+  dipasang di kepala tab tempat barangnya diperiksa. Panel gabungan `VerifikasiTabelPanel`
+  sudah DIHAPUS. Di dokumen lama, "panel Kirim" berarti Tahap 4 plus kontrol per tab.
+- Tabel Tukin default ringkas (`TabelTukinRingkas`, 8 `<th>`): kolom POTONGAN (%) =
+  (penuh - bersih) / penuh. Tombol "Lihat rincian lengkap" membuka `?rincian=1`
+  (`TabelRincianTukinLengkap`, 41 `<th>` per 2026-11-16). Uang Makan: `TabelUangMakan`.
+  Jam Lembur: `TabelKoreksiLemburRinci` dan `TabelPemeriksaanLembur`.
+- Angka tetap `font-mono`. Logika murni: `src/business-logic/tahapKalkulasiUnit.ts` dan
+  `sptjmUnit.ts`; format rupiah `src/lib/format/rupiah.ts`.
+- Semua fungsi lama tetap ada, dikunci `kalkulasiUnit.render.test.tsx`. Tahap 4 sengaja satu
+  kartu (checklist + pernyataan + tombol kirim); aturan "satu blok berkotak per kartu" di
+  `gajihub-laws-of-ux` dilonggarkan untuk bagian lain demi mockup.
+
 ### Paginasi tabel (`src/components/tables/Paginasi.tsx`)
 
-Tabel Rincian Tukin di `/kasubag/kalkulasi` menampilkan seluruh roster unit
+Tabel Tukin di `/kasubag/kalkulasi` (mode ringkas `TabelTukinRingkas`; rincian lengkap
+`?rincian=1` = `TabelRincianTukinLengkap`) menampilkan seluruh roster unit
 (±80 baris, dan jauh lebih banyak buat PPABP/ADMIN lintas satker) dalam satu
 halaman. Sekarang dipotong: **default 10 baris**, dengan pilihan 20/50/100 dan
 navigasi nomor halaman.
@@ -346,17 +374,19 @@ menang dan sel yang masih memakainya akan sendirian tidak ikut aturan:
 - `text-right` di kolom angka (`RincianPotonganKehadiran`, `RincianUangMakan`,
   `/saya`, `RekonsiliasiForm`) - 25 sel.
 - `align-top` di sel form (`/tukin/presensi/[nip]`).
-- `text-left` di konstanta `th` dua halaman - yang **paling penting**, karena
-  itu satu baris yang mematikan aturan untuk SELURUH tabelnya:
-  `kasubag/kalkulasi` (tabel rinci 40 kolom, juga `align-bottom`) dan
-  `tukin/presensi/kendala`.
+- `text-left` di konstanta `th` - dulu di `kasubag/kalkulasi` dan `tukin/presensi/kendala`, dan
+  **paling penting**, karena itu satu baris yang mematikan aturan untuk SELURUH tabelnya. Per
+  2026-11-16 keduanya sudah bersih dari `text-left` (dikunci test
+  `kalkulasiUnit.render.test.tsx`), tapi folder `kasubag/kalkulasi` masih punya satu
+  `align-bottom` - cek dulu sebelum dijadikan contoh.
 - `text-left` di `<tr>` thead (24 tempat) - sebenarnya sudah inert begitu
   `th` punya `text-align` sendiri, tapi kelas mati yang bertentangan dengan
   perilaku nyata bikin orang berikutnya mencari bug yang tidak ada.
 
 **Kolom yang ditandai `col-nama`** (selalu BERPASANGAN `<th>` + `<td>`-nya -
-itu yang paling gampang terlewat): Nama/Nama Pegawai di 3 tabel
-`kasubag/kalkulasi`, Nama di `kasubag/pegawai`, Satuan Kerja di
+itu yang paling gampang terlewat): Nama/Nama Pegawai di 5 tabel
+`kasubag/kalkulasi` (2026-11-16: `TabelKoreksiLemburRinci`, `TabelPemeriksaanLembur`,
+`TabelPerubahanPegawai`, `TabelTukinRingkas`, `TabelUangMakan`), Nama di `kasubag/pegawai`, Satuan Kerja di
 `ppabp/anggaran`, Nama di SIAP & Nama di Web Gaji di `ppabp/basis-data-gaji`
 (halaman + form unggahnya), Pegawai di `ppabp/gaji-induk`, Pegawai & Nama
 Rekening di `ppabp/rekening`, Pegawai di `tukin/predikat-kinerja`, Pegawai di

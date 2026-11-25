@@ -5,6 +5,8 @@ import {
   batasCheckoutMenit,
   batasLemburMenit,
   JADWAL_KERJA_DEFAULT,
+  MENIT_TERLAMBAT_SETARA_LUPA_ABSEN,
+  batasJamMasukDipercayaMenit,
   TOLERANSI_TERLAMBAT_MENIT,
 } from "../presensiPdfKeRekap";
 
@@ -654,15 +656,15 @@ describe("lupa absen dari menit_kerja (Pasal 13 ayat 2)", () => {
   });
 
   it("menit_kerja kurang dari 7,5 jam TAPI bukan nol BUKAN lupa absen", () => {
-    // Kasus nyata (Suryaningrat Prakasa, 8 Juli 2026): masuk 14:20, pulang 17:37,
-    // menit_kerja 240. Kurang dari 450, tapi bukan nol - tapnya lengkap.
-    // Yang dilanggar keterlambatan (Pasal 13 ayat 3, per menit), BUKAN
-    // "tidak melakukan presensi" (ayat 2, per kejadian). Memakai ambang
+    // menit_kerja dari sumber 240: kurang dari 450, tapi bukan nol - tapnya
+    // lengkap. Yang dilanggar keterlambatan (Pasal 13 ayat 3, per menit),
+    // BUKAN "tidak melakukan presensi" (ayat 2, per kejadian). Memakai ambang
     // < 450 di sini akan menagih hari yang sama dua kali.
-    const hasil = rekapDariLaporanPdf(laporan([hari("14:20", "17:37", 240)]));
+    // (Jam masuknya di bawah batas 10:10 supaya tetap dinilai per menit.)
+    const hasil = rekapDariLaporanPdf(laporan([hari("09:20", "17:37", 240)]));
     expect(hasil.rekap.jumlahTidakPresensi).toBe(0);
-    // 14:20 - 07:30 = 410 menit, dikurangi toleransi 60 = 350.
-    expect(hasil.rekap.totalMenitTerlambat).toBe(350);
+    // 09:20 - 07:30 = 110 menit, dikurangi toleransi 60 = 50.
+    expect(hasil.rekap.totalMenitTerlambat).toBe(50);
     // Pulang 17:37 masih LEWAT jam wajib 16:00 - tidak ada pulang cepat.
     expect(hasil.rekap.totalMenitPulangCepat).toBe(0);
   });
@@ -880,7 +882,9 @@ describe("rekapDariLaporanPdf - hari libur nasional", () => {
   it("potongan Pasal 13 TIDAK berlaku di tanggal merah - tidak ada kewajiban yang dilanggar", () => {
     // Datang jauh lewat batas + pulang jauh lebih awal: di hari kerja ini
     // pasti berpotongan, di tanggal merah harus nol.
-    const isi = [baris("01-06-2026", "Senin", "10:30", "12:00", "WFO")];
+    // TANPA_TOLERANSI: batas masuk 07:30 + 100 menit = 09:10, jadi 09:00
+    // masih dinilai per menit.
+    const isi = [baris("01-06-2026", "Senin", "09:00", "12:00", "WFO")];
 
     const tanpaKalender = rekapDariLaporanPdf(laporan(isi), TANPA_TOLERANSI);
     expect(tanpaKalender.rekap.totalMenitTerlambat).toBeGreaterThan(0);
@@ -939,20 +943,32 @@ describe("ketukan yang mustahil sebagai jam masuk (Pasal 13 ayat (2), bukan ayat
     expect(r.rekap.jumlahTidakPresensi).toBe(1);
   });
 
-  it("Jumat memakai batasnya sendiri (16:30) - tap 16:10 masih dipercaya", () => {
+  it("Jumat: tap 16:10 juga sudah lewat batas 10:10 - 1 kejadian, bukan per menit", () => {
     const r = rekapDariLaporanPdf(laporan([baris("17-07-2026", "Jumat", "16:10", "18:00", "WFO")]));
-    // 16:10 = 970 menit; 970 - 450 - 60 toleransi = 460 menit terlambat.
-    expect(r.rekap.totalMenitTerlambat).toBe(460);
+    expect(r.rekap.totalMenitTerlambat).toBe(0);
+    expect(r.rekap.jumlahTidakPresensi).toBe(1);
+  });
+
+  // Batas 10:10 (keputusan Kasubag TU 2026-11-25, TODO(legal-confirm)):
+  // keterlambatan sampai 100 menit tetap per menit; sesudahnya 1 kejadian.
+  it("masuk 10:09 masih per menit: 99 menit, tanpa kejadian tidak presensi", () => {
+    const r = rekapDariLaporanPdf(laporan([baris("22-07-2026", "Rabu", "10:09", "18:00", "WFO")]));
+    expect(r.rekap.totalMenitTerlambat).toBe(99);
     expect(r.rekap.jumlahTidakPresensi).toBe(0);
   });
 
-  // Penjaga paling penting: keterlambatan SUNGGUHAN tidak boleh ikut hilang.
-  // Kasus nyata Abie Dzikri, 22 Juli 2026 - kedua tapnya ada, 246 menit itu
-  // cocok persis dengan kolom Terlambat di rincian tunkin resmi.
-  it("kedatangan siang yang masuk akal TETAP ditagih per menit, tidak diubah jadi 1%", () => {
-    const r = rekapDariLaporanPdf(laporan([baris("22-07-2026", "Rabu", "12:36", "20:06", "WFO")]));
-    expect(r.rekap.totalMenitTerlambat).toBe(246);
-    expect(r.rekap.jumlahTidakPresensi).toBe(0);
+  it("masuk 10:10 ke atas: 1 kejadian lupa absen masuk, tidak ada menit terlambat", () => {
+    for (const jam of ["10:10", "12:36", "15:59"]) {
+      const r = rekapDariLaporanPdf(laporan([baris("22-07-2026", "Rabu", jam, "20:06", "WFO")]));
+      expect(r.rekap.totalMenitTerlambat).toBe(0);
+      expect(r.rekap.jumlahTidakPresensi).toBe(1);
+    }
+  });
+
+  it("batasnya 10:10 di semua hari kerja, diturunkan dari tarif Pasal 13", () => {
+    expect(MENIT_TERLAMBAT_SETARA_LUPA_ABSEN).toBe(100);
+    expect(batasJamMasukDipercayaMenit(16 * 60)).toBe(10 * 60 + 10);
+    expect(batasJamMasukDipercayaMenit(16 * 60 + 30)).toBe(10 * 60 + 10);
   });
 
   it("koreksi jam petugas menang - jam yang sudah diverifikasi manusia tidak ditolak", () => {
@@ -978,13 +994,27 @@ describe("ketukan yang mustahil sebagai jam masuk (Pasal 13 ayat (2), bukan ayat
     expect(r.rekap.jumlahTidakPresensi).toBe(0);
   });
 
-  // Batas maksimal potongan per hari (usulan 3%) SENGAJA BELUM ada - itu
-  // keputusan kebijakan yang terpisah. Test ini menguncinya supaya tidak
-  // ditambahkan diam-diam bersama aturan di atas.
-  it("BELUM ada batas maksimal: kedatangan siang yang masuk akal boleh melebihi tarif alpha 3%", () => {
+  // Datang siang tidak lagi bisa lebih mahal daripada alpha: keterlambatan
+  // paling banyak setara 1%. Kewajiban pulang TETAP ikut jam masuk asli,
+  // berbatas 17:00 (Jumat 17:30) - keputusan user 2026-11-25.
+  it("kedatangan siang: 1% lupa absen masuk + pulang cepat diukur ke 17:00", () => {
     const r = rekapDariLaporanPdf(laporan([baris("13-07-2026", "Senin", "14:00", "15:00", "WFO")]));
-    // 14:00 = 840; 840 - 450 - 60 = 330 menit = 3,3% - lebih besar dari alpha.
-    expect(r.rekap.totalMenitTerlambat).toBe(330);
+    expect(r.rekap.totalMenitTerlambat).toBe(0);
+    expect(r.rekap.jumlahTidakPresensi).toBe(1);
+    expect(r.rekap.totalMenitPulangCepat).toBe(120); // 17:00 - 15:00
+  });
+
+  it("masuk 11:30 pulang 16:00: 1% + kurang 60 menit dari 17:00", () => {
+    const r = rekapDariLaporanPdf(laporan([baris("13-07-2026", "Senin", "11:30", "16:00", "WFO")]));
+    expect(r.rekap.totalMenitTerlambat).toBe(0);
+    expect(r.rekap.totalMenitPulangCepat).toBe(60);
+    expect(r.rekap.jumlahTidakPresensi).toBe(1);
+  });
+
+  it("masuk 13:00 pulang 17:00 atau lebih: cukup 1%", () => {
+    const r = rekapDariLaporanPdf(laporan([baris("13-07-2026", "Senin", "13:00", "17:05", "WFO")]));
+    expect(r.rekap.totalMenitPulangCepat).toBe(0);
+    expect(r.rekap.jumlahTidakPresensi).toBe(1);
   });
 });
 

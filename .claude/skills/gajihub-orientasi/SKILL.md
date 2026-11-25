@@ -191,12 +191,15 @@ Tabel ringkas **enam titik penyimpangan** rumus e-Presensi dari Pasal 13,
 beserta angka terukurnya, plus daftar hal yang justru SAMA di kedua sistem
 (toleransi 60 menit, jam kerja, fakta presensi) supaya tidak dikira beda.
 Dokumen ini yang dilampirkan kalau ada yang bertanya kenapa angka di web
-e-Presensi tidak sama dengan slip - isinya sama dengan yang ditampilkan
-halaman `/tukin/presensi/[nip]?banding=1`, cuma dalam bentuk yang bisa
-dikirim.
+e-Presensi tidak sama dengan slip. (Tampilan `?banding=1` di halaman rincian
+pegawai DIHAPUS 2026-11-25 atas permintaan user - dokumen ini sekarang
+satu-satunya penjelasan selisihnya.)
 
 Memuat juga tiga usulan yang sudah **diuji dan DITOLAK** (ambang 100 menit,
 batas 1%, ambang jam masuk) - baca dulu sebelum mengusulkannya lagi.
+**Kecuali ambang 100 menit: sejak 2026-11-25 DITERAPKAN** atas keputusan
+Kasubag TU (masuk 10:10 ke atas = lupa absen masuk 1%), TODO(legal-confirm) -
+lihat `gajihub-tukin-potongan`.
 
 ## Komentar dirapikan sebelum pemeriksaan keamanan (2026-08-21)
 

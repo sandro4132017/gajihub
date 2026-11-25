@@ -49,6 +49,11 @@ dipakai sampai kolom kiri selesai.
 
 **Aturan**: kalau B mustahil dikerjakan sebelum A selesai, A dan B satu kartu.
 
+**Diperbarui 2026-11-16**: mockup user memecah halaman Kalkulasi Unit jadi empat tahap
+bernomor (`StepperKalkulasi`), tiap tahap kartunya sendiri dan berurutan. Preseden 2026-09-28
+di atas berlaku untuk susunan BARU hanya di dalam Tahap 4: checklist, pernyataan, dan tombol
+kirim tetap satu kartu, karena kolom kanan tidak bisa dipakai sebelum kolom kiri selesai.
+
 ### Law of Proximity
 
 Yang berdekatan terbaca sebagai berhubungan.
@@ -98,7 +103,7 @@ server kebanjiran dan hasilnya datang lebih lambat.
 
 Tugas yang belum selesai lebih diingat - dan perlu tempat untuk digantung.
 
-**Preseden**: centang `VerifikasiTabelUnit` **DISIMPAN di database**, bukan
+**Preseden**: centang per tab `KontrolVerifikasiTabel` (sebelumnya `VerifikasiTabelUnit`) **DISIMPAN di database**, bukan
 state klien. Alasannya ada di komponennya: *"memeriksa tiga tabel bukan
 pekerjaan sekali duduk - orang membuka tabel Tukin hari ini, tabel lembur
 besok. Centang yang hilang tiap halaman ditutup memaksa semuanya diperiksa
@@ -119,6 +124,10 @@ kolom yang lebih sedikit justru lebih cepat.
 
 **Aturan**: tabel baru mulai dari <= 8 kolom. Lebih dari itu harus jadi mode
 terpisah yang DIMINTA (`?rincian=1`), bukan bawaan.
+
+**Preseden 2026-11-16**: tabel Tukin di Kalkulasi Unit bawaannya ringkas (`TabelTukinRingkas`,
+8 `<th>`); rincian lengkap (`TabelRincianTukinLengkap`, 41 `<th>`) hanya lewat tombol
+"Lihat rincian lengkap" yang menuju `?rincian=1`.
 
 ### Chunking
 
@@ -219,6 +228,10 @@ ke-40."*
 **Aturan**: temuan yang mahal kalau terlewat tidak boleh cuma hidup sebagai
 penanda di dalam baris. Ringkasnya naik ke atas tabel.
 
+**Preseden 2026-11-16**: kotak Anomali "perlu ditinjau" di Tahap 1 Ringkasan Kesiapan
+(`TahapKesiapan`) memakai pola ini: temuan yang mahal kalau terlewat ada di atas tahap
+kalkulasi, bukan di dalam baris.
+
 ### Fitts's Law
 
 Waktu meraih target ditentukan ukuran dan jaraknya.
@@ -229,6 +242,10 @@ posisinya sama di kedua keadaan dan targetnya selebar kolom.
 **Aturan**: aksi utama satu kartu dibuat selebar kartunya. Jangan pakai
 `btn-sm` untuk aksi yang mengunci data atau mengirim ke PPABP - ukuran kecil
 untuk aksi kecil.
+
+Label tombol kirim kini dinamis (`labelTombolKirim`): "Kirim & Kunci ke PPABP" bila syarat
+(termasuk TTE SPTJM) lengkap dan pernyataan dicentang; selain itu "Lengkapi TTE, Checklist &
+Pernyataan". Lebarnya tetap `w-full`.
 
 ### Peak-End Rule
 
@@ -253,15 +270,16 @@ berubah jadi alasan mencabut pengaman.
 
 ### Occam's Razor & Hick's Law - DILANGGAR di alur kirim
 
-Gerbang kirim ke PPABP menambah langkah: empat tabel harus dicentang, plus
-pernyataan, plus dialog konfirmasi. Secara hukum UX murni ini kelebihan
-gesekan.
+Gerbang kirim ke PPABP menambah langkah: tiga tabel wajib dicentang (Daftar Perubahan Data
+Pegawai, Tabel Tukin, Tabel Jam Lembur; Tabel Uang Makan tampil tapi belum menahan kirim),
+plus TTE SPTJM Tukin dan Uang Makan (Uang Lembur ikut bila nominalnya sudah ditampilkan),
+plus pernyataan, plus dialog konfirmasi. Secara hukum UX murni ini kelebihan gesekan.
 
 **Tetap dipertahankan**, karena pengiriman **mengunci periode** dan angkanya
 langsung jadi berkas ADK yang dibayarkan. Yang bisa membuka kuncinya hanya
 PPABP. Gesekan di sini lebih murah daripada koreksi sesudah uang keluar.
 
-> **Jangan cabut centang, pernyataan, atau dialog konfirmasi dengan alasan
+> **Jangan cabut centang, pernyataan, syarat TTE SPTJM, atau dialog konfirmasi dengan alasan
 > "terlalu banyak langkah".** Kalau ada permintaan begitu, eskalasikan ke user
 > dengan menyebut akibatnya - jangan kerjakan sendiri.
 
@@ -301,11 +319,17 @@ yang bisa dilipat.
 > tambah entri datar - masukkan ke grup `anak` yang sudah ada, atau buat grup
 > baru. Menambah entri ke-15 di PPABP tanpa mengelompokkan = melanggar.
 
-### Jumlah `<th>` per berkas (diukur 2026-09-28)
+### Jumlah `<th>` per berkas (diukur 2026-09-28; baris Kalkulasi diukur 2026-11-16)
 
 | Berkas | `<th>` |
 |---|---|
-| `kasubag/kalkulasi/page.tsx` (beberapa tabel) | 54 |
+| `kasubag/kalkulasi/page.tsx` (beberapa tabel, sebelum rombak 2026-11-16) | 54 |
+| `TabelTukinRingkas` (Kalkulasi, 2026-11-16) | 8 |
+| `TabelUangMakan` (Kalkulasi, 2026-11-16) | 7 |
+| `TabelPemeriksaanLembur` (Kalkulasi, 2026-11-16) | 8 |
+| `TabelPerubahanPegawai` (Kalkulasi, 2026-11-16) | 6 |
+| `TabelKoreksiLemburRinci` (Kalkulasi, 2026-11-16) | 4 |
+| `TabelRincianTukinLengkap` (`?rincian=1`, 2026-11-16) | 41 |
 | `TabelRincianJamKerja` | 12 |
 | `tukin/presensi/page.tsx` | 11 |
 | `TabelRincianUnit` | 8 |

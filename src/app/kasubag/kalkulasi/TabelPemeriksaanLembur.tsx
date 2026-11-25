@@ -221,7 +221,20 @@ export function TabelPemeriksaanLembur({
   halaman,
   perHalaman,
   paramPaginasi,
+  tertanam = false,
+  aksiKepala,
+  hanyaPegawaiId,
 }: {
+  /** Dipasang di dalam kartu Tahap 2: judul h3 dan tanpa margin atas. */
+  tertanam?: boolean;
+  /** Kontrol di kanan kepala - tombol "Tandai sudah diperiksa". */
+  aksiKepala?: React.ReactNode;
+  /**
+   * Pencarian (`?q=`): kalau diisi, HANYA baris tabel yang disaring ke id-id
+   * ini. Ringkasan di kepala dan peringatan ketidakcocokan tetap menghitung
+   * SELURUH pegawai - pencarian tidak boleh mengubah angka pemeriksaannya.
+   */
+  hanyaPegawaiId?: readonly string[];
   baris: readonly BarisPemeriksaanLembur[];
   periodeBulan: number;
   periodeTahun: number;
@@ -248,8 +261,11 @@ export function TabelPemeriksaanLembur({
   const totalLibur = berlembur.reduce((n, b) => n + (b.jamHariLibur ?? 0), 0);
   // Ringkasan & peringatan di atas tetap menghitung SELURUH pegawai berlembur;
   // yang dipotong per halaman hanya baris tabelnya.
-  const paginasi = hitungPaginasi(berlembur.length, halaman, perHalaman);
-  const berlemburHalaman = berlembur.slice(paginasi.mulai, paginasi.selesai);
+  const idDicari = hanyaPegawaiId ? new Set(hanyaPegawaiId) : null;
+  const berlemburTampil = idDicari ? berlembur.filter((b) => idDicari.has(b.pegawaiId)) : berlembur;
+  const paginasi = hitungPaginasi(berlemburTampil.length, halaman, perHalaman);
+  const berlemburHalaman = berlemburTampil.slice(paginasi.mulai, paginasi.selesai);
+  const Judul = tertanam ? "h3" : "h2";
 
   useEffect(() => {
     if (!pegawaiDipilih) {
@@ -270,10 +286,10 @@ export function TabelPemeriksaanLembur({
     : null;
 
   return (
-    <section id="tabel-lembur" className="mt-8 scroll-mt-4">
+    <section id="tabel-lembur" className={tertanam ? "scroll-mt-4" : "mt-8 scroll-mt-4"}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <h2 className="text-base font-bold text-ink">Rincian Jam Lembur</h2>
+          <Judul className="text-base font-bold text-ink">Rincian Jam Lembur</Judul>
           <BantuanTabel
             judul="Sumber Data & Acuan"
             label="Sumber data dan acuan tabel Jam Lembur"
@@ -307,6 +323,7 @@ export function TabelPemeriksaanLembur({
         <span className="text-xs text-muted">
           {berlembur.length} pegawai berlembur &middot; {totalKerja} jam hari kerja, {totalLibur} jam hari libur
         </span>
+        {aksiKepala}
       </div>
 
       {tidakCocok.length > 0 && (
@@ -337,10 +354,12 @@ export function TabelPemeriksaanLembur({
               </tr>
             </thead>
             <tbody>
-              {berlembur.length === 0 && (
+              {berlemburTampil.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-6 text-center text-muted">
-                    Tidak ada pegawai dengan jam lembur pada periode ini.
+                    {berlembur.length === 0
+                      ? "Tidak ada pegawai dengan jam lembur pada periode ini."
+                      : "Tidak ada pegawai berlembur yang cocok dengan pencarian."}
                   </td>
                 </tr>
               )}
@@ -404,13 +423,13 @@ export function TabelPemeriksaanLembur({
             </tbody>
           </table>
         </div>
-        {berlembur.length > 0 && (
+        {berlemburTampil.length > 0 && (
           <div className="border-t border-line-2 px-4 py-3 sm:px-6">
             <Paginasi
               basePath="/kasubag/kalkulasi"
               params={new URLSearchParams(paramPaginasi)}
               info={paginasi}
-              totalBaris={berlembur.length}
+              totalBaris={berlemburTampil.length}
               labelBaris="pegawai"
               namaParam={{ hal: "halLembur", per: "perLembur" }}
               anchor="tabel-lembur"

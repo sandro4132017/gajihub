@@ -8,7 +8,17 @@ import {
   type HasilNilaiSesi,
   type SessionPayload,
 } from "./auth/session";
-import { opsiCookieSampai } from "./auth/sesiCookie";
+import { opsiCookieSampai, opsiCookieSingkat } from "./auth/sesiCookie";
+import {
+  COOKIE_KEMBALI,
+  COOKIE_PESAN_SESI,
+  HEADER_PESAN_SESI,
+  UMUR_KEMBALI_DETIK,
+  UMUR_PESAN_SESI_DETIK,
+  alasanSesiSah,
+  layakDiingat,
+  tujuanKembaliSah,
+} from "./auth/tujuanKembali";
 import { LANDING_ROLE } from "./auth/roleAktif";
 import { asalPublik } from "./auth/asalPublik";
 import { hostAsalTepercaya } from "./auth/asalTepercaya";
@@ -288,11 +298,33 @@ export async function middleware(request: NextRequest) {
     // format lama) dijelaskan di /login dan cookie-nya dibuang. Rute di atas
     // yang dikecualikan (termasuk /login sendiri) tidak pernah sampai sini,
     // jadi tidak ada loop /login -> /login.
+    //
+    // ALAMAT /login TETAP BERSIH: alasannya dibawa cookie sekali pakai, dan
+    // halaman yang sedang dibuka diingat supaya login berikutnya kembali ke
+    // situ (lihat src/auth/tujuanKembali.ts).
     const alasan = ALASAN_SESI_HABIS.has(nilai.status) ? nilai.status : null;
-    const url = new URL("/login", origin);
-    if (alasan) url.searchParams.set("sesi", alasan);
-    const res = terapkanHeaderKeamanan(NextResponse.redirect(url));
-    if (alasan) res.cookies.delete(SESSION_COOKIE_NAME);
+    const res = terapkanHeaderKeamanan(NextResponse.redirect(new URL("/login", origin)));
+    if (alasan) {
+      res.cookies.delete(SESSION_COOKIE_NAME);
+      res.cookies.set(COOKIE_PESAN_SESI, alasan, opsiCookieSingkat(UMUR_PESAN_SESI_DETIK));
+    }
+    if (layakDiingat(request)) {
+      const tujuan = tujuanKembaliSah(request.nextUrl.pathname + request.nextUrl.search);
+      if (tujuan) res.cookies.set(COOKIE_KEMBALI, tujuan, opsiCookieSingkat(UMUR_KEMBALI_DETIK));
+    }
+    return res;
+  }
+
+  // /login tanpa sesi: pesan sesi berakhir (kalau ada) diteruskan ke halaman
+  // lewat header lalu cookie-nya dibuang - muncul SEKALI, muat ulang bersih.
+  // Header kiriman klien selalu dibuang dulu, jadi tidak bisa dipalsukan.
+  if (!session && isLoginPage) {
+    const reqHeaders = new Headers(request.headers);
+    reqHeaders.delete(HEADER_PESAN_SESI);
+    const pesan = alasanSesiSah(request.cookies.get(COOKIE_PESAN_SESI)?.value);
+    if (pesan) reqHeaders.set(HEADER_PESAN_SESI, pesan);
+    const res = terapkanHeaderKeamanan(lanjutkan(path, reqHeaders), path);
+    if (request.cookies.has(COOKIE_PESAN_SESI)) res.cookies.delete(COOKIE_PESAN_SESI);
     return res;
   }
   if (session && isLoginPage) {

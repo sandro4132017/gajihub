@@ -7,6 +7,7 @@ import {
   riwayatPengirimanPeriode,
   statusUnit,
   tabelBelumDiverifikasi,
+  TABEL_WAJIB_DIVERIFIKASI,
   type BarisPengiriman,
 } from "../pengirimanUnit";
 
@@ -249,30 +250,15 @@ describe("verifikasi tabel sebelum kirim", () => {
     expect(hasil.boleh).toBe(true);
   });
 
-  it("daftar perubahan pegawai WAJIB dicentang", () => {
-    // Ditambahkan 2026-09-24. Kelas jabatan & satuan kerja adalah BAHAN
-    // ketiga tabel lainnya, jadi memeriksa hasilnya sementara bahannya belum
-    // diperiksa bukan pemeriksaan.
+  it("daftar perubahan pegawai TIDAK lagi wajib (keputusan user 2026-11-16)", () => {
     const hasil = cekBolehKirim({ ...SIAP, tabelDiverifikasi: ["TUKIN", "UANG_LEMBUR"] }, belumKirim);
-    expect(hasil.boleh).toBe(false);
-    expect(hasil.alasan).toContain("Daftar Perubahan Data Pegawai");
+    expect(hasil.boleh).toBe(true);
   });
 
-  it("kurang satu centang wajib = tertahan, dan yang kurang disebut namanya", () => {
-    const hasil = cekBolehKirim(
-      { ...SIAP, tabelDiverifikasi: ["PERUBAHAN_PEGAWAI", "TUKIN"] },
-      belumKirim
-    );
-    expect(hasil.boleh).toBe(false);
-    expect(hasil.alasan).toContain("Tabel Jam Lembur");
-    expect(hasil.alasan).not.toContain("Tabel Tukin");
-  });
-
-  it("mencentang uang makan saja tidak membuka apa pun", () => {
-    const hasil = cekBolehKirim({ ...SIAP, tabelDiverifikasi: ["UANG_MAKAN"] }, belumKirim);
-    expect(hasil.boleh).toBe(false);
-    expect(hasil.alasan).toContain("Tabel Tukin");
-    expect(hasil.alasan).toContain("Tabel Jam Lembur");
+  it("centang tabel tidak lagi wajib - TTE SPTJM sudah berarti diperiksa (2026-11-16)", () => {
+    expect(TABEL_WAJIB_DIVERIFIKASI).toEqual([]);
+    expect(cekBolehKirim({ ...SIAP, tabelDiverifikasi: [] }, belumKirim).boleh).toBe(true);
+    expect(cekBolehKirim({ ...SIAP, tabelDiverifikasi: ["UANG_MAKAN"] }, belumKirim).boleh).toBe(true);
   });
 
   it("syarat DATA didahulukan - centang tidak bisa menutupi kalkulasi yang kurang", () => {
@@ -297,8 +283,8 @@ describe("verifikasi tabel sebelum kirim", () => {
   });
 
   it("tabelBelumDiverifikasi menyebut yang kurang, bukan yang sudah", () => {
-    expect(tabelBelumDiverifikasi([])).toEqual(["PERUBAHAN_PEGAWAI", "TUKIN", "UANG_LEMBUR"]);
-    expect(tabelBelumDiverifikasi(["TUKIN"])).toEqual(["PERUBAHAN_PEGAWAI", "UANG_LEMBUR"]);
+    expect(tabelBelumDiverifikasi([])).toEqual([]);
+    expect(tabelBelumDiverifikasi(["TUKIN"])).toEqual([]);
     expect(
       tabelBelumDiverifikasi(["PERUBAHAN_PEGAWAI", "TUKIN", "UANG_MAKAN", "UANG_LEMBUR"])
     ).toEqual([]);

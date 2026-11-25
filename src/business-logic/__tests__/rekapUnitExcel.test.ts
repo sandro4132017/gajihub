@@ -195,6 +195,8 @@ const tukinLengkapKosong: BarisRekapTukinLengkap = {
   totalMenitTerlambat: 15,
   jumlahTidakPresensi: 1,
   jumlahHariAlpha: 0,
+  jumlahTapTidakWajar: 0,
+  persenPotonganAnomali: 0,
   jumlahHariDinasLuar: 2,
   ctGugurKandungan1: "",
   ctGugurKandungan2: "",
@@ -228,7 +230,7 @@ const tukinLengkapKosong: BarisRekapTukinLengkap = {
 };
 
 describe("susunRekapTukinLengkapExcel", () => {
-  it("menyusun tabel 43 kolom dengan lebar seragam untuk header, baris, dan total", () => {
+  it("menyusun tabel 45 kolom dengan lebar seragam untuk header, baris, dan total", () => {
     const hasil = susunRekapTukinLengkapExcel([tukinLengkapKosong]);
     expect(hasil.header).toHaveLength(KOLOM_REKAP_TUKIN_LENGKAP.length);
     expect(hasil.baris).toHaveLength(1);
@@ -280,6 +282,23 @@ describe("susunRekapTukinLengkapExcel", () => {
     expect(hasil.baris[0][idx("Nominal Kinerja")]).toBe(3555440);
     expect(hasil.baris[0][idx("Dibayarkan")]).toBe(4933296);
     expect(hasil.total[idx("Nominal Kehadiran")]).toBe(1377856);
+  });
+
+  it("kolom anomali tepat sesudah Alpa (N-O): jumlah dijumlah, persen tidak", () => {
+    const idx = (nama: string) => KOLOM_REKAP_TUKIN_LENGKAP.indexOf(nama as never);
+    expect(idx("Alpa")).toBe(12); // kolom M
+    expect(idx("Anomali/Tap Tidak Wajar")).toBe(13); // kolom N
+    expect(idx("% Pot Anomali")).toBe(14); // kolom O
+    const baris = { ...tukinLengkapKosong, jumlahTapTidakWajar: 2, persenPotonganAnomali: 2 };
+    const hasil = susunRekapTukinLengkapExcel([baris, baris]);
+    expect(hasil.baris[0][13]).toBe(2);
+    expect(hasil.baris[0][14]).toBe("2%");
+    expect(hasil.total[13]).toBe(4);
+    expect(hasil.total[14]).toBe("");
+    // Kolom rupiah ikut bergeser - Dibayarkan tetap kolom rupiah.
+    expect(KOLOM_RUPIAH_TUKIN_LENGKAP).toContain(idx("Dibayarkan"));
+    expect(KOLOM_RUPIAH_TUKIN_LENGKAP).toContain(idx("Nominal Tukin"));
+    expect(KOLOM_RUPIAH_TUKIN_LENGKAP).toContain(idx("Potongan PPh"));
   });
 
   it("daftar kosong tetap menghasilkan header dan total", () => {

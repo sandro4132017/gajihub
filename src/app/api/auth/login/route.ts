@@ -4,6 +4,7 @@ import { prisma } from "../../../../lib/prisma";
 import { SESSION_COOKIE_NAME } from "../../../../auth/session";
 import { OPSI_COOKIE_SESI, buatTokenUntukUser } from "../../../../auth/sesiCookie";
 import { LANDING_ROLE, pilihRoleBawaan } from "../../../../auth/roleAktif";
+import { COOKIE_KEMBALI, tujuanKembaliSah } from "../../../../auth/tujuanKembali";
 import { LABEL_ROLE } from "../../../../auth/roleLabel";
 import { pesanGalatUntukLayar } from "../../../../lib/koneksi/galatSumber";
 import { ssoAktif } from "../../../../auth/sso";
@@ -116,10 +117,12 @@ export async function POST(req: NextRequest) {
     const jabatan = isPenguji ? JABATAN_PENGUJI : (pegawai?.jabatan ?? LABEL_ROLE[roleBawaan]);
 
     const token = await buatTokenUntukUser(user, jabatan, roleBawaan);
-    const destination = LANDING_ROLE[roleBawaan];
+    // Kembali ke halaman semula bila ada (sekali pakai), lihat tujuanKembali.ts.
+    const destination = tujuanKembaliSah(req.cookies?.get(COOKIE_KEMBALI)?.value) ?? LANDING_ROLE[roleBawaan];
 
     const res = NextResponse.json({ ok: true, redirect: destination });
     res.cookies.set(SESSION_COOKIE_NAME, token, OPSI_COOKIE_SESI);
+    if (req.cookies?.has(COOKIE_KEMBALI)) res.cookies.delete(COOKIE_KEMBALI);
     return res;
   } catch (error) {
     return NextResponse.json(

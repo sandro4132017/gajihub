@@ -14,6 +14,9 @@ description: Use whenever touching approval - the jenjang 1 / jenjang final flow
 > **Kasubag TU kirim rekap -> PPABP** (`src/app/kasubag/kirim/`). Gerbang export
 > ADK sekarang "satker sudah mengirim" (`src/app/ppabp/adk/satkerTerkirim.ts`),
 > bukan `status: "APPROVED"`. `ApprovalLog` masih ditulis alur BANDING.
+> Syarat kirim (2026-11-16): selain tabel wajib tercentang, SPTJM Tukin dan Uang Makan wajib
+> tertandatangani dan tidak basi (Uang Lembur ikut bila nominalnya ditampilkan). Lihat
+> `gajihub-tte-bsre`, bagian "Gerbang kirim".
 > Isi di bawah dipertahankan sebagai catatan alasan, BUKAN peta kode yang
 > berlaku - kalau approval berjenjang dihidupkan lagi, kodenya ada di riwayat git
 > (terakhir di commit `2bc02a7`).

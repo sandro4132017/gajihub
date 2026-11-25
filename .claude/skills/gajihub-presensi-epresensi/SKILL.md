@@ -718,18 +718,20 @@ dibayar"*. Yang SENGAJA TIDAK ada di sini:
   baris cuma memakan lebar. **Engine TETAP menghitung keduanya** dan keduanya
   tetap tampil di `/tukin/presensi/[nip]` - yang hilang cuma kolomnya di sini.
 
-**Kolom Cuti = total hari SEMUA jenis** (`jumlahHariCuti`). Sejak 2026-11-11
-(keputusan user) jenisnya TIDAK lagi ditulis di bawah angka - sel berisi angka
-saja. Jenis dipindah ke **pop up**: angkanya bisa diklik (`RincianCutiTombol`)
-dan memunculkan "Rincian cuti {nama} - {periode}" berisi tabel jenis | hari |
-tanggal, dari `PresensiHarian.namaSistemKerja` (label e-Presensi, mis. "Cuti -
-Cuti Tahunan"). Logika di `src/lib/format/rincianCuti.ts` (`susunRincianCuti`,
-`rincianCutiAtauNull`); `page.tsx` memakai satu query per halaman.
-Pop up SENGAJA tanpa catatan soal Pasal 14 / jenis terbanyak (dicabut atas
-permintaan user 2026-11-11). Isinya: peringatan bila
-jumlah rincian tidak sama dengan rekap; dan "tidak tersedia" bila data harian
-tidak punya jenis (sebelum 2026-09-29). Latar: butir 1 laporan Biro Hukum
-Oktober 2026 (cuti campuran tampil sebagai jenis terbanyak). Perhitungan Tukin
+**Kolom Cuti = total hari SEMUA jenis** (`jumlahHariCuti`). Desain user
+2026-11-16: sel berupa **kotak kecil berisi ANGKA saja** yang bisa diklik
+(`RincianCutiTombol`); jenis cuti hanya tampil di pop up. Pop up "Rincian cuti pegawai - e-Presensi": nama, NIP,
+periode; ringkasan "Total cuti terpakai" + "Label ringkasan di tabel"; kartu per
+jenis dengan rentang tanggal (`formatRentangTanggal`, mis. "14 - 16 Okt 2026");
+bila jenisnya lebih dari satu, kotak "Ketentuan label dominan" yang menjelaskan
+kenapa SEL TABEL hanya menyebut satu label (keterangan tampilan, BUKAN klaim
+aturan Pasal 14 - user menolak klaim seperti itu 2026-11-11). Dokumen pendukung
+cuti TIDAK ditampilkan: data e-Presensi tidak memuatnya, jangan dikarang.
+Sumber: `PresensiHarian.namaSistemKerja`; logika di
+`src/lib/format/rincianCuti.ts`; `page.tsx` memakai satu query per halaman.
+Peringatan bila jumlah rincian tidak sama dengan rekap; "tidak tersedia" bila
+data harian tidak punya jenis (sebelum 2026-09-29). Latar: butir 1 laporan Biro
+Hukum Oktober 2026. Perhitungan Tukin
 TIDAK berubah. "3 hari cuti" saja tidak cukup buat menilai -
 Pasal 14 memotong berbeda per jenis (cuti tahunan 0%, CLTN 100%). Diklat
 digabung ke sel Dinas luar (`+N diklat`) karena perlakuannya identik.
@@ -1036,6 +1038,24 @@ Bukti (foto dan geotag dari pegawai) sekarang **disimpan** di penyimpanan privat
 2. **9 orang yang absen masuknya siang/sore** di kedua tanggal itu tetap
    butuh verifikasi bukti (foto & geotag) seperti sebelumnya - untuk mereka
    kehadiran paginya memang tidak tercatat di manapun.
+
+#### Tampilan koreksi & bukti: pop up (rombak 2026-11-16, mengikuti mockup user)
+
+- **Rincian harian `/tukin/presensi/[nip]`**: jam yang sudah dikoreksi tampil sebagai **pil kuning**
+  (`SelJamKoreksi.tsx`). Hover atau fokus memunculkan kotak gelap "Rincian koreksi": jam awal
+  (merah), jam koreksi (hijau), pengoreksi, bukti, dan "Ubah koreksi" yang membuka dialog lewat
+  event. Kolom Koreksi memakai chip "Dikoreksi"; petunjuk ditaruh di bawah judul halaman.
+- **Dialog koreksi** (`KoreksiJamForm.tsx`) dirombak: kepala "SUDAH / BELUM DIKOREKSI" beserta
+  tanggal, judul "Rincian Koreksi Jam Kehadiran", baris "Nama · Status"; kotak "Dikoreksi oleh"
+  dengan tombol bukti; jam 24 jam memakai input teks HH:MM; unggah bukti berupa pil; tombol
+  "Batalkan Koreksi" dan "Simpan Perubahan". Dasar koreksi pindah ke langkah konfirmasi (Modal).
+  Aturan koreksi di atas (izin, bukti, alasan 15 karakter, tolak bila rekap TERKIRIM) tidak berubah.
+- **Bukti dibuka di pop up** `PenampilBukti.tsx` (`src/components/shared/`): foto atau PDF dari rute
+  berizin `/berkas/koreksi-presensi/[id]`, dengan ikon "Buka di tab baru" dan unduh (`?unduh=1`).
+  Tautannya lewat `TautanBuktiKoreksi.tsx`. Pop up yang sama juga dipakai di `/saya/presensi`.
+- Pop up cuti di kolom Cuti `/tukin/presensi` (lihat bagian "Kolom Cuti" di atas) tidak berubah
+  dengan rombak ini. Dokumen cuti per pegawai tetap TIDAK ditampilkan (tidak ada di e-Presensi
+  maupun SIAP).
 
 ### Kalender hari libur nasional & cuti bersama
 

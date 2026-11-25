@@ -16,6 +16,8 @@
 // ketika dia yakin, dan sejak itu angkanya terkunci.
 // ============================================================================
 
+import { alasanTteBelumLengkap, ringkasSyaratTte, type MasukanSyaratTte } from "./sptjmUnit";
+
 /** Bentuk minimal baris PengirimanUnit yang dibutuhkan modul ini. */
 export interface BarisPengiriman {
   status: string;
@@ -100,12 +102,17 @@ export const TABEL_KALKULASI: readonly JenisTabelKalkulasi[] = [
  * user 2026-09-22) - tetap tampil di panel supaya ketiganya kelihatan sebagai
  * satu rangkaian, tapi belum menahan pengiriman. Memindahkannya jadi wajib
  * cukup menambahkannya di sini; tidak ada tempat lain yang perlu diubah.
+ *
+ * KOSONG sejak 2026-11-16 (keputusan user): menandatangani SPTJM lewat TTE
+ * sudah setara dengan menyatakan tabelnya diperiksa, jadi centang "Tandai
+ * sudah diperiksa" tidak lagi menahan pengiriman. Yang menahan sekarang SPTJM
+ * (sptjmUnit.ts). Termasuk Jam Lembur, walau SPTJM Lembur belum diwajibkan
+ * selama uang lembur ditunda - diterima user secara sadar.
+ *
+ * Fungsi & tabel verifikasi dibiarkan ada supaya catatan lama tetap terbaca
+ * dan syarat bisa dihidupkan lagi cukup dengan mengisi daftar ini.
  */
-export const TABEL_WAJIB_DIVERIFIKASI: readonly JenisTabelKalkulasi[] = [
-  "PERUBAHAN_PEGAWAI",
-  "TUKIN",
-  "UANG_LEMBUR",
-];
+export const TABEL_WAJIB_DIVERIFIKASI: readonly JenisTabelKalkulasi[] = [];
 
 export const LABEL_TABEL_KALKULASI: Record<JenisTabelKalkulasi, string> = {
   PERUBAHAN_PEGAWAI: "Daftar Perubahan Data Pegawai",
@@ -139,6 +146,12 @@ export interface KesiapanKirim {
    * verifikasi tidak ditagih.
    */
   tabelDiverifikasi?: readonly JenisTabelKalkulasi[];
+  /**
+   * Keadaan TTE SPTJM (src/business-logic/sptjmUnit.ts). Diisi = TTE ditagih
+   * sebagai syarat kirim. Opsional HANYA supaya pemanggil/test lama tetap
+   * jalan; gerbang di server (kirimRekapUnitAction) WAJIB mengisinya.
+   */
+  sptjm?: MasukanSyaratTte;
 }
 
 export interface HasilCekKirim {
@@ -210,6 +223,14 @@ export function cekBolehKirim(k: KesiapanKirim, status: StatusUnit): HasilCekKir
         )}. Centang setelah memeriksanya.`,
       };
     }
+  }
+  // TTE SPTJM DITAGIH PALING AKHIR - sesudah data & pemeriksaan. SPTJM
+  // menyatakan hitungan sudah benar; menandatanganinya sebelum kalkulasi
+  // lengkap dan diperiksa berarti menyatakan angka yang masih akan berubah.
+  // Tanpa jalan darurat bila BSrE gangguan (keputusan user).
+  if (k.sptjm !== undefined) {
+    const alasanTte = alasanTteBelumLengkap(ringkasSyaratTte(k.sptjm));
+    if (alasanTte) return { boleh: false, alasan: alasanTte };
   }
   return { boleh: true, alasan: null };
 }

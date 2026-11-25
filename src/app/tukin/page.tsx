@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "../../lib/prisma";
 import { FilterBar } from "../../components/forms/FilterBar";
 import { periodePunyaTukin, resolvePeriode } from "../periodeDefault";
@@ -19,6 +20,7 @@ import {
   TabelRincianTukinLengkap,
   type BarisRincianTukinLengkap,
 } from "../../components/tables/TabelRincianTukinLengkap";
+import { hitungTapTidakWajarUnit } from "../../lib/tapTidakWajarDb";
 import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../business-logic/tarifTukinPokok";
 import { kelasJabatanEfektif } from "../../business-logic/kelasJabatanEfektif";
 import { SumberAcuan } from "../../components/shared/SumberAcuan";
@@ -197,6 +199,9 @@ export default async function TukinPage({
         ? prisma.rekapPresensiPeriode.findMany({ where: { OR: kunciPeriode } })
         : Promise.resolve([]),
     ]);
+    const tapTidakWajar = tampilLengkap
+      ? await hitungTapTidakWajarUnit(idPegawai, satkerEfektif, periodeBulan, periodeTahun)
+      : null;
 
     const kunci = (p: string, b: number, t: number) => `${p}|${b}|${t}`;
     const petaPredikat = new Map(predikatList.map((r) => [kunci(r.pegawaiId, r.periodeBulan, r.periodeTahun), r]));
@@ -233,6 +238,7 @@ export default async function TukinPage({
           tukin: k,
           rekap: petaRekap.get(kp) ?? null,
           predikat: petaPredikat.get(kp) ?? null,
+          tapTidakWajar: tapTidakWajar?.get(k.pegawaiId) ?? 0,
         });
       }
     }
@@ -390,9 +396,9 @@ export default async function TukinPage({
               Rincian Tukin {NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} {periodeTahun} &mdash; {satkerEfektif}
               <span className="ml-2 text-sm font-normal text-muted">- rincian lengkap</span>
             </h2>
-            <a href={hrefRincian(false)} className={KELAS_TOMBOL_RINCIAN}>
+            <Link href={hrefRincian(false)} className={KELAS_TOMBOL_RINCIAN}>
               Tampilkan ringkas
-            </a>
+            </Link>
           </div>
           <TabelRincianTukinLengkap
             baris={barisLengkap}
@@ -409,9 +415,9 @@ export default async function TukinPage({
           satuanKerja={satkerEfektif ?? ""}
           periode={`${NAMA_BULAN[periodeBulan - 1] ?? periodeBulan} ${periodeTahun}`}
           aksi={
-            <a href={hrefRincian(true)} className={KELAS_TOMBOL_RINCIAN}>
+            <Link href={hrefRincian(true)} className={KELAS_TOMBOL_RINCIAN}>
               Lihat rincian lengkap
-            </a>
+            </Link>
           }
         />
       ) : (

@@ -33,13 +33,40 @@ Sistem Gajihub terhubung ke **Esign Client Service v2.2.2** (`http://192.168.221
 | `src/lib/tte/sptjmPdf.ts` | Generator berkas PDF SPTJM A4 menggunakan `pdf-lib`. Menempatkan tag koordinat `#` untuk QR code dan footer resmi BSrE. |
 | `src/app/tte/actions.ts` | Server Action untuk alur signing: agregasi nominal lembur satker, buat draft PDF, panggil Esign Client, simpan file ke storage, catat `DokumenTte` & `LogGagalTte`. |
 | `src/app/tte/ModalPassphraseTte.tsx` | Dialog interaktif input passphrase bertopeng (`autocomplete="off"`), pengecekan status sertifikat, dan penanganan error BSrE. |
-| `src/app/kasubag/kalkulasi/PanelTteSptjm.tsx` | Panel UI di halaman Kalkulasi Kasubag TU sebelum kirim rekap ke PPABP. |
+| `src/app/kasubag/kalkulasi/TahapTteSptjm.tsx` | Tahap 3 (TTE SPTJM) halaman Kalkulasi Unit (rombak 2026-11-16): membungkus panel di bawah dan memuat tiga baris dokumen (Tukin, Uang Makan, Uang Lembur). |
+| `src/app/kasubag/kalkulasi/PanelTteSptjm.tsx` | Panel TTE di dalam Tahap 3, berbingkai merah muda; "Hapus Draft" hanya tampil bila ada draft. Seluruh fungsi tanda tangan tetap di sini dan `ModalPassphraseTte`. |
+| `src/business-logic/sptjmUnit.ts` | PURE, nol I/O. Aturan dokumen mana yang WAJIB dan status SAH / PERLU_TTE_ULANG / BELUM. Sumber tunggal untuk server (`cekBolehKirim`) dan layar. |
 | `storage/uploads/tte/<Nama Unit>/<tahun-bulan>/` | Penyimpanan PRIVAT berkas PDF draft dan signed (akar bisa ditimpa env `GAJIHUB_STORAGE_DIR`). Disajikan hanya lewat `/berkas/tte/[id]` dan `/berkas/tte-pratinjau` (izin `canLihatDokumenSptjm`); verifikasi publik lewat `/tte/verify/[id]/berkas`. Berkas lama tetap di struktur lama `tte/...` tanpa folder unit. Resolver: `src/lib/storage/berkasPrivat.ts`. |
 
 ## Model Data Prisma
 
 - **`DokumenTte`**: Mencatat metadata dokumen (jenis `SPTJM_LEMBUR`, periode, satker, status `DRAFT`/`MENUNGGU_TTE`/`TERTANDATANGANI`/`GAGAL`, path berkas, ID Dokumen BSrE, waktu penandatanganan).
 - **`LogGagalTte`**: Jejak audit kegagalan TTE untuk kepatuhan regulasi BSrE BSSN.
+
+## Gerbang kirim: TTE SPTJM wajib sebelum rekap dikirim (keputusan user 2026-11-16)
+
+- **Wajib**: SPTJM **Tukin** dan **Uang Makan** SELALU wajib tertandatangani sebelum Kasubag TU
+  kirim rekap ke PPABP. **Uang Lembur** wajib HANYA bila nominal lembur sudah ditampilkan
+  (`TAMPILKAN_NOMINAL_LEMBUR`); selama uang lembur ditunda, tidak ada nominal yang bisa
+  dinyatakan benar.
+- **Ditagih di server**: `src/app/kasubag/kirim/actions.ts` memanggil `cekBolehKirim`
+  (`src/business-logic/pengirimanUnit.ts`), yang memakai `ringkasSyaratTte` dari
+  `src/business-logic/sptjmUnit.ts`. Halaman Kalkulasi Unit memakai fungsi yang sama, jadi tombol
+  yang menyala di layar dan keputusan server tidak bisa berbeda.
+- **Tanpa jalan darurat**: bila BSrE gangguan, rekap TIDAK bisa dikirim. Tidak ada bypass dan
+  tidak ada "kirim tanpa TTE" (keputusan user).
+- **Basi = PERLU_TTE_ULANG**: SPTJM yang ditandatangani SEBELUM rekap dikembalikan PPABP dianggap
+  basi. Begitu juga yang ditandatangani sebelum kalkulasi TERAKHIR komponennya (max `calculatedAt`
+  Tukin / Uang Makan / Uang Lembur per unit-periode), karena hitung ulang sesudah tanda tangan
+  membuat angka yang ditandatangani tidak sama dengan yang dikirim. Dokumennya TIDAK dihapus
+  (bukti sah atas apa yang dinyatakan saat itu), hanya tidak lagi dihitung sebagai tanda tangan
+  yang berlaku.
+- **Fail-closed**: `signedAt` null dianggap PERLU_TTE_ULANG.
+- **Dokumen terbaru yang dibaca**: per jenis, yang dipakai dokumen dengan `createdAt` terbesar,
+  bukan yang pernah ditandatangani. Akibatnya dokumen terbaru yang GAGAL atau DRAFT menimpa yang
+  sah (sesuai aturan dokumen terbaru; lihat open items di `PROGRESS.md`).
+- **Dashboard sama**: `langkahTutupBulan` (`/kasubag`) memakai aturan yang sama.
+- **Dokumen lama tidak dihapus.**
 
 ## Lingkungan Dev & Uji Coba
 

@@ -12,12 +12,15 @@ export function KalkulasiMassalForm({
   periodeTahun,
   jumlahBelumPunyaPredikat,
   namaBulan,
+  tanpaKartu = false,
 }: {
   satuanKerja: string;
   periodeBulan: number;
   periodeTahun: number;
   jumlahBelumPunyaPredikat: number;
   namaBulan: string;
+  /** Dipasang di dalam kartu Tahap 2 sebagai baris aksi: tanpa `card`. */
+  tanpaKartu?: boolean;
 }) {
   const [state, setState] = useState<KalkulasiMassalFormState>(INITIAL_STATE);
   const [pending, setPending] = useState(false);
@@ -65,7 +68,10 @@ export function KalkulasiMassalForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card mt-4 p-4">
+    <form
+      onSubmit={handleSubmit}
+      className={tanpaKartu ? "mt-3 rounded-xl border border-line-2 bg-surface-2 p-3.5" : "card mt-4 p-4"}
+    >
       <input type="hidden" name="satuanKerja" value={satuanKerja} />
       <input type="hidden" name="periodeBulan" value={periodeBulan} />
       <input type="hidden" name="periodeTahun" value={periodeTahun} />
@@ -93,7 +99,7 @@ export function KalkulasiMassalForm({
             menghitung - mereka dilewati <em>sekali ini saja</em>, dan tetap terhitung sebagai anggota unit.
             <span className="mt-1 block text-muted">
               Kalau orangnya memang sudah tidak seharusnya dihitung di unit ini, pakai{" "}
-              <strong>Kecualikan pegawai dari perhitungan</strong> di atas - itu berlaku untuk seluruh periode dan
+              <strong>Tinjau &amp; Kecualikan</strong> di Tahap 1 - itu berlaku untuk seluruh periode dan
               alasannya tercatat.
             </span>
           </span>

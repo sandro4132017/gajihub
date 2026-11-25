@@ -649,8 +649,9 @@ potongan Pasal 14 ikut berlaku.
 - **Pasal 17 - tambahan Tukin Plt/Plh** (20% atau selisih, jangka minimal 1
   bulan kalender, pembayaran tertunda satu bulan): BELUM diimplementasi sama
   sekali. Dasar dan besarannya menunggu konfirmasi OSDMA/Biro Hukum.
-- Usulan "telat >100 menit = lupa absen" sudah DITOLAK sebelumnya - lihat
-  `docs/laporan-lupa-absen-dan-batas-jam-untuk-osdma.md` bagian 6.
+- Usulan "telat >100 menit = lupa absen" sempat DITOLAK (lihat
+  `docs/laporan-lupa-absen-dan-batas-jam-untuk-osdma.md` bagian 6), lalu
+  **BERLAKU SEJAK 2026-11-25 (keputusan Kasubag TU, TODO(legal-confirm))**: jam masuk 10:10 ke atas = 1 kejadian tidak presensi masuk (1%), bukan per menit; kewajiban pulang TETAP ikut jam masuk asli, berbatas 17:00 (Jumat 17:30) - pulang sebelum itu kena 0,01%/menit. Sakelar `BATAS_MASUK_SETARA_LUPA_ABSEN_AKTIF` + `batasJamMasukDipercayaMenit()` di `presensiPdfKeRekap.ts`, dipakai lewat `tapMasukMustahil`. Penolakan lama di bawah dipertahankan sebagai riwayat alasan - JANGAN dicabut tanpa jawaban OSDMA.
 - Tercatat di `PROGRESS.md` bagian 2b butir 4-5.
 
 ## Teks peraturan: `docs/permenaker-15-2024-tunjangan-kinerja.md`

@@ -1,7 +1,7 @@
+import type React from "react";
 import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
-import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 import { canGenerateAdk, canKembalikanRekapUnit, type AuthUser } from "../../../auth/permissions";
 import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { NAMA_BULAN } from "../../../lib/format/bulan";
@@ -23,29 +23,14 @@ import {
   sempitkanKeSatker,
   whereIkutAdk,
 } from "./satkerTerkirim";
-import {
-  JENIS_PEGAWAI_ADK,
-  bacaJenisPegawai,
-  labelJenisPegawai,
-  wherePegawaiTanpaJenis,
-} from "./jenisPegawaiAdk";
+import { bacaJenisPegawai, wherePegawaiJenis, wherePegawaiTanpaJenis } from "./jenisPegawaiAdk";
+import { FilterAdk } from "./FilterAdk";
+import { PanduanAdk } from "./PanduanAdk";
+import { bacaStatusPapan } from "../../kasubag/kirim/PapanProgres";
 import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { SumberAcuan } from "../../../components/shared/SumberAcuan";
 import { PanelTteSptjmPpk } from "./PanelTteSptjmPpk";
-import {
-  FiDownload,
-  FiFileText,
-  FiCheckCircle,
-  FiAlertCircle,
-  FiChevronDown,
-  FiShield,
-  FiExternalLink,
-} from "react-icons/fi";
-import {
-  RiMoneyDollarCircleLine,
-  RiBuilding4Line,
-} from "react-icons/ri";
-import { FaUtensils, FaClock } from "react-icons/fa6";
+import { FiDownload, FiAlertCircle, FiExternalLink } from "react-icons/fi";
 
 export const dynamic = "force-dynamic";
 
@@ -68,9 +53,15 @@ export default async function ExportAdkPage({
     adk?: string;
     jenis?: string;
     bank?: string;
+    /** Papan progres unit: saringan status, cari, paginasi. */
+    status?: string;
+    cariUnit?: string;
+    halUnit?: string;
+    perUnit?: string;
   }>;
 }) {
-  const { satker, bulan, tahun, adk, jenis, bank } = await searchParams;
+  const { satker, bulan, tahun, adk, jenis, bank, status, cariUnit, halUnit, perUnit } = await searchParams;
+  const statusUnit = bacaStatusPapan(status);
   const akun = await getSessionAccount();
   const authUser: AuthUser | null = akun && {
     nip: akun.nip,
@@ -110,6 +101,19 @@ export default async function ExportAdkPage({
     },
   });
   const totalTukinBersih = tukinPeriode.reduce((sum, t) => sum + (t.tukinBersih || 0), 0);
+
+  // Penyebut kartu "Pegawai yang memenuhi syarat": pegawai AKTIF di unit yang
+  // sudah mengirim, di luar yang dikecualikan periode ini - dengan saringan
+  // jenis yang sama dengan berkasnya.
+  const pegawaiIkut = await prisma.pegawai.count({
+    where: {
+      statusPegawai: "AKTIF",
+      satuanKerja: { in: satkerDipakai },
+      sourceSystem: { not: SUMBER_DUMMY },
+      ...wherePegawaiJenis(jenisPegawai),
+      pengecualian: { none: { periodeBulan: bln, periodeTahun: thn } },
+    },
+  });
 
   const rekeningTukin = await prisma.rekeningPegawai.findMany({
     where: {
@@ -292,157 +296,245 @@ export default async function ExportAdkPage({
     return `/ppabp/adk?${p.toString()}`;
   };
 
+  // Parameter yang dibawa papan progres (filter, tab, periode) saat berpindah
+  // saringan status / halaman / pencarian unit.
+  const paramDasarPapan: Record<string, string> = {
+    bulan: periodeBulan,
+    tahun: periodeTahun,
+    adk: adkDipilih,
+    ...(satkerTerpilih ? { satker: satkerTerpilih } : {}),
+    ...(jenisPegawai ? { jenis: jenisPegawai } : {}),
+  };
+
   const persentaseTerkirim = Math.round(
     (satkerBoleh.length / (unitAktif.length || 1)) * 100
   );
 
+  // Kartu ringkas: label & angka per tab, bentuknya sama untuk ketiga tab.
+  const namaPeriode = `${NAMA_BULAN[bln - 1] ?? bln} ${thn}`;
+  const kartuRingkas: { judul: string; angka: React.ReactNode; sub: string; perhatian?: boolean; nada?: "biru" }[] =
+    adkDipilih === "tukin"
+      ? [
+          {
+            judul: "Pegawai yang memenuhi syarat",
+            angka: (
+              <>
+                {tukinPeriode.length.toLocaleString("id-ID")}
+                <span className="font-mono text-sm font-medium text-muted">
+                  /{pegawaiIkut.toLocaleString("id-ID")} pegawai
+                </span>
+              </>
+            ),
+            sub:
+              tukinPeriode.length >= pegawaiIkut
+                ? "Semua data lengkap & valid"
+                : `${pegawaiIkut - tukinPeriode.length} pegawai belum punya hasil kalkulasi`,
+            perhatian: tukinPeriode.length < pegawaiIkut,
+          },
+          {
+            judul: "Total Pembayaran Bersih",
+            angka: formatRupiah(totalTukinBersih),
+            sub: "Siap diusulkan ke Kemenkeu",
+            nada: "biru",
+          },
+          {
+            judul: "Bank Operasional (SPAN)",
+            angka: `${bankTukin.length} Bank SPAN`,
+            sub: `${punyaRekening.size}/${tukinPeriode.length} pegawai telah ber-rekening`,
+            perhatian: punyaRekening.size < tukinPeriode.length,
+          },
+        ]
+      : adkDipilih === "uang-makan"
+        ? [
+            {
+              judul: "Pegawai berhak uang makan",
+              angka: (
+                <>
+                  {umIkut.toLocaleString("id-ID")}
+                  <span className="font-mono text-sm font-medium text-muted"> pegawai</span>
+                </>
+              ),
+              sub: satkerTerpilih || "Seluruh satuan kerja yang sudah mengirim",
+            },
+            {
+              judul: "Total Baris Kehadiran",
+              angka: `${pratinjauUm.totalBaris.toLocaleString("id-ID")} baris`,
+              sub: "Satu baris per pegawai per hari yang dibayar",
+              nada: "biru",
+            },
+            {
+              judul: "Estimasi Total Nominal",
+              angka: formatRupiah(totalUmRupiah),
+              sub: "Nominal resmi dihitung Web Gaji dari tarif SBM",
+            },
+          ]
+        : [
+            {
+              judul: "Pegawai lembur",
+              angka: (
+                <>
+                  {pratinjauLembur.pegawai.length.toLocaleString("id-ID")}
+                  <span className="font-mono text-sm font-medium text-muted"> pegawai</span>
+                </>
+              ),
+              sub: "Pegawai dengan jam lembur sah pada periode ini",
+            },
+            {
+              judul: "Total Jam Lembur",
+              angka: `${totalJamLembur.toLocaleString("id-ID")} jam`,
+              sub: `${pratinjauLembur.totalBaris.toLocaleString("id-ID")} baris data harian`,
+              nada: "biru",
+            },
+            {
+              judul: "Estimasi Nominal Lembur",
+              angka: formatRupiah(totalLemburRupiah),
+              sub: "Uang lembur + uang makan lembur (SBM 2026)",
+            },
+          ];
+
+  const TAB: { kunci: JenisBerkasAdk; label: string; jumlah: number }[] = [
+    { kunci: "tukin", label: "Tunjangan Kinerja", jumlah: tukinPeriode.length },
+    { kunci: "uang-makan", label: "Uang Makan", jumlah: umIkut },
+    ...(TAMPILKAN_ADK_LEMBUR
+      ? [{ kunci: "uang-lembur" as const, label: "Uang Lembur", jumlah: pratinjauLembur.pegawai.length }]
+      : []),
+  ];
+
+  const dokumenTab =
+    adkDipilih === "tukin"
+      ? { awal: tteTukin, daftar: daftarSptjmTukin }
+      : adkDipilih === "uang-makan"
+        ? { awal: tteUangMakan, daftar: daftarSptjmUangMakan }
+        : { awal: tteLembur, daftar: daftarSptjmLembur };
+
   return (
-    <main className={`${HALAMAN} space-y-6`}>
+    <main className={`${HALAMAN} space-y-4`}>
       {/* ====================================================================
-          1. HEADER HALAMAN & KESIAPAN PERIODE
+          1. KEPALA: judul + tab komponen, filter + unit terkunci, 3 kartu ringkas
           ==================================================================== */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-2xl font-black tracking-tight text-ink sm:text-3xl">
+      <section className="card p-5 sm:p-6" aria-label="Export ADK">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
               Export ADK
+              <SumberAcuan
+                judulKeterangan="Tentang Berkas ADK"
+                keterangan={[
+                  "Hanya memuat rekap unit yang sudah dikirim & dikunci Kasubag TU.",
+                  "Excel (.xlsx) dan TXT isinya sama persis — TXT muatan yang disetor, Excel untuk verifikasi visual.",
+                  "ADK Tukin memuat rupiah dan dipisah per bank; ADK Uang Makan & Uang Lembur fakta kehadiran harian.",
+                  "Nominal uang makan & lembur dihitung otomatis oleh Web Gaji dari grade/golongan pegawai.",
+                ]}
+                acuan={[
+                  {
+                    aturan: "Template daftar bayar PPABP",
+                    tentang:
+                      "ADK Tukin 21 kolom — NIP, nama, nilai bruto/potongan/bersih, kode bank SPAN & nomor rekening",
+                  },
+                  {
+                    aturan: "Template ADK-UM & ADK-Lembur",
+                    tentang: "Satu baris per pegawai per hari: NIP, tanggal, dan jam untuk lembur",
+                  },
+                  {
+                    aturan: "SBM 2026 item 22.1 & 23.1 (PMK 32/2025)",
+                    tentang: "Tarif uang makan & uang lembur per golongan — dihitung di sisi Web Gaji",
+                  },
+                  {
+                    aturan: "Pemisahan per bank SPAN",
+                    tentang: "SAKTI hanya dapat memproses SPP per kode bank SPAN, jadi ADK Tukin dipecah per bank",
+                  },
+                ]}
+                catatan="Berkas ini adalah PERINTAH BAYAR. Setiap pengunduhan tercatat di jejak audit beserta identitas penariknya."
+              />
             </h1>
-            <SumberAcuan
-              judulKeterangan="Tentang Berkas ADK"
-              keterangan={[
-                "Hanya memuat rekap unit yang sudah dikirim & dikunci Kasubag TU.",
-                "Excel (.xlsx) dan TXT isinya sama persis — TXT muatan yang disetor, Excel untuk verifikasi visual.",
-                "ADK Tukin memuat rupiah dan dipisah per bank; ADK Uang Makan & Uang Lembur fakta kehadiran harian.",
-                "Nominal uang makan & lembur dihitung otomatis oleh Web Gaji dari grade/golongan pegawai.",
-              ]}
-              acuan={[
-                {
-                  aturan: "Template daftar bayar PPABP",
-                  tentang:
-                    "ADK Tukin 21 kolom — NIP, nama, nilai bruto/potongan/bersih, kode bank SPAN & nomor rekening",
-                },
-                {
-                  aturan: "Template ADK-UM & ADK-Lembur",
-                  tentang:
-                    "Satu baris per pegawai per hari: NIP, tanggal, dan jam untuk lembur",
-                },
-                {
-                  aturan: "SBM 2026 item 22.1 & 23.1 (PMK 32/2025)",
-                  tentang:
-                    "Tarif uang makan & uang lembur per golongan — dihitung di sisi Web Gaji",
-                },
-                {
-                  aturan: "Pemisahan per bank SPAN",
-                  tentang:
-                    "SAKTI hanya dapat memproses SPP per kode bank SPAN, jadi ADK Tukin dipecah per bank",
-                },
-              ]}
-              catatan="Berkas ini adalah PERINTAH BAYAR. Setiap pengunduhan tercatat di jejak audit beserta identitas penariknya."
-            />
-          </div>
-          <p className="mt-1 text-xs sm:text-sm text-muted">
-            Penyusunan dan pengunduhan berkas setoran ke Web Gaji Kemenkeu &amp; lampiran SPP SAKTI.
-          </p>
-        </div>
-
-        {/* Ringkasan Status Pengiriman Unit */}
-        <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-2xs">
-          <div className="text-right">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-              Unit Terkunci
-            </p>
-            <p className="text-sm font-extrabold text-ink">
-              <span className="text-biru">{satkerBoleh.length}</span> / {unitAktif.length} Satker
+            <p className="mt-1 text-sm text-muted">
+              Unduh berkas ADK per bank SPAN dari satuan kerja yang telah mengirim dan mengunci rekap.
             </p>
           </div>
-          <div className="h-8 w-px bg-line-2" />
-          <a
-            href="#status-unit"
-            className="flex items-center gap-1.5 rounded-xl bg-teal-tint/50 px-3 py-1.5 text-xs font-bold text-teal-deep hover:bg-teal-tint transition"
-            title="Lihat rincian pengiriman tiap unit"
-          >
-            <span>{persentaseTerkirim}% Terkunci</span>
-            <FiChevronDown className="size-3.5" />
-          </a>
+
+          {/* Tab komponen - segmented control */}
+          <nav aria-label="Jenis berkas ADK" className="shrink-0">
+            <ul className="flex flex-wrap gap-1 rounded-xl border border-line bg-surface-2 p-1">
+              {TAB.map((t) => {
+                const aktif = t.kunci === adkDipilih;
+                return (
+                  <li key={t.kunci}>
+                    <Link
+                      href={tabHref(t.kunci)}
+                      aria-current={aktif ? "page" : undefined}
+                      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm no-underline transition ${
+                        aktif ? "bg-navy font-bold text-white shadow-sm" : "font-medium text-ink-2 hover:text-ink"
+                      }`}
+                    >
+                      {t.label}
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold ${
+                          aktif ? "bg-white/20 text-white" : "bg-surface text-ink-2"
+                        }`}
+                      >
+                        {t.jumlah}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
         </div>
-      </div>
 
-      {/* ====================================================================
-          2. FILTER BAR PERIODE & SATUAN KERJA
-          ==================================================================== */}
-      <form method="get" className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-        <input type="hidden" name="adk" value={adkDipilih} />
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <label className="field-label text-xs">Satuan Kerja</label>
-            <SearchableSelect
-              name="satker"
-              options={[
-                { value: "", label: "Semua satuan kerja (terkirim)" },
-                ...satkerBoleh
-                  .slice()
-                  .sort((a, b) => a.localeCompare(b, "id-ID"))
-                  .map((nama) => ({ value: nama, label: nama })),
-              ]}
-              defaultValue={satkerTerpilih}
+        <div className="mt-5 grid gap-4 border-t border-line-2 pt-5 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="rounded-xl border border-line bg-surface-2/60 p-4">
+            <FilterAdk
+              satkerList={satkerBoleh}
+              satker={satkerTerpilih}
+              bulan={periodeBulan}
+              tahun={periodeTahun}
+              jenis={jenisPegawai ?? ""}
+              adk={adkDipilih}
             />
           </div>
-
-          <div className="w-36">
-            <label className="field-label text-xs">Bulan</label>
-            <SearchableSelect
-              name="bulan"
-              options={NAMA_BULAN.map((nama, index) => ({
-                value: String(index + 1),
-                label: nama,
-              }))}
-              defaultValue={periodeBulan}
-            />
+          <div className="rounded-xl border border-line bg-surface-2/60 p-4">
+            <p className="field-label text-xs">Unit Terkunci</p>
+            <div className="flex items-center gap-3">
+              <a
+                href="#status-unit"
+                title="Lihat progres pengiriman tiap unit"
+                className="rounded-lg border border-line bg-surface px-3 py-2 font-mono text-sm font-bold text-ink no-underline hover:border-biru/50"
+              >
+                {satkerBoleh.length} / {unitAktif.length} Satker
+              </a>
+              <span className="rounded-lg bg-green-tint px-3 py-2 text-xs font-bold text-green">
+                {persentaseTerkirim}% Terkunci
+              </span>
+            </div>
           </div>
-
-          <div className="w-24">
-            <label className="field-label text-xs">Tahun</label>
-            <input
-              type="number"
-              name="tahun"
-              defaultValue={periodeTahun}
-              className="field-input w-full py-1.5"
-            />
-          </div>
-
-          <div className="w-44">
-            <label className="field-label text-xs">Jenis Pegawai</label>
-            <select
-              name="jenis"
-              defaultValue={jenisPegawai ?? ""}
-              className="field-input w-full py-1.5 text-xs font-semibold"
-            >
-              <option value="">Semua pegawai</option>
-              {JENIS_PEGAWAI_ADK.map((j) => (
-                <option key={j.kode} value={j.kode}>
-                  {j.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button type="submit" className="btn btn-primary h-[38px] px-5 text-xs font-bold">
-            Terapkan Filter
-          </button>
         </div>
-      </form>
 
-      {/* Warning Periode Kosong */}
+        <dl className="mt-4 grid gap-4 sm:grid-cols-3">
+          {kartuRingkas.map((k) => (
+            <div key={k.judul} className="rounded-xl border border-line bg-surface-2/40 p-4">
+              <dt className={k.nada === "biru" ? "text-[11px] font-semibold uppercase tracking-wide text-muted" : "text-xs font-semibold text-ink-2"}>
+                {k.judul}
+              </dt>
+              <dd className={`mt-1 font-mono text-xl font-bold ${k.nada === "biru" ? "text-biru-deep" : "text-ink"}`}>
+                {k.angka}
+              </dd>
+              <dd className={`mt-0.5 text-[11px] ${k.perhatian ? "font-medium text-gold-deep" : "text-muted"}`}>{k.sub}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      {/* Periode yang belum bisa diekspor */}
       {totalApproved === 0 && (
-        <div className="flex items-start gap-3 rounded-2xl border border-gold/40 bg-gold-tint/60 p-4 shadow-2xs">
-          <FiAlertCircle className="size-5 shrink-0 text-gold-deep mt-0.5" />
-          <div className="text-xs sm:text-sm text-ink-2">
-            <p className="font-bold text-ink">
-              ADK {NAMA_BULAN[bln - 1]} {thn} belum tersedia
-            </p>
+        <div className="flex items-start gap-3 rounded-2xl border border-gold/40 bg-gold-tint/60 p-4">
+          <FiAlertCircle className="mt-0.5 size-5 shrink-0 text-gold-deep" />
+          <div className="text-sm text-ink-2">
+            <p className="font-bold text-ink">ADK {namaPeriode} belum tersedia</p>
             {totalBelumApproved === 0 ? (
               <p className="mt-1 text-muted">
-                Periode ini <strong>belum memiliki kalkulasi yang disimpan</strong>. Jalankan kalkulasi terlebih dahulu di menu{" "}
+                Periode ini <strong>belum memiliki kalkulasi yang disimpan</strong>. Jalankan kalkulasi terlebih dahulu di
+                menu{" "}
                 <Link href="/kasubag/kalkulasi" className="font-semibold text-teal-deep underline">
                   Kalkulasi Unit
                 </Link>
@@ -450,7 +542,8 @@ export default async function ExportAdkPage({
               </p>
             ) : (
               <p className="mt-1 text-muted">
-                Belum ada satuan kerja yang mengirim dan mengunci rekap pada periode ini. Berkas ADK hanya disusun dari unit yang rekapnya telah berstatus <strong>TERKIRIM</strong>.
+                Belum ada satuan kerja yang mengirim dan mengunci rekap pada periode ini. Berkas ADK hanya disusun dari
+                unit yang rekapnya telah berstatus <strong>TERKIRIM</strong>.
               </p>
             )}
           </div>
@@ -458,588 +551,277 @@ export default async function ExportAdkPage({
       )}
 
       {/* ====================================================================
-          3. TAB NAVIGASI UTAMA (TUKIN / UANG MAKAN / UANG LEMBUR)
+          2. BERKAS (kiri) + SPTJM & PANDUAN (kanan)
           ==================================================================== */}
-      <div className="flex flex-wrap gap-2 border-b border-line pb-1">
-        {/* Tab 1: Tukin */}
-        <Link
-          href={tabHref("tukin")}
-          className={`flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition shadow-2xs ${
-            adkDipilih === "tukin"
-              ? "bg-navy text-white shadow-xs"
-              : "border border-line bg-surface text-muted hover:bg-surface-2 hover:text-ink"
-          }`}
-        >
-          <RiMoneyDollarCircleLine className="size-4 shrink-0" />
-          <span>Tunjangan Kinerja</span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-mono font-bold ${
-              adkDipilih === "tukin" ? "bg-white/20 text-white" : "bg-surface-2 text-ink"
-            }`}
-          >
-            {tukinPeriode.length}
-          </span>
-          {tteTukin?.status === "TERTANDATANGANI" && (
-            <span title="SPTJM TTE Sudah Disahkan">
-              <FiCheckCircle className="size-3.5 text-green-300" />
-            </span>
-          )}
-        </Link>
-
-        {/* Tab 2: Uang Makan */}
-        <Link
-          href={tabHref("uang-makan")}
-          className={`flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition shadow-2xs ${
-            adkDipilih === "uang-makan"
-              ? "bg-navy text-white shadow-xs"
-              : "border border-line bg-surface text-muted hover:bg-surface-2 hover:text-ink"
-          }`}
-        >
-          <FaUtensils className="size-3.5 shrink-0" />
-          <span>Uang Makan</span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-mono font-bold ${
-              adkDipilih === "uang-makan" ? "bg-white/20 text-white" : "bg-surface-2 text-ink"
-            }`}
-          >
-            {umIkut}
-          </span>
-          {tteUangMakan?.status === "TERTANDATANGANI" && (
-            <span title="SPTJM TTE Sudah Disahkan">
-              <FiCheckCircle className="size-3.5 text-green-300" />
-            </span>
-          )}
-        </Link>
-
-        {/* Tab 3: Uang Lembur */}
-        {TAMPILKAN_ADK_LEMBUR && (
-          <Link
-            href={tabHref("uang-lembur")}
-            className={`flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition shadow-2xs ${
-              adkDipilih === "uang-lembur"
-                ? "bg-navy text-white shadow-xs"
-                : "border border-line bg-surface text-muted hover:bg-surface-2 hover:text-ink"
-            }`}
-          >
-            <FaClock className="size-3.5 shrink-0" />
-            <span>Uang Lembur</span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-mono font-bold ${
-                adkDipilih === "uang-lembur" ? "bg-white/20 text-white" : "bg-surface-2 text-ink"
-              }`}
-            >
-              {pratinjauLembur.pegawai.length}
-            </span>
-            {tteLembur?.status === "TERTANDATANGANI" && (
-              <span title="SPTJM TTE Sudah Disahkan">
-                <FiCheckCircle className="size-3.5 text-green-300" />
-              </span>
-            )}
-          </Link>
-        )}
-      </div>
-
-      {/* ====================================================================
-          4. KONTEN TAB: TUNJANGAN KINERJA (TUKIN)
-          ==================================================================== */}
-      {adkDipilih === "tukin" && (
-        <div className="space-y-6">
-          {/* Kartu Ringkasan Metrik Tukin */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Pegawai Berhak Tukin
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <section className="card p-5" aria-labelledby="judul-berkas-adk">
+          {adkDipilih === "tukin" ? (
+            <>
+              <h2 id="judul-berkas-adk" className="text-base font-bold text-ink">
+                Berkas Setoran SAKTI per Bank SPAN
+              </h2>
+              <p className="mt-0.5 text-xs text-muted">
+                SAKTI hanya dapat memproses SPP per kode bank SPAN. Klik unduh pada bank yang bersangkutan.
               </p>
-              <p className="mt-1 font-mono text-2xl font-black text-ink">
-                {tukinPeriode.length.toLocaleString("id-ID")}{" "}
-                <span className="text-xs font-semibold text-muted">orang</span>
-              </p>
-              <p className="mt-1 text-[11px] text-muted">
-                {satkerTerpilih ? satkerTerpilih : "Semua satker yang sudah mengunci rekap"}
-              </p>
-            </div>
 
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Total Pembayaran Bersih
-              </p>
-              <p className="mt-1 font-mono text-2xl font-black text-teal-deep">
-                {formatRupiah(totalTukinBersih)}
-              </p>
-              <p className="mt-1 text-[11px] text-muted">
-                Nilai bersih setelah potongan presensi &amp; PPh
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Sebaran Bank Operasional
-              </p>
-              <p className="mt-1 font-mono text-2xl font-black text-ink">
-                {bankTukin.length}{" "}
-                <span className="text-xs font-semibold text-muted">Bank SPAN</span>
-              </p>
-              <p className="mt-1 text-[11px] text-muted">
-                {punyaRekening.size} dari {tukinPeriode.length} pegawai telah ber-rekening
-              </p>
-            </div>
-          </div>
-
-          {/* Unduh Berkas Gabungan (Semua Bank / Arsip Internal) */}
-          <section className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-ink">
-                  Berkas Gabungan (Semua Bank / Rekonsiliasi Internal)
-                </h3>
-                <p className="mt-0.5 text-xs text-muted">
-                  Format 21 kolom lengkap mencakup seluruh rekening bank. Cocok untuk rekonsiliasi internal &amp; pengarsipan (bukan untuk SPP SAKTI).
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <a
-                  href={hrefBerkas("xlsx", "")}
-                  className="btn btn-primary inline-flex items-center gap-2 px-4 py-2 text-xs font-bold shadow-2xs"
-                >
-                  <FiDownload className="size-4" />
-                  <span>Unduh Excel (.xlsx)</span>
-                </a>
-                <a
-                  href={hrefBerkas("txt", "")}
-                  className="btn btn-ghost inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold"
-                >
-                  <FiFileText className="size-4" />
-                  <span>TXT</span>
-                </a>
-              </div>
-            </div>
-          </section>
-
-          {/* Unduh Per Bank SPAN (Wajib untuk SPP SAKTI) */}
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-wide text-ink">
-                  Berkas Setoran SAKTI per Bank SPAN
-                </h3>
-                <p className="text-xs text-muted">
-                  SAKTI hanya dapat memproses SPP per kode bank SPAN. Klik unduh pada bank yang bersangkutan.
-                </p>
-              </div>
-            </div>
-
-            {bankTukin.length === 0 ? (
-              <div className="rounded-2xl border border-line bg-surface-2 p-6 text-center text-sm text-muted">
-                Belum ada data rekening Tukin yang terdaftar untuk periode ini. Unggah di{" "}
-                <Link href="/ppabp/rekening" className="font-semibold text-teal-deep underline">
-                  Rekening Pegawai
-                </Link>
-                .
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {bankTukin.map((b) => (
-                  <div
-                    key={b.kodeBankSpan}
-                    className="flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 shadow-2xs hover:border-teal-deep/50 transition"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <div className="flex size-7 items-center justify-center rounded-lg bg-surface-2 text-navy">
-                            <RiBuilding4Line className="size-4" />
-                          </div>
-                          <div>
-                            <p className="font-bold text-sm text-ink">{b.namaBank}</p>
-                            <p className="font-mono text-[11px] text-muted">
-                              SPAN: {b.kodeBankSpan}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="rounded-full bg-teal-tint px-2 py-0.5 text-xs font-bold text-teal-deep">
-                          {b.jumlah} Pegawai
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex items-center gap-2 border-t border-line-2 pt-3">
-                      <a
-                        href={hrefBerkas("xlsx", b.kodeBankSpan)}
-                        className="btn btn-primary btn-sm flex-1 justify-center text-xs font-bold"
-                      >
-                        <FiDownload className="size-3.5" />
-                        <span>Excel</span>
-                      </a>
-                      <a
-                        href={hrefBerkas("txt", b.kodeBankSpan)}
-                        className="btn btn-ghost btn-sm text-xs font-bold"
-                      >
-                        <span>TXT</span>
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Peringatan Pegawai Tanpa Rekening */}
-          {tanpaRekening.length > 0 && (
-            <details className="group rounded-2xl border border-gold/40 bg-gold-tint/40 p-4 shadow-2xs">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-bold text-sm text-gold-deep">
-                <span className="flex items-center gap-2">
-                  <FiAlertCircle className="size-4 shrink-0" />
-                  <span>
-                    {tanpaRekening.length} pegawai belum memiliki nomor rekening Tukin
-                  </span>
-                </span>
-                <span className="text-xs font-semibold text-teal-deep underline">
-                  <span className="group-open:hidden">Lihat daftar</span>
-                  <span className="hidden group-open:inline">Tutup</span>
-                </span>
-              </summary>
-              <div className="mt-3 border-t border-gold/20 pt-3 text-xs text-ink-2 space-y-2">
-                <p>
-                  Pegawai di bawah ini <strong>tidak masuk ke berkas per-bank SAKTI</strong> karena belum terdaftar di tabel rekening Tukin:
-                </p>
-                <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2 md:grid-cols-3">
-                  {tanpaRekening.map((p) => (
-                    <li key={p.nip} className="rounded-lg bg-surface/70 px-2.5 py-1.5 font-medium">
-                      <span className="font-bold text-ink">{p.nama}</span>
-                      <span className="block font-mono text-[11px] text-muted">{p.nip}</span>
-                    </li>
+              {bankTukin.length === 0 ? (
+                <div className="mt-4 rounded-xl border border-line bg-surface-2 p-6 text-center text-sm text-muted">
+                  Belum ada data rekening Tukin yang terdaftar untuk periode ini. Unggah di{" "}
+                  <Link href="/ppabp/rekening" className="font-semibold text-teal-deep underline">
+                    Rekening Pegawai
+                  </Link>
+                  .
+                </div>
+              ) : (
+                <ul className="mt-4 divide-y divide-line-2 overflow-hidden rounded-xl border border-line">
+                  {bankTukin.map((b) => (
+                    <BarisBerkas
+                      key={b.kodeBankSpan}
+                      logo={<LogoBank nama={b.namaBank} />}
+                      judul={b.namaBank}
+                      jumlah={b.jumlah}
+                      sub={`Berkas Setoran SAKTI per Bank SPAN · kode ${b.kodeBankSpan}`}
+                      hrefXlsx={hrefBerkas("xlsx", b.kodeBankSpan)}
+                      hrefTxt={hrefBerkas("txt", b.kodeBankSpan)}
+                      labelXlsx="Excel (.xlsx)"
+                    />
                   ))}
+                  <BarisBerkas
+                    logo={<span aria-hidden className="grid size-9 place-items-center rounded-lg bg-surface-2" />}
+                    judul="Berkas Gabungan Semua Bank"
+                    jumlah={tukinPeriode.length}
+                    sub="Untuk rekonsiliasi internal lintas bank oleh PPABP"
+                    hrefXlsx={hrefBerkas("xlsx", "")}
+                    hrefTxt={hrefBerkas("txt", "")}
+                    labelXlsx="Gabungan (.xlsx)"
+                    latar
+                  />
                 </ul>
-                <p className="pt-2">
-                  <Link href="/ppabp/rekening" className="btn btn-secondary btn-sm inline-flex items-center gap-1.5">
-                    <span>Lengkapi di Rekening Pegawai</span>
+              )}
+
+              {tanpaRekening.length > 0 && (
+                <details className="group mt-3 rounded-xl border border-gold/40 bg-gold-tint/40 p-3">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-bold text-gold-deep [&::-webkit-details-marker]:hidden">
+                    <span className="flex items-center gap-2">
+                      <FiAlertCircle className="size-4 shrink-0" />
+                      {tanpaRekening.length} pegawai belum memiliki nomor rekening Tukin - tidak masuk berkas per bank
+                    </span>
+                    <span className="shrink-0 font-semibold text-biru-deep underline">
+                      <span className="group-open:hidden">Lihat daftar</span>
+                      <span className="hidden group-open:inline">Tutup</span>
+                    </span>
+                  </summary>
+                  <ul className="mt-3 grid grid-cols-1 gap-1 border-t border-gold/20 pt-3 text-xs sm:grid-cols-2">
+                    {tanpaRekening.map((p) => (
+                      <li key={p.nip} className="rounded-lg bg-surface/70 px-2.5 py-1.5">
+                        <span className="font-bold text-ink">{p.nama}</span>
+                        <span className="block font-mono text-[11px] text-muted">{p.nip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    href="/ppabp/rekening"
+                    className="btn btn-secondary btn-sm mt-3 inline-flex items-center gap-1.5"
+                  >
+                    Lengkapi di Rekening Pegawai
                     <FiExternalLink className="size-3.5" />
                   </Link>
-                </p>
-              </div>
-            </details>
+                </details>
+              )}
+            </>
+          ) : (
+            <>
+              <h2 id="judul-berkas-adk" className="text-base font-bold text-ink">
+                Berkas ADK {adkDipilih === "uang-makan" ? "Uang Makan" : "Uang Lembur"} (Setoran Web Gaji)
+              </h2>
+              <p className="mt-0.5 text-xs text-muted">
+                {adkDipilih === "uang-makan"
+                  ? "Satu baris per pegawai per hari kehadiran. Tidak dipisah per bank - nominal dihitung Web Gaji."
+                  : "Satu baris per pegawai per hari (NIP + tanggal + jam). Yang mengesahkan hak bayar adalah Surat Perintah Lembur resmi."}
+              </p>
+              <ul className="mt-4 overflow-hidden rounded-xl border border-line">
+                <BarisBerkas
+                  logo={<span aria-hidden className="grid size-9 place-items-center rounded-lg bg-surface-2" />}
+                  judul={`ADK ${adkDipilih === "uang-makan" ? "Uang Makan" : "Uang Lembur"} ${namaPeriode}`}
+                  jumlah={adkDipilih === "uang-makan" ? umIkut : pratinjauLembur.pegawai.length}
+                  sub={satkerTerpilih || "Seluruh satuan kerja yang sudah mengirim"}
+                  hrefXlsx={hrefBerkas("xlsx")}
+                  hrefTxt={hrefBerkas("txt")}
+                  labelXlsx="Excel (.xlsx)"
+                />
+              </ul>
+
+              {adkDipilih === "uang-lembur" &&
+                (pratinjauLembur.tanpaKalkulasi.length > 0 || pratinjauLembur.selisih.length > 0) && (
+                  <div className="mt-3 space-y-1 rounded-xl border border-gold/40 bg-gold-tint/40 p-3 text-xs text-ink-2">
+                    <p className="font-bold text-gold-deep">Periksa catatan lembur sebelum berkas dikirim:</p>
+                    {pratinjauLembur.tanpaKalkulasi.length > 0 && (
+                      <p>
+                        <strong className="text-ink">{pratinjauLembur.tanpaKalkulasi.length} pegawai</strong> punya jam
+                        lembur di presensi tetapi belum dihitung pada kalkulasi bulanan.
+                      </p>
+                    )}
+                    {pratinjauLembur.selisih.length > 0 && (
+                      <p>
+                        <strong className="text-ink">{pratinjauLembur.selisih.length} pegawai</strong> jam lemburnya
+                        berbeda dari rekap bulanan (presensi berubah setelah kalkulasi).
+                      </p>
+                    )}
+                  </div>
+                )}
+
+              {(adkDipilih === "uang-makan" ? pratinjauUm.pegawai.length : pratinjauLembur.pegawai.length) > 0 && (
+                <details className="group mt-3 rounded-xl border border-line p-3">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-ink [&::-webkit-details-marker]:hidden">
+                    <span>
+                      Pratinjau grid {adkDipilih === "uang-makan" ? "kehadiran harian uang makan" : "jam lembur harian"}
+                    </span>
+                    <span className="text-xs font-semibold text-biru-deep underline">
+                      <span className="group-open:hidden">Buka pratinjau</span>
+                      <span className="hidden group-open:inline">Tutup</span>
+                    </span>
+                  </summary>
+                  <div className="mt-3 border-t border-line-2 pt-3">
+                    {adkDipilih === "uang-makan" ? (
+                      <PratinjauAdkUangMakan data={pratinjauUm} periodeBulan={bln} periodeTahun={thn} />
+                    ) : (
+                      <PratinjauAdkUangLembur data={pratinjauLembur} periodeBulan={bln} periodeTahun={thn} terbuka />
+                    )}
+                  </div>
+                </details>
+              )}
+            </>
           )}
 
-          {/* Peringatan Pegawai Tanpa Jenis */}
           {tanpaJenisBerkas.length > 0 && (
-            <div className="rounded-2xl border border-gold/40 bg-gold-tint/40 p-4 text-xs text-ink-2">
+            <div className="mt-3 rounded-xl border border-gold/40 bg-gold-tint/40 p-3 text-xs text-ink-2">
               <p className="font-bold text-gold-deep">
                 {tanpaJenisBerkas.length} pegawai belum terpetakan jenisnya (PNS/PPPK)
               </p>
               <p className="mt-1 text-muted">
                 Pegawai ini tidak masuk saat filter jenis aktif. Jenis kepegawaian diambil dari SIAP - jalankan
-                sinkronisasi pegawai, atau pilih &quot;Semua pegawai&quot; pada filter.
+                sinkronisasi pegawai, atau pilih &quot;Semua&quot; pada filter Jenis Pegawai.
               </p>
             </div>
           )}
+        </section>
 
-          {/* Panel TTE SPTJM PPK (Tukin) */}
+        <div className="space-y-4">
           <PanelTteSptjmPpk
             periodeBulan={bln}
             periodeTahun={thn}
-            adkAktif="tukin"
+            adkAktif={adkDipilih}
             satuanKerja={satkerTerpilih ?? ""}
-            dokumenTteAwal={tteTukin}
-            daftarSptjmUnit={daftarSptjmTukin}
+            dokumenTteAwal={dokumenTab.awal}
+            daftarSptjmUnit={dokumenTab.daftar}
           />
+
+          <PanduanAdk />
         </div>
-      )}
+      </div>
 
       {/* ====================================================================
-          5. KONTEN TAB: UANG MAKAN
+          3. PROGRES PENGIRIMAN UNIT + RINGKASAN
           ==================================================================== */}
-      {adkDipilih === "uang-makan" && (
-        <div className="space-y-6">
-          {/* Kartu Ringkasan Metrik Uang Makan */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Pegawai Berhak Uang Makan
-              </p>
-              <p className="mt-1 font-mono text-2xl font-black text-ink">
-                {umIkut.toLocaleString("id-ID")}{" "}
-                <span className="text-xs font-semibold text-muted">orang</span>
-              </p>
-              <p className="mt-1 text-[11px] text-muted">
-                {satkerTerpilih ? satkerTerpilih : "Seluruh satuan kerja yang sudah dikirim"}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Total Baris Kehadiran
-              </p>
-              <p className="mt-1 font-mono text-2xl font-black text-teal-deep">
-                {pratinjauUm.totalBaris.toLocaleString("id-ID")}{" "}
-                <span className="text-xs font-semibold text-muted">baris</span>
-              </p>
-              <p className="mt-1 text-[11px] text-muted">
-                Format harian NIP + tanggal kehadiran yang dibayar
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Estimasi Total Nominal
-              </p>
-              <p className="mt-1 font-mono text-2xl font-black text-ink">
-                {formatRupiah(totalUmRupiah)}
-              </p>
-              <p className="mt-1 text-[11px] text-muted">
-                Nominal resmi dihitung oleh Web Gaji dari tarif SBM
-              </p>
-            </div>
-          </div>
-
-          {/* Unduh Berkas ADK Uang Makan */}
-          <section className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-ink">
-                  Berkas ADK Uang Makan (Setoran Web Gaji)
-                </h3>
-                <p className="mt-0.5 text-xs text-muted">
-                  Satu baris per pegawai per hari kehadiran. Berkas ini tidak dipisah per bank (nominal dihitung otomatis oleh Web Gaji).
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <a
-                  href={hrefBerkas("xlsx")}
-                  className="btn btn-primary inline-flex items-center gap-2 px-4 py-2 text-xs font-bold shadow-2xs"
-                >
-                  <FiDownload className="size-4" />
-                  <span>Unduh Excel (.xlsx)</span>
-                </a>
-                <a
-                  href={hrefBerkas("txt")}
-                  className="btn btn-ghost inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold"
-                >
-                  <FiFileText className="size-4" />
-                  <span>TXT</span>
-                </a>
-              </div>
-            </div>
-          </section>
-
-          {/* Pratinjau Grid Kehadiran Uang Makan */}
-          {pratinjauUm.pegawai.length > 0 && (
-            <details className="group rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-bold text-sm text-ink">
-                <span>Pratinjau Grid Kehadiran Harian Uang Makan</span>
-                <span className="text-xs font-semibold text-teal-deep underline">
-                  <span className="group-open:hidden">Buka pratinjau</span>
-                  <span className="hidden group-open:inline">Tutup</span>
-                </span>
-              </summary>
-              <div className="mt-4 border-t border-line-2 pt-4">
-                <PratinjauAdkUangMakan
-                  data={pratinjauUm}
-                  periodeBulan={bln}
-                  periodeTahun={thn}
-                />
-              </div>
-            </details>
-          )}
-
-          {/* Panel TTE SPTJM PPK (Uang Makan) */}
-          <PanelTteSptjmPpk
-            periodeBulan={bln}
-            periodeTahun={thn}
-            adkAktif="uang-makan"
-            satuanKerja={satkerTerpilih ?? ""}
-            dokumenTteAwal={tteUangMakan}
-            daftarSptjmUnit={daftarSptjmUangMakan}
-          />
-        </div>
-      )}
-
-      {/* ====================================================================
-          6. KONTEN TAB: UANG LEMBUR
-          ==================================================================== */}
-      {adkDipilih === "uang-lembur" && TAMPILKAN_ADK_LEMBUR && (
-        <div className="space-y-6">
-          {/* Kartu Ringkasan Metrik Lembur */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Pegawai Lembur
-              </p>
-              <p className="mt-1 font-mono text-2xl font-black text-ink">
-                {pratinjauLembur.pegawai.length.toLocaleString("id-ID")}{" "}
-                <span className="text-xs font-semibold text-muted">orang</span>
-              </p>
-              <p className="mt-1 text-[11px] text-muted">
-                Pegawai dengan jam lembur sah pada periode ini
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Total Jam Lembur
-              </p>
-              <p className="mt-1 font-mono text-2xl font-black text-teal-deep">
-                {totalJamLembur.toLocaleString("id-ID")}{" "}
-                <span className="text-xs font-semibold text-muted">Jam</span>
-              </p>
-              <p className="mt-1 text-[11px] text-muted">
-                {pratinjauLembur.totalBaris.toLocaleString("id-ID")} baris data harian
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                Estimasi Nominal Lembur
-              </p>
-              <p className="mt-1 font-mono text-2xl font-black text-ink">
-                {formatRupiah(totalLemburRupiah)}
-              </p>
-              <p className="mt-1 text-[11px] text-muted">
-                Uang lembur + uang makan lembur (SBM 2026)
-              </p>
-            </div>
-          </div>
-
-          {/* Unduh Berkas ADK Uang Lembur */}
-          <section className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-ink">
-                  Berkas ADK Uang Lembur (Setoran Web Gaji)
-                </h3>
-                <p className="mt-0.5 text-xs text-muted">
-                  Satu baris per pegawai per hari (NIP + Tanggal + Jam). Yang mengesahkan hak bayar adalah Surat Perintah Lembur resmi.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <a
-                  href={hrefBerkas("xlsx")}
-                  className="btn btn-primary inline-flex items-center gap-2 px-4 py-2 text-xs font-bold shadow-2xs"
-                >
-                  <FiDownload className="size-4" />
-                  <span>Unduh Excel (.xlsx)</span>
-                </a>
-                <a
-                  href={hrefBerkas("txt")}
-                  className="btn btn-ghost inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold"
-                >
-                  <FiFileText className="size-4" />
-                  <span>TXT</span>
-                </a>
-              </div>
-            </div>
-          </section>
-
-          {/* Peringatan & Validasi Lembur */}
-          {(pratinjauLembur.tanpaKalkulasi.length > 0 || pratinjauLembur.selisih.length > 0) && (
-            <div className="rounded-2xl border border-gold/40 bg-gold-tint/40 p-4 text-xs text-ink-2 space-y-2">
-              <p className="font-bold text-gold-deep">
-                Periksa catatan lembur sebelum berkas dikirim:
-              </p>
-              <ul className="list-disc list-inside space-y-1 text-muted">
-                {pratinjauLembur.tanpaKalkulasi.length > 0 && (
-                  <li>
-                    <strong className="text-ink">
-                      {pratinjauLembur.tanpaKalkulasi.length} pegawai
-                    </strong>{" "}
-                    memiliki jam lembur di presensi tetapi belum dihitung pada kalkulasi bulanan.
-                  </li>
-                )}
-                {pratinjauLembur.selisih.length > 0 && (
-                  <li>
-                    <strong className="text-ink">
-                      {pratinjauLembur.selisih.length} pegawai
-                    </strong>{" "}
-                    jam lemburnya berbeda dari rekap bulanan (terjadi perubahan presensi setelah kalkulasi).
-                  </li>
-                )}
-              </ul>
-            </div>
-          )}
-
-          {/* Pratinjau Grid Jam Lembur Harian */}
-          {pratinjauLembur.pegawai.length > 0 && (
-            <details className="group rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-bold text-sm text-ink">
-                <span>Pratinjau Grid Jam Lembur Harian</span>
-                <span className="text-xs font-semibold text-teal-deep underline">
-                  <span className="group-open:hidden">Buka pratinjau</span>
-                  <span className="hidden group-open:inline">Tutup</span>
-                </span>
-              </summary>
-              <div className="mt-4 border-t border-line-2 pt-4">
-                <PratinjauAdkUangLembur
-                  data={pratinjauLembur}
-                  periodeBulan={bln}
-                  periodeTahun={thn}
-                  terbuka={true}
-                />
-              </div>
-            </details>
-          )}
-
-          {/* Panel TTE SPTJM PPK (Uang Lembur) */}
-          <PanelTteSptjmPpk
-            periodeBulan={bln}
-            periodeTahun={thn}
-            adkAktif="uang-lembur"
-            satuanKerja={satkerTerpilih ?? ""}
-            dokumenTteAwal={tteLembur}
-            daftarSptjmUnit={daftarSptjmLembur}
-          />
-        </div>
-      )}
-
-      {/* ====================================================================
-          7. STATUS PENGIRIMAN SELURUH UNIT (COLLAPSIBLE DI BAWAH)
-          ==================================================================== */}
-      <details id="status-unit" className="group rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-sm text-ink">
-              Status Pengiriman Satuan Kerja ({satkerBoleh.length} / {unitAktif.length} Terkunci)
-            </span>
-            <span className="rounded-full bg-teal-tint px-2 py-0.5 text-xs font-bold text-teal-deep">
-              {persentaseTerkirim}%
-            </span>
-          </div>
-          <span className="text-xs font-semibold text-teal-deep underline">
-            <span className="group-open:hidden">Lihat rincian unit</span>
-            <span className="hidden group-open:inline">Tutup</span>
-          </span>
-        </summary>
-        <div className="mt-4 border-t border-line-2 pt-4">
-          <PapanProgres
-            progres={progres}
-            periodeBulan={bln}
-            periodeTahun={thn}
-            bolehKembalikan={canKembalikanRekapUnit(authUser)}
-          />
-        </div>
-      </details>
-
-      {/* ====================================================================
-          8. INFORMASI FORMAT ADK & DOKUMENTASI TEKNIS
-          ==================================================================== */}
-      <details className="group rounded-2xl border border-line bg-surface p-4 shadow-2xs">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-ink">
-          <span>Struktur &amp; Ketentuan Berkas ADK</span>
-          <span className="text-xs font-semibold text-teal-deep underline">
-            <span className="group-open:hidden">Buka panduan</span>
-            <span className="hidden group-open:inline">Tutup</span>
-          </span>
-        </summary>
-        <ul className="mt-3 space-y-2 border-t border-line-2 pt-3 text-xs text-muted leading-relaxed">
-          <li>
-            <strong className="text-ink">Format Setoran PPABP:</strong> Berkas ADK memuat format baku yang diterima langsung oleh Web Gaji Kemenkeu tanpa baris header tambahan atau format tabel dekoratif.
-          </li>
-          <li>
-            <strong className="text-ink">Pemisahan SAKTI:</strong> ADK Tukin wajib dipisah per kode bank SPAN karena aplikasi SAKTI hanya dapat menerbitkan SPP per satu rekening bank operasional yang sama.
-          </li>
-          <li>
-            <strong className="text-ink">Struktur Excel ADK Uang Makan &amp; Lembur:</strong> Terdiri atas sheet <span className="font-mono text-ink">hasil</span> (data mentah setoran) dan sheet <span className="font-mono text-ink">depan</span> (tampilan grid per tanggal untuk audit visual).
-          </li>
-        </ul>
-      </details>
+      <PapanProgres
+        progres={progres}
+        periodeBulan={bln}
+        periodeTahun={thn}
+        bolehKembalikan={canKembalikanRekapUnit(authUser)}
+        status={statusUnit}
+        cari={cariUnit ?? ""}
+        hal={halUnit}
+        per={perUnit}
+        paramDasar={paramDasarPapan}
+      />
     </main>
+  );
+}
+
+/** Logo bank: singkatan dalam kotak berwarna - penanda selain teks nama. */
+function LogoBank({ nama }: { nama: string }) {
+  const n = nama.toUpperCase();
+  const singkat = n.includes("MANDIRI")
+    ? "MDR"
+    : n.includes("NEGARA INDONESIA") || /\bBNI\b/.test(n)
+      ? "BNI"
+      : n.includes("RAKYAT") || /\bBRI\b/.test(n)
+        ? "BRI"
+        : n.includes("SYARIAH") || /\bBSI\b/.test(n)
+          ? "BSI"
+          : n.includes("TABUNGAN NEGARA") || /\bBTN\b/.test(n)
+            ? "BTN"
+            : n
+                .replace(/^BANK\s+/, "")
+                .split(/\s+/)
+                .map((k) => k[0])
+                .join("")
+                .slice(0, 3);
+  const warna =
+    singkat === "MDR"
+      ? "bg-biru/10 text-biru-deep"
+      : singkat === "BNI"
+        ? "bg-gold-tint text-gold-deep"
+        : singkat === "BRI"
+          ? "bg-biru/10 text-navy"
+          : singkat === "BSI"
+            ? "bg-green-tint text-green"
+            : "bg-surface-2 text-ink-2";
+  return (
+    <span aria-hidden className={`grid size-9 shrink-0 place-items-center rounded-lg font-mono text-[11px] font-extrabold ${warna}`}>
+      {singkat}
+    </span>
+  );
+}
+
+/** Satu baris berkas: logo, nama + jumlah pegawai, keterangan, Excel & .txt. */
+function BarisBerkas({
+  logo,
+  judul,
+  jumlah,
+  sub,
+  hrefXlsx,
+  hrefTxt,
+  labelXlsx,
+  latar = false,
+}: {
+  logo: React.ReactNode;
+  judul: string;
+  jumlah: number;
+  sub: string;
+  hrefXlsx: string;
+  hrefTxt: string;
+  labelXlsx: string;
+  latar?: boolean;
+}) {
+  return (
+    <li className={`flex flex-wrap items-center gap-3 px-4 py-3 ${latar ? "bg-surface-2/60" : "bg-surface"}`}>
+      {logo}
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-2 text-sm font-bold text-ink">
+          {judul}
+          <span className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-2">
+            {jumlah} Pegawai
+          </span>
+        </p>
+        <p className="truncate text-xs text-muted">{sub}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <a
+          href={hrefXlsx}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-bold text-white no-underline transition hover:bg-navy-deep"
+        >
+          <FiDownload className="size-4" />
+          {labelXlsx}
+        </a>
+        <a
+          href={hrefTxt}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs font-medium text-ink-2 no-underline transition hover:border-muted"
+        >
+          <FiDownload className="size-3.5" />
+          .txt
+        </a>
+      </div>
+    </li>
   );
 }

@@ -30,6 +30,7 @@ import type { BarisRekapPresensi } from "./rekapPresensi";
 import type { BarisPresensiPdf, LaporanPresensiPdf } from "./presensiPdf";
 import type { JenisCuti } from "../types/index";
 import { uraiJenisCuti, LABEL_JENIS_CUTI } from "./jenisCuti";
+import { TARIF_POTONGAN_PASAL_13 } from "./tukin";
 
 export type KategoriHari =
   | "WFO"
@@ -258,22 +259,65 @@ export function batasLemburMenit(
  */
 
 /**
- * Ketukan yang mustahil sebagai KEDATANGAN: jatuh pada/sesudah jam pulang
- * wajib. Orang tidak memulai hari kerjanya pukul 16:00.
+ * SAKELAR aturan "masuk lewat 100 menit = lupa absen masuk".
  *
- * TODO(confirm) - AMBANGNYA MASIH JAM PULANG WAJIB, dan itu bocor beberapa
- * menit. Juli 2026: 46 baris ditagih >4% sehari untuk ketukan 15:56-16:22,
- * lebih mahal daripada tidak masuk sama sekali (3%, ayat (1)). Kandidat
- * penggantinya pukul 12:00 - dari 559 baris berpotongan di atas 3%, NOL yang
- * jam masuknya sebelum 12:00. Menunggu validasi dampak nominal; jangan
- * diubah sepihak karena menyentuh pembayaran.
+ * TODO(legal-confirm) - KEPUTUSAN KASUBAG TU (2026-11-25), BUKAN bunyi
+ * Pasal 13. Pasal 13 ayat (3) menagih keterlambatan 0,01% per menit TANPA
+ * batas, sehingga datang sangat siang bisa lebih mahal daripada alpa (3%,
+ * ayat (1)) - dan pegawai lebih untung mengambil cuti padahal sudah masuk
+ * kantor. Keputusannya: keterlambatan yang sudah setara 1 kejadian tidak
+ * presensi (1%, ayat (2)) diperlakukan SEBAGAI tidak presensi masuk, jadi
+ * potongan terlambat sehari paling banyak 1%. Menunggu konfirmasi tertulis
+ * OSDMA (butir B-batas-maksimal di docs/permintaan-data-dan-konfirmasi-osdma.md).
+ *
+ * `false` = kembali ke Pasal 13 apa adanya (ambang jam pulang wajib).
+ * Mengubahnya mengubah pembayaran: tarik ulang presensi & hitung ulang Tukin.
+ */
+export const BATAS_MASUK_SETARA_LUPA_ABSEN_AKTIF = true;
+
+/**
+ * Menit keterlambatan (sesudah toleransi) yang biayanya sudah sama dengan
+ * 1 kejadian tidak presensi: 1% / 0,01% = 100 menit. DITURUNKAN dari tarif
+ * Pasal 13, bukan diketik, supaya ikut bergeser kalau tarifnya berubah.
+ */
+export const MENIT_TERLAMBAT_SETARA_LUPA_ABSEN = Math.round(
+  TARIF_POTONGAN_PASAL_13.perKejadianTidakPresensi / TARIF_POTONGAN_PASAL_13.perMenit
+);
+
+/**
+ * Jam masuk paling siang yang masih dihitung sebagai keterlambatan per menit.
+ * Dengan sakelar aktif: 07:30 + toleransi 60 + 100 menit = 10:10. Tanpa
+ * sakelar (atau kalau jam pulang wajib lebih dulu): jam pulang wajib.
+ */
+export function batasJamMasukDipercayaMenit(
+  jamPulangWajibMenit: number,
+  jadwal: JadwalKerja = JADWAL_KERJA_DEFAULT
+): number {
+  if (!BATAS_MASUK_SETARA_LUPA_ABSEN_AKTIF) return jamPulangWajibMenit;
+  const batas = jadwal.jamMasukWajibMenit + jadwal.toleransiTerlambatMenit + MENIT_TERLAMBAT_SETARA_LUPA_ABSEN;
+  return Math.min(batas, jamPulangWajibMenit);
+}
+
+/**
+ * Ketukan masuk yang TIDAK dihitung sebagai kedatangan, melainkan
+ * 1 kejadian tidak melakukan presensi masuk (Pasal 13 ayat (2)):
+ * - pada/sesudah jam pulang wajib - orang tidak memulai hari kerjanya 16:00;
+ * - pada/sesudah 10:10 selama `BATAS_MASUK_SETARA_LUPA_ABSEN_AKTIF` (lihat
+ *   TODO(legal-confirm) di sana).
+ * Lihat `batasJamMasukDipercayaMenit`.
  */
 export function tapMasukMustahil(
   jamMasukMenit: number | null,
   jamPulangWajibMenit: number | null,
-  dikoreksi = false
+  dikoreksi = false,
+  jadwal: JadwalKerja = JADWAL_KERJA_DEFAULT
 ): boolean {
-  return !dikoreksi && jamMasukMenit !== null && jamPulangWajibMenit !== null && jamMasukMenit >= jamPulangWajibMenit;
+  return (
+    !dikoreksi &&
+    jamMasukMenit !== null &&
+    jamPulangWajibMenit !== null &&
+    jamMasukMenit >= batasJamMasukDipercayaMenit(jamPulangWajibMenit, jadwal)
+  );
 }
 
 /**
@@ -730,7 +774,7 @@ export function rekapDariLaporanPdf(
       //
       // Koreksi petugas selalu menang: jam yang sudah diverifikasi manusia
       // terhadap foto & geotag bukan tebakan atas ketukan yang hilang.
-      const masukMustahil = tapMasukMustahil(jamMasukEfektif, jamPulangWajib, masukDikoreksi);
+      const masukMustahil = tapMasukMustahil(jamMasukEfektif, jamPulangWajib, masukDikoreksi, jadwal);
 
       // --- KETUKAN YANG MUSTAHIL SEBAGAI JAM PULANG -------------------------
       // Cerminan aturan di atas, dan sebelumnya TIDAK ADA di jalur ini -
@@ -886,6 +930,12 @@ export function rekapDariLaporanPdf(
         // menagih menit yang sama dua kali.
         if (keluarDipercaya && jamKeluarEfektif !== null && jamPulangWajib !== null) {
           const istirahat = (idxHari === null ? null : ISTIRAHAT_MENIT[idxHari]) ?? 0;
+          // Jam masuk ASLI tetap menggeser kewajiban pulang, termasuk yang
+          // sudah ditagih 1% sebagai tidak presensi masuk (masuk 10:10 ke
+          // atas): batasnya berhenti di jam pulang wajib + toleransi (17:00,
+          // Jumat 17:30), jadi yang masuk mulai 08:30 harus checkout 17:00.
+          // Keputusan user 2026-11-25 - TODO(legal-confirm) bersama
+          // BATAS_MASUK_SETARA_LUPA_ABSEN_AKTIF.
           const batasCheckout = batasCheckoutMenit(jamMasukEfektif, jamPulangWajib, istirahat, jadwal);
           menitPulangCepat = Math.max(0, batasCheckout - jamKeluarEfektif);
           // DUA BATAS YANG BERBEDA, sengaja. Yang di atas ber-batas atas jam
@@ -914,7 +964,9 @@ export function rekapDariLaporanPdf(
         // memang sudah diperbaiki manusia - itu justru penyelesaiannya.
         if (masukMustahil) {
           catatan.push(
-            `${iso}: jam masuk ${b.jamMasukTeks ?? "-"} jatuh sesudah jam pulang wajib (${jamTeks(jamPulangWajib!)}) - tidak mungkin kedatangan, jadi TIDAK ditagih sebagai keterlambatan. Dihitung 1 kejadian tidak melakukan presensi masuk (Pasal 13 ayat (2)). Kalau pegawai punya bukti jam sebenarnya, perbaiki lewat koreksi jam.`
+            jamMasukEfektif !== null && jamPulangWajib !== null && jamMasukEfektif < jamPulangWajib
+              ? `${iso}: jam masuk ${b.jamMasukTeks ?? "-"} pada/sesudah ${jamTeks(batasJamMasukDipercayaMenit(jamPulangWajib, jadwal))} - keterlambatannya sudah setara 1 kejadian tidak presensi, jadi TIDAK ditagih per menit. Dihitung 1 kejadian tidak melakukan presensi masuk (Pasal 13 ayat (2); batas 10:10 keputusan Kasubag TU, menunggu konfirmasi OSDMA). Kalau pegawai punya bukti jam sebenarnya, perbaiki lewat koreksi jam.`
+              : `${iso}: jam masuk ${b.jamMasukTeks ?? "-"} jatuh sesudah jam pulang wajib (${jamTeks(jamPulangWajib!)}) - tidak mungkin kedatangan, jadi TIDAK ditagih sebagai keterlambatan. Dihitung 1 kejadian tidak melakukan presensi masuk (Pasal 13 ayat (2)). Kalau pegawai punya bukti jam sebenarnya, perbaiki lewat koreksi jam.`
           );
         }
         if (keluarMustahil) {

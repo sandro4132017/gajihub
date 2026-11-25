@@ -666,6 +666,17 @@ html {
   }
 }
 
+/* Garis progres navigasi (BarProgresNavigasi): memanjang dari 0 lalu
+   melambat mendekati 85% - tidak pernah penuh sebelum halaman tiba. */
+@keyframes gj-bar-jalan {
+  from {
+    width: 0;
+  }
+  to {
+    width: 85%;
+  }
+}
+
 /* Garis sparkline & cincin gauge digambar dengan mencabut stroke-dashoffset.
    Ini bekerja TANPA JavaScript karena path-nya diberi atribut `pathLength="1"`
    di JSX - panjang path dinormalkan jadi 1, sehingga dasharray/dashoffset bisa

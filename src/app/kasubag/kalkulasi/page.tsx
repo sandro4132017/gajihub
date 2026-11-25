@@ -1,9 +1,7 @@
-import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { canAjukanKalkulasiTukinMassalUnit, canExportRekapUnit, canKoreksiJamPresensi } from "../../../auth/permissions";
 import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { FilterBar } from "../../../components/forms/FilterBar";
-import { InfoIkon } from "./InfoIkon";
 import { resolveSatuanKerjaListUntukFilter } from "../../dashboardScope";
 import { NAMA_BULAN } from "../../../lib/format/bulan";
 import { periodePunyaPredikatKinerja, resolvePeriode } from "../../periodeDefault";
@@ -12,89 +10,65 @@ import { TUKIN_POKOK_PER_KELAS_JABATAN } from "../../../business-logic/tarifTuki
 import { rincianTukinTersimpan } from "../../../business-logic/rincianTukinTersimpan";
 import { LABEL_PREDIKAT } from "../../tukin/predikat-kinerja/predikat";
 import { KalkulasiMassalForm } from "./KalkulasiMassalForm";
-import { PanelKesiapan } from "./PanelKesiapan";
-import { BantuanRincianTukin } from "./BantuanRincianTukin";
 import { SumberAcuan } from "../../../components/shared/SumberAcuan";
 import { ambilSumberData, keSumberAcuan } from "../../sumberData";
 import { periksaKesiapanKalkulasi } from "../../../business-logic/kesiapanKalkulasi";
 import { sebabPerluHitungUlang } from "../../../business-logic/kalkulasiBasi";
 import { namaCetakPegawai } from "../../../business-logic/namaPegawai";
-import { KoreksiLemburForm } from "./KoreksiLemburForm";
 import { Paginasi, hitungPaginasi } from "../../../components/tables/Paginasi";
 import { TabelRincianTukinLengkap } from "../../../components/tables/TabelRincianTukinLengkap";
-import { BadgePejabatEselon } from "../../../components/shared/BadgePejabatEselon";
+import { hitungTapTidakWajarUnit } from "../../../lib/tapTidakWajarDb";
 import { TAMPILKAN_NOMINAL_LEMBUR } from "../../../lib/format/tampilUangLembur";
-import { lemburTeks } from "../../../lib/format/presensiTampilan";
-import { PengecualianForm, BatalPengecualianForm } from "./PengecualianForm";
-import {
-  alasanDariKode,
-  petunjukKemungkinanKeluar,
-} from "../../../business-logic/pengecualianPegawai";
+import { alasanDariKode, petunjukKemungkinanKeluar } from "../../../business-logic/pengecualianPegawai";
 import {
   cekBolehKirim,
   statusUnit,
-  tabelBelumDiverifikasi,
   TABEL_WAJIB_DIVERIFIKASI,
   type JenisTabelKalkulasi,
 } from "../../../business-logic/pengirimanUnit";
-import { KirimRekapForm } from "../kirim/KirimRekapForm";
-import { VerifikasiTabelPanel } from "../kirim/VerifikasiTabelPanel";
+import {
+  URUTAN_SPTJM,
+  pilihDokumenTerbaru,
+  ringkasSyaratTte,
+  waktuTerakhir,
+  type JenisSptjmUnit,
+} from "../../../business-logic/sptjmUnit";
+import {
+  bacaTab,
+  hitungTabelWajibSudah,
+  kandidatAnomali,
+  labelTemuanAnomali,
+  labelSumberData,
+  ringkasKesiapanPegawai,
+  saringPegawai,
+  subSptjmLembur,
+  subSptjmUang,
+  susunChecklist,
+  susunStepper,
+  totalTukinBersih,
+  validasiNominalNol,
+} from "../../../business-logic/tahapKalkulasiUnit";
 import { TabelPemeriksaanLembur } from "./TabelPemeriksaanLembur";
-import { TabelPerubahanPegawai } from "./TabelPerubahanPegawai";
-import { PanelTteSptjm } from "./PanelTteSptjm";
-import { StatusKoneksiBsre } from "../../tte/StatusKoneksiBsre";
+import { KepalaKalkulasi } from "./KepalaKalkulasi";
+import { StepperKalkulasi } from "./StepperKalkulasi";
+import { TahapKesiapan } from "./TahapKesiapan";
+import { SpandukPengembalian } from "./SpandukPengembalian";
+import { TahapKalkulasi } from "./TahapKalkulasi";
+import { TabelTukinRingkas } from "./TabelTukinRingkas";
+import { TabelUangMakan } from "./TabelUangMakan";
+import { TabelKoreksiLemburRinci } from "./TabelKoreksiLemburRinci";
+import { TahapTteSptjm, type DokumenSptjmTampil } from "./TahapTteSptjm";
+import { TahapPengiriman } from "./TahapPengiriman";
 import { HALAMAN } from "../../../components/layout/layoutHalaman";
 import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 
 export const dynamic = "force-dynamic";
 
-const formatRupiah = (nilai: number) =>
-  new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(nilai);
-
-const formatPersen = (nilai: number, desimal = 3) =>
-  new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: desimal }).format(nilai) + "%";
-
 const TARIF_UANG_LEMBUR_DEFAULT = 25_000; // TODO(confirm): sama seperti seedSimulasi.ts, bukan SBM resmi
 
-function NamaPegawai({
-  nama,
-  nip,
-  periodeBulan,
-  periodeTahun,
-  satuanKerja,
-  kelasJabatan,
-}: {
-  nama: string;
-  nip: string;
-  periodeBulan: number;
-  periodeTahun: number;
-  satuanKerja?: string;
-  kelasJabatan?: number | null;
-}) {
-  const q =
-    `?bulan=${periodeBulan}&tahun=${periodeTahun}&dari=kalkulasi` +
-    (satuanKerja ? `&satker=${encodeURIComponent(satuanKerja)}` : "");
-  return (
-    <>
-      <Link
-        href={`/tukin/presensi/${nip}${q}`}
-        className="font-semibold text-teal-deep underline"
-        title={`Lihat rincian presensi harian ${nama}`}
-      >
-        {nama}
-      </Link>
-      <BadgePejabatEselon kelasJabatan={kelasJabatan} />
-    </>
-  );
-}
-
-function BelumAda({ judul }: { judul: string }) {
-  return (
-    <span className="text-muted/60" title={judul}>
-      -
-    </span>
-  );
-}
+const NAMA_HARI_LEMBUR = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const jamTeksLembur = (d: Date | null | undefined) =>
+  d ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : null;
 
 export default async function KalkulasiUnitPage({
   searchParams,
@@ -108,9 +82,13 @@ export default async function KalkulasiUnitPage({
     per?: string;
     halLembur?: string;
     perLembur?: string;
+    tab?: string;
+    q?: string;
+    tinjau?: string;
   }>;
 }) {
-  const { bulan, tahun, satker, rincian, hal, per, halLembur, perLembur } = await searchParams;
+  const { bulan, tahun, satker, rincian, hal, per, halLembur, perLembur, tab: tabMentah, q: qMentah, tinjau } =
+    await searchParams;
   const akses = await ambilAksesUnit(satker);
   if (!akses) {
     return <AksesDitolak pesan="Kamu harus login dulu buat lihat halaman ini." />;
@@ -155,6 +133,7 @@ export default async function KalkulasiUnitPage({
     tahun,
     await periodePunyaPredikatKinerja(satkerEfektif)
   );
+  const namaBulan = NAMA_BULAN[periodeBulan - 1] ?? String(periodeBulan);
 
   // Nama yang akan TERCETAK sebagai penanda tangan SPTJM - sumbernya sama
   // dengan yang dipakai server saat menandatangani (data pegawai akun yang
@@ -164,12 +143,10 @@ export default async function KalkulasiUnitPage({
     where: { nip: authUser.nip },
     select: { nama: true },
   });
-  const namaPenandatanganSptjm = pegawaiPenandatangan
-    ? namaCetakPegawai(pegawaiPenandatangan)
-    : "";
+  const namaPenandatanganSptjm = pegawaiPenandatangan ? namaCetakPegawai(pegawaiPenandatangan) : "";
 
-  // Keadaan pengiriman unit periode ini. Menentukan dua hal sekaligus:
-  // spanduk di atas halaman, dan boleh-tidaknya tombol Kirim muncul.
+  // Keadaan pengiriman unit periode ini. Menentukan: chip di kepala, boleh-
+  // tidaknya tombol Kirim, dan kapan TTE SPTJM dianggap basi.
   const barisPengiriman = await prisma.pengirimanUnit.findUnique({
     where: {
       satuanKerja_periodeBulan_periodeTahun: {
@@ -179,26 +156,16 @@ export default async function KalkulasiUnitPage({
       },
     },
   });
-  // Jenis SPTJM yang ditandatangani SEBELUM rekapnya dikembalikan - dipakai
-  // satu banner di seksi TTE, menggantikan kalimat yang dulu diulang per kartu.
-  const sptjmPerluTteUlang: string[] = [];
-
-  // "A", "A dan B", "A, B, dan C" - tiga jenis SPTJM, jadi bentuk tiga butir
-  // itu yang paling sering muncul.
-  const daftarTeksSptjm = (b: readonly string[]): string =>
-    b.length <= 1 ? (b[0] ?? "") : b.length === 2 ? `${b[0]} dan ${b[1]}` : `${b.slice(0, -1).join(", ")}, dan ${b[b.length - 1]}`;
   const kirimStatus = statusUnit(barisPengiriman);
+  const dikembalikanPada = barisPengiriman?.dikembalikanPada ?? null;
 
   // Centang "sudah saya periksa" per tabel. Dibaca dari database - sumber yang
   // SAMA dengan yang ditagih server saat Kirim ditekan, supaya tombol yang
   // menyala di layar tidak pernah berbeda dari keputusan server.
   const verifikasiTabel = await prisma.verifikasiTabelUnit.findMany({
     where: { satuanKerja: satkerEfektif, periodeBulan, periodeTahun },
-    include: { diverifikasiOleh: { select: { nama: true } } },
   });
   const tabelDiverifikasi = verifikasiTabel.map((v) => v.jenisTabel as JenisTabelKalkulasi);
-
-
   // HANYA PEGAWAI AKTIF - pensiun/berhenti/nonaktif tidak muncul di halaman
   // ini sama sekali (keputusan user 2026-09-02).
   //
@@ -238,97 +205,135 @@ export default async function KalkulasiUnitPage({
   // lenyap dari layar tanpa jejak.
   const pegawaiAktif = pegawaiList.filter((p) => !setDikecualikan.has(p.id));
 
-  // Jumlah jam lembur HARIAN per pegawai - bahan pemeriksaan silang di tabel
-  // Jam Lembur di bawah.
+  // PENCARIAN (?q=) - HANYA menyaring baris tabel. Semua angka di bawah
+  // (jumlah tab, total, kesiapan, syarat kirim) dihitung dari pegawaiList /
+  // pegawaiAktif utuh.
+  const q = (qMentah ?? "").trim().slice(0, 100);
+  const tab = bacaTab(tabMentah);
+  const tampilRinci = rincian === "1";
+  const pegawaiTersaring = saringPegawai(pegawaiList, q);
+
+  // --- Bahan tab Lembur: dimuat HANYA saat tab itu dibuka ------------------
   //
-  // KENAPA DIADU. Rincian harian yang mengalir ke berkas ADK (formatnya per
+  // Jumlah jam lembur HARIAN per pegawai - bahan pemeriksaan silang di tabel
+  // Jam Lembur. Rincian harian yang mengalir ke berkas ADK (formatnya per
   // tanggal) dan total bulanan yang jadi dasar rupiah adalah DUA angka
-  // tersimpan yang berbeda. Seharusnya selalu sama - pembulatan lembur terjadi
-  // per hari di hulu - dan kalau berbeda berarti rekapnya dihitung sebelum
-  // presensinya berubah. Yang dibayar Web Gaji adalah jam di berkas, bukan
-  // angka yang tersimpan, jadi selisihnya wajib terlihat SEBELUM dikirim.
+  // tersimpan yang berbeda. Seharusnya selalu sama - dan kalau berbeda berarti
+  // rekapnya dihitung sebelum presensinya berubah. Yang dibayar Web Gaji
+  // adalah jam di berkas, bukan angka yang tersimpan, jadi selisihnya wajib
+  // terlihat SEBELUM dikirim.
   const awalPeriodeLembur = new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1));
   const akhirPeriodeLembur = new Date(Date.UTC(periodeTahun, periodeBulan, 1));
+  const idSemua = pegawaiList.map((p) => p.id);
 
-  const [lemburHarianPerPegawai, koreksiLemburRows, hariLiburMap] = await Promise.all([
-    prisma.presensiHarian.groupBy({
-      by: ["pegawaiId"],
-      where: {
-        pegawaiId: { in: pegawaiList.map((p) => p.id) },
-        tanggal: {
-          gte: awalPeriodeLembur,
-          lt: akhirPeriodeLembur,
+  const barisLembur: React.ComponentProps<typeof TabelPemeriksaanLembur>["baris"] = await (async () => {
+    if (tab !== "lembur") return [];
+    const [lemburHarianPerPegawai, koreksiLemburRows, hariLiburMap] = await Promise.all([
+      prisma.presensiHarian.groupBy({
+        by: ["pegawaiId"],
+        where: {
+          pegawaiId: { in: idSemua },
+          tanggal: { gte: awalPeriodeLembur, lt: akhirPeriodeLembur },
+          jamLembur: { gt: 0 },
         },
-        jamLembur: { gt: 0 },
-      },
-      _sum: { jamLembur: true },
-    }),
-    prisma.koreksiPresensiHarian.findMany({
-      where: {
-        pegawaiId: { in: pegawaiList.map((p) => p.id) },
-        tanggal: {
-          gte: awalPeriodeLembur,
-          lt: akhirPeriodeLembur,
+        _sum: { jamLembur: true },
+      }),
+      prisma.koreksiPresensiHarian.findMany({
+        where: {
+          pegawaiId: { in: idSemua },
+          tanggal: { gte: awalPeriodeLembur, lt: akhirPeriodeLembur },
+          jamLembur: { not: null },
         },
-        jamLembur: { not: null },
+        select: {
+          id: true,
+          pegawaiId: true,
+          tanggal: true,
+          jamLembur: true,
+          alasan: true,
+          dikoreksiPada: true,
+          dikoreksiOleh: { select: { nama: true } },
+        },
+        orderBy: { tanggal: "asc" },
+      }),
+      muatHariLiburPeriode(periodeBulan, periodeTahun),
+    ]);
+
+    const presensiLemburRows = await prisma.presensiHarian.findMany({
+      where: {
+        pegawaiId: { in: idSemua },
+        tanggal: { gte: awalPeriodeLembur, lt: akhirPeriodeLembur },
+        OR: [{ jamLembur: { gt: 0 } }, { tanggal: { in: koreksiLemburRows.map((k) => k.tanggal) } }],
       },
-      select: {
-        id: true,
-        pegawaiId: true,
-        tanggal: true,
-        jamLembur: true,
-        alasan: true,
-        dikoreksiPada: true,
-        dikoreksiOleh: { select: { nama: true } },
-      },
+      select: { pegawaiId: true, tanggal: true, jamMasuk: true, jamKeluar: true, jamLembur: true },
       orderBy: { tanggal: "asc" },
-    }),
-    muatHariLiburPeriode(periodeBulan, periodeTahun),
-  ]);
+    });
 
-  const presensiLemburRows = await prisma.presensiHarian.findMany({
-    where: {
-      pegawaiId: { in: pegawaiList.map((p) => p.id) },
-      tanggal: {
-        gte: awalPeriodeLembur,
-        lt: akhirPeriodeLembur,
-      },
-      OR: [
-        { jamLembur: { gt: 0 } },
-        { tanggal: { in: koreksiLemburRows.map((k) => k.tanggal) } },
-      ],
-    },
-    select: {
-      pegawaiId: true,
-      tanggal: true,
-      jamMasuk: true,
-      jamKeluar: true,
-      jamLembur: true,
-    },
-    orderBy: { tanggal: "asc" },
-  });
+    const petaLemburHarian = new Map(lemburHarianPerPegawai.map((g) => [g.pegawaiId, { jam: g._sum.jamLembur ?? 0 }]));
+    const petaPresensiPerPegawai = new Map<string, typeof presensiLemburRows>();
+    for (const pr of presensiLemburRows) {
+      const list = petaPresensiPerPegawai.get(pr.pegawaiId) ?? [];
+      list.push(pr);
+      petaPresensiPerPegawai.set(pr.pegawaiId, list);
+    }
+    const petaKoreksiLemburPerPegawai = new Map<string, typeof koreksiLemburRows>();
+    for (const kr of koreksiLemburRows) {
+      const list = petaKoreksiLemburPerPegawai.get(kr.pegawaiId) ?? [];
+      list.push(kr);
+      petaKoreksiLemburPerPegawai.set(kr.pegawaiId, list);
+    }
 
-  const petaLemburHarian = new Map(
-    lemburHarianPerPegawai.map((g) => [g.pegawaiId, { jam: g._sum.jamLembur ?? 0 }])
-  );
+    return pegawaiList.map((p) => {
+      const lembur = p.uangLembur[0];
+      const harian = petaLemburHarian.get(p.id);
+      const daftarPresensi = petaPresensiPerPegawai.get(p.id) ?? [];
+      const daftarKoreksi = petaKoreksiLemburPerPegawai.get(p.id) ?? [];
+      const petaKoreksiTgl = new Map(daftarKoreksi.map((k) => [k.tanggal.toISOString().slice(0, 10), k]));
+      const petaPresensiTgl = new Map(daftarPresensi.map((pr) => [pr.tanggal.toISOString().slice(0, 10), pr]));
+      const semuaTanggalIso = Array.from(new Set([...petaPresensiTgl.keys(), ...petaKoreksiTgl.keys()])).sort();
 
-  const petaPresensiPerPegawai = new Map<string, typeof presensiLemburRows>();
-  for (const pr of presensiLemburRows) {
-    const list = petaPresensiPerPegawai.get(pr.pegawaiId) ?? [];
-    list.push(pr);
-    petaPresensiPerPegawai.set(pr.pegawaiId, list);
-  }
+      const rincianHari = semuaTanggalIso.map((iso) => {
+        const pr = petaPresensiTgl.get(iso);
+        const kr = petaKoreksiTgl.get(iso);
+        const d = pr ? pr.tanggal : kr!.tanggal;
+        const day = d.getUTCDay();
+        const liburKeterangan = hariLiburMap.get(iso);
+        const isHariLibur = day === 0 || day === 6 || !!liburKeterangan;
+        const keteranganHari = liburKeterangan ? liburKeterangan : day === 0 || day === 6 ? "Akhir Pekan" : "Hari Kerja";
+        const [y, b, h] = iso.split("-");
+        return {
+          tanggalIso: iso,
+          tanggalTampil: `${NAMA_HARI_LEMBUR[day]}, ${h}/${b}/${y}`,
+          isHariLibur,
+          keteranganHari,
+          jamMasuk: jamTeksLembur(pr?.jamMasuk),
+          jamKeluar: jamTeksLembur(pr?.jamKeluar),
+          jamMesin: pr?.jamLembur ?? 0,
+          jamSaatIni: kr?.jamLembur ?? pr?.jamLembur ?? 0,
+          koreksi: kr
+            ? {
+                id: kr.id,
+                jamLembur: kr.jamLembur,
+                alasan: kr.alasan,
+                dikoreksiOlehNama: kr.dikoreksiOleh.nama,
+                dikoreksiPada: kr.dikoreksiPada.toISOString(),
+              }
+            : null,
+        };
+      });
 
-  const petaKoreksiLemburPerPegawai = new Map<string, typeof koreksiLemburRows>();
-  for (const kr of koreksiLemburRows) {
-    const list = petaKoreksiLemburPerPegawai.get(kr.pegawaiId) ?? [];
-    list.push(kr);
-    petaKoreksiLemburPerPegawai.set(kr.pegawaiId, list);
-  }
+      return {
+        pegawaiId: p.id,
+        nip: p.nip,
+        nama: p.nama,
+        jamHariKerja: lembur?.jamLemburHariKerja ?? null,
+        jamHariLibur: lembur?.jamLemburHariLibur ?? null,
+        totalTersimpan: lembur?.totalJamLembur ?? null,
+        jamHarian: harian?.jam ?? 0,
+        rincianHari,
+      };
+    });
+  })();
 
-  const NAMA_HARI_LEMBUR = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-  const jamTeksLembur = (d: Date | null | undefined) =>
-    d ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : null;
   // Berapa hari presensi tiap orang pernah dikoreksi manual pada periode ini.
   //
   // Bukan cacat data - justru sebaliknya. Ditampilkan karena yang memeriksa
@@ -338,16 +343,13 @@ export default async function KalkulasiUnitPage({
     by: ["pegawaiId"],
     where: {
       pegawaiId: { in: pegawaiAktif.map((p) => p.id) },
-      tanggal: {
-        gte: new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1)),
-        lt: new Date(Date.UTC(periodeTahun, periodeBulan, 1)),
-      },
+      tanggal: { gte: awalPeriodeLembur, lt: akhirPeriodeLembur },
     },
     _count: { _all: true },
   });
   const petaKoreksi = new Map(koreksiPeriode.map((k) => [k.pegawaiId, k._count._all]));
 
-  // DAFTAR PERUBAHAN DATA KEPEGAWAIAN unit ini.
+  // PERUBAHAN DATA KEPEGAWAIAN unit ini - dipakai menandai angka basi.
   //
   // Jendelanya mulai dari AWAL BULAN PERIODE, bukan dari tanggal kalkulasi:
   // perubahan yang terjadi di tengah bulan - sebelum angkanya dihitung - tetap
@@ -361,7 +363,7 @@ export default async function KalkulasiUnitPage({
   // kasus yang paling perlu terlihat.
   const perubahanPegawai = await prisma.perubahanDataPegawai.findMany({
     where: {
-      terdeteksiPada: { gte: new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1)) },
+      terdeteksiPada: { gte: awalPeriodeLembur },
       // OR, bukan satu kolom: orang yang PINDAH KELUAR tercatat dengan unit
       // ini di `satuanKerjaDari` dan unit lain di `satuanKerjaKe`. Kalau cuma
       // salah satu yang diperiksa, salah satu unit tidak pernah tahu.
@@ -377,94 +379,68 @@ export default async function KalkulasiUnitPage({
     const ada = petaPerubahanTerbaru.get(c.nip);
     if (!ada || c.terdeteksiPada > ada) petaPerubahanTerbaru.set(c.nip, c.terdeteksiPada);
   }
-  // Kapan kalkulasi tiap pegawai dibekukan - pembanding untuk menandai
-  // perubahan yang datang terlambat. Pegawai yang belum punya kalkulasi tidak
-  // masuk peta, dan barisnya memang tidak perlu ditandai: tidak ada angka
-  // basi kalau belum ada angka sama sekali.
-  const petaKalkulasiPerNip = new Map<string, Date>(
-    pegawaiAktif.flatMap((p) => (p.tukinCalc[0] ? [[p.nip, p.tukinCalc[0].calculatedAt] as const] : []))
-  );
-
   const sumberData = await ambilSumberData({
     satuanKerja: satkerEfektif,
     periodeBulan,
     periodeTahun,
   });
 
-  const [tteTukin, tteUangMakan, tteLembur] = await Promise.all([
-    prisma.dokumenTte
-      .findFirst({
-        where: {
-          satuanKerja: satkerEfektif,
-          periodeBulan,
-          periodeTahun,
-          jenisDokumen: "SPTJM_TUKIN",
-        },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          status: true,
-          nomorDokumen: true,
-          fileSignedPath: true,
-          signedAt: true,
-          penandatanganNama: true,
-        },
-      })
-      .catch(() => null),
-    prisma.dokumenTte
-      .findFirst({
-        where: {
-          satuanKerja: satkerEfektif,
-          periodeBulan,
-          periodeTahun,
-          jenisDokumen: "SPTJM_UANG_MAKAN",
-        },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          status: true,
-          nomorDokumen: true,
-          fileSignedPath: true,
-          signedAt: true,
-          penandatanganNama: true,
-        },
-      })
-      .catch(() => null),
-    prisma.dokumenTte
-      .findFirst({
-        where: {
-          satuanKerja: satkerEfektif,
-          periodeBulan,
-          periodeTahun,
-          jenisDokumen: "SPTJM_LEMBUR",
-        },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          status: true,
-          nomorDokumen: true,
-          fileSignedPath: true,
-          signedAt: true,
-          penandatanganNama: true,
-        },
-      })
-      .catch(() => null),
-  ]);
+  // --- TTE SPTJM -----------------------------------------------------------
+  // Dokumen TERBARU per jenis, dan penilaian sah/basi/belum, memakai fungsi
+  // yang SAMA dengan gerbang di server (business-logic/sptjmUnit.ts).
+  const dokumenRows = await prisma.dokumenTte
+    .findMany({
+      where: {
+        satuanKerja: satkerEfektif,
+        periodeBulan,
+        periodeTahun,
+        jenisDokumen: { in: [...URUTAN_SPTJM] },
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        jenisDokumen: true,
+        status: true,
+        nomorDokumen: true,
+        fileSignedPath: true,
+        signedAt: true,
+        penandatanganNama: true,
+        createdAt: true,
+      },
+    })
+    .catch(() => []);
+  const dokumenTerbaru = pilihDokumenTerbaru(dokumenRows);
+  // Kalkulasi terakhir tiap komponen: SPTJM yang ditandatangani sebelum
+  // hitung ulang wajib ditandatangani ulang (sama dengan gerbang di server).
+  const dihitungTerakhir = {
+    SPTJM_TUKIN: waktuTerakhir(pegawaiList.map((p) => p.tukinCalc[0]?.calculatedAt)),
+    SPTJM_UANG_MAKAN: waktuTerakhir(pegawaiList.map((p) => p.uangMakan[0]?.calculatedAt)),
+    SPTJM_LEMBUR: waktuTerakhir(pegawaiList.map((p) => p.uangLembur[0]?.calculatedAt)),
+  };
+  const tte = ringkasSyaratTte({
+    dokumen: dokumenTerbaru,
+    dikembalikanPada,
+    lemburWajib: TAMPILKAN_NOMINAL_LEMBUR,
+    dihitungTerakhir,
+  });
+  const jenisPerluUlang = URUTAN_SPTJM.filter((j) => tte.statusPerJenis[j] === "PERLU_TTE_ULANG");
+  const dokumenTampil = Object.fromEntries(
+    URUTAN_SPTJM.map((j) => {
+      const d = dokumenTerbaru[j];
+      const tampil: DokumenSptjmTampil | null = d
+        ? {
+            id: d.id,
+            status: d.status,
+            nomorDokumen: d.nomorDokumen,
+            fileSignedPath: d.fileSignedPath,
+            signedAt: d.signedAt ? d.signedAt.toISOString() : null,
+            penandatanganNama: d.penandatanganNama,
+          }
+        : null;
+      return [j, tampil];
+    }),
+  ) as Record<JenisSptjmUnit, DokumenSptjmTampil | null>;
 
-
-  {
-    const dikembalikan = barisPengiriman?.dikembalikanPada ?? null;
-    if (dikembalikan) {
-      const basi = (d: { status: string; signedAt: Date | null } | null, label: string) => {
-        if (d?.status === "TERTANDATANGANI" && d.signedAt && d.signedAt < dikembalikan) {
-          sptjmPerluTteUlang.push(label);
-        }
-      };
-      basi(tteTukin, "Tukin");
-      basi(tteUangMakan, "Uang Makan");
-      basi(tteLembur, "Uang Lembur");
-    }
-  }
   // Pemeriksaan kelengkapan SEBELUM tombol Hitung. Yang dikecualikan sudah
   // keluar lewat `pegawaiAktif` di atas - lihat alasannya di
   // src/business-logic/kesiapanKalkulasi.ts.
@@ -492,13 +468,32 @@ export default async function KalkulasiUnitPage({
       };
     })
   );
+  const ringkasKesiapan = ringkasKesiapanPegawai(kesiapan);
 
-  const belumPunyaPredikat = pegawaiAktif.filter(
-    (p) => p.predikatKinerja.length === 0,
-  );
-  const belumPunyaPresensi = pegawaiAktif.filter(
-    (p) => p.rekapPresensi.length === 0,
-  );
+  const belumPunyaPredikat = pegawaiAktif.filter((p) => p.predikatKinerja.length === 0);
+  const belumPunyaPresensi = pegawaiAktif.filter((p) => p.rekapPresensi.length === 0);
+
+  // Kandidat pengecualian = tanpa predikat UNION kehadiran 0 hari sebulan.
+  const petaPegawaiAktif = new Map(pegawaiAktif.map((p) => [p.nip, p]));
+  const kandidat = kandidatAnomali(kesiapan.perPegawai).flatMap((k) => {
+    const p = petaPegawaiAktif.get(k.nip);
+    if (!p) return [];
+    return [
+      {
+        id: p.id,
+        nama: p.nama,
+        nip: p.nip,
+        temuan: labelTemuanAnomali(k.temuan),
+        petunjuk: petunjukKemungkinanKeluar({
+          jumlahHariKerja: p.rekapPresensi[0]?.jumlahHariKerja ?? 0,
+          jumlahHariHadir: p.rekapPresensi[0]?.jumlahHariHadir ?? 0,
+          punyaPredikat: p.predikatKinerja.length > 0,
+          jumlahHariCuti: p.rekapPresensi[0]?.jumlahHariCuti ?? 0,
+          jumlahHariTugasBelajar: p.rekapPresensi[0]?.jumlahHariTugasBelajar ?? 0,
+        }),
+      },
+    ];
+  });
 
   // Angka Tukin yang tampil di tabel adalah nilai TERSIMPAN, dibekukan saat
   // tombol Hitung ditekan. Kalau presensi atau predikatnya berubah setelah
@@ -516,7 +511,6 @@ export default async function KalkulasiUnitPage({
       predikatSyncedAt: p.predikatKinerja[0]?.sourceSyncedAt ?? null,
       perubahanDataTerakhir: petaPerubahanTerbaru.get(p.nip) ?? null,
     });
-
     return sebab.length > 0 ? sebab.join(" & ") : null;
   };
   const jumlahPerluHitungUlang = pegawaiAktif.filter((p) => perluHitungUlang(p) !== null).length;
@@ -525,446 +519,130 @@ export default async function KalkulasiUnitPage({
   // tercatat) SENGAJA TIDAK ditampilkan - permintaan user, dua kali: pertama
   // di halaman Predikat Kinerja, lalu di kartu ini. Yang perlu diketahui
   // Kasubag TU cuma BERAPA yang sudah punya predikat, bukan siapa penilainya.
-  // `unitPenilaian` tetap tersimpan dan tetap bisa dilihat per pegawai.
 
-  const tampilRinci = rincian === "1";
+  // --- Angka ringkasan (SELURUH pegawai aktif, bukan halaman & bukan hasil cari)
+  const jumlahKalkulasi = pegawaiAktif.filter((p) => p.tukinCalc.length > 0).length;
+  const totalTukin = totalTukinBersih(pegawaiAktif.map((p) => p.tukinCalc[0]?.tukinBersih));
+  const pegawaiPunyaMakan = pegawaiAktif.filter((p) => p.uangMakan.length > 0);
+  const totalMakan = pegawaiPunyaMakan.reduce((n, p) => n + (p.uangMakan[0]?.totalUangMakan ?? 0), 0);
+  const pegawaiBerlembur = pegawaiAktif.filter((p) => (p.uangLembur[0]?.totalJamLembur ?? 0) > 0);
+  const totalJamLembur = pegawaiBerlembur.reduce((n, p) => n + (p.uangLembur[0]?.totalJamLembur ?? 0), 0);
+  const totalUangLembur = pegawaiBerlembur.reduce((n, p) => n + (p.uangLembur[0]?.totalUangLembur ?? 0), 0);
+  const nominalNol = validasiNominalNol(
+    pegawaiAktif.map((p) => ({ nip: p.nip, nama: p.nama, tukinBersih: p.tukinCalc[0]?.tukinBersih ?? null })),
+  );
+
+  const checklist = susunChecklist({
+    tte,
+    nominalNol,
+    totalPegawai: pegawaiAktif.length,
+    jumlahKalkulasi,
+    jumlahBasi: jumlahPerluHitungUlang,
+    tabelDiverifikasi,
+  });
+  // GERBANG YANG SAMA dengan kirimRekapUnitAction di server. Pembaginya
+  // `pegawaiAktif` (tanpa yang dikecualikan) - WAJIB sama dengan hitungan di
+  // server, kalau berbeda tombolnya menyala tapi server menolak.
+  const alasanTertahan = cekBolehKirim(
+    {
+      totalPegawai: pegawaiAktif.length,
+      jumlahKalkulasi,
+      tabelDiverifikasi,
+      // Punya baris Tukin TIDAK SAMA DENGAN siap kirim: baris yang sumbernya
+      // sudah berubah atau dihapus tetap berdiri dengan angka lama.
+      jumlahBasi: jumlahPerluHitungUlang,
+      sptjm: { dokumen: dokumenTerbaru, dikembalikanPada, lemburWajib: TAMPILKAN_NOMINAL_LEMBUR },
+    },
+    kirimStatus,
+  ).alasan;
+
+  const stepper = susunStepper({
+    kesiapan: ringkasKesiapan,
+    kalkulasiLengkap: pegawaiAktif.length > 0 && jumlahKalkulasi >= pegawaiAktif.length && jumlahPerluHitungUlang === 0,
+    tte,
+    tabelWajibSudah: hitungTabelWajibSudah(tabelDiverifikasi),
+    tabelWajib: TABEL_WAJIB_DIVERIFIKASI.length,
+    keadaan: kirimStatus.keadaan,
+    jumlahDikecualikan: pengecualian.length,
+  });
+
+  // --- URL ------------------------------------------------------------------
   const paramDasar = new URLSearchParams({
     bulan: String(periodeBulan),
     tahun: String(periodeTahun),
     satker: satkerEfektif,
   });
-
-  const paramMode = new URLSearchParams(paramDasar);
-  if (per) paramMode.set("per", per);
-  const linkRinci = `/kasubag/kalkulasi?${paramMode.toString()}&rincian=1`;
-  const linkRingkas = `/kasubag/kalkulasi?${paramMode.toString()}`;
-
-  const paginasi = hitungPaginasi(pegawaiList.length, hal, per);
-  const pegawaiHalaman = pegawaiList.slice(paginasi.mulai, paginasi.selesai);
+  const urlDengan = (tambahan: Record<string, string | undefined>, jangkar: string) => {
+    const p = new URLSearchParams(paramDasar);
+    for (const [k, v] of Object.entries(tambahan)) if (v) p.set(k, v);
+    return `/kasubag/kalkulasi?${p.toString()}${jangkar}`;
+  };
+  const bawaan = { q: q || undefined, per };
+  const hrefTab = {
+    tukin: urlDengan({ ...bawaan, rincian: tampilRinci ? "1" : undefined }, "#tahap-2"),
+    makan: urlDengan({ ...bawaan, tab: "makan" }, "#tahap-2"),
+    lembur: urlDengan({ ...bawaan, tab: "lembur", rincian: tampilRinci ? "1" : undefined }, "#tahap-2"),
+  };
+  const hrefRincian = urlDengan({ ...bawaan, rincian: "1" }, "#tahap-2");
+  const hrefRingkas = urlDengan(bawaan, "#tahap-2");
+  const hrefTinjau = urlDengan({ tinjau: "1" }, "#kecualikan");
+  const paramForm: Record<string, string> = {
+    bulan: String(periodeBulan),
+    tahun: String(periodeTahun),
+    satker: satkerEfektif,
+    ...(tab !== "tukin" ? { tab } : {}),
+    ...(tampilRinci ? { rincian: "1" } : {}),
+    ...(per ? { per } : {}),
+  };
+  // Paginasi tukin/makan. Tabel Jam Lembur punya paginasinya sendiri
+  // (halLembur/perLembur) dan membawa posisi halaman lainnya.
   const paramPaginasi = new URLSearchParams(paramDasar);
+  if (tab !== "tukin") paramPaginasi.set("tab", tab);
+  if (q) paramPaginasi.set("q", q);
   if (tampilRinci) paramPaginasi.set("rincian", "1");
-  // Tabel Rincian Jam Lembur punya paginasinya sendiri (halLembur/perLembur).
-  // Masing-masing membawa posisi halaman tabel lainnya, supaya pindah halaman
-  // di satu tabel tidak mengembalikan tabel lain ke halaman 1.
   const paramPaginasiLembur = new URLSearchParams(paramPaginasi);
   if (hal) paramPaginasiLembur.set("hal", hal);
   if (per) paramPaginasiLembur.set("per", per);
   if (halLembur) paramPaginasi.set("halLembur", halLembur);
   if (perLembur) paramPaginasi.set("perLembur", perLembur);
 
-  return (
-    <main className={HALAMAN}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight text-navy sm:text-3xl">
-            Kalkulasi Unit
-            {/* BADGE, bukan kartu berisi pesan PPABP. Pesan lengkapnya ada di
-                panel Kirim di kaki halaman - lihat catatan di sana.
-                Yang dibutuhkan di puncak halaman cuma SATU hal: halaman ini
-                sedang dalam tahap apa. Pesan detail di sini dibaca sekali di
-                awal, lalu tergulir hilang justru pada saat orang selesai
-                memperbaiki dan hendak mengirim ulang. */}
-            {kirimStatus.keadaan === "DIKEMBALIKAN" && (
-              <a
-                href="#kirim"
-                className="chip chip-danger align-middle text-[11px] no-underline hover:brightness-95"
-                title="PPABP mengembalikan rekap periode ini - klik untuk melompat ke catatannya di panel Kirim."
-              >
-                Revisi dari PPABP
-              </a>
-            )}
-            <SumberAcuan
-              judul="Dasar aturan"
-              sumber={keSumberAcuan(sumberData)}
-              acuan={[
-                { aturan: "Pasal 5 Permenaker 15/2024", tentang: "Bobot 70% capaian kinerja + 30% kehadiran" },
-                { aturan: "Lampiran Permenaker 15/2024", tentang: "Tukin pokok per kelas jabatan" },
-                { aturan: "Pasal 13 Permenaker 15/2024", tentang: "Potongan kehadiran - alpha, lupa absen, terlambat, pulang cepat" },
-                { aturan: "Pasal 14 Permenaker 15/2024", tentang: "Persentase yang dibayarkan selama cuti" },
-                { aturan: "Kepsekjen 82/2025", tentang: "Konversi predikat kinerja ke persentase" },
-                { aturan: "PP 94/2021", tentang: "Kelas jabatan yang turun selama hukuman disiplin" },
-                { aturan: "PMK 32/2025", tentang: "Tarif uang makan & uang lembur (SBM 2026)" },
-              ]}
-              catatan="Pejabat pimpinan tinggi (kelas jabatan 15 ke atas) dibayar penuh komponen kehadirannya - mengikuti praktik pembayaran yang berjalan, bukan pasal di Permenaker 15/2024."
-            />
-          </h1>
-          <p className="mt-0.5 text-sm font-bold text-ink">
-            {satkerEfektif} &middot; {NAMA_BULAN[periodeBulan - 1]} {periodeTahun}
-          </p>
-          <p className="mt-2 text-sm text-biru">
-            Hitung Tukin dan Uang Makan seluruh pegawai unit ini untuk satu periode, lalu kirim rekapnya ke PPABP.
-          </p>
-        </div>
-        {/*
-          Membawa periode & unit yang SEDANG DILIHAT. Berkasnya memuat SEMUA
-          baris apa pun statusnya - itu memang gunanya: dipakai memeriksa
-          SEBELUM dikirim. Yang disetor ke Web Gaji tetap ADK di /ppabp/adk,
-          dan itu hanya unit yang sudah dikirim & dikunci.
-        */}
-        {bolehExportRekap && (
-          <a
-            href={`/kasubag/kalkulasi/export?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}
-            className="btn btn-secondary"
-          >
-            Unduh Excel
-          </a>
-        )}
-      </div>
+  const paginasi = hitungPaginasi(pegawaiTersaring.length, hal, per);
+  const pegawaiHalaman = pegawaiTersaring.slice(paginasi.mulai, paginasi.selesai);
+  const kaki = (
+    <Paginasi
+      basePath="/kasubag/kalkulasi"
+      params={paramPaginasi}
+      info={paginasi}
+      totalBaris={pegawaiTersaring.length}
+      labelBaris="pegawai"
+      anchor="tahap-2"
+      varian="ringan"
+    />
+  );
+  const hrefNama = (nip: string) =>
+    `/tukin/presensi/${nip}?bulan=${periodeBulan}&tahun=${periodeTahun}&dari=kalkulasi&satker=${encodeURIComponent(satkerEfektif)}`;
+  const kosongKarena =
+    pegawaiList.length === 0
+      ? "Belum ada pegawai aktif di unit ini pada periode ini."
+      : `Tidak ada pegawai yang cocok dengan pencarian "${q}".`;
 
-      {/* SATU KARTU: filter periode + ringkasan kesiapan datanya.
-          Keduanya menjawab pertanyaan yang sama - "periode ini, unit ini,
-          datanya bagaimana" - dan waktu jadi dua kartu bertumpuk, angka
-          kesiapannya terbaca seperti urusan terpisah dari periode yang baru
-          saja dipilih. */}
-      <div className="card mt-4 p-4">
-        <FilterBar
-          tanpaKartu
-          wajibPeriode
-          wajibSatker
-          satuanKerjaList={satuanKerjaList}
-          bulan={String(periodeBulan)}
-          tahun={String(periodeTahun)}
-          satker={satkerEfektif}
-        />
-        {/* Pemeriksaan kelengkapan - SEBELUM tombol hitung, supaya ketahuan
-            lebih dulu daripada setelah kalkulasi terlanjur jalan. */}
-        <PanelKesiapan
-          ringkasan={kesiapan}
-          tanpaKartu
-          sumber={[
-            {
-              nama: "Rekap presensi",
-              bobot: "30%",
-              terisi: pegawaiAktif.length - belumPunyaPresensi.length,
-              dari: pegawaiAktif.length,
-              href: "/tukin/presensi",
-              labelAksi: "Kelola presensi",
-            },
-            {
-              nama: "Predikat kinerja",
-              bobot: "70%",
-              terisi: pegawaiAktif.length - belumPunyaPredikat.length,
-              dari: pegawaiAktif.length,
-              href: "/tukin/predikat-kinerja",
-              labelAksi: "Kelola predikat kinerja",
-            },
-          ]}
-        />
-      </div>
-
-      {/* Daftar yang sedang dikecualikan. WAJIB TAMPIL - kalau orang yang
-          dikeluarkan dari hitungan tidak kelihatan di mana pun, pengecualian
-          berubah jadi cara menghilangkan orang tanpa jejak. */}
-      {pengecualian.length > 0 && (
-        <section className="card mt-4 p-4">
-          <h2 className="text-sm font-bold text-ink">
-            {pengecualian.length} pegawai dikecualikan dari periode ini
-          </h2>
-          <p className="mt-0.5 text-xs text-muted">
-            Tidak dihitung dan tidak ikut ke PPABP. Laporkan ke PPABP supaya
-            data SIAP diperbaiki.
-          </p>
-          <ul className="mt-2 space-y-1.5 text-xs">
-            {pengecualian.map((x) => (
-              <li key={x.id} className="flex flex-wrap items-baseline gap-x-2">
-                <span className="font-medium text-ink">{x.pegawai.nama}</span>
-                <span className="text-muted">({x.pegawai.nip})</span>
-                <span className="chip chip-draft">
-                  {alasanDariKode(x.alasanKode)?.label ?? x.alasanKode}
-                </span>
-                {x.penjelasan && (
-                  <span className="text-muted">- {x.penjelasan}</span>
-                )}
-                <BatalPengecualianForm
-                  pegawaiId={x.pegawaiId}
-                  periodeBulan={periodeBulan}
-                  periodeTahun={periodeTahun}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* SPANDUK KEADAAN - ditaruh PALING ATAS, sebelum data apa pun.
-          Orang yang membuka halaman ini untuk memperbaiki sesuatu harus tahu
-          lebih dulu apakah perbaikannya bisa disimpan, bukan setelah mengisi
-          form dan ditolak server. */}
-      {kirimStatus.keadaan === "TERKIRIM" && (
-        <div className="card mt-4 border-l-4 border-l-green p-4">
-          <p className="text-sm font-bold text-ink">
-            Rekap periode ini sudah dikirim &amp; terkunci
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            Kalkulasi tidak bisa dijalankan ulang selama masih terkunci. Kalau
-            ada yang perlu diperbaiki, minta PPABP mengembalikannya lebih dulu.
-          </p>
-        </div>
-      )}
-      {/* Kartu "Sumber data periode ini" DICABUT - kedua angkanya (47/48)
-          pindah jadi checklist di panel kesiapan, supaya tidak ada dua tempat
-          yang menyebut angka yang sama.
-
-          Peringatan angka basi TIDAK ikut pindah: itu urusan berbeda (angka
-          yang SUDAH dihitung kini kedaluwarsa), dan sekarang berdiri sendiri -
-          kartunya cuma muncul kalau memang ada yang basi, tidak lagi menyisakan
-          kotak kosong waktu semuanya mutakhir.
-
-          Angka Tukin dibekukan saat dihitung. Kalau sumbernya berubah setelah
-          itu, tabel di bawah menampilkan angka lama tanpa tanda - dan itu
-          terbaca sebagai "koreksi saya tidak berpengaruh". */}
-      {/* KECUALIKAN PEGAWAI - satu-satunya jalan keluar untuk orang yang memang
-          sudah tidak seharusnya dihitung di unit ini (mis. sudah mutasi tapi
-          SIAP belum diperbarui). Sempat HILANG dari halaman waktu kartu
-          "Sumber data periode ini" dibongkar - formnya dulu menempel pada
-          daftar pegawai tanpa predikat di dalam kartu itu.
-
-          DILIPAT, dan itu disengaja: sebagian besar periode tidak
-          membutuhkannya, sementara tombol "kecualikan" yang selalu terbuka di
-          sebelah tiap nama mengundang dipakai sebagai jalan pintas
-          menghilangkan orang yang datanya cuma belum lengkap. */}
-      {belumPunyaPredikat.length > 0 && (
-        <details className="card mt-4 p-4">
-          <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 text-sm font-bold text-ink [&::-webkit-details-marker]:hidden">
-            Kecualikan pegawai dari perhitungan
-            <span className="font-mono text-xs font-bold text-muted">{belumPunyaPredikat.length} kandidat</span>
-            {/* Ikon "i" AMAN di dalam <summary> - InfoIkon seluruhnya <span>.
-                Sebab tersering dijelaskan di sini, bukan di badan kartu:
-                orang yang sudah tahu tidak perlu membacanya tiap kali, dan
-                yang baru pertama kali membuka kartu ini justru butuh tahu
-                lebih dulu sebelum memutuskan mengeluarkan seseorang. */}
-            <InfoIkon
-              judul="Kapan ini dipakai"
-              poin={[
-                {
-                  judul: "Data SIAP belum diperbarui—sebab tersering",
-                  isi: "Pegawai sudah mutasi atau berhenti, tapi SIAP masih mencatatnya di unit ini. Gajihub menyalin SIAP apa adanya tiap malam, jadi selama SIAP belum berubah, namanya tetap muncul di sini.",
-                },
-                {
-                  judul: "BUKAN untuk data yang sekadar belum lengkap",
-                  isi: "Predikat kinerja yang belum diupload cukup ditagih ke penilainya, atau dilewati sekali jalan lewat kotak centang di panel Kalkulasi.",
-                },
-              ]}
-              catatan="Yang dikecualikan tidak dihitung dan tidak ikut dikirim ke PPABP, tapi tetap terlihat di daftar beserta alasannya—pengecualian tidak boleh jadi cara menghilangkan orang tanpa jejak."
-            />
-          </summary>
-          <p className="mt-1 text-xs text-muted">
-            Gunakan fitur ini khusus untuk pegawai yang memang sudah tidak seharusnya dihitung di unit ini—bukan
-            untuk pegawai yang datanya sekadar belum lengkap. Pegawai yang dikecualikan akan tetap tampil di daftar
-            atas beserta alasannya.
-          </p>
-          <ul className="mt-3 space-y-2 text-xs">
-            {belumPunyaPredikat.slice(0, 15).map((p) => (
-              <li key={p.id} className="border-l-2 border-line pl-3">
-                <span className="font-medium text-ink">{p.nama}</span>{" "}
-                <span className="text-muted">({p.nip})</span>
-                <PengecualianForm
-                  pegawaiId={p.id}
-                  nama={p.nama}
-                  periodeBulan={periodeBulan}
-                  periodeTahun={periodeTahun}
-                  petunjuk={petunjukKemungkinanKeluar({
-                    jumlahHariKerja: p.rekapPresensi[0]?.jumlahHariKerja ?? 0,
-                    jumlahHariHadir: p.rekapPresensi[0]?.jumlahHariHadir ?? 0,
-                    punyaPredikat: p.predikatKinerja.length > 0,
-                    jumlahHariCuti: p.rekapPresensi[0]?.jumlahHariCuti ?? 0,
-                    jumlahHariTugasBelajar: p.rekapPresensi[0]?.jumlahHariTugasBelajar ?? 0,
-                  })}
-                />
-              </li>
-            ))}
-          </ul>
-          {belumPunyaPredikat.length > 15 && (
-            <p className="mt-2 text-xs text-muted">
-              Menampilkan 15 dari {belumPunyaPredikat.length}. Sisanya muncul setelah yang ini ditangani.
-            </p>
-          )}
-        </details>
-      )}
-
-      {jumlahPerluHitungUlang > 0 && (
-        <div className="card mt-4 border-l-4 border-l-gold p-4 text-xs text-ink-2">
-          <p className="text-sm font-semibold text-ink">
-            {jumlahPerluHitungUlang} pegawai perlu dihitung ulang - angka Tukin-nya sudah basi.
-          </p>
-          {/* Sebabnya: presensi/predikat berubah SETELAH Tukin terakhir
-              dihitung (mis. presensi ditarik ulang karena koreksi jam), jadi
-              angka di tabel masih yang lama. Tidak ditulis di layar - yang
-              perlu diketahui pembaca cuma berapa orang dan apa yang harus
-              ditekan. */}
-          <p className="mt-1 text-muted">Baris terdampak ditandai kuning. Tekan Hitung sekarang.</p>
-        </div>
-      )}
-
-      <KalkulasiMassalForm
-        satuanKerja={satkerEfektif}
-        periodeBulan={periodeBulan}
-        periodeTahun={periodeTahun}
-        jumlahBelumPunyaPredikat={belumPunyaPredikat.length}
-        namaBulan={NAMA_BULAN[periodeBulan - 1] ?? String(periodeBulan)}
-      />
-
-      {/* ------------------------------------------------------------------ */}
-      {/* RINCIAN TUKIN - ringkas (default) atau lengkap (?rincian=1)         */}
-      {/* ------------------------------------------------------------------ */}
-      <div
-        id="rincian-tukin"
-        className="mt-8 flex scroll-mt-4 flex-wrap items-center justify-between gap-3"
-      >
-        {/* Ikon bantuan DI SAMPING heading, bukan di dalamnya - lihat catatan
-            flow content di BantuanRincianTukin.tsx. */}
-        <div className="flex items-center gap-1.5">
-          <h2 className="text-base font-bold text-ink">
-            Rincian Tukin{tampilRinci && <span className="ml-2 text-sm font-normal text-muted">- rincian lengkap</span>}
-          </h2>
-          <BantuanRincianTukin tampilRinci={tampilRinci} />
-        </div>
-        <a
-          href={tampilRinci ? linkRingkas : linkRinci}
-          className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-3"
-        >
-          {tampilRinci ? "Tampilkan ringkas" : "Lihat rincian lengkap"}
-        </a>
-      </div>
-
-      {!tampilRinci && (
-        <div className="card mt-2 overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
-                <th className="col-nama kolom-beku px-4 py-2.5">Nama</th>
-                <th className="px-4 py-2.5">Predikat Kinerja</th>
-                <th className="px-4 py-2.5">
-                  Tunjangan Kinerja
-                  <span className="block text-[10px] font-normal normal-case">kotor</span>
-                </th>
-                <th className="px-4 py-2.5">
-                  Potongan %
-                  <span className="block text-[10px] font-normal normal-case">dari bobot kehadiran</span>
-                </th>
-                <th className="px-4 py-2.5">Uang Makan</th>
-                {TAMPILKAN_NOMINAL_LEMBUR && (
-                  <th className="px-4 py-2.5">Uang Lembur</th>
-                )}
-                {/* KOLOM "Jam Lembur" DICABUT 2026-09-22 (permintaan user):
-                    "kan udah ada tabel khusus lembur". Satu angka total sebulan
-                    di sini tidak bisa diperiksa - yang menentukan bayar adalah
-                    pemisahan hari kerja vs hari libur (tarifnya beda) dan
-                    rincian hariannya, dan keduanya ada di Tabel Jam Lembur.
-                    Dua tempat yang menampilkan jam lembur dengan kedalaman
-                    berbeda cuma mengundang orang memeriksa yang dangkal. */}
-                <th className="px-4 py-2.5">Tukin bersih</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pegawaiHalaman.map((p) => {
-                const tukin = p.tukinCalc[0];
-                const um = p.uangMakan[0];
-                const lembur = p.uangLembur[0];
-                const predikat = p.predikatKinerja[0];
-
-                const tarifKelas =
-                  p.kelasJabatan !== null && p.kelasJabatan !== undefined
-                    ? TUKIN_POKOK_PER_KELAS_JABATAN[p.kelasJabatan] ?? null
-                    : null;
-                const rincianBaris = tukin ? rincianTukinTersimpan(tukin, tarifKelas) : null;
-
-                const persenPotongan =
-                  rincianBaris && rincianBaris.bobotKehadiranPenuh
-                    ? ((rincianBaris.potonganKehadiran ?? 0) / rincianBaris.bobotKehadiranPenuh) * 100
-                    : null;
-
-                const kurangKinerja = rincianBaris?.potonganKinerja ?? 0;
-                const basi = perluHitungUlang(p);
-
-                return (
-                  <tr key={p.id} className={`border-b border-line-2 align-top ${basi ? "bg-gold-tint" : "bg-surface"}`}>
-                    <td className="col-nama kolom-beku px-4 py-2.5">
-                      <NamaPegawai
-                        nama={p.nama}
-                        nip={p.nip}
-                        periodeBulan={periodeBulan}
-                        periodeTahun={periodeTahun}
-                        satuanKerja={satkerEfektif}
-                        kelasJabatan={p.kelasJabatan}
-                      />
-                      {basi && (
-                        <span
-                          className="mt-0.5 block text-xs font-semibold text-amber-700 dark:text-amber-400"
-                          title={`Data ${basi} berubah setelah Tukin ini dihitung - angka di baris ini masih yang lama.`}
-                        >
-                          angka basi - {basi} berubah
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-ink-2">
-                      {predikat ? (
-                        LABEL_PREDIKAT[predikat.predikat] ?? predikat.predikat
-                      ) : (
-                        <BelumAda judul="Predikat kinerja periode ini belum diupload" />
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-ink-2">
-                      {tarifKelas !== null ? (
-                        formatRupiah(tarifKelas)
-                      ) : (
-                        <BelumAda judul="Kelas jabatan belum terisi di data pegawai" />
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-ink-2">
-                      {persenPotongan !== null ? (
-                        formatPersen(persenPotongan, 2)
-                      ) : (
-                        <BelumAda judul="Tukin periode ini belum dihitung" />
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-ink-2">
-                      {um ? formatRupiah(um.totalUangMakan) : "-"}
-                    </td>
-                    {TAMPILKAN_NOMINAL_LEMBUR && (
-                      <td className="px-4 py-2.5 font-mono text-ink-2">
-                        {lembur ? formatRupiah(lembur.totalUangLembur) : "-"}
-                      </td>
-                    )}
-                    <td className="px-4 py-2.5 font-mono font-semibold text-ink">
-                      {tukin ? formatRupiah(tukin.tukinBersih) : <BelumAda judul="Tukin periode ini belum dihitung" />}
-                      {kurangKinerja > 1 && (
-                        <span className="mt-0.5 block font-sans text-[11px] font-normal text-muted">
-                          termasuk {formatRupiah(kurangKinerja)} dari capaian kinerja di bawah 100%
-                        </span>
-                      )}
-                      {rincianBaris?.adaSelisih && (
-                        <span className="mt-0.5 block font-sans text-[11px] font-normal text-amber-700 dark:text-amber-400">
-                          cek override cuti / tugas belajar
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-          <div className="border-t border-line-2 px-4 py-3 sm:px-6">
-            <Paginasi
-              basePath="/kasubag/kalkulasi"
-              params={paramPaginasi}
-              info={paginasi}
-              totalBaris={pegawaiList.length}
-              labelBaris="pegawai"
-            />
-          </div>
-        </div>
-      )}
-
-      {tampilRinci && (
-      <>
+  // --- ISI TAB ----------------------------------------------------------------
+  let isiTab: React.ReactNode;
+  // Hanya untuk tabel rincian lengkap, dan hanya pegawai di halaman ini.
+  const tapTidakWajar =
+    tab === "tukin" && tampilRinci
+      ? await hitungTapTidakWajarUnit(
+          pegawaiHalaman.map((p) => p.id),
+          satkerEfektif,
+          periodeBulan,
+          periodeTahun
+        )
+      : null;
+  if (tab === "tukin") {
+    isiTab = tampilRinci ? (
       <TabelRincianTukinLengkap
         nomorAwal={paginasi.mulai + 1}
-        hrefNama={(b) =>
-          `/tukin/presensi/${b.nip}?bulan=${periodeBulan}&tahun=${periodeTahun}&dari=kalkulasi&satker=${encodeURIComponent(satkerEfektif)}`
-        }
+        hrefNama={(b) => hrefNama(b.nip)}
         baris={pegawaiHalaman.map((p) => ({
           id: p.id,
           nip: p.nip,
@@ -975,438 +653,250 @@ export default async function KalkulasiUnitPage({
           rekap: p.rekapPresensi[0] ?? null,
           predikat: p.predikatKinerja[0] ?? null,
           basi: perluHitungUlang(p),
+          tapTidakWajar: tapTidakWajar?.get(p.id) ?? 0,
         }))}
-        kaki={
-          <Paginasi
-            basePath="/kasubag/kalkulasi"
-            params={paramPaginasi}
-            info={paginasi}
-            totalBaris={pegawaiList.length}
-            labelBaris="pegawai"
+        kaki={kaki}
+      />
+    ) : (
+      <TabelTukinRingkas
+        nomorAwal={paginasi.mulai + 1}
+        kosongKarena={kosongKarena}
+        kaki={kaki}
+        baris={pegawaiHalaman.map((p) => {
+          const tukin = p.tukinCalc[0];
+          const predikat = p.predikatKinerja[0];
+          const tarifKelas =
+            p.kelasJabatan !== null && p.kelasJabatan !== undefined
+              ? (TUKIN_POKOK_PER_KELAS_JABATAN[p.kelasJabatan] ?? null)
+              : null;
+          const rincianBaris = tukin ? rincianTukinTersimpan(tukin, tarifKelas) : null;
+          return {
+            id: p.id,
+            nama: p.nama,
+            nip: p.nip,
+            kelasJabatan: p.kelasJabatan ?? null,
+            predikat: predikat ? (LABEL_PREDIKAT[predikat.predikat] ?? predikat.predikat) : null,
+            penuh: tarifKelas,
+            bersih: tukin ? tukin.tukinBersih : null,
+            dikecualikan: setDikecualikan.has(p.id),
+            basi: setDikecualikan.has(p.id) ? null : perluHitungUlang(p),
+            kurangKinerja: rincianBaris?.potonganKinerja ?? 0,
+            adaSelisih: rincianBaris?.adaSelisih ?? false,
+            hrefNama: hrefNama(p.nip),
+          };
+        })}
+      />
+    );
+  } else if (tab === "makan") {
+    isiTab = (
+      <TabelUangMakan
+        nomorAwal={paginasi.mulai + 1}
+        kosongKarena={kosongKarena}
+        kaki={kaki}
+        baris={pegawaiHalaman.map((p) => {
+          const um = p.uangMakan[0];
+          return {
+            id: p.id,
+            nama: p.nama,
+            nip: p.nip,
+            kelasJabatan: p.kelasJabatan ?? null,
+            dikecualikan: setDikecualikan.has(p.id),
+            makan: um
+              ? {
+                  hariKerja: um.jumlahHariKerja,
+                  hariDibayar: um.jumlahHariDibayar,
+                  tarifHarian: um.tarifHarian,
+                  total: um.totalUangMakan,
+                }
+              : null,
+            hrefNama: hrefNama(p.nip),
+          };
+        })}
+      />
+    );
+  } else {
+    isiTab = (
+      <>
+        <TabelPemeriksaanLembur
+          tertanam
+          halaman={halLembur}
+          perHalaman={perLembur}
+          paramPaginasi={paramPaginasiLembur.toString()}
+          periodeBulan={periodeBulan}
+          periodeTahun={periodeTahun}
+          terkunci={kirimStatus.terkunci}
+          bolehKoreksi={canKoreksiJamPresensi(authUser, satkerEfektif)}
+          hanyaPegawaiId={q ? pegawaiTersaring.map((p) => p.id) : undefined}
+          baris={barisLembur}
+        />
+        {tampilRinci && (
+          <TabelKoreksiLemburRinci
+            periodeBulan={periodeBulan}
+            periodeTahun={periodeTahun}
+            kosongKarena={kosongKarena}
+            kaki={kaki}
+            baris={pegawaiHalaman.map((p) => ({
+              id: p.id,
+              nama: p.nama,
+              nip: p.nip,
+              kelasJabatan: p.kelasJabatan ?? null,
+              totalJam: p.uangLembur[0]?.totalJamLembur ?? 0,
+              totalUangLembur: p.uangLembur[0]?.totalUangLembur ?? null,
+              tarifPerJam: p.uangLembur[0]?.tarifPerJam ?? TARIF_UANG_LEMBUR_DEFAULT,
+              hrefNama: hrefNama(p.nip),
+            }))}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Sub-judul tiap SPTJM. Lembur: JAM saja selama nominalnya ditahan.
+  const ringkasanSptjm: Record<JenisSptjmUnit, string> = {
+    SPTJM_TUKIN: subSptjmUang(jumlahKalkulasi, totalTukin),
+    SPTJM_UANG_MAKAN: subSptjmUang(pegawaiPunyaMakan.length, totalMakan),
+    SPTJM_LEMBUR: TAMPILKAN_NOMINAL_LEMBUR
+      ? subSptjmUang(pegawaiBerlembur.length, totalUangLembur)
+      : subSptjmLembur(pegawaiBerlembur.length, totalJamLembur),
+  };
+
+  return (
+    <main className={HALAMAN}>
+      <KepalaKalkulasi
+        satuanKerja={satkerEfektif}
+        namaBulan={namaBulan}
+        periodeBulan={periodeBulan}
+        periodeTahun={periodeTahun}
+        satuanKerjaList={satuanKerjaList}
+        keadaan={kirimStatus.keadaan}
+        hrefExport={
+          bolehExportRekap
+            ? `/kasubag/kalkulasi/export?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`
+            : null
+        }
+        sumberAcuan={
+          <SumberAcuan
+            judul="Dasar aturan"
+            sumber={keSumberAcuan(sumberData)}
+            acuan={[
+              { aturan: "Pasal 5 Permenaker 15/2024", tentang: "Bobot 70% capaian kinerja + 30% kehadiran" },
+              { aturan: "Lampiran Permenaker 15/2024", tentang: "Tukin pokok per kelas jabatan" },
+              { aturan: "Pasal 13 Permenaker 15/2024", tentang: "Potongan kehadiran - alpha, lupa absen, terlambat, pulang cepat" },
+              { aturan: "Pasal 14 Permenaker 15/2024", tentang: "Persentase yang dibayarkan selama cuti" },
+              { aturan: "Kepsekjen 82/2025", tentang: "Konversi predikat kinerja ke persentase" },
+              { aturan: "PP 94/2021", tentang: "Kelas jabatan yang turun selama hukuman disiplin" },
+              { aturan: "PMK 32/2025", tentang: "Tarif uang makan & uang lembur (SBM 2026)" },
+            ]}
+            catatan="Pejabat pimpinan tinggi (kelas jabatan 15 ke atas) dibayar penuh komponen kehadirannya - mengikuti praktik pembayaran yang berjalan, bukan pasal di Permenaker 15/2024."
           />
         }
       />
 
-          {/* ---------------------------------------------------------------- */}
-          {/* Uang makan & lembur - di tampilan RINCI saja. Di tampilan ringkas */}
-          {/* ketiganya sudah jadi kolom biasa di tabel utama.                  */}
-          {/* ---------------------------------------------------------------- */}
-          <h2 id="uang-makan" className="mt-8 scroll-mt-4 text-base font-bold text-ink">
-            Uang Makan &amp;{" "}
-            {TAMPILKAN_NOMINAL_LEMBUR ? "Uang Lembur" : "Jam Lembur"}
-          </h2>
-          <p className="mt-1 text-xs text-muted">
-            Di luar cakupan rekap Excel Tukin - dipisah supaya tabel di atas
-            tetap sebanding kolom per kolom.
-          </p>
-          <div className="card mt-2 overflow-hidden">
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-line bg-surface-2 text-xs font-bold uppercase tracking-wide text-muted">
-                  <th className="col-nama px-4 py-2.5">Nama</th>
-                  <th className="px-4 py-2.5">Uang Makan</th>
-                  {TAMPILKAN_NOMINAL_LEMBUR && (
-                    <th className="px-4 py-2.5">Uang Lembur</th>
-                  )}
-                  <th className="px-4 py-2.5">Koreksi jam lembur</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pegawaiHalaman.map((p) => {
-                  const um = p.uangMakan[0];
-                  const lembur = p.uangLembur[0];
-                  return (
-                    <tr key={p.id} className="border-b border-line-2 align-top">
-                      <td className="col-nama px-4 py-2.5">
-                        <NamaPegawai
-                          nama={p.nama}
-                          nip={p.nip}
-                          periodeBulan={periodeBulan}
-                          periodeTahun={periodeTahun}
-                          satuanKerja={satkerEfektif}
-                          kelasJabatan={p.kelasJabatan}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-ink-2">
-                        {um ? formatRupiah(um.totalUangMakan) : "-"}
-                      </td>
-                      {TAMPILKAN_NOMINAL_LEMBUR && (
-                        <td className="px-4 py-2.5 font-mono text-ink-2">
-                          {lembur
-                            ? `${formatRupiah(lembur.totalUangLembur)} (${lemburTeks(lembur.totalJamLembur)})`
-                            : "-"}
-                        </td>
-                      )}
-                      <td className="px-4 py-2.5">
-                        {/* TETAP TAMPIL walau nominalnya ditahan: pengumpulan data
-                        jam lembur harus jalan terus selama menunggu tata cara
-                        turun, kalau tidak periode-periode ini akan kosong dan
-                        harus diisi ulang dari kertas. Formnya hanya menerima
-                        angka jam - tidak ada rupiah di dalamnya. */}
-                        <KoreksiLemburForm
-                          pegawaiId={p.id}
-                          periodeBulan={periodeBulan}
-                          periodeTahun={periodeTahun}
-                          totalJamLemburSaatIni={lembur?.totalJamLembur ?? 0}
-                          tarifPerJam={
-                            lembur?.tarifPerJam ?? TARIF_UANG_LEMBUR_DEFAULT
-                          }
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
-            <div className="border-t border-line-2 px-4 py-3 sm:px-6">
-              <Paginasi
-                basePath="/kasubag/kalkulasi"
-                params={paramPaginasi}
-                info={paginasi}
-                totalBaris={pegawaiList.length}
-                labelBaris="pegawai"
-              />
-            </div>
-          </div>
-        </>
+      {/* Catatan PPABP di PUNCAK halaman - dibaca sebelum mulai memperbaiki. */}
+      {kirimStatus.keadaan === "DIKEMBALIKAN" && kirimStatus.alasanKembali && (
+        <SpandukPengembalian alasan={kirimStatus.alasanKembali} />
       )}
 
-      {/* Panel Kirim sengaja di BAWAH tabel, bukan di atas: yang ditandatangani
-          Kasubag TU adalah angka-angka di atasnya, dan tombol yang mengunci
-          sebaiknya berada sesudah hal yang dikunci - bukan sebelum. */}
-      {/* SENGAJA TIDAK DIBUNGKUS `{!kirimStatus.terkunci && ...}`. Aksi kirim
-          memanggil revalidatePath, jadi begitu berhasil halaman ini langsung
-          dirender ulang dalam keadaan terkunci - dan komponen yang ikut
-          dilepas di situ membawa serta popup "berhasil dikirim"-nya sebelum
-          sempat terbaca. Keadaannya dikirim sebagai prop; komponennya sendiri
-          yang menyembunyikan formnya. */}
-      {/* TABEL YANG DITAGIH CENTANGNYA. Ditaruh tepat di atas daftar periksa,
-          bukan di bagian lain halaman: centang "sudah saya periksa" yang
-          jauh dari barang yang diperiksa adalah centang yang diisi tanpa
-          dibaca.
+      <StepperKalkulasi langkah={stepper} />
 
-          SELURUH pegawai unit, bukan sehalaman paginasi - yang dicentang
-          pernyataan atas satu periode utuh, dan tabel yang cuma memperlihatkan
-          10 baris pertama membuat pernyataan itu tidak benar. */}
-      <TabelPerubahanPegawai
+      <TahapKesiapan
+        ringkas={ringkasKesiapan}
+        presensi={{
+          sumber: labelSumberData(sumberData.find((s) => s.nama === "Kehadiran")?.sistemSumber),
+          terisi: pegawaiAktif.length - belumPunyaPresensi.length,
+          dari: pegawaiAktif.length,
+          href: "/tukin/presensi",
+          labelAksi: "Kelola presensi",
+        }}
+        predikat={{
+          sumber: labelSumberData(sumberData.find((s) => s.nama === "Kinerja")?.sistemSumber),
+          terisi: pegawaiAktif.length - belumPunyaPredikat.length,
+          dari: pegawaiAktif.length,
+          href: "/tukin/predikat-kinerja",
+          labelAksi: "Kelola predikat kinerja",
+        }}
+        jumlahBelumPredikat={belumPunyaPredikat.length}
+        kandidat={kandidat}
+        hrefTinjau={hrefTinjau}
+        tinjauTerbuka={tinjau === "1"}
         periodeBulan={periodeBulan}
         periodeTahun={periodeTahun}
-        namaBulan={NAMA_BULAN[periodeBulan - 1] ?? String(periodeBulan)}
-        baris={perubahanPegawai.map((c) => {
-          const t = petaKalkulasiPerNip.get(c.nip);
-          return {
-            id: c.id,
-            nip: c.nip,
-            nama: c.nama,
-            jenis: c.jenis,
-            dari: c.dari,
-            ke: c.ke,
-            terdeteksiPada: c.terdeteksiPada,
-            keluarDariUnit: c.jenis === "PINDAH_UNIT" && c.satuanKerjaDari === satkerEfektif,
-            sesudahHitung: t !== undefined && c.terdeteksiPada > t,
-          };
-        })}
-      />
-
-      <TabelPemeriksaanLembur
-        halaman={halLembur}
-        perHalaman={perLembur}
-        paramPaginasi={paramPaginasiLembur.toString()}
-        periodeBulan={periodeBulan}
-        periodeTahun={periodeTahun}
+        satuanKerja={satkerEfektif}
+        namaBulan={namaBulan}
+        dikecualikan={pengecualian.map((x) => ({
+          id: x.id,
+          pegawaiId: x.pegawaiId,
+          nama: x.pegawai.nama,
+          nip: x.pegawai.nip,
+          alasanKode: x.alasanKode,
+          alasan: alasanDariKode(x.alasanKode)?.label ?? x.alasanKode,
+          penjelasan: x.penjelasan,
+        }))}
         terkunci={kirimStatus.terkunci}
-        bolehKoreksi={canKoreksiJamPresensi(authUser, satkerEfektif)}
-        baris={pegawaiList.map((p) => {
-          const lembur = p.uangLembur[0];
-          const harian = petaLemburHarian.get(p.id);
-
-          const daftarPresensi = petaPresensiPerPegawai.get(p.id) ?? [];
-          const daftarKoreksi = petaKoreksiLemburPerPegawai.get(p.id) ?? [];
-          const petaKoreksiTgl = new Map(daftarKoreksi.map((k) => [k.tanggal.toISOString().slice(0, 10), k]));
-          const petaPresensiTgl = new Map(daftarPresensi.map((pr) => [pr.tanggal.toISOString().slice(0, 10), pr]));
-
-          const semuaTanggalIso = Array.from(
-            new Set([...petaPresensiTgl.keys(), ...petaKoreksiTgl.keys()])
-          ).sort();
-
-          const rincianHari = semuaTanggalIso.map((iso) => {
-            const pr = petaPresensiTgl.get(iso);
-            const kr = petaKoreksiTgl.get(iso);
-            const d = pr ? pr.tanggal : kr!.tanggal;
-            const day = d.getUTCDay();
-            const namaHari = NAMA_HARI_LEMBUR[day];
-            const liburKeterangan = hariLiburMap.get(iso);
-            const isHariLibur = day === 0 || day === 6 || !!liburKeterangan;
-            const keteranganHari = liburKeterangan
-              ? liburKeterangan
-              : day === 0 || day === 6
-              ? "Akhir Pekan"
-              : "Hari Kerja";
-
-            const [y, b, h] = iso.split("-");
-            const tanggalTampil = `${namaHari}, ${h}/${b}/${y}`;
-
-            return {
-              tanggalIso: iso,
-              tanggalTampil,
-              isHariLibur,
-              keteranganHari,
-              jamMasuk: jamTeksLembur(pr?.jamMasuk),
-              jamKeluar: jamTeksLembur(pr?.jamKeluar),
-              jamMesin: pr?.jamLembur ?? 0,
-              jamSaatIni: kr?.jamLembur ?? pr?.jamLembur ?? 0,
-              koreksi: kr
-                ? {
-                    id: kr.id,
-                    jamLembur: kr.jamLembur,
-                    alasan: kr.alasan,
-                    dikoreksiOlehNama: kr.dikoreksiOleh.nama,
-                    dikoreksiPada: kr.dikoreksiPada.toISOString(),
-                  }
-                : null,
-            };
-          });
-
-          return {
-            pegawaiId: p.id,
-            nip: p.nip,
-            nama: p.nama,
-            jamHariKerja: lembur?.jamLemburHariKerja ?? null,
-            jamHariLibur: lembur?.jamLemburHariLibur ?? null,
-            totalTersimpan: lembur?.totalJamLembur ?? null,
-            jamHarian: harian?.jam ?? 0,
-            rincianHari,
-          };
-        })}
       />
 
-      {/* SATU KARTU, DUA KOLOM - permintaan user 2026-09-28, dan alasannya
-          memang alur: periksa data -> semua terverifikasi -> kirim rekap.
-          Sebagai dua kartu terpisah, syarat dan akibatnya terbaca sebagai dua
-          urusan berbeda, padahal kolom kanan justru TIDAK BISA dipakai sampai
-          kolom kiri selesai.
+      <TahapKalkulasi
+        tab={tab}
+        tampilRinci={tampilRinci}
+        kataKunci={q}
+        labelLembur={TAMPILKAN_NOMINAL_LEMBUR ? "Uang Lembur" : "Jam Lembur"}
+        jumlahTab={{ tukin: jumlahKalkulasi, makan: pegawaiPunyaMakan.length, lembur: pegawaiBerlembur.length }}
+        hrefTab={hrefTab}
+        hrefRincian={hrefRincian}
+        hrefRingkas={hrefRingkas}
+        paramForm={paramForm}
+        jumlahPegawaiAktif={pegawaiAktif.length}
+        totalTukinBersih={totalTukin}
+        jumlahMakan={pegawaiPunyaMakan.length}
+        totalMakan={totalMakan}
+        jumlahBasi={jumlahPerluHitungUlang}
+        aksiHitung={
+          <KalkulasiMassalForm
+            tanpaKartu
+            satuanKerja={satkerEfektif}
+            periodeBulan={periodeBulan}
+            periodeTahun={periodeTahun}
+            jumlahBelumPunyaPredikat={belumPunyaPredikat.length}
+            namaBulan={namaBulan}
+          />
+        }
+        kontrolVerifikasi={null}
+        isi={isiTab}
+      />
 
-          Daftar periksa tetap di luar dialog Kirim: memeriksa tabel adalah
-          pekerjaan yang dikerjakan sambil membacanya, sementara dialog Kirim
-          baru terbuka ketika orangnya sudah memutuskan. */}
-      {/* Border kiri 2px, bukan 4px seperti kartu lain di aplikasi ini.
-          Kartu ini satu-satunya yang SEKALIGUS punya header bergaris, pemisah
-          tengah, dan border luar - pada 4px ketiganya saling berebut. Kartu
-          lain tetap 4px; kalau nanti diseragamkan, di sinilah tempatnya. */}
-      <section id="kirim" className="card mt-6 border-l-2 border-l-navy">
-        <div className="border-b border-line-2 px-4 py-3 sm:px-5">
-          <h2 className="text-sm font-bold text-ink">Periksa &amp; kirim rekap</h2>
-          <p className="mt-0.5 text-xs text-muted">Pengiriman mengunci periode ini.</p>
-        </div>
-
-        {/* Panel Tanda Tangan Elektronik (TTE) BSrE untuk 3 Dokumen SPTJM (Tukin, Uang Makan, Uang Lembur) */}
-        <div className="border-b border-line-2 px-4 py-4 sm:px-5 space-y-3">
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-            <div className="min-w-0">
-              <h3 className="text-sm font-bold text-ink">
-                Tanda Tangan Elektronik (TTE) SPTJM
-              </h3>
-              <p className="mt-0.5 text-xs text-muted">
-                Pengesahan SPTJM digital via BSrE BSSN untuk 3 berkas (Tunjangan Kinerja, Uang Makan, dan Uang Lembur) sebelum dikirim ke PPABP.
-              </p>
-            </div>
-            <div className="shrink-0">
-              <StatusKoneksiBsre />
-            </div>
-          </div>
-          {/* SATU peringatan untuk ketiga kartu, bukan diulang di masing-masing.
-
-              Kalimatnya panjang dan identik; diulang tiga kali ia memakan
-              ruang tanpa menambah keterangan, dan mendesak tombol aksinya
-              sampai menumpuk. Di kartunya cukup penanda ringkas. */}
-          {sptjmPerluTteUlang.length > 0 && (
-            <div className="flex items-start gap-2 rounded-lg border border-gold/40 bg-gold-tint px-3 py-2.5 text-xs text-gold-deep">
-              <span aria-hidden className="mt-px shrink-0 font-bold">!</span>
-              <span>
-                <strong className="font-bold">
-                  SPTJM perlu ditandatangani ulang
-                </strong>{" "}
-                - rekap periode ini dikembalikan PPABP setelah
-                {" "}
-                {daftarTeksSptjm(sptjmPerluTteUlang)} ditandatangani. Perbaiki
-                hitungannya, periksa ulang ketiga tabel, lalu tanda tangani
-                lagi. Tanda tangan yang lama membenarkan angka yang sudah
-                berubah.
-              </span>
-            </div>
-          )}
-          <div className="space-y-2.5">
-            <PanelTteSptjm
-              jenisDokumen="SPTJM_TUKIN"
-              dikembalikanPada={
-                barisPengiriman?.dikembalikanPada
-                  ? barisPengiriman.dikembalikanPada.toISOString()
-                  : null
-              }
-              periodeBulan={periodeBulan}
-              periodeTahun={periodeTahun}
-              satuanKerja={satkerEfektif}
-              namaPenandatangan={namaPenandatanganSptjm}
-              dokumenTteTerbaru={
-                tteTukin
-                  ? {
-                      ...tteTukin,
-                      signedAt: tteTukin.signedAt
-                        ? tteTukin.signedAt.toISOString()
-                        : null,
-                    }
-                  : null
-              }
-            />
-            <PanelTteSptjm
-              jenisDokumen="SPTJM_UANG_MAKAN"
-              dikembalikanPada={
-                barisPengiriman?.dikembalikanPada
-                  ? barisPengiriman.dikembalikanPada.toISOString()
-                  : null
-              }
-              periodeBulan={periodeBulan}
-              periodeTahun={periodeTahun}
-              satuanKerja={satkerEfektif}
-              namaPenandatangan={namaPenandatanganSptjm}
-              dokumenTteTerbaru={
-                tteUangMakan
-                  ? {
-                      ...tteUangMakan,
-                      signedAt: tteUangMakan.signedAt
-                        ? tteUangMakan.signedAt.toISOString()
-                        : null,
-                    }
-                  : null
-              }
-            />
-            <PanelTteSptjm
-              jenisDokumen="SPTJM_LEMBUR"
-              dikembalikanPada={
-                barisPengiriman?.dikembalikanPada
-                  ? barisPengiriman.dikembalikanPada.toISOString()
-                  : null
-              }
-              periodeBulan={periodeBulan}
-              periodeTahun={periodeTahun}
-              satuanKerja={satkerEfektif}
-              namaPenandatangan={namaPenandatanganSptjm}
-              dokumenTteTerbaru={
-                tteLembur
-                  ? {
-                      ...tteLembur,
-                      signedAt: tteLembur.signedAt
-                        ? tteLembur.signedAt.toISOString()
-                        : null,
-                    }
-                  : null
-              }
-            />
-          </div>
-        </div>
-
-        {/* Pemisah vertikal HANYA dari lg ke atas. Di bawah itu keduanya
-            bertumpuk dan garis tegak jadi menyesatkan - yang benar di layar
-            sempit adalah garis datar antar langkah, dan itu yang dipakai. */}
-        <div className="grid divide-y divide-line-2 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-          <div className="p-4 sm:p-5">
-            <VerifikasiTabelPanel
-              periodeBulan={periodeBulan}
-              periodeTahun={periodeTahun}
-              terkunci={kirimStatus.terkunci}
-              // Anchor ditentukan DI SINI karena hanya halaman ini yang tahu
-              // tabel mana yang sedang benar-benar dirender.
-              //
-              // UANG_MAKAN yang jadi sebabnya: tabel tersendirinya cuma ada di
-              // tampilan RINCI. Di tampilan ringkas, Uang Makan adalah satu
-              // kolom di tabel Rincian Tukin - jadi ke situlah tautannya
-              // diarahkan, bukan ke id yang belum lahir.
-              tautan={{
-                PERUBAHAN_PEGAWAI: "#perubahan-pegawai",
-                TUKIN: "#rincian-tukin",
-                UANG_MAKAN: tampilRinci ? "#uang-makan" : "#rincian-tukin",
-                UANG_LEMBUR: "#tabel-lembur",
-              }}
-              verifikasi={verifikasiTabel.map((v) => ({
-                jenisTabel: v.jenisTabel as JenisTabelKalkulasi,
-                olehNama: v.diverifikasiOleh.nama,
-                pada: v.diverifikasiPada,
-              }))}
-            />
-          </div>
-
-          <div className="p-4 sm:p-5">
-            {/* Terkunci: KirimRekapForm sengaja cuma mengembalikan popup
-                hasilnya (tanpa isi yang terlihat), jadi kolom ini akan kosong
-                melompong tanpa penggantinya. Komponennya TETAP dirender -
-                popup "berhasil dikirim" lahir dari situ, dan halaman ini
-                dirender ulang dalam keadaan terkunci tepat setelah kirim
-                berhasil. */}
-            {kirimStatus.terkunci && (
-              <div className="rounded-lg border border-green bg-green/10 px-3.5 py-3">
-                <p className="text-sm font-bold text-green">Sudah dikirim &amp; terkunci</p>
-                <p className="mt-1 text-xs text-ink-2">
-                  Periode ini tidak bisa dihitung ulang atau disunting. Hanya PPABP yang bisa
-                  mengembalikannya ke unit.
-                </p>
-              </div>
-            )}
-            <KirimRekapForm
-              terkunci={kirimStatus.terkunci}
-              // Catatan PPABP ditampilkan DI SINI, bukan di puncak halaman: ini hal
-              // terakhir yang dibaca sebelum tombol Kirim Ulang ditekan, jadi bisa
-              // diadu dengan perbaikan yang barusan dikerjakan.
-              alasanKembali={kirimStatus.keadaan === "DIKEMBALIKAN" ? kirimStatus.alasanKembali : null}
-              periodeBulan={periodeBulan}
-              periodeTahun={periodeTahun}
-              satuanKerja={satkerEfektif}
-              // PEMBAGINYA `pegawaiAktif`, BUKAN `pegawaiList`.
-              //
-              // Tabel di atas sengaja menampilkan SEMUA pegawai unit termasuk yang
-              // sudah pensiun/berhenti - bulan terakhir mereka tetap perlu terlihat
-              // dan tetap perlu dihitung. Tapi mereka TIDAK BOLEH ikut jadi syarat
-              // kelengkapan: orang yang sudah pensiun tidak akan pernah punya
-              // predikat kinerja baru, jadi unitnya tidak akan pernah bisa
-              // mengirim - macet permanen tanpa jalan keluar.
-              //
-              // Angka ini WAJIB sama dengan yang dihitung kirimRekapUnitAction di
-              // server (yang memakai `statusPegawai: "AKTIF"`). Kalau berbeda,
-              // tombolnya menyala tapi server menolak - atau lebih buruk,
-              // sebaliknya.
-              jumlahPegawai={pegawaiAktif.length}
-              jumlahKalkulasi={
-                pegawaiAktif.filter((p) => p.tukinCalc.length > 0).length
-              }
-              // Ketiga syarat yang diperiksa cekBolehKirim(), dioper APA ADANYA
-              // supaya daftarnya di layar dan gerbang di server memakai angka
-              // yang sama. Menghitungnya ulang di dalam komponen berarti dua
-              // sumber untuk satu pertanyaan.
-              jumlahBasi={jumlahPerluHitungUlang}
-              tabelKurang={tabelBelumDiverifikasi(tabelDiverifikasi).length}
-              tabelWajib={TABEL_WAJIB_DIVERIFIKASI.length}
-              alasanTertahan={
-                cekBolehKirim(
-                  {
-                    totalPegawai: pegawaiAktif.length,
-                    jumlahKalkulasi: pegawaiAktif.filter(
-                      (p) => p.tukinCalc.length > 0,
-                    ).length,
-                    tabelDiverifikasi,
-                    // Punya baris Tukin TIDAK SAMA DENGAN siap kirim. Baris yang
-                    // sumbernya sudah berubah atau dihapus tetap berdiri dengan
-                    // angka lama, dan tanpa hitungan ini ia ikut terkirim &
-                    // terkunci tanpa ada yang menyadarinya.
-                    jumlahBasi: jumlahPerluHitungUlang,
-                  },
-                  kirimStatus,
-                ).alasan
-              }
-            />
-          </div>
-        </div>
-      </section>
+      {/* Tahap 3 lebih lebar dari Tahap 4 di layar lebar; bertumpuk di layar
+          sempit. */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)]">
+        <TahapTteSptjm
+          periodeBulan={periodeBulan}
+          periodeTahun={periodeTahun}
+          satuanKerja={satkerEfektif}
+          namaPenandatangan={namaPenandatanganSptjm}
+          dikembalikanPada={dikembalikanPada ? dikembalikanPada.toISOString() : null}
+          dokumen={dokumenTampil}
+          ringkasan={ringkasanSptjm}
+          perluUlang={jenisPerluUlang}
+          lemburWajib={TAMPILKAN_NOMINAL_LEMBUR}
+          dihitungTerakhir={{
+            SPTJM_TUKIN: dihitungTerakhir.SPTJM_TUKIN?.toISOString() ?? null,
+            SPTJM_UANG_MAKAN: dihitungTerakhir.SPTJM_UANG_MAKAN?.toISOString() ?? null,
+            SPTJM_LEMBUR: dihitungTerakhir.SPTJM_LEMBUR?.toISOString() ?? null,
+          }}
+          terkunci={kirimStatus.terkunci}
+        />
+        <TahapPengiriman
+          keadaan={kirimStatus.keadaan}
+          terkunci={kirimStatus.terkunci}
+          alasanKembali={kirimStatus.keadaan === "DIKEMBALIKAN" ? kirimStatus.alasanKembali : null}
+          periodeBulan={periodeBulan}
+          periodeTahun={periodeTahun}
+          satuanKerja={satkerEfektif}
+          jumlahKalkulasi={jumlahKalkulasi}
+          checklist={checklist}
+          daftarNominalNol={nominalNol.nol.map((n) => n.nama)}
+          alasanTertahan={alasanTertahan}
+        />
+      </div>
     </main>
   );
 }

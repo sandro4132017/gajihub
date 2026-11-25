@@ -170,83 +170,55 @@ export function PanelTteSptjmPpk({
   const tampilTabelMultiBerkas = daftarSptjmUnit.length > 1;
 
   return (
-    <div className="rounded-2xl border border-teal/20 bg-gradient-to-r from-teal-tint/40 via-surface-2 to-surface-2 p-4 sm:p-5 shadow-sm space-y-3.5">
-      {/* Tingkat 1: Identitas Dokumen, Status TTE Utama, Penandatangan, & No. Dokumen */}
-      <div className="flex items-start gap-3.5">
-        <div className="rounded-xl bg-teal-tint p-3 text-navy shadow-inner shrink-0">
-          <FiShield className="size-6 text-biru" />
-        </div>
+    <div className="card space-y-4 p-5">
+      {/* Kepala: identitas dokumen, status TTE, periode */}
+      <div className="flex items-start gap-3">
+        <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-biru/10 text-biru">
+          <FiShield className="size-5" />
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-bold text-ink">
-              SPTJM PPK &ndash; {labelJenis}
-            </h3>
+            <h3 className="text-sm font-bold text-ink">SPTJM PPK &ndash; {labelJenis}</h3>
             {isSudahTte ? (
-              <>
-                <span className="inline-flex items-center gap-1 rounded-full bg-green/10 px-2.5 py-0.5 text-xs font-bold text-green border border-green/20">
-                  <FiCheckCircle className="size-3.5" /> TTE Sah
-                </span>
-                <span className="text-xs font-medium text-muted">
-                  BSrE &middot; {namaBulan} {periodeTahun}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="inline-flex items-center gap-1 rounded-full bg-gold-tint px-2.5 py-0.5 text-xs font-bold text-gold-deep border border-gold-deep/20">
-                  Belum Ditandatangani
-                </span>
-                <span className="text-xs font-medium text-muted">
-                  {namaBulan} {periodeTahun}
-                </span>
-              </>
-            )}
-          </div>
-
-          {isSudahTte ? (
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted">
-              <span>
-                Penandatangan:{" "}
-                <strong className="font-semibold text-ink">
-                  {dokumen?.penandatanganNama || "Kasubag TU unit ini"}
-                </strong>
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-tint px-2 py-0.5 text-[11px] font-bold text-green">
+                <FiCheckCircle className="size-3" /> Sudah Ditandatangani
               </span>
-              {dokumen?.nomorDokumen && (
-                <span>
-                  No. Dokumen:{" "}
-                  <span className="font-mono font-semibold text-biru">
-                    {dokumen.nomorDokumen}
-                  </span>
-                </span>
-              )}
-            </div>
-          ) : (
-            <p className="mt-1 text-xs text-muted leading-relaxed">
-              Lampiran wajib Pejabat Pembuat Komitmen (PPK) saat pengajuan ADK ke SAKTI / KPPN.
-            </p>
-          )}
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-gold-tint px-2 py-0.5 text-[11px] font-bold text-gold-deep">
+                Belum Ditandatangani
+              </span>
+            )}
+            <span className="rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-2">
+              {namaBulan} {periodeTahun}
+            </span>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            Lampiran wajib Pejabat Pembuat Komitmen (PPK) saat pengajuan ADK ke SAKTI / KPPN.
+          </p>
         </div>
       </div>
 
-      {/* Tingkat 2: Informasi Berkas & Satu Lokasi Aksi Utama */}
-      <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="rounded-lg bg-surface-2 p-2 text-biru shrink-0">
-            <FiFileText className="size-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
-                Berkas
-              </span>
-              <span className="text-xs font-bold text-ink truncate">
-                {labelBerkasSingkat}
-              </span>
-            </div>
-            <p className="text-xs text-muted truncate">{satkerUtama}</p>
-          </div>
+      {/* Berkas + satu lokasi aksi */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-2/50 px-3.5 py-3">
+        <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-lg border border-line bg-surface text-biru">
+          <FiFileText className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-bold uppercase tracking-wide text-ink">Berkas {labelBerkasSingkat}</p>
+          <p className="truncate text-xs text-muted">{satkerUtama || "Pilih satuan kerja untuk melihat berkasnya"}</p>
+          {isSudahTte && (
+            <p className="truncate text-[11px] text-muted">
+              {dokumen?.nomorDokumen && (
+                <>
+                  No. <span className="font-mono font-semibold text-biru">{dokumen.nomorDokumen}</span> &bull;{" "}
+                </>
+              )}
+              {dokumen?.penandatanganNama || "Kasubag TU unit ini"}
+            </p>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {/* TIDAK ADA TOMBOL TTE DI SINI, dan itu disengaja.
 
               Keputusan user 2026-10-20: role PPABP TIDAK berwenang
@@ -257,17 +229,15 @@ export function PanelTteSptjmPpk({
 
               Yang tetap tersedia bagi PPABP: melihat dan mengunduh SPTJM
               yang sudah ditandatangani unit. */}
-          <span className="chip chip-draft text-[11px] font-semibold">
-            TTE oleh Kasubag TU unit
-          </span>
+          <span className="text-[11px] text-muted">TTE oleh Kasubag TU unit</span>
 
           <button
             type="button"
             onClick={handleBukaViewerUtama}
-            className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs font-semibold"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-bold text-ink transition hover:border-muted"
           >
             <FiEye className="size-3.5 text-biru" />
-            <span>{isSudahTte ? "Lihat PDF" : "Lihat Draft"}</span>
+            {isSudahTte ? "Lihat PDF" : "Lihat Draft"}
           </button>
 
           {isSudahTte && dokumen?.fileSignedPath ? (
@@ -276,10 +246,11 @@ export function PanelTteSptjmPpk({
               download={namaFileUtama}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs shadow-2xs"
+              title="Unduh PDF"
+              aria-label="Unduh PDF SPTJM"
+              className="grid size-8 place-items-center rounded-lg border border-line bg-surface text-biru transition hover:border-biru/50"
             >
               <FiDownload className="size-3.5" />
-              <span>Unduh PDF</span>
             </a>
           ) : null}
         </div>

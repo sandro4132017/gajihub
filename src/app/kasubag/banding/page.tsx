@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "../../../lib/prisma";
 import { canViewRekapUnitKerja } from "../../../auth/permissions";
 import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
@@ -130,7 +131,7 @@ export default async function VerifikasiBandingUnitPage({
 
       {/* STAT TILES / FILTER CEPAT */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <a
+        <Link
           href={`/kasubag/banding${satker ? `?satker=${encodeURIComponent(satker)}` : ""}`}
           className={`rounded-xl border p-3 transition ${
             !statusFilter
@@ -140,9 +141,9 @@ export default async function VerifikasiBandingUnitPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Total Banding</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-ink">{countTotal}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={`/kasubag/banding?status=DIAJUKAN${satker ? `&satker=${encodeURIComponent(satker)}` : ""}`}
           className={`rounded-xl border p-3 transition ${
             statusFilter === "DIAJUKAN"
@@ -157,9 +158,9 @@ export default async function VerifikasiBandingUnitPage({
             )}
           </div>
           <p className="mt-1 font-mono text-xl font-extrabold text-gold-deep">{countMenunggu}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={`/kasubag/banding?status=MENUNGGU_APPROVAL_FINAL${satker ? `&satker=${encodeURIComponent(satker)}` : ""}`}
           className={`rounded-xl border p-3 transition ${
             statusFilter === "MENUNGGU_APPROVAL_FINAL"
@@ -169,9 +170,9 @@ export default async function VerifikasiBandingUnitPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Diteruskan OSDMA</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-navy">{countDiteruskan}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={`/kasubag/banding?status=DISETUJUI${satker ? `&satker=${encodeURIComponent(satker)}` : ""}`}
           className={`rounded-xl border p-3 transition ${
             statusFilter === "DISETUJUI"
@@ -181,9 +182,9 @@ export default async function VerifikasiBandingUnitPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Selesai Disetujui</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-green">{countDisetujui}</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href={`/kasubag/banding?status=DITOLAK${satker ? `&satker=${encodeURIComponent(satker)}` : ""}`}
           className={`rounded-xl border p-3 transition ${
             statusFilter === "DITOLAK"
@@ -193,7 +194,7 @@ export default async function VerifikasiBandingUnitPage({
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Ditolak</p>
           <p className="mt-1 font-mono text-xl font-extrabold text-red">{countDitolak}</p>
-        </a>
+        </Link>
       </div>
 
       {/* DAFTAR KARTU VERIFIKASI BANDING (LANDSCAPE TRACKER CARD) */}

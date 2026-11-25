@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { RiErrorWarningLine } from "react-icons/ri";
+import { PilPredikat } from "../../components/shared/PilPredikat";
 
 /**
  * Tabel rincian Tukin satu satuan kerja - nilai intinya saja.
@@ -39,7 +40,7 @@ export interface BarisRincianTukin {
 }
 
 const rupiah = (n: number | null) =>
-  n === null ? "-" : new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(n);
+  n === null ? "-" : `Rp ${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(n)}`;
 
 /**
  * Potongan = tarif penuh kelas jabatan dikurangi yang benar-benar dibayarkan.
@@ -72,8 +73,13 @@ function persenPotongan(b: BarisRincianTukin): number | null {
 
 const format2 = (n: number) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
 
-const TH = "whitespace-nowrap px-3 py-2 text-[10.5px] font-bold uppercase tracking-wide";
-const TD = "whitespace-nowrap px-3 py-2";
+// Gaya sama dengan tabel Tukin di Kalkulasi Unit (TabelTukinRingkas).
+const TH = "whitespace-nowrap px-3 py-3 text-[11px] font-semibold uppercase tracking-wide";
+const TD = "whitespace-nowrap px-3 py-3";
+
+function SubJudul({ children }: { children: string }) {
+  return <span className="mt-0.5 block text-[10px] font-normal normal-case tracking-normal text-muted/80">{children}</span>;
+}
 
 export function TabelRincianUnit({
   baris,
@@ -119,14 +125,17 @@ export function TabelRincianUnit({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-surface-2 text-muted">
-              <th className={`${TH} col-nama`}>Nama Pegawai</th>
-              <th className={TH}>NIP</th>
+            <tr className="border-b border-line bg-surface-2/50 text-muted">
+              <th className={`${TH} col-nama sm:pl-5`}>Nama Pegawai / NIP</th>
               <th className={TH}>Grade</th>
-              <th className={TH}>Nominal Tukin</th>
-              <th className={TH}>Potongan</th>
+              <th className={TH}>
+                Nominal Tukin<SubJudul>kotor, sesuai kelas jabatan</SubJudul>
+              </th>
+              <th className={TH}>
+                Potongan<SubJudul>dari tunjangan penuh</SubJudul>
+              </th>
               <th className={TH}>Capaian Kinerja</th>
-              <th className={TH}>Dibayarkan</th>
+              <th className={`${TH} sm:pr-5`}>Dibayarkan</th>
             </tr>
           </thead>
           <tbody>
@@ -134,9 +143,9 @@ export function TabelRincianUnit({
               const pot = potonganTotal(b);
               const persen = persenPotongan(b);
               return (
-                <tr key={b.id} className="border-b border-line-2 last:border-0 hover:bg-surface-2">
-                  <td className={`${TD} col-nama font-semibold text-ink`} title={b.nama}>
-                    {b.nama}
+                <tr key={b.id} className="border-b border-line-2 last:border-0 hover:bg-surface-2/60">
+                  <td className={`${TD} col-nama sm:pl-5`} title={b.nama}>
+                    <span className="font-semibold text-ink">{b.nama}</span>
                     {/* Catatan validasi kalkulasi - mis. cuti panjang yang bulan
                         ke berapanya tidak diketahui. Isinya di `title` supaya
                         satu baris tidak melebar gara-gara kalimat panjang. */}
@@ -148,29 +157,36 @@ export function TabelRincianUnit({
                         <RiErrorWarningLine aria-hidden />
                       </span>
                     )}
+                    <span className="mt-0.5 block text-[11px] text-muted">
+                      NIP. <span className="font-mono">{b.nip}</span>
+                    </span>
                   </td>
-                  <td className={`${TD} font-mono text-xs text-muted`}>{b.nip}</td>
-                  <td className={TD}>{b.kelasJabatan ?? "-"}</td>
-                  <td className={`${TD} font-mono`}>{rupiah(b.nominalTukin)}</td>
-                  {/* Potongan nol ditulis "-", bukan "0%": yang perlu tertangkap
-                      mata adalah baris yang KENA potongan, bukan barisan nol. */}
+                  <td className={`${TD} font-mono text-ink-2`}>{b.kelasJabatan ?? "-"}</td>
+                  <td className={`${TD} font-mono text-ink-2`}>{rupiah(b.nominalTukin)}</td>
+                  {/* 0% HIJAU, potongan oranye - sama dengan tabel Kalkulasi Unit
+                      (keputusan user 2026-11-16). "-" hanya bila tarifnya tidak
+                      diketahui. */}
                   <td
-                    className={`${TD} font-mono ${pot && pot > 0 ? "font-semibold text-gold-deep" : "text-muted"}`}
-                    title={pot !== null && pot > 0 ? `Rp ${rupiah(pot)}` : undefined}
+                    className={`${TD} font-mono font-semibold ${
+                      persen === null ? "font-normal text-muted" : persen > 0 ? "text-gold-deep" : "text-green"
+                    }`}
+                    title={pot !== null && pot > 0 ? rupiah(pot) : undefined}
                   >
-                    {persen === null || persen <= 0 ? "-" : `${format2(persen)}%`}
+                    {persen === null ? "-" : persen > 0 ? `${format2(persen)}%` : "0%"}
                   </td>
-                  <td className={TD}>{b.predikat ?? "-"}</td>
-                  <td className={`${TD} font-mono font-bold text-ink`}>{rupiah(b.dibayarkan)}</td>
+                  <td className={TD}>
+                    {b.predikat ? <PilPredikat nilai={b.predikat} /> : <span className="text-muted">-</span>}
+                  </td>
+                  <td className={`${TD} font-mono font-bold text-ink sm:pr-5`}>{rupiah(b.dibayarkan)}</td>
                 </tr>
               );
             })}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-line bg-surface-2 font-bold text-ink">
-              <td className={`${TD} col-nama`}>TOTAL</td>
-              <td className={TD} colSpan={5} />
-              <td className={`${TD} font-mono`}>{rupiah(total.dibayarkan)}</td>
+              <td className={`${TD} col-nama sm:pl-5`}>TOTAL</td>
+              <td className={TD} colSpan={4} />
+              <td className={`${TD} font-mono sm:pr-5`}>{rupiah(total.dibayarkan)}</td>
             </tr>
           </tfoot>
         </table>

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { JENIS_CUTI_TAK_DISEBUT, labelJenisCutiHarian, rincianCutiAtauNull, susunRincianCuti } from "../rincianCuti";
+import {
+  JENIS_CUTI_TAK_DISEBUT,
+  formatRentangTanggal,
+  labelJenisCutiHarian,
+  rincianCutiAtauNull,
+  susunRincianCuti,
+} from "../rincianCuti";
 
 const tgl = (d: number) => new Date(Date.UTC(2026, 9, d));
 
@@ -60,5 +66,14 @@ describe("rincianCutiAtauNull", () => {
       { jenis: JENIS_CUTI_TAK_DISEBUT, hari: 2, tanggal: [2, 5] },
       { jenis: "Cuti Tahunan", hari: 1, tanggal: [1] },
     ]);
+  });
+});
+
+describe("formatRentangTanggal", () => {
+  it("menggabung tanggal berurutan jadi rentang", () => {
+    expect(formatRentangTanggal([16, 14, 15], 10, 2026)).toBe("14 - 16 Okt 2026");
+    expect(formatRentangTanggal([14, 15, 16, 20], 10, 2026)).toBe("14 - 16 Okt 2026, 20 Okt 2026");
+    expect(formatRentangTanggal([27], 10, 2026)).toBe("27 Okt 2026");
+    expect(formatRentangTanggal([], 10, 2026)).toBe("");
   });
 });

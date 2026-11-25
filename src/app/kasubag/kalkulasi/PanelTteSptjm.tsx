@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { ModalPassphraseTte } from "@/app/tte/ModalPassphraseTte";
 import { type JenisSptjm, generateNamaFileSptjm } from "@/lib/tte/sptjmTypes";
+import { statusSptjm } from "@/business-logic/sptjmUnit";
 import {
   FiCheckCircle,
   FiFileText,
@@ -58,8 +59,24 @@ interface PanelTteSptjmProps {
    * sedang dikembalikan.
    */
   dikembalikanPada?: string | null;
+  /** Kalkulasi terakhir komponen ini (ISO). TTE sebelum ini = perlu TTE ulang. */
+  dihitungTerakhir?: string | null;
+  /** Ringkasan satu baris di bawah judul, mis. "46 Pegawai - Rp ...". */
+  ringkasan?: string;
+  /**
+   * false = dokumen ini belum menahan pengiriman (SPTJM Lembur selama uang
+   * lembur ditunda). Tetap bisa ditandatangani - hanya ditandai.
+   */
+  wajib?: boolean;
+  /** Rekap sudah dikirim & terkunci: baris hanya-baca, tinggal Lihat PDF. */
+  terkunci?: boolean;
 }
 
+/**
+ * Satu baris dokumen SPTJM di Tahap 3: berbingkai merah muda, ikon PDF,
+ * judul + ringkasan, badge status, dan aksi tanda tangan / hapus draft /
+ * lihat & unduh PDF.
+ */
 export function PanelTteSptjm({
   jenisDokumen = "SPTJM_TUKIN",
   periodeBulan,
@@ -68,6 +85,10 @@ export function PanelTteSptjm({
   namaPenandatangan = "",
   dokumenTteTerbaru,
   dikembalikanPada = null,
+  dihitungTerakhir = null,
+  ringkasan,
+  wajib = true,
+  terkunci = false,
 }: PanelTteSptjmProps) {
   const [modalTerbuka, setModalTerbuka] = useState(false);
   const [dokumen, setDokumen] = useState(dokumenTteTerbaru);
@@ -113,6 +134,8 @@ export function PanelTteSptjm({
   }, [dokumenTteTerbaru]);
 
   const isSudahTte = dokumen?.status === "TERTANDATANGANI";
+  // Ada dokumen tapi belum ditandatangani = ada DRAFT yang bisa dihapus.
+  const adaDraft = Boolean(dokumen) && !isSudahTte;
 
   // SPTJM YANG DITANDATANGANI SEBELUM REKAPNYA DIKEMBALIKAN SUDAH BASI.
   //
@@ -122,14 +145,17 @@ export function PanelTteSptjm({
   // Dokumennya TIDAK dihapus (itu bukti sah atas apa yang dinyatakan saat
   // itu), tapi tidak boleh lagi tampil sebagai "TTE Sah" untuk angka baru.
   //
-  // Diturunkan dari perbandingan waktu, bukan kolom baru - tidak perlu
-  // migrasi, dan tidak bisa lupa diperbarui.
+  // Aturannya SATU untuk layar dan server: statusSptjm()
+  // (src/business-logic/sptjmUnit.ts) - gerbang kirim di server memakai
+  // fungsi yang sama.
   const perluTteUlang =
-    isSudahTte &&
-    Boolean(dikembalikanPada) &&
-    Boolean(dokumen?.signedAt) &&
-    new Date(dokumen!.signedAt as string).getTime() <
-      new Date(dikembalikanPada as string).getTime();
+    statusSptjm(
+      dokumen
+        ? { status: dokumen.status, signedAt: dokumen.signedAt ? new Date(dokumen.signedAt) : null }
+        : null,
+      dikembalikanPada ? new Date(dikembalikanPada) : null,
+      dihitungTerakhir ? new Date(dihitungTerakhir) : null,
+    ) === "PERLU_TTE_ULANG";
   const cfg = CONFIG_JENIS[jenisDokumen] ?? {
     judul: `SPTJM PPK – ${jenisDokumen}`,
     label: jenisDokumen,
@@ -143,8 +169,55 @@ export function PanelTteSptjm({
     satuanKerja
   );
 
+  // MODE TERKUNCI - rekap sudah dikirim: tidak ada tanda tangan ulang atau
+  // hapus draft (server juga menolaknya); yang tersisa melihat dokumennya.
+  if (terkunci) {
+    const sah = isSudahTte && dokumen?.fileSignedPath;
+    return (
+      <div className="grid gap-x-3 gap-y-2 rounded-xl border border-line bg-surface px-3.5 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="flex min-w-0 items-start gap-2">
+          <FiFileText aria-hidden className="mt-0.5 size-4 shrink-0 text-red" />
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h4 className="truncate text-[13px] font-bold text-ink">{cfg.judul}</h4>
+              {isSudahTte ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-tint px-1.5 py-px text-[10px] font-bold text-green">
+                  Sudah TTE &amp; Diperiksa <FiCheckCircle className="size-2.5" />
+                </span>
+              ) : (
+                <span className="inline-flex shrink-0 items-center rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-medium text-muted">
+                  Tidak ditandatangani
+                </span>
+              )}
+            </div>
+            <p
+              className="truncate text-[11px] text-muted"
+              title={isSudahTte ? `Penandatangan: ${dokumen?.penandatanganNama || "Kasubag TU unit ini"}` : undefined}
+            >
+              SPTJM rincian pembayaran {cfg.label} pegawai {satuanKerja}.
+            </p>
+          </div>
+        </div>
+        {sah && (
+          <a
+            href={`/berkas/tte/${dokumen!.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-lg border border-line bg-surface px-3 py-1.5 text-[11px] font-bold text-ink no-underline hover:border-muted sm:justify-self-end"
+          >
+            Lihat PDF
+          </a>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-xl border border-line-2 bg-surface-2 p-4 space-y-2.5">
+    <div
+      className={`space-y-2 rounded-xl border bg-surface px-3.5 py-2.5 ${
+        isSudahTte && !perluTteUlang ? "border-green/30" : "border-red/40"
+      }`}
+    >
       {notifSukses && (
         <div className="flex items-center justify-between gap-2 rounded-lg border border-green/30 bg-green/10 px-3 py-2 text-xs text-green">
           <span className="flex items-center gap-1.5 font-semibold">
@@ -169,87 +242,76 @@ export function PanelTteSptjm({
         </div>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-teal-tint p-2 text-navy">
-            <FiFileText className="size-5" />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h4 className="text-sm font-bold text-ink">{cfg.judul}</h4>
+      <div className="grid gap-x-3 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="flex min-w-0 items-start gap-2">
+          <FiFileText aria-hidden className="mt-0.5 size-4 shrink-0 text-red" />
+          {/* DUA BARIS SAJA: judul + status, lalu satu baris keterangan.
+              Penandatangan ada di tooltip baris kedua (dan di PDF-nya). */}
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h4 className="truncate text-[13px] font-bold text-ink">{cfg.judul}</h4>
               {perluTteUlang ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-gold-tint px-2 py-0.5 text-[11px] font-bold text-gold-deep">
-                  <FiAlertTriangle className="size-3" /> Perlu TTE Ulang
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gold-tint px-1.5 py-px text-[10px] font-bold text-gold-deep">
+                  <FiAlertTriangle className="size-2.5" /> Perlu TTE Ulang
                 </span>
               ) : isSudahTte ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-green/10 px-2 py-0.5 text-[11px] font-bold text-green">
-                  <FiCheckCircle className="size-3" /> TTE Sah
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green/10 px-1.5 py-px text-[10px] font-bold text-green">
+                  <FiCheckCircle className="size-2.5" /> TTE Sah
                 </span>
               ) : (
-                <span className="inline-flex items-center rounded-full bg-gold-tint px-2 py-0.5 text-[11px] font-bold text-gold-deep">
-                  Belum Ditandatangani
-                </span>
+                <span className="sr-only">Belum ditandatangani</span>
               )}
             </div>
-            {isSudahTte ? (
-              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-muted">
-                <span>
-                  Penandatangan:{" "}
-                  <strong className="font-semibold text-ink">
-                    {dokumen?.penandatanganNama || "Kasubag TU unit ini"}
-                  </strong>
-                </span>
-                {dokumen?.nomorDokumen && (
-                  <span>
-                    No. Dokumen:{" "}
-                    <span className="font-mono font-semibold text-biru">
-                      {dokumen.nomorDokumen}
-                    </span>
-                  </span>
-                )}
-              </div>
-            ) : (
-              <p className="mt-0.5 text-xs text-muted">{cfg.deskripsiBelum}</p>
-            )}
-
-            {/* Kalimat panjangnya DICABUT dari sini: identik di ketiga kartu,
-                jadi dipindah ke satu banner di atas seksinya. Di kartu cukup
-                badge "Perlu TTE Ulang" - yang menandai KARTU MANA, dan itu
-                yang tidak bisa dijawab banner. */}
+            <p
+              className="truncate text-[11px] text-muted"
+              title={
+                isSudahTte
+                  ? `Penandatangan: ${dokumen?.penandatanganNama || "Kasubag TU unit ini"}`
+                  : undefined
+              }
+            >
+              {ringkasan ? <span className="font-mono">{ringkasan}</span> : !isSudahTte ? cfg.deskripsiBelum : null}
+              {isSudahTte && dokumen?.nomorDokumen && (
+                <>
+                  {ringkasan ? " • " : ""}No. <span className="font-mono text-biru">{dokumen.nomorDokumen}</span>
+                </>
+              )}
+              {!wajib && <> &bull; belum diwajibkan</>}
+            </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:justify-end">
           <button
             type="button"
             onClick={() => setModalTerbuka(true)}
             // SAAT BASI, INI AKSI UTAMANYA - bukan mengunduh dokumen yang
             // angkanya sudah berubah.
-            className={`btn btn-sm flex items-center gap-1.5 text-xs ${
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
               perluTteUlang || !isSudahTte
-                ? "btn-primary"
-                : "btn-ghost text-muted hover:text-ink"
+                ? "bg-navy text-white hover:bg-navy-deep"
+                : "border border-line bg-surface text-ink-2 hover:border-muted"
             }`}
           >
             <FiEdit3 className="size-3.5" />
             {isSudahTte ? "TTE Ulang" : "Tanda Tangani SPTJM"}
           </button>
 
-          {/* HAPUS DRAFT - hanya muncul sebelum ditandatangani.
+          {/* HAPUS DRAFT - hanya bila ADA draft dan belum ditandatangani.
 
               Sesudah ber-TTE BSrE, yang tersedia TTE Ulang: dokumen bertanda
               tangan elektronik tidak dibuang lewat tombol. Server menolaknya
               juga (hapusDraftSptjmAction), jadi ini bukan satu-satunya
               penjagaan - tapi tombol yang selalu ditolak itu jalan buntu. */}
-          {!isSudahTte &&
+          {adaDraft &&
             (mintaKonfirmasi ? (
               <>
-                <span className="text-xs font-semibold text-red">Hapus draft ini?</span>
+                <span className="text-[11px] font-semibold text-red">Hapus draft?</span>
                 <button
                   type="button"
                   onClick={hapusDraft}
                   disabled={sedangHapus}
-                  className="btn btn-sm flex items-center gap-1.5 bg-red text-xs text-white hover:opacity-90 disabled:opacity-60"
+                  className="inline-flex items-center gap-1 rounded-lg bg-red px-2.5 py-1.5 text-[11px] font-bold text-white disabled:opacity-60"
                 >
                   <FiTrash2 className="size-3.5" />
                   {sedangHapus ? "Menghapus..." : "Ya, hapus"}
@@ -258,7 +320,7 @@ export function PanelTteSptjm({
                   type="button"
                   onClick={() => setMintaKonfirmasi(false)}
                   disabled={sedangHapus}
-                  className="btn btn-secondary btn-sm text-xs disabled:opacity-60"
+                  className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] font-bold text-ink-2 disabled:opacity-60"
                 >
                   Batal
                 </button>
@@ -270,7 +332,7 @@ export function PanelTteSptjm({
                   setErrorHapus(null);
                   setMintaKonfirmasi(true);
                 }}
-                className="btn btn-ghost btn-sm flex items-center gap-1.5 text-xs text-muted hover:text-red"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red/20 bg-red-tint px-3 py-1.5 text-[11px] font-bold text-red hover:border-red/50"
               >
                 <FiTrash2 className="size-3.5" />
                 Hapus Draft
@@ -279,25 +341,26 @@ export function PanelTteSptjm({
 
           {isSudahTte && dokumen?.fileSignedPath ? (
             <>
-              <span className="hidden sm:inline-block h-4 w-px bg-line-2" />
               <a
                 href={`/berkas/tte/${dokumen.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs"
+                title="Lihat PDF"
+                aria-label={`Lihat PDF ${cfg.judul}`}
+                className="grid size-7 place-items-center rounded-lg border border-line bg-surface text-biru hover:border-biru/50"
               >
-                <FiEye className="size-3.5 text-biru" /> Lihat PDF
+                <FiEye className="size-3.5" />
               </a>
               <a
                 href={`/berkas/tte/${dokumen.id}?unduh=1`}
                 download={namaFileResmi}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`btn btn-sm flex items-center gap-1.5 text-xs ${
-                  perluTteUlang ? "btn-secondary" : "btn-primary"
-                }`}
+                title="Unduh PDF"
+                aria-label={`Unduh PDF ${cfg.judul}`}
+                className="grid size-7 place-items-center rounded-lg border border-line bg-surface text-biru hover:border-biru/50"
               >
-                <FiDownload className="size-3.5" /> Unduh PDF
+                <FiDownload className="size-3.5" />
               </a>
             </>
           ) : null}
@@ -333,4 +396,3 @@ export function PanelTteSptjm({
     </div>
   );
 }
-

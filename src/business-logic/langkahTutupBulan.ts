@@ -27,6 +27,7 @@ import {
   type JenisTabelKalkulasi,
   type StatusUnit,
 } from "./pengirimanUnit";
+import { ringkasSyaratTte, type MasukanSyaratTte } from "./sptjmUnit";
 
 export type JenisLangkah = "PRESENSI" | "PREDIKAT" | "HITUNG";
 
@@ -124,6 +125,12 @@ export interface KeadaanDaftarLangkah {
   jumlahBasi: number;
   jumlahUangMakan: number;
   tabelDiverifikasi: readonly JenisTabelKalkulasi[];
+  /**
+   * TTE SPTJM - gerbang kirim di server menagihnya (sptjmUnit.ts), jadi langkah
+   * KIRIM di dashboard ikut menagihnya. Opsional: tidak diisi = TTE tidak
+   * dihitung (pemanggil lama).
+   */
+  sptjm?: MasukanSyaratTte;
   status: StatusUnit;
 }
 
@@ -154,7 +161,10 @@ export function daftarLangkahTutupBulan(k: KeadaanDaftarLangkah): LangkahPeriode
       "Unggah predikat dari e-Kinerja BKN atau isi manual untuk komponen kinerja 70%.",
     ],
     HITUNG: ["Hitung Tukin & Uang Makan", "Hitung seluruh pegawai unit sekaligus."],
-    PERIKSA: ["Periksa tabel", `Periksa dan centang ${jumlahTabelWajib} tabel.`],
+    PERIKSA:
+      wajib > 0
+        ? ["Periksa tabel", `Periksa dan centang ${jumlahTabelWajib} tabel.`]
+        : ["Tanda tangani SPTJM", "TTE SPTJM lewat BSrE - sekaligus pernyataan bahwa angkanya sudah diperiksa."],
     KIRIM: ["Kirim rekap ke PPABP", "Pengiriman akan mengunci periode."],
   } as const satisfies Record<KodeLangkah, readonly [string, string]>;
 
@@ -184,7 +194,14 @@ export function daftarLangkahTutupBulan(k: KeadaanDaftarLangkah): LangkahPeriode
       `${AWALAN_CATATAN_UANG_MAKAN} ${k.jumlahUangMakan}/${k.jumlahTukin} belum terhitung - periksa golongan`
     );
   }
-  const angkaPeriksa = { x: wajib - belumDiperiksa, y: wajib };
+  // Tanpa tabel wajib, langkah ini menghitung SPTJM yang sah.
+  const tte = k.sptjm ? ringkasSyaratTte(k.sptjm) : null;
+  const angkaPeriksa =
+    wajib > 0
+      ? { x: wajib - belumDiperiksa, y: wajib }
+      : tte
+        ? { x: tte.jumlahSah, y: tte.wajib.length }
+        : null;
 
   // Sesudah terkirim tidak ada catatan di langkah HITUNG (keputusan user
   // 2026-11-09): angka "perlu dihitung ulang" pada rekap yang sudah terkunci
@@ -209,7 +226,7 @@ export function daftarLangkahTutupBulan(k: KeadaanDaftarLangkah): LangkahPeriode
   const selesaiPresensi = k.jumlahPresensi >= total;
   const selesaiPredikat = k.jumlahPredikat >= total;
   const selesaiHitung = k.jumlahTukin >= total && k.jumlahBasi === 0;
-  const selesaiPeriksa = belumDiperiksa === 0;
+  const selesaiPeriksa = wajib > 0 ? belumDiperiksa === 0 : tte ? tte.lengkap : false;
 
   // Alasan terkunci langkah HITUNG: sama dengan aturan di kepala file.
   let alasanHitung: string | null = null;
@@ -219,7 +236,11 @@ export function daftarLangkahTutupBulan(k: KeadaanDaftarLangkah): LangkahPeriode
     );
     alasanHitung = `Lengkapi ${kurang.join(" dan ")} dulu - menghitung sebelum bahannya lengkap membuat angka harus dihitung ulang.`;
   }
-  const alasanPeriksa = selesaiHitung ? null : "Hitung Tukin dulu - tabel yang diperiksa harus sudah final.";
+  const alasanPeriksa = selesaiHitung
+    ? null
+    : wajib > 0
+      ? "Hitung Tukin dulu - tabel yang diperiksa harus sudah final."
+      : "Hitung Tukin dulu - SPTJM harus menandatangani angka yang sudah final.";
 
   const cek = cekBolehKirim(
     {
@@ -227,6 +248,7 @@ export function daftarLangkahTutupBulan(k: KeadaanDaftarLangkah): LangkahPeriode
       jumlahKalkulasi: k.jumlahTukin,
       jumlahBasi: k.jumlahBasi,
       tabelDiverifikasi: k.tabelDiverifikasi,
+      sptjm: k.sptjm,
     },
     k.status
   );
