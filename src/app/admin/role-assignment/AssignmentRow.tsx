@@ -3,14 +3,13 @@
 import { useActionState, useState, useTransition } from "react";
 import type { Role } from "@prisma/client";
 import { putusSemuaSesiAction, ubahAssignmentRoleAction, type UbahAssignmentRoleFormState } from "./actions";
-import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
+import { LABEL_ROLE, SEMUA_ROLE, labelRole } from "../../../auth/roleLabel";
 import { SearchableSelect } from "../../../components/forms/SearchableSelect";
 import { Modal } from "../../../components/feedback/Modal";
 import { URUTAN_ROLE_BAWAAN, pilihRoleBawaan } from "../../../auth/roleAktif";
 import type { BarisAkun } from "./aturanAssignment";
 
 const INITIAL_STATE: UbahAssignmentRoleFormState = {};
-const SEMUA_ROLE: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
 
 /** Aturan role bawaan login, diturunkan dari sumbernya (bukan ditulis tangan) supaya tak bisa beda. */
 export function teksAturanBawaan(): string {

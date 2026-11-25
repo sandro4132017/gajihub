@@ -10,6 +10,7 @@ import {
 } from "../lib/kabar/gabungAktivitas";
 import type { BarisAktivitasMentah, EksporAdk, KursorAktivitas } from "../lib/kabar/gabungAktivitas";
 import { hrefAktivitas } from "../lib/kabar/tautanKabar";
+import { ROLE_PANEL_KABAR } from "../lib/kabar/rolePanelKabar";
 
 /**
  * Isi panel Notifikasi & Aktivitas (panel kanan yang bisa dibuka-tutup).
@@ -141,7 +142,8 @@ interface Cakupan {
 
 /** null = pemakai tidak berhak panel ini sama sekali. */
 function tentukanCakupan(user: AuthUser, satkerDiminta?: string | null): Cakupan | null {
-  if (user.role === "PEGAWAI" || !user.aktif) return null;
+  // Daftar diizinkan: PEGAWAI dan KEPALA_TIM tidak punya panel lintas pegawai.
+  if (!user.aktif || !ROLE_PANEL_KABAR.includes(user.role)) return null;
 
   const satkerScope = user.role === "KASUBAG_TU" ? user.satuanKerja : null;
   // Kasubag TU tanpa unit: lolos guard role tapi tidak cocok dengan satuan

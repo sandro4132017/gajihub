@@ -15,6 +15,8 @@ export interface BarisKoreksiLembur {
   totalUangLembur: number | null;
   tarifPerJam: number;
   hrefNama: string;
+  /** Periode & satker sudah masuk gerbang pilot SPKL (lembur ber-perintah). */
+  berSpkl?: boolean;
 }
 
 /**
@@ -82,6 +84,7 @@ export function TabelKoreksiLemburRinci({
                       pegawaiId={b.id}
                       periodeBulan={periodeBulan}
                       periodeTahun={periodeTahun}
+                      berSpkl={b.berSpkl}
                       totalJamLemburSaatIni={b.totalJam}
                       tarifPerJam={b.tarifPerJam}
                     />

@@ -5,7 +5,7 @@ import { prisma } from "../../../lib/prisma";
 import { getSessionAccount } from "../../../auth/getSessionAccount";
 import { canKelolaAssignmentRole, type AuthUser } from "../../../auth/permissions";
 import { daftarRoleTersedia } from "../../../auth/roleAktif";
-import { LABEL_ROLE, labelRole } from "../../../auth/roleLabel";
+import { LABEL_ROLE, SEMUA_ROLE, labelRole } from "../../../auth/roleLabel";
 import { AksesDitolak } from "../../../components/feedback/AksesDitolak";
 import { AssignmentRow } from "./AssignmentRow";
 import { BuatAkunBaruForm } from "./BuatAkunBaruForm";
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 const PILIH_AKUN = { id: true, nip: true, nama: true, role: true, rolesTambahan: true, satuanKerja: true, aktif: true } as const;
 
 /** Role yang punya tab penyaring - PEGAWAI tidak, karena itu bawaan semua akun. */
-const ROLE_KHUSUS: Role[] = ["KASUBAG_TU", "PPABP", "OSDMA", "PIMPINAN", "ADMIN"];
+const ROLE_KHUSUS: Role[] = SEMUA_ROLE.filter((r) => r !== "PEGAWAI");
 
 function bacaRole(nilai: string | undefined): Role | null {
   return nilai && (ROLE_KHUSUS as string[]).includes(nilai) ? (nilai as Role) : null;

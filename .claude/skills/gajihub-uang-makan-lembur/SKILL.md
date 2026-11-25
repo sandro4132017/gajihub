@@ -123,6 +123,154 @@ baris, dan penyebabnya bukan bug:
   cutinya masuk e-Presensi setelah ADK dibuat.
 - 2 hari WFH Jumat yang Gajihub hitung tapi file asli tidak.
 
+### SPKL (perintah lembur) - keputusan user 2026-11-19
+
+Lembur sah hanya dengan **perintah lembur (SPKL)**; pulang malam bukan lembur
+(lihat peringatan ADK di atas). Ini mengatur pembayaran, bukan angka tarif.
+Status implementasi: tahap 1 (role, gerbang pilot), tahap 2 (tabel
+`perintah_lembur`, `jam_lembur_nyata`), tahap 3a-3b (pembayaran dan gerbang
+per tanggal), dan tahap 4 (dokumen TTE, lihat `gajihub-tte-bsre`) sudah ada di
+worktree `lembur`. Form pembuatan perintah (tahap 5, `/kepala-tim`) sudah ada,
+tetapi TTE lembur sementara DIMATIKAN (lihat keputusan 2026-11-20 di bawah). Migrasi
+`20261119090000_role_kepala_tim` lalu `20261119100000_perintah_lembur` wajib
+diterapkan sebelum kode ini dipakai, karena tarik presensi membaca
+`jam_lembur_nyata`.
+
+Letak kode: `src/business-logic/perintahLembur.ts` (batas kirim 15:00:00.000 WIB
+inklusif, validasi, `cariBentrok`), `src/business-logic/lemburDiperintahkan.ts`
+(pembayaran min(perintah, nyata)), `src/lib/lembur/` (anggota tim, gerbang
+per tanggal, muat perintah). Hari kerja bukan WFO dibayar 0 mutlak, termasuk
+koreksi Kasubag. Koreksi uang lembur manual ditolak untuk satker+periode ber-SPKL.
+Yang masih terbuka: tarik ulang presensi belum memeriksa rekap terkunci
+(perilaku lama), dan perintah yang terkirim sesudah presensi ditarik baru
+berlaku setelah tarik ulang. Keduanya menunggu keputusan user.
+
+- **Tanpa perintah = tidak bisa lembur.** Jam tanpa perintah tidak dibayar.
+- **Perintah lembur** dibuat kepala tim **paling lambat 15.00 WIB hari itu**.
+  Sementara ini TANPA TTE dan bukan syarat bayar (lihat keputusan 2026-11-20).
+- **SPKL harian** = satu dokumen per satker per tanggal dari semua perintah
+  terkirim (lihat keputusan 2026-11-20). Bukan lagi SPKL bulanan.
+- **Jam dibayar = min(jam perintah, jam nyata).** Kalau jam nyata lebih kecil
+  dari perintah, bayar jam nyata dan beri catatan. Jam nyata lebih besar dari
+  perintah tidak dibayar lebih.
+- **Hari libur juga dibatasi perintah.** Lembur hari libur tanpa perintah tidak
+  dibayar, sama dengan hari kerja.
+- **Jam mulai lembur = "jam harus pulang"** (sama dengan aturan "tidak ada jeda
+  sebelum lembur" di bagian jam pulang wajib di bawah).
+- **Pilot**: semua pegawai Biro Keuangan dan BMN sebagai anggota. Gerbang di
+  `src/lib/lembur/gerbangSpkl.ts` (mulai 2026-12-01, `TODO(confirm)`).
+- **Notifikasi**: WA grup dengan pola pengingat absen (`docs/pengingat-absen-bot-whatsapp.md`).
+- **Nomor surat**: dummy sampai ada format resmi.
+- **Status "lembur ditunda" DICABUT untuk SPKL.** Sebelumnya uang lembur dan ADK
+  lembur tertahan sampai tata cara turun. Untuk lembur yang punya perintah SPKL,
+  penahanan itu tidak berlaku lagi. Yang tetap berlaku: tarif dan batas 40 jam
+  mengikuti SBM 2026 di bagian bawah. Kalau tata cara turun dan isinya bertentangan
+  dengan aturan SPKL di sini, minta keputusan user, jangan diam-diam ubah.
+
+#### Keputusan 2026-11-20: SPKL harian tanpa TTE
+
+- **SPKL bulanan diganti SPKL HARIAN.** Satu dokumen per (satker, tanggal) yang
+  memuat semua perintah TERKIRIM dari semua kepala tim satker itu. Formatnya
+  template `docs/lembur/SPKL_Bulan Oktober 2026.pdf` dengan tanggal harian
+  (`src/lib/tte/spklHarianPdf.ts`, `src/lib/lembur/rekapSpklHarian.ts`). Rincian
+  lampiran di subbagian "Lanjutan 2026-11-20" di bawah.
+- **TTE lembur DIMATIKAN SEMENTARA** lewat `TTE_LEMBUR_AKTIF = false` di
+  `src/lib/lembur/sakelarTteLembur.ts`. Kode BSrE tetap ada. Route
+  `/api/lembur/spkl` dan pratinjau (`/api/lembur/perintah`) menjawab 404 saat
+  sakelar mati. Kalau nanti dinyalakan, SPKL harian ber-TTE paling lambat 15.00 WIB.
+- **Kepala tim mengirim tanpa passphrase** sampai 15.00 WIB. Batasnya dicek
+  ulang di dalam transaksi (422).
+- **Kunci berbasis waktu, tanpa job** di `src/business-logic/perintahLembur.ts`:
+  `spklHarianTerkunci` (sesudah 15.00:00.000 WIB) dan `spklHarianSiap` (terkunci
+  + tenggang `TENGGANG_SIAP_MS` 60 dtk, `TODO(confirm)`).
+- **PDF** diunduh di `GET /berkas/spkl-harian` kapan saja, inline, `no-store`.
+  Sebelum `spklHarianSiap` isinya masih bisa bertambah, tapi PDF TANPA cap (keputusan user 2026-11-23)
+  (lihat "Lanjutan 2026-11-20"). TIDAK ADA lagi jawaban 409. Izinnya
+  `canLihatPerintahLemburUnit`: Kasubag TU unit itu, PPABP, ADMIN, dan PIMPINAN
+  untuk unit sendiri. KEPALA_TIM tidak. Kasubag TU dikunci ke satker akunnya.
+- **Halaman `/kasubag/spkl`** kini "SPKL Harian". `PanelSpklBulanan` dihapus.
+  File bulanan (`spklBulananPdf.ts`, `rekapSpklBulanan.ts`) DISIMPAN untuk jalur TTE.
+- **WA**: satu pesan gabungan per hari per satker, dikelompokkan per kepala tim
+  (`susunPesanSpklHarian`). `GET /api/perintah-lembur/notifikasi` memakai
+  `sejak=YYYY-MM-DD` (kursor tanggal EKSKLUSIF; tanpa `sejak` = hari ini WIB).
+  Maks 31 hari per respons dan `take` 620 baris; tanggal yang terpotong ditunda.
+  id `spkl-harian:<tanggal>`. Gajihub TIDAK mencatat "sudah dikirim".
+  **Bot yang lama perlu menyesuaikan format `sejak`.**
+- **Bayar tetap min(diperintahkan, nyata).** Perintah dengan `dokumenTteId` null
+  sah; TTE bukan syarat bayar.
+- **Penanda tangan TTE nanti = KEPALA BIRO.** Perintah boleh dibuat Kepala Tim
+  maupun Kepala Biro (Kepala Biro diberi role KEPALA_TIM lewat UI admin).
+  `canTandatanganiSpklHarian` (rename dari `canTandatanganiSpklBulanan`) MASIH
+  berisi Kasubag TU, `TODO(confirm)` sampai TTE dinyalakan.
+- **TODO(confirm) terbuka**: tanggal TTE dinyalakan; tenggang 60 dtk; jabatan dan
+  catatan PDF tanpa TTE; format nomor SPKL harian; apakah TTE sebelum 15.00
+  sekaligus mengunci hari itu.
+
+#### Ukuran PDF mengikuti berkas asli (keputusan user 2026-11-23)
+
+Sumber: Word "SPKL Lembur September 2026" (halaman 1) dan Excel "SPK LEMBUR BIRO
+KEUANGAN 2026" sheet September (lampiran) milik Biro Keuangan - TIDAK disimpan di
+repo (berisi nama & NIP). Disetujui user setelah melihat contoh ("Sudah sesuai").
+
+- **Halaman 1 kertas LEGAL 612x1008** (`siapkanKertasBerkop({ukuran})`, opt-in;
+  SPTJM tetap A4). Helvetica 12 (pengganti Arial), judul & nomor 13 tidak tebal.
+  Margin kiri 56.7 / kanan 49.6. Tab dari margin: ":" +66, nomor +76, isi +99.25
+  (Pembiayaan & Akun +85). Baris kosong antarbagian 1/2/1/0/3/1/2 seperti docx.
+  Blok TTD: "Ditetapkan/Pada tanggal" rata kiri di margin+276.45; jabatan & nama
+  rata tengah di x 454.85 (`TENGAH_TTD_SPKL_HARIAN`, dicatat sebagai SIGN_X di
+  keywords; dokumen tanpa SIGN_X tetap 412.67), 5 baris kosong. Penyusutan:
+  baris kosong dulu, lalu font sampai 9; masih tidak muat -> galat, bukan
+  teks bertumpuk.
+- **Lampiran A4**, Helvetica 9 (aslinya Calibri 12 dicetak skala +-70%; Calibri
+  sengaja TIDAK ditanam - butuh fontkit & lisensi). Kolom NO 3 / NAMA-NIP 32 /
+  GOL 5 / TANGGAL 10 / KETERANGAN 50 % (TANGGAL dipersempit, keputusan user).
+  Semua sel rata tengah vertikal. Kolom JABATAN di Excel asli tersembunyi ->
+  tidak dicetak. TTD lampiran di tengah kolom KETERANGAN.
+
+#### Lanjutan 2026-11-20: layout PDF, penanda tangan, gelar, PIMPINAN
+
+Keputusan user 2026-11-20, sudah di kode (belum di-commit). Tidak ada migrasi.
+
+- **Layout PDF = template SPKL Oktober 2026**, hanya tanggalnya harian. Halaman 1:
+  judul TIDAK tebal, paragraf rata kiri-kanan (justify). DIPA dan akun untuk 2026
+  diambil dari `src/lib/lembur/anggaranLembur.ts`. Tahun lain memakai
+  `[belum dikonfirmasi]` (`TODO(confirm)`), begitu pula butir Dasar 4 (SK KPA) untuk
+  tahun selain 2026. Butir Dasar 3 memakai teks "Satuan Kerja Unit Pelaksanaan
+  Teknis Pusat" lewat konstanta khusus SPKL harian. Jalur TTE tetap memakai
+  `DASAR_LEMBUR`.
+- **Lampiran portrait** dengan kolom NO | NAMA/NIP (dua sub-baris) | GOL |
+  TANGGAL (bulan) | KETERANGAN. TIDAK ADA kolom JAM dan TIDAK ADA nama kepala tim.
+  NO, GOL, dan TANGGAL rata tengah vertikal (opsi `tengahVertikal` di
+  `src/lib/tte/pdfLemburBersama.ts`, opt-in). Satu baris per pegawai. Urutan: PNS
+  golongan tertinggi dulu, lalu PPPK, lalu tanpa golongan.
+- **Blok tanda tangan** diulang di akhir lampiran, beserta NIP penanda tangan.
+- **Catatan "dibentuk otomatis oleh Gajihub" DIHAPUS** dari PDF atas permintaan user.
+- **Penanda tangan = KEPALA BIRO** dari tabel Pegawai (`src/lib/lembur/penandatanganSpkl.ts`,
+  `muatKepalaBiro`). Tepat SATU pegawai aktif satker itu dengan jabatan diawali
+  "Kepala Biro" dipakai. Nol atau lebih dari satu -> garis titik-titik. Plt/Plh
+  TIDAK ditebak. `gerbangSpkl.ts` kini memuat `namaSingkat` dan `jabatanPenandatangan`.
+- **Gelar dicetak untuk SPKL** (`namaBergelarSpkl` di `src/business-logic/namaPegawai.ts`),
+  untuk daftar pegawai dan Kepala Biro. Ini PENGECUALIAN TERCATAT atas keputusan
+  2026-10-20 "nama cetak tanpa gelar". Dokumen lain tetap tanpa gelar.
+- **PDF sementara**: sebelum `spklHarianSiap` (15.00 WIB + 60 dtk) isinya masih bisa bertambah. Cap
+  "SEMENTARA" di PDF dan akhiran nama file DIHAPUS (keputusan user 2026-11-23); status cukup di halaman
+  (lencana kuning "Sementara s.d. 15.00" / hijau "Selesai", tanpa merah - keputusan user 2026-11-23; tombol "Buka (sementara)"). Respons 409 DIHAPUS. WA tetap hanya setelah siap.
+- **Role PIMPINAN** (pengecualian dari read-only, lihat `gajihub-role-otorisasi`):
+  boleh memantau dan MEMBUAT perintah lembur untuk unit sendiri. Halaman
+  `/pimpinan/lembur` (Pemantauan) dan `/kepala-tim` (Perintah Lembur) di sidebar
+  grup "Lembur". Satker diambil dari tabel Pegawai lewat NIP, bukan
+  `User.satuanKerja`. Tanpa baris Pegawai ditolak. ADMIN tetap ditolak.
+- **Pemberi perintah** tercatat per perintah dan terlihat di Pemantauan. Di WA
+  dan halaman, label netral "Pemberi perintah:".
+- **Tim bukan data database.** Tim (TU, AKLAP, BMN, PA, PTUK) tidak ada di database.
+  Setiap pemberi perintah boleh memilih pegawai mana saja di satker yang sama.
+  Opsi tabel tim = pekerjaan masa depan.
+- **Satu pegawai, satu perintah terkirim per tanggal.** Perintah kedua ditolak 409.
+- **TTE nanti (belum dibangun, tahap 3)**: Kepala Biro menandatangani MANUAL di menu
+  Pimpinan dengan passphrase, setiap hari ada lembur sebelum 15.00. Tidak bisa
+  otomatis karena passphrase tidak boleh disimpan. Kesiapan Kepala Biro perlu
+  disepakati sebelum sakelar `TTE_LEMBUR_AKTIF` dinyalakan.
+
 ### Uang makan & uang lembur mengikuti SBM 2026
 
 Dipicu PDF "SBM 2026" + aturan dari user. Menutup sebagian open item #8

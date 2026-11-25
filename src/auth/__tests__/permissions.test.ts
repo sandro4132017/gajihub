@@ -52,6 +52,7 @@ import {
   canViewDataPayroll,
   canViewApproverDashboard,
   canViewPegawai,
+  canBuatPerintahLembur,
   canEditPresensiKinerjaLangsung,
   canKelolaDataPegawai,
   canEditDataPegawai,
@@ -1023,5 +1024,70 @@ describe("canLihatBuktiKoreksiPresensi - bukti memuat foto pegawai", () => {
   it("satuan kerja pegawai kosong: Kasubag TU tanpa unit tidak lolos", () => {
     const kosong = { nipPegawai: NIP_PEGAWAI, satuanKerjaPegawai: null };
     expect(canLihatBuktiKoreksiPresensi(buatUser({ role: "KASUBAG_TU", satuanKerja: null }), kosong)).toBe(false);
+  });
+});
+
+describe("KEPALA_TIM - bukan approver, hanya dirinya sendiri", () => {
+  it("canViewApproverDashboard: hanya role dalam daftar diizinkan", () => {
+    const lolos = (["KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"] as const).map((role) =>
+      canViewApproverDashboard(buatUser({ role, satuanKerja: SETJEN })),
+    );
+    expect(lolos).toEqual([true, true, true, true, true]);
+    expect(canViewApproverDashboard(buatUser({ role: "KEPALA_TIM", satuanKerja: SETJEN }))).toBe(false);
+    expect(canViewApproverDashboard(buatUser({ role: "PEGAWAI" }))).toBe(false);
+  });
+
+  it("canViewPegawai: hanya dirinya sendiri, bukan anggota timnya", () => {
+    const kepala = buatUser({ role: "KEPALA_TIM", nip: "111", satuanKerja: SETJEN }); // sensitive-ok
+    expect(canViewPegawai(kepala, { nip: "111", satuanKerja: SETJEN })).toBe(true);
+    expect(canViewPegawai(kepala, { nip: "222", satuanKerja: SETJEN })).toBe(false);
+  });
+});
+
+describe("canBuatPerintahLembur", () => {
+  const PILOT = "Biro Keuangan dan Barang Milik Negara";
+  const kepala = buatUser({ role: "KEPALA_TIM", satuanKerja: PILOT });
+
+  it("satker pilot sendiri pada/ setelah tanggal berlaku: diterima", () => {
+    expect(canBuatPerintahLembur(kepala, PILOT, PILOT, "2026-12-01")).toBe(true);
+    expect(canBuatPerintahLembur(kepala, PILOT, PILOT, "2027-01-15")).toBe(true);
+  });
+
+  it("sebelum tanggal berlaku: ditolak", () => {
+    expect(canBuatPerintahLembur(kepala, PILOT, PILOT, "2026-11-30")).toBe(false);
+  });
+
+  it("anggota dari satker lain: ditolak", () => {
+    expect(canBuatPerintahLembur(kepala, PILOT, "Biro Umum", "2026-12-01")).toBe(false);
+  });
+
+  it("satker non-pilot: ditolak walau satker sama", () => {
+    const k = buatUser({ role: "KEPALA_TIM", satuanKerja: BIRO_UMUM });
+    expect(canBuatPerintahLembur(k, BIRO_UMUM, BIRO_UMUM, "2026-12-01")).toBe(false);
+  });
+
+  it("satker kosong: ditolak", () => {
+    expect(canBuatPerintahLembur(kepala, null, null, "2026-12-01")).toBe(false);
+    expect(canBuatPerintahLembur(kepala, "", "", "2026-12-01")).toBe(false);
+    expect(canBuatPerintahLembur(kepala, PILOT, null, "2026-12-01")).toBe(false);
+  });
+
+  it("akun nonaktif: ditolak", () => {
+    expect(canBuatPerintahLembur({ ...kepala, aktif: false }, PILOT, PILOT, "2026-12-01")).toBe(false);
+  });
+
+  it("PIMPINAN: boleh di satker pilot sendiri, ditolak untuk anggota satker lain / di luar pilot / nonaktif", () => {
+    const pimpinan = buatUser({ role: "PIMPINAN", satuanKerja: PILOT });
+    expect(canBuatPerintahLembur(pimpinan, PILOT, PILOT, "2026-12-01")).toBe(true);
+    expect(canBuatPerintahLembur(pimpinan, PILOT, "Biro Umum", "2026-12-01")).toBe(false);
+    expect(canBuatPerintahLembur(pimpinan, PILOT, PILOT, "2026-11-30")).toBe(false);
+    expect(canBuatPerintahLembur(buatUser({ role: "PIMPINAN", satuanKerja: BIRO_UMUM }), BIRO_UMUM, BIRO_UMUM, "2026-12-01")).toBe(false);
+    expect(canBuatPerintahLembur({ ...pimpinan, aktif: false }, PILOT, PILOT, "2026-12-01")).toBe(false);
+  });
+
+  it("ADMIN tanpa role aktif KEPALA_TIM/PIMPINAN ditolak; role lain juga", () => {
+    for (const role of ["ADMIN", "PEGAWAI", "KASUBAG_TU", "PPABP", "OSDMA"] as const) {
+      expect(canBuatPerintahLembur(buatUser({ role, satuanKerja: PILOT }), PILOT, PILOT, "2026-12-01")).toBe(false);
+    }
   });
 });

@@ -31,6 +31,8 @@ Sistem Gajihub terhubung ke **Esign Client Service v2.2.2** (`http://192.168.221
 |---|---|
 | `src/lib/tte/esignClient.ts` | Adapter API Esign Client BSrE (`checkUserStatus`, `signPdf`, `verifyPdf`). Pure HTTP fetch layer dengan Basic Auth. |
 | `src/lib/tte/sptjmPdf.ts` | Generator berkas PDF SPTJM A4 menggunakan `pdf-lib`. Menempatkan tag koordinat `#` untuk QR code dan footer resmi BSrE. |
+| `src/lib/tte/tandatanganiDokumen.ts` | Inti tanda tangan BERSAMA (SPTJM dan dokumen lembur). Memeriksa NIK, sidik, lalu memanggil Esign Client. SPTJM memanggilnya tanpa perubahan perilaku. |
+| `src/lib/tte/suratTugasLemburPdf.ts`, `spklBulananPdf.ts`, `spklHarianPdf.ts`, `pdfLemburBersama.ts`, `lemburTypes.ts` | PDF Surat Tugas lembur harian & SPKL bulanan (jalur TTE, kini di balik sakelar mati), SPKL harian (dibentuk tanpa TTE selama `TTE_LEMBUR_AKTIF` mati, opsi `tanpaTte`; layout = template SPKL Oktober 2026 tanpa kolom JAM, lihat `gajihub-uang-makan-lembur`), dan bagian bersama (`#` di teks bebas menjadi "No."). Nomor dummy dan nomor DIPA/akun masih placeholder (`TODO(confirm)`). |
 | `src/app/tte/actions.ts` | Server Action untuk alur signing: agregasi nominal lembur satker, buat draft PDF, panggil Esign Client, simpan file ke storage, catat `DokumenTte` & `LogGagalTte`. |
 | `src/app/tte/ModalPassphraseTte.tsx` | Dialog interaktif input passphrase bertopeng (`autocomplete="off"`), pengecekan status sertifikat, dan penanganan error BSrE. |
 | `src/app/kasubag/kalkulasi/TahapTteSptjm.tsx` | Tahap 3 (TTE SPTJM) halaman Kalkulasi Unit (rombak 2026-11-16): membungkus panel di bawah dan memuat tiga baris dokumen (Tukin, Uang Makan, Uang Lembur). |
@@ -141,3 +143,33 @@ Selama hidup, SPTJM bisa mencetak nama pegawai yang login dengan tanda tangan
 sertifikat demo - **matikan sebelum SPTJM dipakai sebagai dasar pembayaran**.
 Pemakaiannya dicatat `console.warn` tanpa NIK/passphrase. NIK lain tetap
 ditolak walau sakelar hidup (ada test di `signSptjmSimulasi.test.ts`).
+
+## Dokumen lembur (SPKL) lewat inti bersama (2026-11-19)
+
+- **Dua jenis dokumen lembur**: `SURAT_TUGAS_LEMBUR` (harian, di-TTE kepala tim
+  penerbit) dan `SPKL_BULANAN` (rekap bulanan). Daftar jenis ada di
+  `src/lib/tte/lemburTypes.ts`.
+- **Inti bersama**: `src/lib/tte/tandatanganiDokumen.ts`. SPTJM dan lembur
+  memakai inti yang sama. Tidak ada perubahan perilaku SPTJM.
+- **NIK demo ditolak untuk jalur lembur.** Pemanggil lembur mengirim
+  `izinkanNikDemoBsre=false`, sehingga NIK demo (`NIK_DEMO_BSRE`) ditolak
+  eksplisit dan dicatat di `LogGagalTte` dengan `kategoriError: "NIK_DEMO_DITOLAK"`,
+  tanpa NIK atau passphrase. Sakelar `TTE_IZINKAN_NIK_DEMO` tidak berlaku untuk
+  jalur ini. SPTJM tetap memanggil dengan `izinkanNikDemoBsre: true` (`src/app/tte/actions.ts`).
+- **Izin unduh**: route `src/app/berkas/tte/[id]/route.ts` memilih izin dari
+  `jenisDokumen`. Jenis lembur memakai `canLihatDokumenLembur` (penandatangan
+  sendiri, atau yang boleh melihat SPTJM unit itu). Jenis lain tetap
+  `canLihatDokumenSptjm`.
+- **TTE lembur MATI sementara** (keputusan user 2026-11-20): sakelar
+  `TTE_LEMBUR_AKTIF = false` di `src/lib/lembur/sakelarTteLembur.ts`; perintah
+  dan SPKL harian berjalan tanpa TTE (lihat `gajihub-uang-makan-lembur`).
+- **Penanda tangan SPKL harian** (saat TTE dinyalakan) = KEPALA BIRO,
+  keputusan user 2026-11-20. `canTandatanganiSpklHarian` MASIH berisi Kasubag
+  TU unit (`TODO(confirm)`: cara mengenali akun Kepala Biro). Ubah di
+  `src/auth/permissions.ts` saja.
+- **Modal passphrase**: `ModalPassphraseTte` memakai mode demo bila prop
+  `kirimTandaTangan` tidak diisi. Pemanggil lembur WAJIB mengirim prop itu agar
+  tidak jatuh ke demo.
+- **Nomor dummy**: nomor agenda Surat Tugas dan SPKL (`KP.08.01` / `KU.02`) dan
+  nomor DIPA serta kode akun masih placeholder sampai dikonfirmasi
+  (`TODO(confirm)`). Jangan dicetak sebagai nomor resmi.

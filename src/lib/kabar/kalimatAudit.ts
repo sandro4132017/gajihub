@@ -349,6 +349,22 @@ export function jelaskanAudit(p: {
       return dasar(dengan("Mengoreksi jam presensi", lp), "ubah", periode);
     }
 
+    case "perintah_lembur": {
+      // CREATE = perintah terkirim; UPDATE = surat sudah ditandatangani tetapi
+      // perintahnya tidak jadi (kalah balapan / lewat batas waktu).
+      const tgl = labelTanggal(teksString(d.tanggal) ?? "");
+      if (aksi === "UPDATE") {
+        return dasar(dengan("Surat tugas lembur ditandatangani tetapi tidak berlaku", tgl ? `(${tgl})` : undefined), "ubah");
+      }
+      return dasar(dengan("Mengirim perintah lembur", tgl ? `untuk ${tgl}` : undefined), "kirim");
+    }
+
+    case "spkl_bulanan": {
+      // CREATE = SPKL bulanan ditandatangani (data.periode = "bulan/tahun").
+      const periode = periodeDariGarisMiring(d.periode);
+      return dasar(dengan("Menandatangani SPKL bulanan", labelPeriode(periode)), "kirim", periode);
+    }
+
     case "kendala_epresensi": {
       const tgl = labelTanggal(entitasId.slice(-10));
       if (aksi === "DELETE") return dasar(dengan("Mencabut penanda kendala e-Presensi", tgl ? `(${tgl})` : undefined), "hapus");

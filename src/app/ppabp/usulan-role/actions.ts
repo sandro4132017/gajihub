@@ -3,6 +3,7 @@
 import { pesanGalatUntukLayar } from "@/lib/koneksi/galatSumber";
 import { revalidatePath } from "next/cache";
 import type { Role } from "@prisma/client";
+import { SEMUA_ROLE } from "../../../auth/roleLabel";
 import { prisma } from "../../../lib/prisma";
 import { getSessionAccount, ambilUserSesi } from "../../../auth/getSessionAccount";
 import { canUsulkanPerubahanRole, type AuthUser } from "../../../auth/permissions";
@@ -12,7 +13,7 @@ export interface UsulkanPerubahanRoleFormState {
   success?: string;
 }
 
-const ROLE_VALID: Role[] = ["PEGAWAI", "KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
+const ROLE_VALID: readonly Role[] = SEMUA_ROLE;
 
 /**
  * PPABP MENGUSULKAN perubahan role - BUKAN eksekusi (itu wewenang ADMIN,

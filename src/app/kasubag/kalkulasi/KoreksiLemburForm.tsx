@@ -11,14 +11,25 @@ export function KoreksiLemburForm({
   periodeTahun,
   totalJamLemburSaatIni,
   tarifPerJam,
+  berSpkl = false,
 }: {
   pegawaiId: string;
   periodeBulan: number;
   periodeTahun: number;
   totalJamLemburSaatIni: number;
   tarifPerJam: number;
+  /** Satker ber-SPKL di periode ini: total manual tidak berlaku (ditolak juga di server). */
+  berSpkl?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(koreksiUangLemburAction, INITIAL_STATE);
+
+  if (berSpkl) {
+    return (
+      <p className="max-w-xs text-xs text-muted">
+        Jam lembur mengikuti perintah lembur (SPKL) dan dikoreksi per hari di tabel Rincian Jam Lembur.
+      </p>
+    );
+  }
 
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-2">

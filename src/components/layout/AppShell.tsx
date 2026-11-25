@@ -9,6 +9,7 @@ import { AccountMenu } from "./AccountMenu";
 import { PanelKabar } from "./PanelKabar";
 import { GajihubLogo } from "./GajihubLogo";
 import { labelRole } from "../../auth/roleLabel";
+import { ROLE_PANEL_KABAR } from "../../lib/kabar/rolePanelKabar";
 import { TAMPILKAN_MENU_LEMBUR } from "../../lib/format/tampilUangLembur";
 import type { Role } from "@prisma/client";
 import type { IconType } from "react-icons";
@@ -25,7 +26,7 @@ import {
   RiScalesLine,
   RiSettingsLine,
 } from "react-icons/ri";
-import { FiUser } from "react-icons/fi";
+import { FiClock, FiUser } from "react-icons/fi";
 import { GrDocument, GrDocumentUser, GrGroup, GrUserAdmin } from "react-icons/gr";
 import { IoMdCheckboxOutline } from "react-icons/io";
 import { FaClock, FaUtensils } from "react-icons/fa6";
@@ -83,7 +84,15 @@ const MENU_KASUBAG = [
   },
   { href: "/tukin", label: "Tukin", Ikon: RiMoneyDollarCircleLine },
   { href: "/uang-makan", label: "Uang Makan", Ikon: FaUtensils },
-  ...MENU_UANG_LEMBUR,
+  // Satu grup supaya jumlah entri menu tidak bertambah (gajihub-laws-of-ux bagian 3).
+  {
+    label: "Lembur",
+    Ikon: FaClock,
+    anak: [
+      ...(TAMPILKAN_MENU_LEMBUR ? [{ href: "/uang-lembur", label: "Uang Lembur" }] : []),
+      { href: "/kasubag/spkl", label: "SPKL Harian" },
+    ],
+  },
   {
     href: "/kasubag/banding",
     label: "Verifikasi Banding",
@@ -247,6 +256,16 @@ const MENU_PIMPINAN = [
     label: "Dashboard Lintas Unit",
     Ikon: MdSpaceDashboard,
   },
+  // Pengecualian lembur (keputusan user 2026-11-20): Pimpinan memantau dan
+  // memberi perintah lembur di UNIT SENDIRI.
+  {
+    label: "Lembur",
+    Ikon: FaClock,
+    anak: [
+      { href: "/pimpinan/lembur", label: "Pemantauan" },
+      { href: "/kepala-tim", label: "Perintah Lembur" },
+    ],
+  },
   {
     href: "/saya",
     label: "Data Saya",
@@ -254,12 +273,21 @@ const MENU_PIMPINAN = [
   },
 ];
 
-const MENU_PEGAWAI = [
+const ITEM_DATA_SAYA = {
+  href: "/saya",
+  label: "Data Saya",
+  Ikon: FiUser,
+};
+
+const MENU_PEGAWAI = [ITEM_DATA_SAYA];
+
+const MENU_KEPALA_TIM = [
   {
-    href: "/saya",
-    label: "Data Saya",
-    Ikon: FiUser,
+    href: "/kepala-tim",
+    label: "Perintah Lembur",
+    Ikon: FiClock,
   },
+  ITEM_DATA_SAYA,
 ];
 
 type ItemMenu = {
@@ -324,7 +352,9 @@ export function AppShell({
               ? MENU_ADMIN
               : account.role === "PIMPINAN"
                 ? MENU_PIMPINAN
-                : MENU_APPROVER;
+                : account.role === "KEPALA_TIM"
+                  ? MENU_KEPALA_TIM
+                  : MENU_APPROVER;
 
   return (
     <div
@@ -601,7 +631,7 @@ export function AppShell({
           atas, panelnya tertutup sampai diklik. PEGAWAI tidak dapat: ditolak
           di sisi server, dan tombolnya tidak ditampilkan sama sekali. Aturan
           cakupan per role ada di kabarData.ts. */}
-      <PanelKabar tampilkan={account.role !== "PEGAWAI"} />
+      <PanelKabar tampilkan={ROLE_PANEL_KABAR.includes(account.role)} />
     </div>
   );
 }

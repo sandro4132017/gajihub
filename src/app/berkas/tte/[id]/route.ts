@@ -12,7 +12,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ambilUserSesi } from "@/auth/getSessionAccount";
-import { canLihatDokumenSptjm, type AuthUser } from "@/auth/permissions";
+import { canLihatDokumenLembur, canLihatDokumenSptjm, type AuthUser } from "@/auth/permissions";
+import { apakahJenisLembur } from "@/lib/tte/lemburTypes";
 import { jalurAman, bacaBerkasDalamAkar } from "@/lib/storage/berkasPrivat";
 import { GALAT, mintaInline, responBerkas } from "@/lib/storage/responBerkas";
 
@@ -31,6 +32,8 @@ export async function GET(
     .findUnique({
       where: { id },
       select: {
+        jenisDokumen: true,
+        penandatanganNip: true,
         status: true,
         satuanKerja: true,
         fileDraftPath: true,
@@ -46,7 +49,16 @@ export async function GET(
     satuanKerja: user.satuanKerja,
     aktif: user.aktif,
   };
-  if (!canLihatDokumenSptjm(authUser, dokumen.satuanKerja)) return GALAT.tanpaIzin();
+  // Dokumen lembur punya aturan sendiri (penandatangan boleh mengunduh
+  // suratnya); jenis lainnya memakai izin SPTJM seperti sebelumnya.
+  const boleh = apakahJenisLembur(dokumen.jenisDokumen)
+    ? canLihatDokumenLembur(authUser, {
+        jenis: dokumen.jenisDokumen,
+        satuanKerja: dokumen.satuanKerja,
+        penandatanganNip: dokumen.penandatanganNip,
+      })
+    : canLihatDokumenSptjm(authUser, dokumen.satuanKerja);
+  if (!boleh) return GALAT.tanpaIzin();
 
   // Yang sudah tertandatangani menyajikan berkas bertanda tangan; selain itu draft.
   const ref =

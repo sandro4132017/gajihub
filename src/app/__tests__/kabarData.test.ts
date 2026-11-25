@@ -92,6 +92,12 @@ describe("kursor", () => {
 });
 
 describe("cakupan", () => {
+  it("KEPALA_TIM tidak dapat panel dan tidak ada query lintas pegawai", async () => {
+    expect((await ambilIsiPanelKabar(user("KEPALA_TIM", "Biro Contoh"))).boleh).toBe(false);
+    expect(await hitungNotifikasiKabar(user("KEPALA_TIM", "Biro Contoh"))).toBeNull();
+    expect(palsu.auditTrail.findMany).not.toHaveBeenCalled();
+  });
+
   it("PEGAWAI dan akun nonaktif tidak dapat panel", async () => {
     expect((await ambilIsiPanelKabar(user("PEGAWAI"))).boleh).toBe(false);
     expect((await ambilIsiPanelKabar({ ...user("PPABP"), aktif: false })).boleh).toBe(false);

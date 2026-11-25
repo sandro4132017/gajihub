@@ -36,7 +36,7 @@ describe("AssignmentRow - role bawaan login", () => {
     const h = html(baris());
     expect(h).not.toContain("Role utama tetap jadi bawaan saat login");
     expect(h).toContain(teksAturanBawaan());
-    expect(teksAturanBawaan()).toContain("Pimpinan, Kasubag TU, PPABP, OSDMA, Pegawai");
+    expect(teksAturanBawaan()).toContain("Pimpinan, Kasubag TU, PPABP, OSDMA, Kepala Tim, Pegawai");
   });
 
   it("label Role utama tetap ada, dan tombol Putus semua sesi tersedia", () => {

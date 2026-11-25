@@ -28,6 +28,7 @@
 
 import type { BarisRekapPresensi } from "./rekapPresensi";
 import type { BarisPresensiPdf, LaporanPresensiPdf } from "./presensiPdf";
+import { terapkanPerintahLembur } from "./lemburDiperintahkan";
 import type { JenisCuti } from "../types/index";
 import { uraiJenisCuti, LABEL_JENIS_CUTI } from "./jenisCuti";
 import { TARIF_POTONGAN_PASAL_13 } from "./tukin";
@@ -426,6 +427,14 @@ export interface RincianHariPdf {
   jamLembur: number;
   hariLibur: boolean;
   berhakMakanLembur: boolean;
+  /**
+   * Jam lembur nyata dari presensi SEBELUM dibatasi perintah lembur (SPKL).
+   * `null` kalau SPKL tidak berlaku (parameter `perintahLembur` tidak diisi);
+   * di situ `jamLembur` adalah satu-satunya angka.
+   */
+  jamLemburNyata: number | null;
+  /** Sebab jam dibayar berbeda dari jam nyata/perintah; null = tidak ada yang perlu dijelaskan. */
+  catatanLembur: string | null;
 }
 
 export interface BarisDibuang {
@@ -572,7 +581,23 @@ export function rekapDariLaporanPdf(
    * KOSONG = perilaku persis seperti sebelum kalender ini ada: hari libur cuma
    * Sabtu & Minggu. Jadi tabel yang belum diisi tidak mengubah apa pun.
    */
-  hariLiburNasional: ReadonlyMap<string, string> = new Map()
+  hariLiburNasional: ReadonlyMap<string, string> = new Map(),
+  /**
+   * Perintah lembur (SPKL) pegawai INI: tanggal ISO -> jam diperintahkan.
+   *
+   * `null`/tidak diisi = SPKL tidak berlaku, perilaku lama PERSIS. DIISI
+   * (termasuk Map kosong) = tanpa perintah di suatu tanggal berarti jam lembur
+   * hari itu 0, dan jam dibayar = min(perintah, jam nyata) - lihat
+   * lemburDiperintahkan.ts (keputusan user 2026-11-19).
+   */
+  perintahLembur: ReadonlyMap<string, number> | null = null,
+  /**
+   * Tanggal mana yang tunduk pada aturan SPKL. null = SEMUA tanggal (perilaku
+   * 3a). Diisi untuk periode yang separuh di dalam gerbang pilot: tanggal
+   * SEBELUM berlakuMulai tetap perilaku lama (tidak dinolkan) dan
+   * `jamLemburNyata`-nya null. Hanya bermakna bila `perintahLembur` diisi.
+   */
+  spklBerlakuPadaTanggal: ((tanggalIso: string) => boolean) | null = null
 ): HasilRekapDariPdf {
   const catatan: string[] = [...laporan.peringatan];
   const dibuang: BarisDibuang[] = [];
@@ -1095,6 +1120,8 @@ export function rekapDariLaporanPdf(
         jamLembur: 0,
         hariLibur,
         berhakMakanLembur: false,
+        jamLemburNyata: null,
+        catatanLembur: null,
       });
     }
 
@@ -1293,6 +1320,8 @@ export function rekapDariLaporanPdf(
             jamLembur: jam,
             hariLibur,
             berhakMakanLembur: adaBlokDuaJam,
+            jamLemburNyata: null,
+            catatanLembur: null,
           });
         }
       }
@@ -1315,6 +1344,32 @@ export function rekapDariLaporanPdf(
   // Yang mengesahkan lembur adalah surat perintah lembur, dan petugas yang
   // mengadu hitungan mesin kepadanya - lihat `alasan` yang wajib diisi di
   // model KoreksiPresensiHarian.
+  // Disusun ulang dari NOL atas seluruh rincian - bukan ditambal selisihnya.
+  // Menambal berarti mempercayai bahwa akumulasi di atas dan koreksi memakai
+  // aturan yang sama persis, dan itu hubungan yang gampang lepas tanpa ada yang
+  // menyadarinya. Dipakai 4b (koreksi petugas) dan 4c (perintah lembur) supaya
+  // total bulanan selalu bersumber dari satu cara.
+  const susunUlangTotalLembur = (): void => {
+    jamLemburKerja = 0;
+    jamLemburLibur = 0;
+    hariLemburKerja = 0;
+    hariMakanLemburKerja = 0;
+    hariMakanLemburLibur = 0;
+    hitung.hariLembur = 0;
+    for (const h of hari) {
+      if (h.jamLembur <= 0) continue;
+      hitung.hariLembur++;
+      if (h.hariLibur) {
+        jamLemburLibur += h.jamLembur;
+        if (h.berhakMakanLembur) hariMakanLemburLibur++;
+      } else {
+        jamLemburKerja += h.jamLembur;
+        hariLemburKerja++;
+        if (h.berhakMakanLembur) hariMakanLemburKerja++;
+      }
+    }
+  };
+
   const tanggalDikoreksiLembur = new Set<string>();
   for (const [iso, k] of koreksiJam) {
     if (k.jamLembur === undefined || k.jamLembur === null) continue;
@@ -1343,29 +1398,40 @@ export function rekapDariLaporanPdf(
     tanggalDikoreksiLembur.add(iso);
   }
 
-  if (tanggalDikoreksiLembur.size > 0) {
-    // Disusun ulang dari NOL atas seluruh rincian - bukan ditambal selisihnya.
-    // Menambal berarti mempercayai bahwa akumulasi di atas dan koreksi di sini
-    // memakai aturan yang sama persis, dan itu hubungan yang gampang lepas
-    // tanpa ada yang menyadarinya.
-    jamLemburKerja = 0;
-    jamLemburLibur = 0;
-    hariLemburKerja = 0;
-    hariMakanLemburKerja = 0;
-    hariMakanLemburLibur = 0;
-    hitung.hariLembur = 0;
-    for (const h of hari) {
-      if (h.jamLembur <= 0) continue;
-      hitung.hariLembur++;
-      if (h.hariLibur) {
-        jamLemburLibur += h.jamLembur;
-        if (h.berhakMakanLembur) hariMakanLemburLibur++;
-      } else {
-        jamLemburKerja += h.jamLembur;
-        hariLemburKerja++;
-        if (h.berhakMakanLembur) hariMakanLemburKerja++;
+  if (tanggalDikoreksiLembur.size > 0) susunUlangTotalLembur();
+
+  // --- 4c. PERINTAH LEMBUR (SPKL) ---------------------------------------------
+  // Sesudah 4b: koreksi petugas = jam NYATA, lalu dibatasi perintah. Hanya
+  // berlaku kalau `perintahLembur` diisi; null = perilaku lama.
+  if (perintahLembur !== null) {
+    const idxDalam: number[] = [];
+    hari.forEach((h, i) => {
+      if (spklBerlakuPadaTanggal === null || spklBerlakuPadaTanggal(h.tanggalIso)) idxDalam.push(i);
+    });
+    const hasil = terapkanPerintahLembur(
+      idxDalam.map((i) => hari[i]),
+      perintahLembur
+    );
+    idxDalam.forEach((i, k) => {
+      hari[i] = hasil.hari[k];
+    });
+    for (const i of idxDalam) {
+      const h = hari[i];
+      // Catatan "dihitung sebagai lembur HARI KERJA (tarif 1x)" menyatakan ada
+      // jam yang dibayar; kalau perintah membuat jam dibayar hari itu 0,
+      // catatannya menyesatkan dan dibuang (alasannya sudah di catatanLembur).
+      if (h.jamLembur === 0) {
+        const awalanCatatan = `${h.tanggalIso} (`;
+        for (let k = catatan.length - 1; k >= 0; k--) {
+          if (catatan[k].startsWith(awalanCatatan) && catatan[k].includes("lembur HARI KERJA (tarif 1x)")) {
+            catatan.splice(k, 1);
+          }
+        }
       }
+      if (h.catatanLembur !== null) catatan.push(`${h.tanggalIso}: ${h.catatanLembur}.`);
     }
+    catatan.push(...hasil.catatanTanpaPresensi);
+    susunUlangTotalLembur();
   }
 
   // --- 5. Rakit rekap bulanan -------------------------------------------------

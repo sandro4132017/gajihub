@@ -40,6 +40,21 @@ interface ModalPassphraseTteProps {
   nipPenandatanganDefault?: string;
   jabatanPenandatanganDefault?: string;
   onSukses?: (result: TteActionResult) => void;
+  /**
+   * Jalur kirim tanda tangan milik dokumen lain (mis. lembur). Dipanggil
+   * dengan NIK dan passphrase yang diketik; passphrase hanya lewat argumen
+   * ini dan tidak disimpan. Tanpa prop ini perilaku SPTJM lama persis, termasuk
+   * akun demo. Dengan prop ini akun demo TIDAK dipakai (nilai bawaan kosong).
+   */
+  kirimTandaTangan?: (nik: string, passphrase: string) => Promise<TteActionResult>;
+  /**
+   * Hanya dipakai bersama `kirimTandaTangan`: nama dokumen di judul/hasil
+   * (mis. "Surat Tugas Lembur") dan ringkasan satu baris di kotak rangkuman.
+   * Dengan `kirimTandaTangan` modal TIDAK menampilkan pratinjau draft SPTJM,
+   * penyunting nomor SPTJM, maupun akun uji coba - semuanya milik jalur SPTJM.
+   */
+  labelDokumen?: string;
+  ringkasan?: string;
 }
 
 export function ModalPassphraseTte({
@@ -60,7 +75,11 @@ export function ModalPassphraseTte({
   nipPenandatanganDefault = "",
   jabatanPenandatanganDefault = "Pejabat Pembuat Komitmen",
   onSukses,
+  kirimTandaTangan,
+  labelDokumen,
+  ringkasan,
 }: ModalPassphraseTteProps) {
+  const pakaiDemo = !kirimTandaTangan;
   const router = useRouter();
   const [state, setState] = useState<TteActionResult>(INITIAL_STATE);
   const [pending, setPending] = useState(false);
@@ -77,9 +96,10 @@ export function ModalPassphraseTte({
     return () => clearInterval(t);
   }, [pending]);
   const [passphrase, setPassphrase] = useState(
-    defaultNik === "0803202100007062" ? "Bsre2026.#!" : ""
+    pakaiDemo && defaultNik === "0803202100007062" ? "Bsre2026.#!" : ""
   );
-  const [nik, setNik] = useState(defaultNik);
+  // Jalur kirimTandaTangan (lembur) tidak pernah memulai dari NIK demo bawaan.
+  const [nik, setNik] = useState(pakaiDemo ? defaultNik : "");
   const wasTerbukaRef = useRef(false);
 
   const romawi =
@@ -190,10 +210,16 @@ export function ModalPassphraseTte({
       setNomorKustom(baru);
       setIsModeKustom(parsed.isKustom);
 
-      const targetNik = nik || defaultNik || "0803202100007062";
-      if (!nik) setNik(targetNik);
-      if (!passphrase && targetNik === "0803202100007062") {
-        setPassphrase("Bsre2026.#!");
+      if (!pakaiDemo) {
+        // Jalur kirimTandaTangan: kredensial tidak pernah dibawa ke pembukaan berikutnya.
+        setNik("");
+        setPassphrase("");
+      } else {
+        const targetNik = nik || (pakaiDemo ? defaultNik || "0803202100007062" : "");
+        if (!nik) setNik(targetNik);
+        if (pakaiDemo && !passphrase && targetNik === "0803202100007062") {
+          setPassphrase("Bsre2026.#!");
+        }
       }
     }
     wasTerbukaRef.current = terbuka;
@@ -202,7 +228,7 @@ export function ModalPassphraseTte({
   // Cek status sertifikat saat modal terbuka atau NIK berubah (debounced 250ms agar tidak memicu double request)
   useEffect(() => {
     if (!terbuka) return;
-    const cleanNik = (nik || defaultNik || "0803202100007062").trim();
+    const cleanNik = (nik || (pakaiDemo ? defaultNik || "0803202100007062" : "")).trim();
 
     const timer = setTimeout(() => {
       periksaStatusNik(cleanNik);
@@ -215,6 +241,10 @@ export function ModalPassphraseTte({
 
   const handleTutup = () => {
     setState(INITIAL_STATE);
+    if (!pakaiDemo) {
+      setPassphrase("");
+      setNik("");
+    }
     onTutup();
   };
 
@@ -267,6 +297,18 @@ export function ModalPassphraseTte({
     setPending(true);
     setState({});
     try {
+      if (kirimTandaTangan) {
+        const hasil = await kirimTandaTangan(nik, passphrase);
+        setState(hasil);
+        if (hasil.success) {
+          // Kredensial tidak perlu bertahan di memori setelah dokumen tertanda tangani.
+          setPassphrase("");
+          setNik("");
+          if (onSukses) onSukses(hasil);
+          router.refresh();
+        }
+        return;
+      }
       const r = await fetch("/api/tte", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -303,9 +345,13 @@ export function ModalPassphraseTte({
     <Modal
       terbuka={terbuka}
       judul={
-        state.success
-          ? `SPTJM ${labelJenis} Berhasil Ditandatangani!`
-          : `Tanda Tangan Elektronik SPTJM PPK - ${labelJenis}`
+        pakaiDemo
+          ? state.success
+            ? `SPTJM ${labelJenis} Berhasil Ditandatangani!`
+            : `Tanda Tangan Elektronik SPTJM PPK - ${labelJenis}`
+          : state.success
+            ? `${labelDokumen ?? "Dokumen"} Berhasil Ditandatangani!`
+            : `Tanda Tangan Elektronik ${labelDokumen ?? "Dokumen"}`
       }
       nada={state.success ? "sukses" : state.error ? "bahaya" : "netral"}
       onTutup={pending ? null : handleTutup}
@@ -325,12 +371,12 @@ export function ModalPassphraseTte({
                   </a>
                   <a
                     href={state.downloadUrl}
-                    download={namaFileResmi}
+                    download={pakaiDemo ? namaFileResmi : undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs"
                   >
-                    <FiDownload className="size-3.5" /> Unduh PDF SPTJM TTE
+                    <FiDownload className="size-3.5" /> Unduh PDF {pakaiDemo ? "SPTJM TTE" : "TTE"}
                   </a>
                 </>
               )}
@@ -360,10 +406,18 @@ export function ModalPassphraseTte({
                     : "Tanda Tangan Elektronik (TTE) Selesai!"}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-ink">
-                  Dokumen <strong>SPTJM {labelJenis}</strong> periode{" "}
-                  <strong>
-                    {periodeBulan}/{periodeTahun}
-                  </strong>{" "}
+                  {pakaiDemo ? (
+                    <>
+                      Dokumen <strong>SPTJM {labelJenis}</strong> periode{" "}
+                      <strong>
+                        {periodeBulan}/{periodeTahun}
+                      </strong>
+                    </>
+                  ) : (
+                    <>
+                      Dokumen <strong>{labelDokumen ?? "dokumen"}</strong>
+                    </>
+                  )}{" "}
                   {state.isSimulasi
                     ? "diberi stempel simulasi, bukan tanda tangan elektronik."
                     : "telah berhasil disahkan secara elektronik menggunakan sertifikat BSrE BSSN."}
@@ -374,17 +428,25 @@ export function ModalPassphraseTte({
             <div className="mt-3.5 space-y-1.5 rounded-lg border border-line-2 bg-surface p-3 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted">Nomor Surat:</span>
-                <span className="font-mono font-bold text-ink">NOMOR {nomorDokumen}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted">Nama Berkas:</span>
-                <span className="font-mono text-[11px] font-semibold text-biru truncate">
-                  {namaFileResmi}
+                <span className="font-mono font-bold text-ink">
+                  NOMOR {pakaiDemo ? nomorDokumen : state.nomorDokumen}
                 </span>
               </div>
+              {pakaiDemo && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted">Nama Berkas:</span>
+                  <span className="font-mono text-[11px] font-semibold text-biru truncate">
+                    {namaFileResmi}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted">Penandatangan:</span>
-                <span className="font-semibold text-ink">{namaPenandatanganDefault || "Data pegawai akun ini belum ada"}</span>
+                <span className="font-semibold text-ink">
+                  {pakaiDemo
+                    ? namaPenandatanganDefault || "Data pegawai akun ini belum ada"
+                    : state.penandatanganNama || "-"}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted">ID Dokumen BSrE:</span>
@@ -417,25 +479,27 @@ export function ModalPassphraseTte({
               <div className="flex items-start gap-2">
                 <FiFileText className="mt-0.5 size-4 text-biru shrink-0" />
                 <div>
-                  <span className="font-bold text-ink">{labelJenis}</span>
+                  <span className="font-bold text-ink">{pakaiDemo ? labelJenis : labelDokumen}</span>
                   <p className="text-muted">
-                    Periode: Bulan {periodeBulan} / Tahun {periodeTahun}
+                    {pakaiDemo ? `Periode: Bulan ${periodeBulan} / Tahun ${periodeTahun}` : ringkasan}
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handlePratinjauDraft}
-                disabled={draftPending}
-                className="btn btn-secondary btn-sm flex items-center gap-1 text-[11px] shrink-0"
-              >
-                <FiEye className="size-3" />
-                {draftPending ? "Memuat Draft..." : "Pratinjau Draft"}
-              </button>
+              {pakaiDemo && (
+                <button
+                  type="button"
+                  onClick={handlePratinjauDraft}
+                  disabled={draftPending}
+                  className="btn btn-secondary btn-sm flex items-center gap-1 text-[11px] shrink-0"
+                >
+                  <FiEye className="size-3" />
+                  {draftPending ? "Memuat Draft..." : "Pratinjau Draft"}
+                </button>
+              )}
             </div>
 
             <div className="border-t border-line-2 pt-1.5 text-[11px] text-muted flex items-center justify-between">
-              <span>Penandatangan (PPK):</span>
+              <span>{pakaiDemo ? "Penandatangan (PPK):" : "Penandatangan:"}</span>
               <span className="font-semibold text-ink">{namaPenandatanganDefault || "Data pegawai akun ini belum ada"}</span>
             </div>
           </div>
@@ -444,7 +508,8 @@ export function ModalPassphraseTte({
             <div className="text-[11px] text-red">{draftError}</div>
           )}
 
-          {/* Penomoran Dokumen Sesuai Format Resmi Tata Naskah Dinas Kemnaker */}
+          {/* Penomoran Dokumen Sesuai Format Resmi Tata Naskah Dinas Kemnaker (hanya SPTJM) */}
+          {pakaiDemo && (
           <div>
             <div className="flex items-center justify-between">
               <label
@@ -513,6 +578,7 @@ export function ModalPassphraseTte({
 
             <input type="hidden" name="nomorDokumen" value={nomorDokumen} />
           </div>
+          )}
 
           {/* Status Sertifikat BSrE */}
           {statusSertifikat.loading ? (
@@ -542,7 +608,8 @@ export function ModalPassphraseTte({
                   Status Sertifikat BSrE: {labelStatusSertifikat(statusSertifikat.status)}
                 </span>
 
-                {(statusSertifikat.status === "NOT_REGISTERED" || statusSertifikat.status === "BELUM_TERDAFTAR") &&
+                {pakaiDemo &&
+                (statusSertifikat.status === "NOT_REGISTERED" || statusSertifikat.status === "BELUM_TERDAFTAR") &&
                 nik.trim() !== "0803202100007062" ? (
                   <button
                     type="button"
@@ -573,7 +640,7 @@ export function ModalPassphraseTte({
               <label className="block text-xs font-semibold text-ink" htmlFor="tte-nik">
                 NIK Penandatangan BSrE
               </label>
-              {nik !== "0803202100007062" && (
+              {pakaiDemo && nik !== "0803202100007062" && (
                 <button
                   type="button"
                   onClick={gunakanAkunDemo}
@@ -594,7 +661,12 @@ export function ModalPassphraseTte({
               required
             />
             <p className="mt-0.5 text-[10px] text-muted">
-              *Masukkan 16 digit <strong>NIK</strong> (bukan NIP). Akun uji coba server BSrE ini: <code>0803202100007062</code>
+              *Masukkan 16 digit <strong>NIK</strong> (bukan NIP).
+              {pakaiDemo && (
+                <>
+                  {" "}Akun uji coba server BSrE ini: <code>0803202100007062</code>
+                </>
+              )}
             </p>
           </div>
 
@@ -604,13 +676,15 @@ export function ModalPassphraseTte({
               <label className="block text-xs font-semibold text-ink" htmlFor="tte-passphrase">
                 Passphrase BSrE
               </label>
-              <button
-                type="button"
-                onClick={gunakanAkunDemo}
-                className="text-[11px] font-medium text-biru hover:underline"
-              >
-                Gunakan Akun Demo
-              </button>
+              {pakaiDemo && (
+                <button
+                  type="button"
+                  onClick={gunakanAkunDemo}
+                  className="text-[11px] font-medium text-biru hover:underline"
+                >
+                  Gunakan Akun Demo
+                </button>
+              )}
             </div>
             <div className="relative mt-1">
               <input

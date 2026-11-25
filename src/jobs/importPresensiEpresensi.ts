@@ -26,6 +26,7 @@ import { PrismaClient } from "@prisma/client";
 import { tarikPresensiPeriode } from "../adapters/EpresensiAdapter";
 import { simpanHasilPresensi } from "./simpanRekapPresensi";
 import { muatKendalaPeriode, muatKoreksiPeriode } from "../lib/kendalaPresensi";
+import { muatPerintahLemburPeriode } from "../lib/lembur/muatPerintahLembur";
 import { muatHariLiburPeriode } from "../lib/hariLibur";
 
 try {
@@ -68,7 +69,21 @@ async function main() {
   if (hariLibur.size > 0) {
     console.log(`   hari libur nasional periode ini: ${[...hariLibur.entries()].map(([t, k]) => `${t} (${k})`).join(", ")}`);
   }
-  const tarikan = await tarikPresensiPeriode(bulan, tahun, kendala.untukNip, koreksi.untukNip, hariLibur);
+  const perintahLembur = await muatPerintahLemburPeriode(prisma, bulan, tahun);
+  if (perintahLembur.jumlahPegawai > 0) {
+    console.log(
+      `Lembur diperintahkan (SPKL) berlaku untuk ${perintahLembur.jumlahPegawai} pegawai, ${perintahLembur.jumlahPerintah} perintah terkirim`
+    );
+  }
+  const tarikan = await tarikPresensiPeriode(
+    bulan,
+    tahun,
+    kendala.untukNip,
+    koreksi.untukNip,
+    hariLibur,
+    undefined,
+    perintahLembur.untukNip
+  );
   console.log(`  ${tarikan.totalBarisSumber.toLocaleString("id-ID")} baris, ${tarikan.totalPegawaiSumber.toLocaleString("id-ID")} pegawai di sumber`);
   console.log(`  ${tarikan.pegawai.length.toLocaleString("id-ID")} berhasil dipetakan ke NIP`);
 

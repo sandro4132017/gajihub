@@ -1,4 +1,4 @@
-import { PDFDocument, PDFDict, PDFName, PDFRawStream, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFArray, PDFDocument, PDFDict, PDFName, PDFRawStream, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { buatSpesimenQr, ambilTemplateSpesimen } from "./spesimenTte";
 import fs from "fs";
 import path from "path";
@@ -16,8 +16,8 @@ import {
 export type { JenisSptjm, DataSptjmUniversal, DataSptjmLembur };
 export { BULAN_ROMAWI, NAMA_BULAN, generateNomorSptjmDefault, generateNamaFileSptjm };
 
-const PAGE_WIDTH = 595.32;
-const PAGE_HEIGHT = 841.92;
+export const PAGE_WIDTH = 595.32;
+export const PAGE_HEIGHT = 841.92;
 
 /**
  * Mencari PDF referensi asli yang memiliki Kop Surat vektor + font Arial Narrow tertanam
@@ -84,7 +84,7 @@ function cariAsetGambarKop(): { tipe: "kop" | "logo"; buffer: Buffer } | null {
  * Memecah paragraf menjadi baris-baris sesuai lebar maksimum `maxWidth`
  * dan merender dengan perataan kiri-kanan (Justify) untuk semua baris kecuali baris terakhir.
  */
-function renderParagrafJustify(
+export function renderParagrafJustify(
   page: PDFPage,
   text: string,
   font: PDFFont,
@@ -207,18 +207,28 @@ async function gambarQrCodeTte(
   });
 }
 
+export interface KertasBerkop {
+  doc: PDFDocument;
+  page: PDFPage;
+  fontRegular: PDFFont;
+  fontBold: PDFFont;
+}
+
 /**
- * Generator Draft PDF SPTJM Resmi (A4: 595.32 x 841.92 pt)
- * Mengikuti 100% spesifikasi tipografi, koordinat, font (ArialMT 12pt, Arial-BoldMT 14.04pt,
- * Kop Arial Narrow), justify isi pernyataan, serta posisi blok tanda tangan dokumen asli.
+ * Menyiapkan halaman pertama berkop surat Kemnaker (A4) beserta font bakunya.
+ * Dipakai bersama oleh SPTJM dan dokumen lembur supaya kop tidak digandakan.
  */
-export async function generateDraftSptjm(data: DataSptjmUniversal): Promise<Buffer> {
+export async function siapkanKertasBerkop(
+  opsi: { ukuran?: readonly [number, number] } = {},
+): Promise<KertasBerkop> {
   let doc: PDFDocument;
   let page: PDFPage;
 
   // 1. KOP SURAT (Prioritas 1: Vektor + Font Arial Narrow asli dari PDF referensi)
   const tplKopBytes = cariTemplateKopPdfAsli();
   let kopBerhasilDariTemplate = false;
+  // Pemotongan stream kop bisa meninggalkan `q` yang belum ditutup `Q`.
+  let qTerbuka = 0;
 
   if (tplKopBytes) {
     try {
@@ -234,6 +244,8 @@ export async function generateDraftSptjm(data: DataSptjmUniversal): Promise<Buff
           Buffer.from(kopOnly, "latin1")
         );
         page.node.delete(PDFName.of("StructParents"));
+        qTerbuka =
+          (kopOnly.match(/(?:^|\s)q(?=\s)/g)?.length ?? 0) - (kopOnly.match(/(?:^|\s)Q(?=\s)/g)?.length ?? 0);
         kopBerhasilDariTemplate = true;
       }
     } catch {
@@ -283,6 +295,37 @@ export async function generateDraftSptjm(data: DataSptjmUniversal): Promise<Buff
       renderKopTeksFallback(page!, fontBold, fontRegular);
     }
   }
+
+  // Opt-in: kertas selain A4 (mis. Legal). Kop tetap menempel di tepi atas
+  // dan ditengahkan secara horizontal; bawaan A4 tidak disentuh.
+  if (opsi.ukuran && (opsi.ukuran[0] !== PAGE_WIDTH || opsi.ukuran[1] !== PAGE_HEIGHT)) {
+    const { width, height } = page!.getSize();
+    page!.setMediaBox(0, 0, opsi.ukuran[0], opsi.ukuran[1]);
+    page!.node.delete(PDFName.of("CropBox"));
+    // Hanya kop yang bergeser: konten yang ada dibungkus q ... cm ... Q supaya
+    // teks yang digambar sesudahnya memakai koordinat halaman baru.
+    const dx = (opsi.ukuran[0] - width) / 2;
+    const dy = opsi.ukuran[1] - height;
+    const ctx = doc!.context;
+    const awal = page!.node.get(PDFName.of("Contents"));
+    const daftar = awal instanceof PDFArray ? awal.asArray() : awal ? [awal] : [];
+    const pra = ctx.register(ctx.flateStream(`q 1 0 0 1 ${dx} ${dy} cm`));
+    const pasca = ctx.register(ctx.flateStream(Array(1 + Math.max(0, qTerbuka)).fill("Q").join(" ")));
+    page!.node.set(PDFName.of("Contents"), ctx.obj([pra, ...daftar, pasca]));
+    // Gambar berikutnya harus masuk stream baru (di luar pembungkus), bukan stream kop.
+    (page as unknown as { getContentStream(useExisting?: boolean): unknown }).getContentStream(false);
+  }
+
+  return { doc: doc!, page: page!, fontRegular, fontBold };
+}
+
+/**
+ * Generator Draft PDF SPTJM Resmi (A4: 595.32 x 841.92 pt)
+ * Mengikuti 100% spesifikasi tipografi, koordinat, font (ArialMT 12pt, Arial-BoldMT 14.04pt,
+ * Kop Arial Narrow), justify isi pernyataan, serta posisi blok tanda tangan dokumen asli.
+ */
+export async function generateDraftSptjm(data: DataSptjmUniversal): Promise<Buffer> {
+  const { doc, page, fontRegular, fontBold } = await siapkanKertasBerkop();
 
   // NILAI CADANGAN TIDAK BOLEH BERUPA ORANG SUNGGUHAN.
   //
@@ -601,15 +644,19 @@ export async function terapkanStempelTteSimulasi(
   const page = doc.getPages()[0];
 
   let yNama = 110.42;
+  let tengahX = 412.67;
   const kw = doc.getKeywords();
   if (kw) {
     const match = kw.match(/SIGN_Y:([\d.]+)/);
     if (match) {
       yNama = parseFloat(match[1]);
     }
+    // Opt-in: dokumen dengan titik tengah tanda tangan lain (SPKL harian) mencatat SIGN_X.
+    const matchX = kw.match(/SIGN_X:([\d.]+)/);
+    if (matchX) tengahX = parseFloat(matchX[1]);
   }
 
-  await gambarQrCodeTte(doc, page, 412.67, yNama, options.verifyUrl);
+  await gambarQrCodeTte(doc, page, tengahX, yNama, options.verifyUrl);
 
   const signedBytes = await doc.save();
   return Buffer.from(signedBytes);

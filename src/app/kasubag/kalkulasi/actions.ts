@@ -28,6 +28,8 @@ import { periksaBuktiKoreksi, tulisBuktiKoreksi } from "../../../lib/storage/buk
 import { rekapUnitTerkunciUntukTanggal } from "../../../lib/koreksiPresensiDb";
 import { muatHariLiburPeriode } from "../../../lib/hariLibur";
 import { tglTampil } from "../../../lib/format/tanggalTampil";
+import { muatPerintahHari, muatPerintahPegawaiPeriode } from "../../../lib/lembur/muatPerintahLembur";
+import { jamDibayarHariSpkl, spklBerlakuDiPeriode } from "../../../lib/lembur/perintahPeriode";
 import type { Prisma } from "@prisma/client";
 
 const HARI_KERJA_DEFAULT = 21;
@@ -579,14 +581,32 @@ export async function koreksiUangLemburAction(
     const totalJamLembur = Number(formData.get("totalJamLembur"));
     const tarifPerJam = Number(formData.get("tarifPerJam"));
 
-    if (!pegawaiId || !periodeBulan || !periodeTahun || Number.isNaN(totalJamLembur) || !tarifPerJam) {
+    if (!pegawaiId || Number.isNaN(totalJamLembur) || !tarifPerJam) {
       return { error: "Data koreksi tidak lengkap." };
+    }
+    // Periode divalidasi SEBELUM apa pun: nilai di luar rentang tidak boleh
+    // sampai ke gerbang SPKL (tanggal tidak valid) maupun ke database.
+    if (!Number.isInteger(periodeBulan) || periodeBulan < 1 || periodeBulan > 12) {
+      return { error: "Bulan periode tidak valid - harus bilangan bulat 1 sampai 12." };
+    }
+    if (!Number.isInteger(periodeTahun) || periodeTahun < 2000 || periodeTahun > 2100) {
+      return { error: "Tahun periode tidak valid." };
     }
 
     const pegawai = await prisma.pegawai.findUnique({ where: { id: pegawaiId } });
     if (!pegawai) return { error: "Pegawai tidak ditemukan." };
     if (!canTelaahKoreksiAjukanUangLemburUnit(authUser, pegawai.satuanKerja)) {
       return { error: "Peran kamu tidak berwenang mengoreksi Uang Lembur unit ini." };
+    }
+    // Satker ber-SPKL: lembur sah hanya dengan perintah (keputusan user
+    // 2026-11-19). Total manual satu angka tidak punya tanggal, jadi
+    // melewati perintah - ditolak. Yang boleh: koreksi jam lembur HARIAN,
+    // yang tetap dibatasi perintah.
+    if (spklBerlakuDiPeriode(pegawai.satuanKerja, periodeBulan, periodeTahun)) {
+      return {
+        error:
+          "Total jam lembur tidak bisa diisi manual untuk unit ini: lembur dibayar hanya berdasarkan perintah lembur (SPKL) per tanggal. Gunakan koreksi jam lembur harian, yang tetap dibatasi perintah.",
+      };
     }
 
     const hasilLembur = hitungUangLembur({
@@ -658,6 +678,25 @@ function tanggalUtcDariIso(iso: string): Date | null {
   return d;
 }
 
+function hariLiburDi(tanggal: Date, iso: string, hariLiburMap: Map<string, string>): boolean {
+  const day = tanggal.getUTCDay();
+  return day === 0 || day === 6 || hariLiburMap.has(iso);
+}
+
+/**
+ * Jam lembur NYATA menurut mesin sebelum koreksi petugas, dibaca dari catatan
+ * audit koreksi (CREATE/UPDATE) terbaru. null = tidak tercatat.
+ */
+async function jamMesinDariAudit(tx: Prisma.TransactionClient, nip: string, tanggalIso: string): Promise<number | null> {
+  const jejak = await tx.auditTrail.findFirst({
+    where: { entitas: "koreksi_presensi_harian", entitasId: `${nip}-${tanggalIso}`, aksi: { in: ["CREATE", "UPDATE"] } },
+    orderBy: { timestamp: "desc" },
+    select: { dataSebelum: true },
+  });
+  const sebelum = jejak?.dataSebelum as Record<string, unknown> | null | undefined;
+  return typeof sebelum?.jamLemburMesin === "number" ? (sebelum.jamLemburMesin as number) : null;
+}
+
 function hitungJamMesinDariPresensi(
   tanggal: Date,
   jamMasuk: Date | null,
@@ -690,14 +729,22 @@ async function sinkronkanUangLemburPegawai(
   periodeBulan: number,
   periodeTahun: number,
   hariLiburMap: Map<string, string>
-) {
+): Promise<number> {
+  let hariDibetulkan = 0;
   const awal = new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1));
   const akhir = new Date(Date.UTC(periodeTahun, periodeBulan, 1));
 
   const semuaPresensi = await tx.presensiHarian.findMany({
     where: { pegawaiId: pegawai.id, tanggal: { gte: awal, lt: akhir } },
-    select: { tanggal: true, jamLembur: true, statusKehadiran: true },
+    select: { id: true, tanggal: true, jamLembur: true, jamLemburNyata: true, statusKehadiran: true },
   });
+
+  // SPKL: jam dibayar diturunkan dari jam NYATA + perintah TERKIRIM dengan
+  // primitif yang sama seperti mesin tarik (null = SPKL tidak berlaku, tanpa
+  // query). Baris yang tersimpan tanpa batas perintah (mis. ditarik sebelum
+  // fitur ini) dibetulkan di sini, supaya ADK (membaca PresensiHarian.jamLembur)
+  // dan rekap tidak berbeda.
+  const spklPeriode = await muatPerintahPegawaiPeriode(tx, pegawai, periodeBulan, periodeTahun);
 
   let jamLemburKerja = 0;
   let jamLemburLibur = 0;
@@ -713,7 +760,23 @@ async function sinkronkanUangLemburPegawai(
     const iso = p.tanggal.toISOString().slice(0, 10);
     const day = p.tanggal.getUTCDay();
     const isLibur = day === 0 || day === 6 || hariLiburMap.has(iso);
-    const jam = Math.max(0, Math.floor(p.jamLembur));
+    let jamTersimpan = p.jamLembur;
+    if (spklPeriode && spklPeriode.berlaku(iso)) {
+      const nyata = p.jamLemburNyata ?? p.jamLembur;
+      const { dibayar } = jamDibayarHariSpkl({
+        tanggalIso: iso,
+        statusKehadiran: p.statusKehadiran,
+        hariLibur: isLibur,
+        jamNyata: nyata,
+        perintah: spklPeriode.perintah.get(iso) ?? null,
+      });
+      if (dibayar !== p.jamLembur || p.jamLemburNyata === null) {
+        await tx.presensiHarian.update({ where: { id: p.id }, data: { jamLembur: dibayar, jamLemburNyata: nyata } });
+        hariDibetulkan++;
+      }
+      jamTersimpan = dibayar;
+    }
+    const jam = Math.max(0, Math.floor(jamTersimpan));
     if (jam > 0) {
       if (isLibur) {
         jamLemburLibur += jam;
@@ -787,6 +850,14 @@ async function sinkronkanUangLemburPegawai(
       where: { pegawaiId: pegawai.id, periodeBulan, periodeTahun },
     });
   }
+  return hariDibetulkan;
+}
+
+/** Kalimat penutup pesan sukses bila sinkronisasi ikut membetulkan hari lain. */
+function ringkasHariDibetulkan(jumlah: number): string {
+  return jumlah > 0
+    ? ` ${jumlah} hari lain di periode ini ikut dibetulkan otomatis agar jam dibayarnya sesuai perintah lembur (SPKL).`
+    : "";
 }
 
 /**
@@ -854,7 +925,7 @@ export async function koreksiJamLemburHarianAction(
 
     const presensiLama = await prisma.presensiHarian.findUnique({
       where: { pegawaiId_tanggal: { pegawaiId, tanggal } },
-      select: { id: true, jamMasuk: true, jamKeluar: true, jamLembur: true },
+      select: { id: true, jamMasuk: true, jamKeluar: true, jamLembur: true, jamLemburNyata: true, statusKehadiran: true },
     });
 
     const koreksiLama = await prisma.koreksiPresensiHarian.findUnique({
@@ -879,6 +950,8 @@ export async function koreksiJamLemburHarianAction(
       buktiRefLembur = kunci;
     }
 
+    let ringkasanSpkl = "";
+    let hariLainDibetulkan = 0;
     const jm = (d: Date | null | undefined) =>
       d ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : null;
 
@@ -903,8 +976,37 @@ export async function koreksiJamLemburHarianAction(
         },
       });
 
-      // 2. Perbarui PresensiHarian jika baris kehadiran ada
-      if (presensiLama) {
+      // 2. Perbarui PresensiHarian jika baris kehadiran ada. Di satker/tanggal
+      // ber-SPKL, angka koreksi adalah jam NYATA; yang dibayar tetap dibatasi
+      // perintah TERKIRIM tanggal itu dan syarat WFO (mutlak).
+      const spkl = await muatPerintahHari(tx, pegawai, tanggalIso);
+      let hasilSpkl: { dibayar: number; catatan: string | null } | null = null;
+      let jamMesinSebelum: number | null = null;
+      if (spkl.berlaku && presensiLama) {
+        const hariLibur = hariLiburDi(tanggal, tanggalIso, hariLiburMap);
+        hasilSpkl = jamDibayarHariSpkl({
+          tanggalIso,
+          statusKehadiran: presensiLama.statusKehadiran,
+          hariLibur,
+          jamNyata: jamLembur,
+          perintah: spkl.jamDiperintahkan,
+        });
+        // Jam mesin asli dibawa dari catatan audit sebelumnya kalau koreksi
+        // lama masih aktif (jamLemburNyata sudah berisi koreksi itu).
+        jamMesinSebelum =
+          koreksiLama?.jamLembur != null
+            ? await jamMesinDariAudit(tx, pegawai.nip, tanggalIso)
+            : (presensiLama.jamLemburNyata ?? presensiLama.jamLembur);
+        await tx.presensiHarian.update({
+          where: { id: presensiLama.id },
+          data: { jamLembur: hasilSpkl.dibayar, jamLemburNyata: jamLembur },
+        });
+        ringkasanSpkl =
+          ` Dibayar ${hasilSpkl.dibayar} jam` +
+          (spkl.jamDiperintahkan === null ? " (tanpa perintah lembur SPKL pada tanggal itu)" : ` (diperintahkan ${spkl.jamDiperintahkan} jam)`) +
+          (hasilSpkl.catatan ? `: ${hasilSpkl.catatan}` : "") +
+          ".";
+      } else if (presensiLama) {
         await tx.presensiHarian.update({
           where: { id: presensiLama.id },
           data: { jamLembur },
@@ -923,7 +1025,7 @@ export async function koreksiJamLemburHarianAction(
             tanggal: tanggalIso,
             jamMasukEpresensi: jm(presensiLama?.jamMasuk),
             jamKeluarEpresensi: jm(presensiLama?.jamKeluar),
-            jamLemburMesin: presensiLama?.jamLembur ?? 0,
+            jamLemburMesin: hasilSpkl ? jamMesinSebelum : (presensiLama?.jamLembur ?? 0),
             jamLemburSebelumnya: koreksiLama?.jamLembur ?? null,
             alasanSebelumnya: koreksiLama?.alasan ?? null,
             buktiRefLemburSebelumnya: koreksiLama?.buktiRefLembur ?? null,
@@ -935,19 +1037,27 @@ export async function koreksiJamLemburHarianAction(
             buktiRefLembur,
             pernyataanTanggungJawab: true,
             sumber: "Koreksi SPL Kasubag TU",
+            ...(hasilSpkl
+              ? {
+                  spkl: true,
+                  jamDiperintahkan: spkl.berlaku ? spkl.jamDiperintahkan : null,
+                  jamLemburDibayar: hasilSpkl.dibayar,
+                  catatanLembur: hasilSpkl.catatan,
+                }
+              : {}),
           },
         },
       });
 
       // 4. Selaraskan RekapPresensiPeriode & UangLembur
-      await sinkronkanUangLemburPegawai(tx, pegawai, periodeBulan, periodeTahun, hariLiburMap);
+      hariLainDibetulkan = await sinkronkanUangLemburPegawai(tx, pegawai, periodeBulan, periodeTahun, hariLiburMap);
     });
 
     revalidatePath("/kasubag/kalkulasi");
     revalidatePath(`/tukin/presensi/${pegawai.nip}`);
 
     return {
-      success: `Jam lembur ${pegawai.nama} tgl ${tglTampil(tanggalIso)} disesuaikan jadi ${jamLembur} jam (SPL: ${alasan}).`,
+      success: `Jam lembur ${pegawai.nama} tgl ${tglTampil(tanggalIso)} disesuaikan jadi ${jamLembur} jam (SPL: ${alasan}).${ringkasanSpkl}${ringkasHariDibetulkan(hariLainDibetulkan)}`,
     };
   } catch (err) {
     return { error: pesanGalatUntukLayar("kasubag.kalkulasi.actions#3", err, "Terjadi kesalahan") };
@@ -1003,7 +1113,7 @@ export async function hapusKoreksiJamLemburHarianAction(
 
     const presensi = await prisma.presensiHarian.findUnique({
       where: { pegawaiId_tanggal: { pegawaiId, tanggal } },
-      select: { id: true, jamMasuk: true, jamKeluar: true, jamLembur: true },
+      select: { id: true, jamMasuk: true, jamKeluar: true, jamLembur: true, statusKehadiran: true },
     });
 
     const hariLiburMap = await muatHariLiburPeriode(periodeBulan, periodeTahun);
@@ -1018,7 +1128,7 @@ export async function hapusKoreksiJamLemburHarianAction(
     });
 
     const dataSebelum = jejakAudit?.dataSebelum as Record<string, unknown> | null;
-    const jamMesinAsli =
+    let jamMesinAsli =
       typeof dataSebelum?.jamLemburMesin === "number"
         ? (dataSebelum.jamLemburMesin as number)
         : hitungJamMesinDariPresensi(
@@ -1028,6 +1138,8 @@ export async function hapusKoreksiJamLemburHarianAction(
             hariLiburMap
           );
 
+    let ringkasanSpkl = "";
+    let hariLainDibetulkan = 0;
     await prisma.$transaction(async (tx) => {
       // 1. Hapus atau set jamLembur = null di KoreksiPresensiHarian
       if (koreksi.jamMasuk === null && koreksi.jamKeluar === null) {
@@ -1040,7 +1152,30 @@ export async function hapusKoreksiJamLemburHarianAction(
       }
 
       // 2. Pulihkan jamLembur di PresensiHarian
-      if (presensi) {
+      const spkl = await muatPerintahHari(tx, pegawai, tanggalIso);
+      if (spkl.berlaku && presensi) {
+        // Ber-SPKL: pulihkan JAM NYATA mesin (dari catatan audit koreksi), lalu
+        // batasi lagi dengan perintah + WFO. Batas 16:00 tetap
+        // (hitungJamMesinDariPresensi) TIDAK dipakai di sini. Kalau jam mesin
+        // tidak tercatat, dipakai 0 (tidak dibayar) - jangan menebak; tarik
+        // ulang presensi memulihkan angka mesin yang sebenarnya.
+        const tercatat = await jamMesinDariAudit(tx, pegawai.nip, tanggalIso);
+        jamMesinAsli = tercatat ?? 0;
+        const hasil = jamDibayarHariSpkl({
+          tanggalIso,
+          statusKehadiran: presensi.statusKehadiran,
+          hariLibur: hariLiburDi(tanggal, tanggalIso, hariLiburMap),
+          jamNyata: jamMesinAsli,
+          perintah: spkl.jamDiperintahkan,
+        });
+        await tx.presensiHarian.update({
+          where: { id: presensi.id },
+          data: { jamLembur: hasil.dibayar, jamLemburNyata: jamMesinAsli },
+        });
+        ringkasanSpkl =
+          ` Dibayar ${hasil.dibayar} jam (dibatasi perintah lembur SPKL).` +
+          (tercatat === null ? " Jam mesin asli tidak tercatat - dianggap 0; tarik ulang presensi untuk memulihkannya." : "");
+      } else if (presensi) {
         await tx.presensiHarian.update({
           where: { id: presensi.id },
           data: { jamLembur: jamMesinAsli },
@@ -1065,20 +1200,21 @@ export async function hapusKoreksiJamLemburHarianAction(
           dataSesudah: {
             tanggal: tanggalIso,
             jamLemburDipulihkan: jamMesinAsli,
+            ...(ringkasanSpkl ? { spkl: true } : {}),
             sumber: "Pencabutan Koreksi Lembur Kasubag TU",
           },
         },
       });
 
       // 4. Selaraskan RekapPresensiPeriode & UangLembur
-      await sinkronkanUangLemburPegawai(tx, pegawai, periodeBulan, periodeTahun, hariLiburMap);
+      hariLainDibetulkan = await sinkronkanUangLemburPegawai(tx, pegawai, periodeBulan, periodeTahun, hariLiburMap);
     });
 
     revalidatePath("/kasubag/kalkulasi");
     revalidatePath(`/tukin/presensi/${pegawai.nip}`);
 
     return {
-      success: `Koreksi lembur tgl ${tglTampil(tanggalIso)} dicabut. Jam dikembalikan ke hitungan mesin (${jamMesinAsli} jam).`,
+      success: `Koreksi lembur tgl ${tglTampil(tanggalIso)} dicabut. Jam dikembalikan ke hitungan mesin (${jamMesinAsli} jam).${ringkasanSpkl}${ringkasHariDibetulkan(hariLainDibetulkan)}`,
     };
   } catch (err) {
     return { error: pesanGalatUntukLayar("kasubag.kalkulasi.actions#4", err, "Terjadi kesalahan") };

@@ -42,6 +42,11 @@ export function susunBarisHarianPegawai(
     petaKoreksi: ReadonlyMap<string, KoreksiHariPegawai>;
     tanggalKendala: ReadonlySet<string>;
     hariLibur: ReadonlyMap<string, string>;
+    /**
+     * Tanggal ber-SPKL (lembur yang diperintahkan). Di tanggal itu jam koreksi
+     * adalah jam NYATA, sementara yang tampil harus jam yang DIBAYAR (mesin).
+     */
+    tanggalSpkl?: ReadonlyMap<string, unknown> | ReadonlySet<string>;
   }
 ): BarisTabelRincianJamKerja[] {
   return harian.map((h) => {
@@ -87,7 +92,7 @@ export function susunBarisHarianPegawai(
       dikoreksiManual: opsi.petaKoreksi.has(iso),
       masukDikoreksi: koreksiHari?.jamMasuk != null,
       keluarDikoreksi: koreksiHari?.jamKeluar != null,
-      jamLembur: koreksiHari?.jamLembur ?? h.jamLembur,
+      jamLembur: opsi.tanggalSpkl?.has(iso) ? h.jamLembur : (koreksiHari?.jamLembur ?? h.jamLembur),
       jamLemburMesin: h.jamLembur,
       kejadianTidakPresensi,
     };

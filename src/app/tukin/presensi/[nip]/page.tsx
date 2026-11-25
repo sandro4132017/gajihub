@@ -29,6 +29,8 @@ import {
 } from "../../../../business-logic/rincianJamKerjaHarian";
 import { HALAMAN } from "../../../../components/layout/layoutHalaman";
 import { rekapUnitTerkunciUntukTanggal } from "../../../../lib/koreksiPresensiDb";
+import { muatPerintahPegawaiPeriode } from "../../../../lib/lembur/muatPerintahLembur";
+import { rincianLemburSpkl, type RincianLemburSpkl } from "../../../../lib/lembur/perintahPeriode";
 
 export const dynamic = "force-dynamic";
 
@@ -230,6 +232,22 @@ export default async function RincianPresensiPegawaiPage({
   const tanggalBelumBerlaku = [...new Set(perubahanBelumBerlaku.map((t) => t.toISOString().slice(0, 10)))].sort();
   const tanggalKendala = new Set(kendalaPeriode.map((k) => k.tanggal.toISOString().slice(0, 10)));
   const petaKoreksi = new Map(koreksiPeriode.map((k) => [k.tanggal.toISOString().slice(0, 10), k]));
+  // Lembur ber-SPKL: diperintahkan / nyata / dibayar per tanggal. Kosong untuk
+  // satker di luar pilot (tanpa query).
+  const perintahSpkl = await muatPerintahPegawaiPeriode(prisma, pegawai, periodeBulan, periodeTahun);
+  const spklPerTanggal = new Map<string, RincianLemburSpkl>();
+  for (const h of harian) {
+    const iso = h.tanggal.toISOString().slice(0, 10);
+    const hari = h.tanggal.getUTCDay();
+    const r = rincianLemburSpkl(perintahSpkl, {
+      tanggalIso: iso,
+      statusKehadiran: h.statusKehadiran,
+      hariLibur: hari === 0 || hari === 6 || hariLiburPeriode.has(iso),
+      jamLembur: h.jamLembur,
+      jamLemburNyata: h.jamLemburNyata,
+    });
+    if (r) spklPerTanggal.set(iso, r);
+  }
   // Koreksi jam HANYA Kasubag TU unit pegawai ini (canKoreksiJamPresensi).
   // PPABP/Admin tetap boleh MELIHAT halaman ini, koreksinya, dan buktinya.
   const bolehKoreksi = canKoreksiJamPresensi(authUser, pegawai.satuanKerja ?? "");
@@ -244,6 +262,7 @@ export default async function RincianPresensiPegawaiPage({
     petaKoreksi,
     tanggalKendala,
     hariLibur: hariLiburPeriode,
+    tanggalSpkl: spklPerTanggal,
   });
 
   // Cek silang per komponen. Yang diperiksa BUKAN totalnya saja: dua selisih
@@ -617,6 +636,17 @@ export default async function RincianPresensiPegawaiPage({
                       <span className="text-ink">{lemburTeks(h.jamLembur)}</span>
                     ) : (
                       <span className="text-muted">-</span>
+                    )}
+                    {/* Hari ber-SPKL: angka di atas = jam DIBAYAR. Perintah &
+                        nyata ditaruh di sel yang sama (bukan kolom baru) supaya
+                        selisihnya terbaca tanpa melebarkan tabel. */}
+                    {spklPerTanggal.has(iso) && (
+                      <span className="mt-0.5 block text-muted">
+                        perintah {spklPerTanggal.get(iso)!.perintah ?? "-"} / nyata {lemburTeks(spklPerTanggal.get(iso)!.nyata)}
+                      </span>
+                    )}
+                    {spklPerTanggal.get(iso)?.catatan && (
+                      <span className="mt-0.5 block max-w-56 font-sans text-ink-2">{spklPerTanggal.get(iso)!.catatan}</span>
                     )}
                   </td>
                   {/* % potongan hari itu; uraian per jenis muncul saat disorot. */}

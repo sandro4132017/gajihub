@@ -31,6 +31,17 @@ interface SignPdfOptions {
   height?: number;
   reason?: string;
   location?: string;
+  /**
+   * Batas waktu (ms) menunggu jawaban BSrE pada panggilan sign - nama dari
+   * jalur lembur (transaksi database berbatas waktu). Sama dengan
+   * `timeoutMs`; tanpa keduanya dipakai BATAS_WAKTU_SIGN_MS.
+   */
+  batasWaktuMs?: number;
+}
+
+/** Batas waktu sign yang berlaku: batasWaktuMs, lalu timeoutMs, lalu 60 detik. */
+function batasWaktuSign(o: { batasWaktuMs?: number; timeoutMs?: number }): number {
+  return o.batasWaktuMs ?? o.timeoutMs ?? BATAS_WAKTU_SIGN_MS;
 }
 
 interface SignPdfResult {
@@ -243,8 +254,9 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
         Authorization: authHeader,
       },
       body: formData,
-      // Mencakup juga pembacaan isi balasan (PDF bertanda tangan) di bawah.
-      signal: AbortSignal.timeout(options.timeoutMs ?? BATAS_WAKTU_SIGN_MS),
+      // SELALU berbatas (bawaan BATAS_WAKTU_SIGN_MS). Mencakup juga pembacaan
+      // isi balasan (PDF bertanda tangan) di bawah.
+      signal: AbortSignal.timeout(batasWaktuSign(options)),
     });
 
     const idDokumen = res.headers.get("id_dokumen") || undefined;
@@ -281,10 +293,11 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
       signingTimeMs,
     };
   } catch (err) {
+    // Kata "timeout" dipakai klasifikasiGagalBsre -> kategori NETWORK_TIMEOUT.
     const habisWaktu =
       err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
     if (habisWaktu) {
-      const detik = Math.round((options.timeoutMs ?? BATAS_WAKTU_SIGN_MS) / 1000);
+      const detik = Math.round(batasWaktuSign(options) / 1000);
       return {
         success: false,
         statusCode: 504,
@@ -294,7 +307,9 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
     return {
       success: false,
       statusCode: 500,
-      error: "Terjadi kesalahan koneksi ke Esign Client BSrE.",
+      error: habisWaktu
+        ? "Batas waktu (timeout) menunggu jawaban Esign Client BSrE terlampaui."
+        : "Terjadi kesalahan koneksi ke Esign Client BSrE.",
     };
   }
 }

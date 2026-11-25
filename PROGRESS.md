@@ -9,17 +9,18 @@ apa yang menunggu keputusan, dan apa yang ditunggu dari pihak luar.
 relevan (nama bagiannya disebut di tabel di bawah). Update file ini tiap
 selesai satu batch pekerjaan, sebelum ganti chat.
 
-Terakhir diperbarui: **2026-11-25** - lihat butir 000000 (pekerjaan 2026-11-16 s.d. 2026-11-25, SEMUANYA belum di-commit di `main`). Riwayat sebelumnya: rombak Kalkulasi Unit 4 tahap & gerbang TTE (butir 00000, 2026-11-16, BELUM di-commit), sesi berbatas & role bawaan login (butir 0000) dan koreksi jam presensi khusus Kasubag TU (butir 000) - dua yang terakhir SUDAH di-commit di `f074e91` (2026-11-11, `main` = `origin/main`). Detail per perubahan ada di `docs/ai-log.md`.
+Terakhir diperbarui: **2026-11-25** - lihat butir 000000 (pekerjaan 2026-11-16 s.d. 2026-11-25, di-commit `38ad49a`) dan 00000b (branch `lembur` DIGABUNG ke `main`, belum di-push). Riwayat sebelumnya: rombak Kalkulasi Unit 4 tahap & gerbang TTE (butir 00000, 2026-11-16, BELUM di-commit), sesi berbatas & role bawaan login (butir 0000) dan koreksi jam presensi khusus Kasubag TU (butir 000) - dua yang terakhir SUDAH di-commit di `f074e91` (2026-11-11, `main` = `origin/main`). Detail per perubahan ada di `docs/ai-log.md`.
 
 000000. **Pekerjaan 2026-11-16 s.d. 2026-11-25 (BELUM di-commit di `main`, TANPA MIGRASI BARU)**:
-   - **Keadaan git** (diukur 2026-11-25): `main` = `origin/main` = `f074e91` (2026-11-11);
-     **109 berkas** berubah/baru belum di-commit di checkout `main`. Branch `lembur`
-     (`origin/lembur`, commit `13fad39` 20 Nov, `b6fbbf9` & `3cd259b` 23 Nov: SPKL, role
-     Kepala Tim, perintah lembur ber-TTE, notifikasi WA) BELUM digabung ke `main`.
-   - **Typecheck merah HANYA di `src/auth/roleAktif.ts` & `roleLabel.ts`** (`KEPALA_TIM`
-     hilang): Prisma client di `node_modules` dihasilkan dari skema branch `lembur`. Bukan bug
-     kode `main`; selesai dengan `npx prisma generate` di checkout `main`, atau hilang sendiri
-     begitu `lembur` digabung. Test: 2.419 lulus (168 berkas); check-sensitive 71 temuan lama.
+   - **Keadaan git** (2026-11-25): pekerjaan ini di-commit `38ad49a`, lalu branch `lembur`
+     (SPKL, role Kepala Tim, perintah lembur, notifikasi WA - lihat butir 00000b) DIGABUNG ke
+     `main` dengan merge commit. **Belum di-push.** Konflik yang diselesaikan: `esignClient.ts`
+     (batas waktu sign SELALU aktif, bawaan 60 detik; `batasWaktuMs` lembur = `timeoutMs`),
+     `kasubag/kalkulasi/page.tsx` (tata letak main + tautan SPKL Harian + `berSpkl` di
+     `TabelKoreksiLemburRinci`), `tukin/presensi/[nip]/page.tsx` (hari ber-SPKL menampilkan
+     jam lembur dibayar, lewat opsi `tanggalSpkl` di `barisHarianPegawai.ts`), `PROGRESS.md`.
+     Prisma client WAJIB di-generate ulang (`npx prisma generate`) karena skema lembur
+     menambah role `KEPALA_TIM`.
    - **Kalkulasi Unit (lanjutan mockup)**: tahap Kesiapan pakai laci pengecualian kanan; daftar
      dikecualikan & rincian kesiapan dihapus; tabel Tukin/Uang Makan berwarna & full-bleed;
      tahap TTE SPTJM ringkas dengan ikon (i); `SpandukPengembalian` saat dikembalikan PPABP; mode
@@ -66,6 +67,27 @@ Terakhir diperbarui: **2026-11-25** - lihat butir 000000 (pekerjaan 2026-11-16 s
        16.00. Belum diputuskan, kasusnya sangat jarang.
      - Status migrasi di VPS belum diketahui (`user_sesi_versi`, bukti koreksi presensi) -
        `npx prisma migrate status` di VPS sebelum deploy.
+
+00000b. **SPKL harian tanpa TTE (2026-11-20 s.d. 23, branch `lembur`, DIGABUNG ke `main` 2026-11-25, tanpa migrasi baru)**:
+   - TTE lembur DIMATIKAN sementara: `TTE_LEMBUR_AKTIF = false` di `src/lib/lembur/sakelarTteLembur.ts`.
+     Route `/api/lembur/spkl` dan pratinjau menjawab 404. Kode BSrE tetap ada.
+   - SPKL bulanan diganti SPKL HARIAN (satu dokumen per satker per tanggal). PDF di `GET /berkas/spkl-harian`
+     kapan saja, inline, `no-store`. Sebelum 15.00 WIB isinya masih bisa bertambah (PDF tanpa cap, sejak 2026-11-23)
+     (TIDAK ADA 409 lagi). Halaman `/kasubag/spkl` kini "SPKL Harian". `PanelSpklBulanan` dihapus.
+   - Lanjutan 2026-11-20 (sudah di kode, belum di-commit, tanpa migrasi):
+     - Layout PDF = template SPKL Oktober 2026 hanya tanggal harian. Lampiran NO | NAMA/NIP | GOL | TANGGAL | KETERANGAN, tanpa kolom JAM dan tanpa nama kepala tim. Catatan "dibentuk otomatis" dihapus.
+     - Penanda tangan = Kepala Biro dari tabel Pegawai (tepat satu kandidat; 0 atau >1 = titik-titik, Plt/Plh tidak ditebak).
+     - Gelar dicetak untuk SPKL: PENGECUALIAN TERCATAT atas keputusan 2026-10-20 "nama cetak tanpa gelar" (`namaBergelarSpkl`).
+     - Role PIMPINAN boleh memantau (`/pimpinan/lembur`) dan membuat perintah lembur untuk unit sendiri (`canBukaHalamanPerintahLembur`, `canLihatPerintahLemburUnit`). Satker dari tabel Pegawai lewat NIP.
+     - Login akun dev menambah role KEPALA_TIM sekali bila belum ada.
+     - Tim bukan data DB. Satu pegawai satu perintah per tanggal (409). Label WA "Pemberi perintah:".
+     - TTE nanti = Kepala Biro manual di menu Pimpinan (passphrase tidak disimpan). Belum dibangun, tahap 3.
+     - Opsi tabel tim = pekerjaan masa depan.
+   - WA: satu pesan gabungan per hari per satker. Bot WA yang lama HARUS menyesuaikan `sejak=YYYY-MM-DD`.
+   - Penanda tangan TTE nanti = Kepala Biro. `canTandatanganiSpklHarian` masih Kasubag TU.
+   - TODO(confirm) terbuka: tanggal TTE dinyalakan; tenggang 60 dtk; jabatan/catatan PDF tanpa TTE;
+     format nomor SPKL harian; apakah TTE sebelum 15.00 sekaligus mengunci hari itu.
+   - Detail: `gajihub-uang-makan-lembur` (bagian "Keputusan 2026-11-20"). Verifikasi belum dijalankan pencatat.
 
 00000. **Kalkulasi Unit 4 tahap, gerbang TTE sebelum kirim, pop up presensi (2026-11-16, belum di-commit, TANPA MIGRASI BARU)**:
    - `/kasubag/kalkulasi` dirombak mengikuti mockup user: kepala, stepper 4 tahap (Ringkasan

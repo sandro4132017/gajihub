@@ -129,6 +129,14 @@ describe("jelaskanAudit", () => {
     expect(a.kunciGabung).toBe(b.kunciGabung);
   });
 
+  it("SPKL bulanan: kalimat dengan periode, berjenis kirim", () => {
+    const h = j("spkl_bulanan", "CREATE", "dok-1", { periode: "12/2026" });
+    expect(h.teks).toBe("Menandatangani SPKL bulanan Desember 2026");
+    expect(h.jenis).toBe("kirim");
+    expect(h.periode).toEqual({ bulan: 12, tahun: 2026 });
+    expect(h.cadangan).toBeUndefined();
+  });
+
   it("entitas tak dikenal jatuh ke kalimat manusiawi", () => {
     const h = j("PengirimanBaru", "CREATE", "x");
     expect(h.teks).toBe("Menambah pengiriman baru");
@@ -159,6 +167,8 @@ const PASANGAN_BERLABEL: Record<string, string[]> = {
   predikat_kinerja: ["CREATE", "UPDATE", "DELETE"],
   koreksi_presensi_harian: ["CREATE", "UPDATE", "DELETE"],
   kendala_epresensi: ["CREATE", "DELETE"],
+  perintah_lembur: ["CREATE", "UPDATE"],
+  spkl_bulanan: ["CREATE"],
   hari_libur_nasional: ["CREATE", "UPDATE", "DELETE"],
   gaji_induk: ["CREATE", "UPDATE"],
   export_adk: ["EXPORT"],

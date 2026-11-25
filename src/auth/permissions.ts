@@ -27,6 +27,8 @@
 // ============================================================================
 
 import type { Role } from "@prisma/client";
+import { spklAktifUntuk } from "../lib/lembur/gerbangSpkl";
+import { apakahJenisLembur } from "../lib/tte/lemburTypes";
 
 /** Subset field User yang dibutuhkan buat cek izin - bukan full Prisma User. */
 export interface AuthUser {
@@ -78,6 +80,10 @@ function cekRoleAtauAdmin(user: AuthUser, role: Role): boolean {
  * bertindak atas unit ini", yang ini menjawab "boleh melihat unit ini".
  * Menyatukannya akan membuat hibah baca diam-diam ikut memberi wewenang
  * menghitung dan mengirim.
+ *
+ * PERINGATAN: fungsi ini TIDAK memeriksa role. Jangan dipakai langsung sebagai
+ * guard halaman - PEGAWAI dan KEPALA_TIM yang satu unit akan lolos. Pasangkan
+ * dengan pengecekan role (mis. canBuatPerintahLembur) di guard-nya.
  */
 export function canLihatSatker(user: AuthUser, targetSatuanKerja: string): boolean {
   if (!user.aktif) return false;
@@ -94,6 +100,9 @@ export function canLihatSatker(user: AuthUser, targetSatuanKerja: string): boole
  * Sengaja `null`, bukan array kosong: array kosong dan "semua" adalah dua
  * keadaan yang berlawanan, dan menyamakannya pernah menghasilkan halaman
  * kosong untuk PPABP.
+ *
+ * PERINGATAN: sama seperti canLihatSatker, TIDAK memeriksa role - bukan guard
+ * halaman.
  */
 export function satkerTerlihatOleh(user: AuthUser): string[] | null {
   if (!user.aktif) return [];
@@ -301,6 +310,91 @@ export function canExportRekapUnit(user: AuthUser, targetSatuanKerja: string): b
 export function canLihatDokumenSptjm(user: AuthUser, targetSatuanKerja: string): boolean {
   if (!targetSatuanKerja) return false;
   return canExportRekapUnit(user, targetSatuanKerja);
+}
+
+/**
+ * Menandatangani SPKL unit dengan TTE BSrE (nama lama: SPKL bulanan; kini SPKL harian,
+ * dan sementara TTE lembur mati: lihat sakelarTteLembur.ts).
+ *
+ * Keputusan user 2026-11-20: penanda tangan SPKL harian = KEPALA BIRO (sesuai
+ * template SPKL). Perintah boleh dibuat Kepala Tim maupun Kepala Biro sendiri
+ * (Kepala Biro memegang role KEPALA_TIM), tetapi TTE tetap di Kepala Biro.
+ * TODO(confirm): isi fungsi ini MASIH Kasubag TU (`canTandatanganiSptjmUnit`)
+ * dan baru diganti ke Kepala Biro saat TTE lembur dinyalakan - cara
+ * mengenali akun Kepala Biro (role/jabatan) belum ditentukan. Ubah di sini saja.
+ */
+export function canTandatanganiSpklHarian(user: AuthUser, targetSatuanKerja: string): boolean {
+  return canTandatanganiSptjmUnit(user, targetSatuanKerja);
+}
+
+/**
+ * MELIHAT dan MENGUNDUH SPKL harian (rekap perintah lembur) sebuah unit - lihat-saja.
+ *
+ * KOMPOSISI `canExportRekapUnit` (Kasubag TU unit itu, PPABP, ADMIN), bukan
+ * aturan baru: isinya nama, golongan, tanggal, dan uraian lembur pegawai satu
+ * unit, setara dengan rekap unit yang sudah boleh dilihat orang-orang itu.
+ * Tidak memberi wewenang menandatangani (itu `canTandatanganiSpklHarian`).
+ * KEPALA_TIM dan PEGAWAI tidak; satuan kerja kosong ditolak.
+ *
+ * PENGECUALIAN keputusan user 2026-11-20: PIMPINAN biasanya read-only dan
+ * dibatasi ke dashboard agregat, tetapi untuk lembur boleh memantau dan
+ * memberi perintah di UNIT SENDIRI saja. Unit itu diambil dari tabel Pegawai
+ * lewat NIP-nya (`satkerPegawaiAkun`), BUKAN dari `User.satuanKerja`; tanpa
+ * baris Pegawai atau beda unit -> ditolak.
+ */
+export function canLihatPerintahLemburUnit(
+  user: AuthUser,
+  targetSatuanKerja: string,
+  satkerPegawaiAkun?: string | null,
+): boolean {
+  if (!targetSatuanKerja) return false;
+  if (user.role === "PIMPINAN") {
+    const satker = satkerPegawaiAkun?.trim();
+    return user.aktif && !!satker && satker === targetSatuanKerja.trim();
+  }
+  return canExportRekapUnit(user, targetSatuanKerja);
+}
+
+/**
+ * KEPALA_TIM membuka SPKL harian sebuah (satker, tanggal) sebagai PEMBERI PERINTAH.
+ *
+ * Keputusan user 2026-11-23: selama TTE lembur mati, Kepala Tim boleh membuka
+ * SPKL harian yang memuat perintahnya. Syaratnya, akun itu sendiri punya
+ * PerintahLembur berstatus TERKIRIM pada satker + tanggal tsb
+ * (`punyaPerintahDiTanggal`, dicek pemanggil dari DB per baris). PDF memuat
+ * SEMUA pegawai hari itu; user menerima NIP pegawai tim lain ikut terlihat.
+ * Satker = `Pegawai.satuanKerja` lewat NIP akun (`satkerPegawaiAkun`), bukan
+ * User.satuanKerja; tanpa baris Pegawai atau beda unit -> ditolak.
+ * Hanya KEPALA_TIM; role lain tetap lewat `canLihatPerintahLemburUnit`.
+ */
+export function canLihatSpklHarianSebagaiPemberi(
+  user: AuthUser,
+  targetSatuanKerja: string,
+  satkerPegawaiAkun: string | null | undefined,
+  punyaPerintahDiTanggal: boolean,
+): boolean {
+  if (user.role !== "KEPALA_TIM" || !user.aktif || !punyaPerintahDiTanggal) return false;
+  const satker = satkerPegawaiAkun?.trim();
+  return !!satker && satker === targetSatuanKerja.trim();
+}
+
+/**
+ * Melihat / mengunduh dokumen lembur (Surat Tugas harian, SPKL bulanan).
+ *
+ * Dua jalan masuk: (1) penandatangannya sendiri - Kepala Tim yang menerbitkan
+ * Surat Tugas boleh mengunduh suratnya walau role aktifnya tidak punya akses
+ * rekap unit; (2) siapa pun yang boleh melihat dokumen SPTJM unit itu
+ * (`canLihatDokumenSptjm`: Kasubag TU unit itu, PPABP, ADMIN). Selain jenis
+ * lembur, atau tanpa satuan kerja pada dokumen, ditolak.
+ */
+export function canLihatDokumenLembur(
+  user: AuthUser,
+  dokumen: { jenis: string; satuanKerja: string; penandatanganNip?: string | null },
+): boolean {
+  if (!apakahJenisLembur(dokumen.jenis)) return false;
+  if (!user.aktif) return false;
+  if (dokumen.penandatanganNip && user.nip === dokumen.penandatanganNip) return true;
+  return canLihatDokumenSptjm(user, dokumen.satuanKerja);
 }
 
 /** Verifikasi (jenjang 1) banding yang masuk dari pegawai di unitnya sendiri. */
@@ -829,13 +923,59 @@ export function canViewDataPayroll(user: AuthUser): boolean {
 }
 
 /**
+ * Role yang boleh membuka dashboard approver. DAFTAR DIIZINKAN, bukan "semua
+ * kecuali PEGAWAI": role baru yang ditambahkan ke enum tidak boleh otomatis
+ * lolos ke data lintas pegawai (mis. KEPALA_TIM, yang hanya melihat dirinya).
+ */
+const ROLE_DASHBOARD_APPROVER: readonly Role[] = ["KASUBAG_TU", "OSDMA", "PPABP", "PIMPINAN", "ADMIN"];
+
+/**
  * Guard gabungan buat 3 dashboard approver (Tukin/Uang Makan/Uang Lembur):
- * PEGAWAI diarahkan ke dashboard self-service sendiri (/saya) - dashboard
+ * PEGAWAI dan KEPALA_TIM diarahkan ke halaman miliknya sendiri - dashboard
  * approver nampilin SEMUA pegawai per satker, yang melanggar "TIDAK BOLEH
- * lihat pegawai lain" di role matrix kalau PEGAWAI dibiarkan masuk.
+ * lihat pegawai lain" di role matrix kalau mereka dibiarkan masuk.
  */
 export function canViewApproverDashboard(user: AuthUser): boolean {
-  return canViewDataPayroll(user) && user.role !== "PEGAWAI";
+  return canViewDataPayroll(user) && ROLE_DASHBOARD_APPROVER.includes(user.role);
+}
+
+/**
+ * Membuka halaman perintah lembur (/kepala-tim): akun aktif dengan role AKTIF
+ * KEPALA_TIM atau PIMPINAN (pengecualian user 2026-11-20, lihat
+ * `canBuatPerintahLembur`). Tanpa bypass ADMIN. Ini guard role saja; gerbang
+ * satker pilot dicek terpisah lewat `berlakuMulaiSpkl` supaya penolakannya
+ * bisa menyebut satker yang belum aktif.
+ */
+export function canBukaHalamanPerintahLembur(user: AuthUser): boolean {
+  return user.aktif && (user.role === "KEPALA_TIM" || user.role === "PIMPINAN");
+}
+
+/**
+ * Membuat perintah lembur (SPKL) dari seorang Kepala Tim untuk anggota
+ * timnya.
+ *
+ * Syarat: akun aktif, role aktif KEPALA_TIM atau PIMPINAN (pengecualian
+ * keputusan user 2026-11-20: Pimpinan biasanya read-only, untuk lembur boleh
+ * memberi perintah di UNIT SENDIRI; unit diambil pemanggil dari tabel
+ * Pegawai), satker pemberi perintah dan satker
+ * anggota sama dan tidak kosong, dan SPKL sudah berlaku di satker itu pada
+ * tanggal perintah (lihat `spklAktifUntuk`).
+ *
+ * ADMIN SENGAJA TIDAK DIIZINKAN: perintah lembur adalah penugasan yang
+ * melekat pada orang yang memberinya (alasan sama dengan
+ * `canTandatanganiSptjmUnit`). Admin yang perlu bertindak sebagai Kepala Tim
+ * harus memegang role KEPALA_TIM dan memilihnya sebagai role aktif.
+ */
+export function canBuatPerintahLembur(
+  user: AuthUser,
+  satkerKepalaTim: string | null | undefined,
+  satkerAnggota: string | null | undefined,
+  tanggalIso: string,
+): boolean {
+  if (!user.aktif || (user.role !== "KEPALA_TIM" && user.role !== "PIMPINAN")) return false;
+  const satker = satkerKepalaTim?.trim();
+  if (!satker || satker !== satkerAnggota?.trim()) return false;
+  return spklAktifUntuk(satker, tanggalIso);
 }
 
 // ---------------------------------------------------------------------------
@@ -852,6 +992,8 @@ export function canViewPegawai(user: AuthUser, target: TargetPegawai): boolean {
   switch (user.role) {
     case "PEGAWAI":
       return user.nip === target.nip; // data sendiri saja
+    case "KEPALA_TIM":
+      return user.nip === target.nip; // data sendiri saja, bukan data timnya
     case "KASUBAG_TU":
       return user.satuanKerja === target.satuanKerja; // unit kerjanya saja
     case "PPABP":

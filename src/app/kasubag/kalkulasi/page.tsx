@@ -20,6 +20,8 @@ import { TabelRincianTukinLengkap } from "../../../components/tables/TabelRincia
 import { hitungTapTidakWajarUnit } from "../../../lib/tapTidakWajarDb";
 import { TAMPILKAN_NOMINAL_LEMBUR } from "../../../lib/format/tampilUangLembur";
 import { alasanDariKode, petunjukKemungkinanKeluar } from "../../../business-logic/pengecualianPegawai";
+import { spklBerlakuDiPeriode } from "../../../lib/lembur/perintahPeriode";
+import Link from "next/link";
 import {
   cekBolehKirim,
   statusUnit,
@@ -744,6 +746,7 @@ export default async function KalkulasiUnitPage({
               totalUangLembur: p.uangLembur[0]?.totalUangLembur ?? null,
               tarifPerJam: p.uangLembur[0]?.tarifPerJam ?? TARIF_UANG_LEMBUR_DEFAULT,
               hrefNama: hrefNama(p.nip),
+              berSpkl: spklBerlakuDiPeriode(p.satuanKerja, periodeBulan, periodeTahun),
             }))}
           />
         )}
@@ -897,6 +900,21 @@ export default async function KalkulasiUnitPage({
           alasanTertahan={alasanTertahan}
         />
       </div>
+
+      {/* SPKL harian (lembur) punya halaman sendiri, tanpa entri sidebar.
+          Hanya muncul di periode yang sudah masuk gerbang pilot SPKL. */}
+      {spklBerlakuDiPeriode(satkerEfektif, periodeBulan, periodeTahun) && (
+        <p className="mt-3 text-xs text-muted">
+          SPKL harian (lembur) dibentuk otomatis dan diunduh terpisah di{" "}
+          <Link
+            href={`/kasubag/spkl?bulan=${periodeBulan}&tahun=${periodeTahun}&satker=${encodeURIComponent(satkerEfektif)}`}
+            className="font-semibold text-teal-deep underline"
+          >
+            halaman SPKL Harian
+          </Link>
+          .
+        </p>
+      )}
     </main>
   );
 }

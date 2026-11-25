@@ -15,8 +15,24 @@ export const LABEL_ROLE: Record<Role, string> = {
   OSDMA: "OSDMA",
   PPABP: "PPABP",
   PIMPINAN: "Pimpinan",
+  KEPALA_TIM: "Kepala Tim",
   ADMIN: "Admin",
 };
+
+/**
+ * Seluruh role, urutan sesuai enum `Role`. Satu-satunya daftar yang boleh
+ * dipakai untuk pilihan role, validasi input, dan hitungan komposisi: daftar
+ * yang ditulis manual tertinggal tiap kali role baru ditambahkan.
+ */
+export const SEMUA_ROLE: readonly Role[] = [
+  "PEGAWAI",
+  "KASUBAG_TU",
+  "OSDMA",
+  "PPABP",
+  "PIMPINAN",
+  "KEPALA_TIM",
+  "ADMIN",
+];
 
 /**
  * Label role SESEORANG, lengkap dengan unitnya untuk Kasubag TU.

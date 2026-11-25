@@ -105,6 +105,8 @@ export async function simpanHasilPresensi(
           // Dipakai export ADK Uang Lembur (formatnya per tanggal). Angkanya
           // sudah dihitung sejak awal, cuma dulu tidak ada tempat menyimpannya.
           jamLembur: h.jamLembur,
+          // Jam nyata sebelum dibatasi perintah (SPKL); null = SPKL tidak berlaku.
+          jamLemburNyata: h.jamLemburNyata,
           sourceSystem,
           sourceSyncedAt: new Date(),
         })),
@@ -218,6 +220,7 @@ export async function simpanHasilPresensiMassal(
             menitMeninggalkanKantor: 0,
             tidakIkutUpacara: false,
             jamLembur: h.jamLembur,
+            jamLemburNyata: h.jamLemburNyata,
             sourceSystem,
             sourceSyncedAt: sekarang,
           }))
