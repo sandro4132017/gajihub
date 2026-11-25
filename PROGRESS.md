@@ -21,6 +21,10 @@ Terakhir diperbarui: **2026-11-25** - lihat butir 000000 (pekerjaan 2026-11-16 s
      jam lembur dibayar, lewat opsi `tanggalSpkl` di `barisHarianPegawai.ts`), `PROGRESS.md`.
      Prisma client WAJIB di-generate ulang (`npx prisma generate`) karena skema lembur
      menambah role `KEPALA_TIM`.
+   - **Verifikasi sesudah gabung** (2026-11-25, `node tools/verify.mjs` di checkout `main`):
+     typecheck LULUS, 2.869 test lulus (205 berkas), check-sensitive 71 temuan lama. Migrasi
+     baru dari `lembur`: `20261119090000_role_kepala_tim`, `20261119100000_perintah_lembur` -
+     jalankan `npx prisma migrate deploy` di tiap database yang belum punya.
    - **Kalkulasi Unit (lanjutan mockup)**: tahap Kesiapan pakai laci pengecualian kanan; daftar
      dikecualikan & rincian kesiapan dihapus; tabel Tukin/Uang Makan berwarna & full-bleed;
      tahap TTE SPTJM ringkas dengan ikon (i); `SpandukPengembalian` saat dikembalikan PPABP; mode
