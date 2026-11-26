@@ -10,10 +10,29 @@ import {
   susunExportPresensiHarian,
 } from "../../../../business-logic/exportPresensiHarian";
 import { NAMA_BULAN } from "../../../../lib/format/bulan";
+import { muatHariLiburPeriode } from "../../../../lib/hariLibur";
+import { susunBarisHarianPegawai } from "../[nip]/barisHarianPegawai";
+import {
+  HEADER_MASTER_PRESENSI,
+  HEADER_REKAP_HADIR,
+  KOLOM_JAM_MASTER,
+  LEBAR_MASTER_PRESENSI,
+  LEBAR_REKAP_HADIR,
+  susunLembarMasterPresensi,
+  susunLembarRekapHadir,
+  type PegawaiMaster,
+} from "./lembarMasterRekap";
 
 /**
  * Unduh presensi satu unit untuk satu periode, sebagai Excel.
  *
+ * TIGA SHEET sejak 2026-11-25 (template Kasubag TU `docs/jam_absensi.xlsx`):
+ * 1. "Master Presensi" - satu baris per pegawai per hari, rincian jam kerja.
+ * 2. "Rekap Hadir" - satu baris per pegawai, jumlah per jenis kehadiran.
+ * 3. "Sheet1" - bentuk 9 kolom di bawah ini, TETAP ADA (permintaan user).
+ * Angka sheet 1 & 2 dari `susunBarisHarianPegawai` - lihat `lembarMasterRekap.ts`.
+ *
+ * Catatan sheet 3:
  * BENTUKNYA DIGANTI 2026-09-29 mengikuti template baru dari user
  * (`Template_export_presensi_kasubagTU.xlsx`): dari satu baris per PEGAWAI
  * berisi total sebulan, menjadi **satu baris per pegawai per HARI**.
@@ -89,7 +108,7 @@ export async function GET(req: NextRequest) {
           : {}),
       },
     },
-    include: { pegawai: { select: { nama: true } } },
+    include: { pegawai: { select: { id: true, nama: true, nip: true, golongan: true } } },
     // Nama dulu lalu tanggal: berkas ini dibaca per orang, bukan per hari.
     // Urutannya ditentukan DI SINI, bukan di modul penyusunnya - yang tahu
     // urutan yang berguna adalah query-nya.
@@ -110,7 +129,55 @@ export async function GET(req: NextRequest) {
     }))
   );
 
+  const pegawaiIds = [...new Set(rows.map((r) => r.pegawaiId))];
+  const [koreksi, kendala, hariLibur, rekap] = await Promise.all([
+    prisma.koreksiPresensiHarian.findMany({
+      where: { pegawaiId: { in: pegawaiIds }, tanggal: { gte: awal, lt: akhir } },
+      select: { pegawaiId: true, tanggal: true, jamMasuk: true, jamKeluar: true, jamLembur: true },
+    }),
+    prisma.kendalaEpresensi.findMany({
+      where: {
+        tanggal: { gte: awal, lt: akhir },
+        OR: [{ satuanKerja: null }, { satuanKerja: satkerEfektif }],
+      },
+      select: { tanggal: true },
+    }),
+    muatHariLiburPeriode(bulan, tahun),
+    prisma.rekapPresensiPeriode.findMany({
+      where: { pegawaiId: { in: pegawaiIds }, periodeBulan: bulan, periodeTahun: tahun },
+      select: { pegawaiId: true, jenisCutiAktif: true, bulanCutiKeberapa: true },
+    }),
+  ]);
+  const tanggalKendala = new Set(kendala.map((k) => k.tanggal.toISOString().slice(0, 10)));
+  const rekapPer = new Map(rekap.map((r) => [r.pegawaiId, r]));
+
+  // Kelompokkan per pegawai - urutan nama dari query tetap terjaga.
+  const perPegawai = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const daftar = perPegawai.get(r.pegawaiId) ?? [];
+    daftar.push(r);
+    perPegawai.set(r.pegawaiId, daftar);
+  }
+  const pegawaiMaster: PegawaiMaster[] = [...perPegawai].map(([id, harian]) => {
+    const petaKoreksi = new Map(
+      koreksi.filter((k) => k.pegawaiId === id).map((k) => [k.tanggal.toISOString().slice(0, 10), k])
+    );
+    const r = rekapPer.get(id);
+    return {
+      nama: harian[0].pegawai.nama,
+      nip: harian[0].pegawai.nip,
+      golongan: harian[0].pegawai.golongan,
+      harian,
+      // Fungsi yang SAMA dengan halaman & Excel perorangan.
+      rincian: susunBarisHarianPegawai(harian, { petaKoreksi, tanggalKendala, hariLibur }),
+      cutiRekap: r ? { jenisCutiAktif: r.jenisCutiAktif, bulanCutiKeberapa: r.bulanCutiKeberapa } : null,
+    };
+  });
+
   const wb = new ExcelJS.Workbook();
+  tulisMasterPresensi(wb, pegawaiMaster);
+  tulisRekapHadir(wb, pegawaiMaster, `KEMENTERIAN KETENAGAKERJAAN PERIODE BULAN ${NAMA_BULAN[bulan - 1].toUpperCase()} TAHUN ${tahun}`);
+
   const ws = wb.addWorksheet("Sheet1");
   ws.addRow([...HEADER_EXPORT_PRESENSI_HARIAN]);
 
@@ -138,6 +205,8 @@ export async function GET(req: NextRequest) {
   // Format tanggal dipasang PER KOLOM, sesudah semua baris ditulis - kalau
   // dipasang per sel di dalam loop, biayanya sejumlah baris dan berkas belasan
   // ribu baris terasa lambat tanpa sebab yang kelihatan.
+  ws.eachRow((row) => bingkai(row, HEADER_EXPORT_PRESENSI_HARIAN.length));
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, ws.rowCount), column: HEADER_EXPORT_PRESENSI_HARIAN.length } };
   ws.getColumn(3).numFmt = FORMAT_TANGGAL_RINGKAS;
   ws.getColumn(4).numFmt = FORMAT_TANGGAL_PENUH;
 
@@ -154,6 +223,66 @@ export async function GET(req: NextRequest) {
       "Cache-Control": "private, no-store",
     },
   });
+}
+
+const GARIS = { style: "thin" as const };
+const BINGKAI = { top: GARIS, left: GARIS, bottom: GARIS, right: GARIS };
+
+/** Garis di SEMUA sel baris, termasuk yang kosong (eachCell melewatinya). */
+function bingkai(row: ExcelJS.Row, jumlahKolom: number) {
+  for (let k = 1; k <= jumlahKolom; k++) row.getCell(k).border = BINGKAI;
+}
+
+function gayaHeader(row: ExcelJS.Row, jumlahKolom: number) {
+  row.font = { bold: true };
+  row.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  bingkai(row, jumlahKolom);
+}
+
+/** Header, baris nomor kolom, lalu data - sama dengan template. */
+function tulisMasterPresensi(wb: ExcelJS.Workbook, pegawai: PegawaiMaster[]) {
+  const ws = wb.addWorksheet("Master Presensi", { views: [{ state: "frozen", ySplit: 2 }] });
+  const n = HEADER_MASTER_PRESENSI.length;
+  gayaHeader(ws.addRow([...HEADER_MASTER_PRESENSI]), n);
+  gayaHeader(ws.addRow(HEADER_MASTER_PRESENSI.map((_, i) => i + 1)), n);
+  for (const b of susunLembarMasterPresensi(pegawai)) bingkai(ws.addRow(b), n);
+  // Filter di baris nomor kolom, supaya baris itu tidak ikut terbaca sebagai data.
+  ws.autoFilter = { from: { row: 2, column: 1 }, to: { row: Math.max(2, ws.rowCount), column: HEADER_MASTER_PRESENSI.length } };
+
+  LEBAR_MASTER_PRESENSI.forEach((w, i) => (ws.getColumn(i + 1).width = w));
+  // NIP teks - 18 digit melewati presisi angka Excel.
+  ws.getColumn(3).numFmt = "@";
+  ws.getColumn(4).numFmt = "[$-421]dd mmmm yyyy;@";
+  for (const k of KOLOM_JAM_MASTER) ws.getColumn(k).numFmt = "h:mm";
+  ws.getColumn(19).numFmt = "0.00%";
+  // Checkin & Checkout berhuruf merah, seperti template (baris nomor kolom tidak).
+  ws.eachRow((row, nomor) => {
+    if (nomor === 2) return;
+    for (const k of [8, 9]) {
+      const c = row.getCell(k);
+      c.font = { ...c.font, color: { argb: "FFFF0000" } };
+    }
+  });
+  ws.getRow(1).numFmt = "General";
+  ws.getRow(2).numFmt = "General";
+}
+
+function tulisRekapHadir(wb: ExcelJS.Workbook, pegawai: PegawaiMaster[], judul: string) {
+  const ws = wb.addWorksheet("Rekap Hadir", { views: [{ state: "frozen", ySplit: 4 }] });
+  const jumlahKolom = HEADER_REKAP_HADIR.length;
+  ws.addRow([]);
+  ws.addRow([judul]).font = { bold: true, size: 12 };
+  ws.mergeCells(2, 1, 2, jumlahKolom);
+  ws.getCell(2, 1).alignment = { horizontal: "center" };
+  gayaHeader(ws.addRow([...HEADER_REKAP_HADIR]), jumlahKolom);
+  gayaHeader(ws.addRow(HEADER_REKAP_HADIR.map((_, i) => i + 1)), jumlahKolom);
+  for (const b of susunLembarRekapHadir(pegawai)) bingkai(ws.addRow(b), jumlahKolom);
+  ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: Math.max(4, ws.rowCount), column: HEADER_REKAP_HADIR.length } };
+
+  LEBAR_REKAP_HADIR.forEach((w, i) => (ws.getColumn(i + 1).width = w));
+  ws.getColumn(3).numFmt = "@";
+  ws.getColumn(7).numFmt = "0.00%";
+  for (const r of [3, 4]) ws.getRow(r).numFmt = "General";
 }
 
 /** Nama unit jadi potongan nama berkas yang aman di semua sistem berkas. */

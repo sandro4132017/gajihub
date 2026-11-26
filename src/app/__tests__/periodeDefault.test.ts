@@ -4,52 +4,18 @@ import { pilihPeriodeDefault, periodeSekarang, resolvePeriode } from "../periode
 const P = (bulan: number, tahun: number) => ({ bulan, tahun });
 
 describe("pilihPeriodeDefault", () => {
-  it("MELEWATI bulan berjalan walau datanya sudah ada", () => {
-    // Bulan berjalan belum selesai - presensinya baru terisi sampai hari ini,
-    // jadi potongan & uang makan masih akan berubah. Yang dibuka bawaan harus
-    // periode yang sudah tutup.
-    const tersedia = [P(5, 2026), P(7, 2026), P(8, 2026)];
-    expect(pilihPeriodeDefault(tersedia, P(8, 2026))).toEqual(P(7, 2026));
+  // Keputusan user 2026-11-25: bawaan filter = bulan berjalan ("real time").
+  it("selalu bulan berjalan, walau ada periode lain yang lebih lengkap", () => {
+    expect(pilihPeriodeDefault([P(5, 2026), P(7, 2026), P(8, 2026)], P(8, 2026))).toEqual(P(8, 2026));
+    expect(pilihPeriodeDefault([P(5, 2026), P(7, 2026)], P(8, 2026))).toEqual(P(8, 2026));
   });
 
-  it("tetap memakai bulan berjalan kalau CUMA itu yang ada datanya", () => {
-    // Server baru yang baru sekali menarik presensi - halaman kosong tanpa
-    // penjelasan lebih buruk daripada angka yang belum final.
-    expect(pilihPeriodeDefault([P(8, 2026)], P(8, 2026))).toEqual(P(8, 2026));
+  it("bulan berjalan juga ketika belum ada data sama sekali", () => {
+    expect(pilihPeriodeDefault([], P(11, 2026))).toEqual(P(11, 2026));
   });
 
-  it("melewati bulan berjalan lintas tahun", () => {
-    // Januari berjalan -> jatuh ke Desember tahun sebelumnya, bukan ke bulan
-    // lain di tahun yang sama.
-    const tersedia = [P(11, 2025), P(12, 2025), P(1, 2026)];
-    expect(pilihPeriodeDefault(tersedia, P(1, 2026))).toEqual(P(12, 2025));
-  });
-
-  it("jatuh ke periode terbaru yang ada datanya kalau bulan berjalan kosong", () => {
-    // Kasus nyata: Agustus 2026 belum punya predikat kinerja, Juli punya.
-    const tersedia = [P(5, 2026), P(7, 2026)];
-    expect(pilihPeriodeDefault(tersedia, P(8, 2026))).toEqual(P(7, 2026));
-  });
-
-  it("membandingkan tahun dulu, baru bulan", () => {
-    const tersedia = [P(12, 2026), P(1, 2027)];
-    expect(pilihPeriodeDefault(tersedia, P(6, 2027))).toEqual(P(1, 2027));
-  });
-
-  it("tidak peduli urutan masukan", () => {
-    const acak = [P(3, 2026), P(11, 2026), P(1, 2026), P(7, 2026)];
-    expect(pilihPeriodeDefault(acak, P(12, 2026))).toEqual(P(11, 2026));
-  });
-
-  it("balik ke periode berjalan kalau tidak ada data sama sekali", () => {
-    // Database kosong (mis. server baru) - halaman tetap harus bisa dibuka.
-    expect(pilihPeriodeDefault([], P(8, 2026))).toEqual(P(8, 2026));
-  });
-
-  it("tidak membuang periode di masa depan", () => {
-    // Kalau ada yang sengaja memasukkan data lebih awal, halamannya harus
-    // tetap bisa dicapai lewat link sidebar yang tanpa query string.
-    expect(pilihPeriodeDefault([P(9, 2026), P(7, 2026)], P(8, 2026))).toEqual(P(9, 2026));
+  it("lintas tahun: Januari berjalan tetap Januari", () => {
+    expect(pilihPeriodeDefault([P(12, 2025)], P(1, 2026))).toEqual(P(1, 2026));
   });
 });
 
@@ -74,8 +40,8 @@ describe("resolvePeriode", () => {
     expect(resolvePeriode("8", "2026", tersedia, waktu)).toEqual(P(8, 2026));
   });
 
-  it("tanpa query string jatuh ke periode terbaru yang ada datanya", () => {
-    expect(resolvePeriode(undefined, undefined, tersedia, waktu)).toEqual(P(7, 2026));
+  it("tanpa query string jatuh ke bulan berjalan", () => {
+    expect(resolvePeriode(undefined, undefined, tersedia, waktu)).toEqual(P(8, 2026));
   });
 
   it("bulan saja: bulannya menang, tahun ikut periode default", () => {
@@ -83,17 +49,17 @@ describe("resolvePeriode", () => {
   });
 
   it("tahun saja: tahunnya menang, bulan ikut periode default", () => {
-    expect(resolvePeriode(undefined, "2027", tersedia, waktu)).toEqual(P(7, 2027));
+    expect(resolvePeriode(undefined, "2027", tersedia, waktu)).toEqual(P(8, 2027));
   });
 
   it("nilai ngawur diabaikan, bukan bikin NaN", () => {
     // Query string datang dari luar - "?bulan=abc" dulu menghasilkan NaN yang
     // diteruskan ke query Prisma dan mengembalikan nol baris tanpa penjelasan.
     for (const b of ["abc", "0", "13", "-1", "7.5", ""]) {
-      expect(resolvePeriode(b, undefined, tersedia, waktu)).toEqual(P(7, 2026));
+      expect(resolvePeriode(b, undefined, tersedia, waktu)).toEqual(P(8, 2026));
     }
     for (const t of ["abc", "26", ""]) {
-      expect(resolvePeriode(undefined, t, tersedia, waktu)).toEqual(P(7, 2026));
+      expect(resolvePeriode(undefined, t, tersedia, waktu)).toEqual(P(8, 2026));
     }
   });
 });

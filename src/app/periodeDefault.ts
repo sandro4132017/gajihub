@@ -4,29 +4,18 @@ import { pegawaiBukanUji } from "../lib/dataUji";
 /**
  * Periode default halaman - dipakai kalau user membuka halaman TANPA ?bulan=&tahun=.
  *
- * KENAPA BUKAN SEKADAR "BULAN BERJALAN": halaman-halaman periode di Gajihub
- * dulu selalu jatuh ke bulan berjalan, dan itu hampir selalu bulan yang BELUM
- * ada datanya - rekap presensi ditarik setelah bulannya lewat, dan predikat
- * kinerja terbit lebih lambat lagi. Akibatnya link sidebar (yang tidak membawa
- * query string) mendarat di halaman kosong, dan halaman kosong tidak bisa
- * dibedakan dari "data hilang". Ini pernah benar-benar terjadi: "saya udah
- * kalkulasi unit, kok belum ada angka data nya di tabel?" - padahal
- * kalkulasinya berhasil, cuma untuk bulan yang berbeda dari yang terbuka.
+ * BAWAANNYA BULAN BERJALAN (keputusan user 2026-11-25: filter harus "real
+ * time"). Menggantikan aturan 2026-08-18 yang memilih periode terbaru yang
+ * datanya ada DAN bulannya sudah lewat.
  *
- * DAN KENAPA BUKAN BULAN BERJALAN WALAU DATANYA SUDAH ADA (diubah 2026-08-18):
- * bulan berjalan itu periode yang BELUM SELESAI. Presensinya baru terisi
- * sebagian - per 18 Agustus, rekap Agustus cuma memuat kehadiran sampai
- * tanggal itu - jadi potongan Pasal 13, hari uang makan, dan jam lembur
- * semuanya masih akan berubah sampai bulannya tutup. Membukanya sebagai
- * tampilan bawaan menyodorkan angka setengah jadi sebagai kalau-kalau sudah
- * final, dan itu angka yang dipakai orang mengambil keputusan bayar.
+ * Konsekuensi yang diterima: (1) angka bulan berjalan belum final - presensi
+ * baru terisi sampai hari ini, jadi potongan, hari uang makan, dan jam lembur
+ * masih bisa berubah sampai bulannya tutup; (2) halaman yang datanya terbit
+ * belakangan (predikat kinerja, rekap terkirim untuk ADK) bisa terbuka kosong
+ * di awal bulan. Bulan lain tetap dibuka lewat filter.
  *
- * Jadi bawaannya = periode TERBARU yang datanya ada DAN bulannya sudah lewat.
- * Bulan berjalan tetap bisa dibuka, cuma harus dipilih sendiri lewat filter -
- * pilihan sadar, bukan yang kebetulan terbuka.
- *
- * Aturannya bergerak sendiri: begitu masuk September, bawaannya jadi Agustus.
- * TIDAK ADA bulan yang di-hardcode di sini.
+ * Aturannya bergerak sendiri mengikuti jam server. TIDAK ADA bulan yang
+ * di-hardcode di sini.
  */
 export type Periode = { bulan: number; tahun: number };
 
@@ -36,24 +25,11 @@ export type Periode = { bulan: number; tahun: number };
  * yang sama.
  */
 export function pilihPeriodeDefault(
-  tersedia: Periode[],
+  // Dipertahankan supaya pemanggil tidak berubah; tidak lagi menentukan hasil.
+  _tersedia: Periode[],
   sekarang: Periode
 ): Periode {
-  // Terbaru = tahun dulu, baru bulan. Periode di masa depan TIDAK dibuang:
-  // kalau ada, itu memang data yang sengaja dimasukkan lebih awal, dan
-  // menyembunyikannya membuat halamannya tidak bisa dibuka lewat sidebar.
-  const terurut = [...tersedia].sort((a, b) => b.tahun - a.tahun || b.bulan - a.bulan);
-
-  // Bulan BERJALAN dilewati - datanya masih setengah jalan sampai bulannya
-  // tutup (lihat catatan panjang di kepala file).
-  const bukanBerjalan = terurut.filter(
-    (p) => !(p.bulan === sekarang.bulan && p.tahun === sekarang.tahun)
-  );
-
-  // Kalau yang ada CUMA bulan berjalan (mis. server baru yang baru sekali
-  // menarik presensi), tetap dipakai - halaman kosong tanpa penjelasan lebih
-  // buruk daripada angka yang belum final.
-  return bukanBerjalan[0] ?? terurut[0] ?? sekarang;
+  return sekarang;
 }
 
 /** Periode berjalan menurut jam server. Dipisah supaya gampang di-stub di test. */
