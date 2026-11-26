@@ -2,6 +2,7 @@
 
 import { DetakSesi } from "./DetakSesi";
 import { BarProgresNavigasi } from "./BarProgresNavigasi";
+import { PenandaMasukSso } from "./PenandaMasukSso";
 import { type ReactNode, Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -616,7 +617,10 @@ export function AppShell({
           kolom grid sendiri (68px), jadi isi halaman tidak pernah tertimpa.
           Dulu perlu, karena sidebar yang diciutkan benar-benar hilang dan
           tombol pemunculnya mengambang di atas judul halaman. */}
-      <div className="min-w-0">{children}</div>
+      <div className="min-w-0">
+        <PenandaMasukSso nama={account.nama} />
+        {children}
+      </div>
 
       {/* Detak interaksi: hanya mengirim bila pengguna benar-benar berinteraksi. */}
       <DetakSesi />

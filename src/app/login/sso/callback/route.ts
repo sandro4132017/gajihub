@@ -17,6 +17,8 @@ import {
 import { kunciSidikNik, sidikNik } from "../../../../auth/sidikNik";
 import { pesanGalatUntukLayar } from "../../../../lib/koneksi/galatSumber";
 import { COOKIE_STATE_SSO } from "../route";
+import { COOKIE_MASUK_SSO, UMUR_MASUK_SSO_DETIK } from "../../../../auth/penandaMasukSso";
+import { opsiCookieSingkat } from "../../../../auth/sesiCookie";
 
 export const dynamic = "force-dynamic";
 
@@ -196,6 +198,8 @@ export async function GET(req: NextRequest) {
     const tujuan = tujuanKembaliSah(req.cookies.get(COOKIE_KEMBALI)?.value) ?? LANDING_ROLE[roleBawaan];
     const res = NextResponse.redirect(new URL(tujuan, asalPublik(req.headers, req.url)));
     res.cookies.set(SESSION_COOKIE_NAME, sesi, OPSI_COOKIE_SESI);
+    // Pita "Kamu masuk sebagai ..." sekali tampil - lihat PenandaMasukSso.
+    res.cookies.set(COOKIE_MASUK_SSO, "1", { ...opsiCookieSingkat(UMUR_MASUK_SSO_DETIK), httpOnly: false });
     res.cookies.delete(COOKIE_STATE_SSO);
     if (req.cookies.has(COOKIE_KEMBALI)) res.cookies.delete(COOKIE_KEMBALI);
     return res;

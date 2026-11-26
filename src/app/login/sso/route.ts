@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { asalPublik, konfigurasiSso, urlOtorisasi } from "../../../auth/sso";
+import { SESSION_COOKIE_NAME } from "../../../auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -47,5 +48,10 @@ export async function GET(req: NextRequest) {
     path: "/",
     maxAge: UMUR_STATE_DETIK,
   });
+  // Sesi Gajihub yang masih menempel di browser ini DIBUANG dulu. Tanpa ini,
+  // login SSO yang gagal berakhir di /login, yang langsung melempar ke
+  // dashboard sesi lama - orang berikutnya di komputer yang sama terlihat
+  // "masuk" sebagai pemakai sebelumnya, dan pesan gagalnya tidak pernah tampil.
+  res.cookies.delete(SESSION_COOKIE_NAME);
   return res;
 }

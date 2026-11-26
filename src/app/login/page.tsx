@@ -62,6 +62,9 @@ export default async function LoginPage({
               <p className="mt-3 text-center text-xs text-muted leading-relaxed">
                 Masuk memakai akun resmi Kementerian Ketenagakerjaan.
               </p>
+              <p className="mt-1.5 text-center text-xs text-muted leading-relaxed">
+                Komputer dipakai bergantian? Pakai jendela Incognito, supaya tidak masuk sebagai akun orang sebelumnya.
+              </p>
             </div>
           )}
 
