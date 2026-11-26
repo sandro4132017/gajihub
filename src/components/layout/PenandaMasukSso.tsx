@@ -31,8 +31,8 @@ export function PenandaMasukSso({ nama }: { nama: string }) {
         Kamu masuk sebagai <strong>{nama}</strong>.
       </span>
       <span className="text-ink-2">
-        Bukan kamu? Keluar dari Gajihub, lalu keluar juga dari Akun Kemnaker di browser ini - atau pakai jendela
-        Incognito.
+        Bukan kamu? Keluar dari Gajihub, lalu di halaman login pilih &quot;Keluar dari Akun Kemnaker&quot; dan
+        masuk dengan akunmu.
       </span>
       <button
         type="button"

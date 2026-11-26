@@ -21,12 +21,5 @@ describe("GET /login/sso", () => {
     const sesi = res.cookies.get(SESSION_COOKIE_NAME);
     expect(sesi?.value).toBe("");
     expect(res.cookies.get("gajihub_sso_state")?.value).toBeTruthy();
-    expect(res.headers.get("location")).not.toContain("prompt=");
-  });
-
-  it("NACO_PROMPT diisi = prompt ikut dikirim ke Akun Kemnaker", async () => {
-    vi.stubEnv("NACO_PROMPT", '"login"');
-    const res = await GET(new NextRequest("http://localhost:3000/login/sso"));
-    expect(new URL(res.headers.get("location")!).searchParams.get("prompt")).toBe("login");
   });
 });

@@ -52,8 +52,6 @@ export interface KonfigurasiSso {
    * satu-satunya jalan mengenali pegawai karena NIP tidak pernah dikirim.
    */
   fieldNik: string | null;
-  /** Nilai `prompt` ke /auth (mis. "login"), dari NACO_PROMPT. null = tidak dikirim. */
-  prompt?: string | null;
 }
 
 /** Panjang NIP baru ASN. Dipakai mengenali NIP di balasan yang belum diketahui bentuknya. */
@@ -78,8 +76,19 @@ export function konfigurasiSso(): KonfigurasiSso | null {
     scope: process.env.NACO_SCOPE?.trim() || "basic email",
     fieldNip: process.env.NACO_FIELD_NIP?.trim() || null,
     fieldNik: process.env.NACO_FIELD_NIK?.trim() || "data.username",
-    prompt: process.env.NACO_PROMPT?.trim().replace(/^["']|["']$/g, "") || null,
   };
+}
+
+/**
+ * Halaman keluar Akun Kemnaker. Naco TIDAK menyediakan parameter untuk memaksa
+ * form login (`prompt=login` dicoba di VPS 2026-11-26: diabaikan), jadi selama
+ * browser masih menyimpan login Akun Kemnaker - dari aplikasi Kemnaker mana
+ * pun - /auth langsung mengembalikan akun itu. Alamat ini yang dipakai Naco
+ * sendiri untuk tautan "Login dengan akun yang lain" (dibaca dari skrip
+ * halaman login Naco); tidak ada di dokumentasi resminya.
+ */
+export function urlKeluarAkunKemnaker(cfg: KonfigurasiSso): string {
+  return `${cfg.baseUrl}/auth/logout`;
 }
 
 export function ssoAktif(): boolean {
@@ -98,12 +107,6 @@ export function urlOtorisasi(cfg: KonfigurasiSso, state: string): string {
     // login). Nilainya dicocokkan ulang dengan cookie di Route Handler.
     state,
   });
-  // OPSIONAL, TIDAK disebut dokumentasi Naco: `prompt=login` adalah cara
-  // standar OAuth/OIDC meminta form login tetap muncul walau browser masih
-  // menyimpan login Akun Kemnaker dari aplikasi lain. Belum diketahui apakah
-  // Naco menghormatinya - TODO(confirm) ke Pusdatik. Hanya dikirim bila
-  // NACO_PROMPT diisi, jadi tanpa itu perilakunya sama persis dengan dulu.
-  if (cfg.prompt) q.set("prompt", cfg.prompt);
   return `${cfg.baseUrl}/auth?${q.toString()}`;
 }
 

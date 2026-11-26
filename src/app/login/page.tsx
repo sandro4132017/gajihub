@@ -1,6 +1,6 @@
 import { GajihubLogo } from "../../components/layout/GajihubLogo";
 import { LoginForm } from "./LoginForm";
-import { ssoAktif } from "../../auth/sso";
+import { konfigurasiSso, ssoAktif, urlKeluarAkunKemnaker } from "../../auth/sso";
 import { adaLoginKataSandi } from "../../auth/kredensialLogin";
 import { PesanSso } from "./PesanSso";
 import { PesanSesi } from "./PesanSesi";
@@ -62,8 +62,16 @@ export default async function LoginPage({
               <p className="mt-3 text-center text-xs text-muted leading-relaxed">
                 Masuk memakai akun resmi Kementerian Ketenagakerjaan.
               </p>
+              {/* Akun Kemnaker menyimpan login-nya sendiri di browser (dipakai
+                  bersama aplikasi Kemnaker lain), jadi tombol di atas bisa
+                  langsung masuk sebagai akun terakhir tanpa form. Tautan ini
+                  keluar dari Akun Kemnaker dulu supaya bisa memilih akun lain. */}
               <p className="mt-1.5 text-center text-xs text-muted leading-relaxed">
-                Komputer dipakai bergantian? Pakai jendela Incognito, supaya tidak masuk sebagai akun orang sebelumnya.
+                Langsung masuk ke akun yang salah?{" "}
+                <a href={urlKeluarAkunKemnaker(konfigurasiSso()!)} className="font-semibold text-biru-deep hover:underline">
+                  Keluar dari Akun Kemnaker
+                </a>{" "}
+                dulu, lalu masuk lagi dengan akunmu.
               </p>
             </div>
           )}
