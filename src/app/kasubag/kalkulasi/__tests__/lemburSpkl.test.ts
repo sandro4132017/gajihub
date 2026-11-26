@@ -42,8 +42,8 @@ vi.mock("@/lib/prisma", () => ({
     pengirimanUnit: { findUnique: m.pengirimanFind },
     koreksiPresensiHarian: { findUnique: m.koreksiFindUnique },
     presensiHarian: { findUnique: m.presensiFindUnique },
-    auditTrail: { findFirst: m.auditFindFirstPrisma },
-    uangLembur: { upsert: m.uangLemburUpsert },
+    auditTrail: { findFirst: m.auditFindFirstPrisma, create: m.auditCreate },
+    uangLembur: { upsert: m.uangLemburUpsert, findUnique: m.uangLemburFindUnique },
     $transaction: m.transaksi,
   },
 }));
@@ -319,6 +319,38 @@ describe("koreksiUangLemburAction (total bulanan manual)", () => {
     const res = await koreksiUangLemburAction({}, formTotal("12", "2026"));
     expect(res.error).toBeUndefined();
     expect(m.uangLemburUpsert).toHaveBeenCalled();
+  });
+
+  // Tarif dari form bisa diubah di browser - server menurunkannya dari golongan.
+  it("tarif dari form DIABAIKAN, dipakai tarif SBM golongan pegawai", async () => {
+    masuk(NON_PILOT);
+    m.pegawaiFind.mockResolvedValue(pegawai(NON_PILOT));
+    const fd = formTotal("12", "2026");
+    fd.set("tarifPerJam", "9999999");
+    const res = await koreksiUangLemburAction({}, fd);
+    expect(res.error).toBeUndefined();
+    const arg = m.uangLemburUpsert.mock.calls.at(-1)?.[0];
+    expect(arg.create.tarifPerJam).not.toBe(9999999);
+    expect(m.auditCreate).toHaveBeenCalled();
+  });
+
+  it.each(["-5", "745", "1.3"])("jam lembur di luar rentang (%s) ditolak", async (jam) => {
+    masuk(NON_PILOT);
+    m.pegawaiFind.mockResolvedValue(pegawai(NON_PILOT));
+    const fd = formTotal("12", "2026");
+    fd.set("totalJamLembur", jam);
+    const res = await koreksiUangLemburAction({}, fd);
+    expect(res.error).toMatch(/antara 0 dan/);
+    expect(m.uangLemburUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rekap yang sudah dikirim ke PPABP terkunci - koreksi ditolak", async () => {
+    masuk(NON_PILOT);
+    m.pegawaiFind.mockResolvedValue(pegawai(NON_PILOT));
+    m.pengirimanFind.mockResolvedValue({ status: "TERKIRIM", dikirimPada: new Date() });
+    const res = await koreksiUangLemburAction({}, formTotal("12", "2026"));
+    expect(res.error).toMatch(/terkunci/);
+    expect(m.uangLemburUpsert).not.toHaveBeenCalled();
   });
 });
 

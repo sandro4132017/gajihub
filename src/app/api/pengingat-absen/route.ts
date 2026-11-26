@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { prisma } from "../../../lib/prisma";
 import { ambilAbsenHariIni } from "../../../adapters/absenHariIni";
 import {
@@ -39,15 +40,23 @@ export const dynamic = "force-dynamic";
  *   GET /api/pengingat-absen?satker=Biro%20Keuangan%20dan%20Barang%20Milik%20Negara
  *   Header: x-gajihub-secret: <isi PENGINGAT_ABSEN_SECRET>
  */
+/** Perbandingan waktu-tetap; di-hash dulu supaya panjangnya selalu sama. */
+function rahasiaCocok(diberikan: string | null, rahasia: string): boolean {
+  if (diberikan === null) return false;
+  const a = createHash("sha256").update(diberikan).digest();
+  const b = createHash("sha256").update(rahasia).digest();
+  return timingSafeEqual(a, b);
+}
+
 export async function GET(req: NextRequest) {
   const rahasia = process.env.PENGINGAT_ABSEN_SECRET?.trim();
   if (!rahasia) {
     return Response.json(
-      { error: "PENGINGAT_ABSEN_SECRET belum diisi di .env - route ini sengaja mati tanpa itu." },
+      { error: "Layanan pengingat belum diaktifkan di server." },
       { status: 503 }
     );
   }
-  if (req.headers.get("x-gajihub-secret") !== rahasia) {
+  if (!rahasiaCocok(req.headers.get("x-gajihub-secret"), rahasia)) {
     return Response.json({ error: "Tidak berwenang." }, { status: 401 });
   }
 

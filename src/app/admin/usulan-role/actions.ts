@@ -41,6 +41,9 @@ export async function eksekusiUsulanRoleAction(
 
     const usulan = await prisma.usulanPerubahanRole.findUnique({ where: { id: usulanId }, include: { user: true } });
     if (!usulan) return { error: "Usulan tidak ditemukan." };
+    if (usulan.userId === admin.id && keputusan === "EKSEKUSI") {
+      return { error: "Usulan untuk akun sendiri tidak bisa dieksekusi sendiri - minta Admin lain." };
+    }
     if (usulan.status !== "MENUNGGU") {
       return { error: `Usulan ini berstatus ${usulan.status} - sudah diputuskan sebelumnya.` };
     }

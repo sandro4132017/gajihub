@@ -8,10 +8,11 @@ describe("hostAsalTepercaya - asal milik sendiri", () => {
     );
   });
 
-  it("subdomain kemnaker lain diterima lewat pola bintang", () => {
-    expect(hostAsalTepercaya("https://apa-saja.kemnaker.go.id")).toBe(
-      "apa-saja.kemnaker.go.id"
-    );
+  // Subdomain Kemnaker lain same-site (cookie ikut) - tidak boleh dipercaya
+  // menjalankan aksi Gajihub.
+  it("subdomain kemnaker LAIN ditolak - tidak ada pola bintang", () => {
+    expect(hostAsalTepercaya("https://apa-saja.kemnaker.go.id")).toBeNull();
+    expect(hostAsalTepercaya("https://lain.rokeubmn.id")).toBeNull();
   });
 
   it("IP internal dengan port diterima", () => {

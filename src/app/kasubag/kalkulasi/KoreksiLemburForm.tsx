@@ -10,14 +10,14 @@ export function KoreksiLemburForm({
   periodeBulan,
   periodeTahun,
   totalJamLemburSaatIni,
-  tarifPerJam,
   berSpkl = false,
 }: {
   pegawaiId: string;
   periodeBulan: number;
   periodeTahun: number;
   totalJamLemburSaatIni: number;
-  tarifPerJam: number;
+  /** Tidak dikirim lagi - tarif ditentukan server dari golongan. */
+  tarifPerJam?: number;
   /** Satker ber-SPKL di periode ini: total manual tidak berlaku (ditolak juga di server). */
   berSpkl?: boolean;
 }) {
@@ -36,7 +36,6 @@ export function KoreksiLemburForm({
       <input type="hidden" name="pegawaiId" value={pegawaiId} />
       <input type="hidden" name="periodeBulan" value={periodeBulan} />
       <input type="hidden" name="periodeTahun" value={periodeTahun} />
-      <input type="hidden" name="tarifPerJam" value={tarifPerJam} />
       <input
         type="number"
         step="0.5"

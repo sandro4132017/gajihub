@@ -114,9 +114,12 @@ describe("cariNikDariInfo - bentuk balasan Naco yang sebenarnya", () => {
     expect(cariNikDariInfo(BALASAN_NACO, "data.username")).toBe(NIK);
   });
 
-  it("menelusuri sebagai cadangan kalau nama fieldnya berubah", () => {
-    expect(cariNikDariInfo(BALASAN_NACO, "data.tidak_ada")).toBe(NIK);
-    expect(cariNikDariInfo(BALASAN_NACO, null)).toBe(NIK);
+  // Tidak menelusuri field lain: nama/alamat bisa diisi pemilik akun dengan
+  // NIK orang lain.
+  it("TIDAK menelusuri field lain kalau field yang ditetapkan kosong", () => {
+    expect(cariNikDariInfo(BALASAN_NACO, "data.tidak_ada")).toBeNull();
+    expect(cariNikDariInfo(BALASAN_NACO, null)).toBeNull();
+    expect(cariNikDariInfo({ data: { username: "x", name: NIK } }, "data.username")).toBeNull();
   });
 
   // UUID memuat banyak digit tapi bukan 16 digit polos - jadi tidak bisa

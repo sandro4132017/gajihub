@@ -29,13 +29,11 @@ const nextConfig = {
       allowedOrigins: [
         "gajihub.kemnaker.go.id",
         "gajihub.kemnaker.go.id:443",
-        "*.kemnaker.go.id",
         "gajihubkemnaker.go.id",
         "gajihubkemnaker.go.id:443",
         "gajihubkemnakergoid",
         "gajihub.rokeubmn.id",
         "gajihub.rokeubmn.id:443",
-        "*.rokeubmn.id",
         "192.168.221.44:3000",
         "192.168.221.44:3002",
         "192.168.221.44:80",

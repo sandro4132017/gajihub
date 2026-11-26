@@ -21,17 +21,22 @@
 // berbeda cepat atau lambat.
 // ============================================================================
 
-/** Host yang sah menjalankan Server Action. Sama persis dengan `allowedOrigins`. */
+/**
+ * Host yang sah menjalankan Server Action. Sama persis dengan `allowedOrigins`.
+ *
+ * TANPA pola bintang (`*.kemnaker.go.id`): subdomain Kemnaker lain dihitung
+ * "same-site", jadi cookie sesi ikut terkirim - celah XSS di aplikasi Kemnaker
+ * mana pun bisa menjalankan aksi Gajihub atas nama pegawai yang sedang login.
+ * Tiap host yang sah disebut satu per satu.
+ */
 export const ASAL_TEPERCAYA: readonly string[] = [
   "gajihub.kemnaker.go.id",
   "gajihub.kemnaker.go.id:443",
-  "*.kemnaker.go.id",
   "gajihubkemnaker.go.id",
   "gajihubkemnaker.go.id:443",
   "gajihubkemnakergoid",
   "gajihub.rokeubmn.id",
   "gajihub.rokeubmn.id:443",
-  "*.rokeubmn.id",
   "192.168.221.44:3000",
   "192.168.221.44:3002",
   "192.168.221.44:80",

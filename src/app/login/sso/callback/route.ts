@@ -17,6 +17,7 @@ import {
 import { kunciSidikNik, sidikNik } from "../../../../auth/sidikNik";
 import { pesanGalatUntukLayar } from "../../../../lib/koneksi/galatSumber";
 import { COOKIE_STATE_SSO } from "../route";
+import { COOKIE_PESAN_SSO, UMUR_PESAN_SSO_DETIK } from "../../../../auth/penandaMasukSso";
 import { COOKIE_MASUK_SSO, UMUR_MASUK_SSO_DETIK } from "../../../../auth/penandaMasukSso";
 import { opsiCookieSingkat } from "../../../../auth/sesiCookie";
 
@@ -45,8 +46,13 @@ export const dynamic = "force-dynamic";
 function keLogin(req: NextRequest, alasan: string, detail?: string) {
   const url = new URL("/login", asalPublik(req.headers, req.url));
   url.searchParams.set("sso", alasan);
-  if (detail) url.searchParams.set("pesan", detail.slice(0, 300));
   const res = NextResponse.redirect(url);
+  // Rincian lewat cookie httpOnly singkat, BUKAN query string: teks di URL bisa
+  // dipalsukan orang lewat tautan (phishing di halaman login resmi), dan ikut
+  // tercatat di log proxy & riwayat browser.
+  if (detail) {
+    res.cookies.set(COOKIE_PESAN_SSO, encodeURIComponent(detail.slice(0, 300)), opsiCookieSingkat(UMUR_PESAN_SSO_DETIK));
+  }
   res.cookies.delete(COOKIE_STATE_SSO);
   return res;
 }
@@ -173,10 +179,10 @@ export async function GET(req: NextRequest) {
 
     const user = await prisma.user.findUnique({ where: { nip } });
     if (!user) {
-      return keLogin(req, "tidak-terdaftar", `NIP ${nip} belum punya akun di Gajihub. Minta Admin membuatkannya.`);
+      return keLogin(req, "tidak-terdaftar", `NIP berakhiran …${nip.slice(-4)} belum punya akun di Gajihub. Minta Admin membuatkannya.`);
     }
     if (!user.aktif) {
-      return keLogin(req, "nonaktif", `Akun NIP ${nip} berstatus nonaktif.`);
+      return keLogin(req, "nonaktif", `Akun NIP berakhiran …${nip.slice(-4)} berstatus nonaktif.`);
     }
 
     const pegawai = await prisma.pegawai.findUnique({ where: { nip } });

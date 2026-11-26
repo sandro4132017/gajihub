@@ -68,20 +68,33 @@ interface VerifyResult {
   error?: string;
 }
 
+/**
+ * Alamat & kredensial Esign Client HANYA dari env. Tidak ada nilai cadangan di
+ * kode: repo ini publik, dan cadangan yang tertulis di sini sama dengan
+ * menerbitkan kredensialnya.
+ */
 function getEsignConfig() {
-  const baseUrl = process.env.ESIGN_BASE_URL || "http://192.168.221.11";
-  const apiUser = process.env.ESIGN_API_USER || "temporary";
-  const apiPass = process.env.ESIGN_API_PASS || "T3mp0reRy";
+  const baseUrl = process.env.ESIGN_BASE_URL?.trim();
+  const apiUser = process.env.ESIGN_API_USER?.trim();
+  const apiPass = process.env.ESIGN_API_PASS?.trim();
+  if (!baseUrl || !apiUser || !apiPass) {
+    throw new Error("Layanan TTE belum dikonfigurasi di server (alamat/kredensial Esign Client kosong).");
+  }
   const authHeader = `Basic ${Buffer.from(`${apiUser}:${apiPass}`).toString("base64")}`;
-
-  return { baseUrl, authHeader };
+  return { baseUrl: baseUrl.replace(/\/+$/, ""), authHeader };
 }
 
 /**
  * Cek status sertifikat elektronik pengguna di BSrE berdasarkan NIK
  */
 export async function checkUserStatus(nik: string): Promise<UserStatusResult> {
-  const { baseUrl, authHeader } = getEsignConfig();
+  let cfg: ReturnType<typeof getEsignConfig>;
+  try {
+    cfg = getEsignConfig();
+  } catch (e) {
+    return { success: false, statusCode: 503, status: "SERVER_ERROR", message: (e as Error).message };
+  }
+  const { baseUrl, authHeader } = cfg;
   const cleanNik = (nik || "").trim();
 
   if (!cleanNik) {
@@ -210,9 +223,8 @@ export async function checkUserStatus(nik: string): Promise<UserStatusResult> {
  * Passphrase HANYA digunakan di dalam memori saat eksekusi fetch dan TIDAK PERNAH disimpan / di-log.
  */
 export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
-  const { baseUrl, authHeader } = getEsignConfig();
-
   try {
+    const { baseUrl, authHeader } = getEsignConfig();
     const formData = new FormData();
     const pdfBlob = new Blob([new Uint8Array(options.fileBuffer)], { type: "application/pdf" });
     formData.append("file", pdfBlob, options.fileName || "dokumen.pdf");
@@ -318,9 +330,8 @@ export async function signPdf(options: SignPdfOptions): Promise<SignPdfResult> {
  * Verifikasi keabsahan dokumen PDF yang telah ditandatangani
  */
 export async function verifyPdf(pdfBuffer: Buffer, fileName: string = "dokumen_signed.pdf"): Promise<VerifyResult> {
-  const { baseUrl, authHeader } = getEsignConfig();
-
   try {
+    const { baseUrl, authHeader } = getEsignConfig();
     const formData = new FormData();
     const pdfBlob = new Blob([new Uint8Array(pdfBuffer)], { type: "application/pdf" });
     formData.append("signed_file", pdfBlob, fileName);
@@ -378,8 +389,8 @@ export async function pingLayananBsre(
   nikProbe: string,
   timeoutMs = 4_000
 ): Promise<HasilPingBsre> {
-  const { baseUrl, authHeader } = getEsignConfig();
   try {
+    const { baseUrl, authHeader } = getEsignConfig();
     const res = await fetch(`${baseUrl}/api/user/status/${encodeURIComponent(nikProbe)}`, {
       method: "GET",
       headers: { Authorization: authHeader, Accept: "application/json" },

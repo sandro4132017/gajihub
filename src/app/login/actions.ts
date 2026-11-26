@@ -14,7 +14,7 @@ import { COOKIE_KEMBALI, tujuanKembaliSah } from "../../auth/tujuanKembali";
 import { LABEL_ROLE } from "../../auth/roleLabel";
 import { pesanGalatUntukLayar } from "../../lib/koneksi/galatSumber";
 import { ssoAktif } from "../../auth/sso";
-import { bersihkanNilaiEnv, putuskanLogin } from "../../auth/kredensialLogin";
+import { bersihkanNilaiEnv, kredensialDev, putuskanLogin } from "../../auth/kredensialLogin";
 import { konfigPenguji } from "../../auth/akunPenguji";
 import {
   JABATAN_PENGUJI,
@@ -47,8 +47,7 @@ export async function loginAction(
     const keputusan = putuskanLogin(
       { username: inputUsername, password: inputPassword },
       {
-        devUser: bersihkanNilaiEnv(process.env.DEV_AUTH_USER),
-        devPass: bersihkanNilaiEnv(process.env.DEV_AUTH_PASS),
+        ...kredensialDev(process.env),
         penguji: konfigPenguji(process.env),
       }
     );

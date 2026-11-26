@@ -27,15 +27,11 @@ import { normalkanNik } from "./sidikNik";
  * kalkulasi, approval, banding. Sementara scope yang disebut dokumentasi
  * cuma `basic email`, dan email BUKAN NIP.
  *
- * Karena bentuk balasannya belum diketahui, `cariNipDariInfo()` di bawah
- * MENCARI, bukan menebak: ia menelusuri seluruh isi balasan untuk menemukan
- * nilai berbentuk NIP (18 digit). Kalau ketemu, dipakai; kalau tidak, alur
- * login DIHENTIKAN dengan halaman yang mendaftar nama-nama field yang
- * benar-benar dikirim Naco - jadi satu kali percobaan login sudah cukup untuk
- * memastikan bentuknya, tanpa menebak-nebak.
- *
- * Begitu bentuknya diketahui, isi `NACO_FIELD_NIP` di `.env` supaya
- * pembacaannya jadi eksplisit dan tidak lagi bergantung pada penelusuran.
+ * NIP hanya dibaca dari field yang DITETAPKAN (`NACO_FIELD_NIP`), NIK hanya
+ * dari `NACO_FIELD_NIK` (bawaan `data.username`). Seluruh isi balasan TIDAK
+ * ditelusuri: Akun Kemnaker terbuka untuk umum, jadi field yang bisa diisi
+ * pemiliknya sendiri (nama, dst) bisa memuat NIP/NIK orang lain - menelusuri
+ * semua field berarti orang luar bisa masuk sebagai pegawai mana pun.
  */
 
 export interface KonfigurasiSso {
@@ -238,29 +234,13 @@ export function nipRusakKarenaAngka(v: unknown): boolean {
  * Menemukan NIP di dalam balasan `/users/me` yang bentuknya belum
  * terdokumentasi.
  *
- * Dua tahap, dan urutannya disengaja:
- *   1. Kalau `NACO_FIELD_NIP` diisi, pakai field itu SAJA - eksplisit menang
- *      atas tebakan, dan begitu bentuknya sudah dipastikan manusia, tidak ada
- *      lagi penelusuran yang bisa salah sasaran.
- *   2. Kalau belum diisi, telusuri seluruh isi balasan dan ambil nilai
- *      pertama yang BERBENTUK NIP (18 digit).
- *
- * Tahap 2 SENGAJA tidak mencocokkan nama field (`nip`, `employee_id`, dst):
- * nama field bisa apa saja, sementara bentuk 18 digit jauh lebih jarang
- * salah. Field yang namanya jelas-jelas bukan identitas pegawai (nomor
- * telepon, NIK 16 digit) tidak akan lolos karena panjangnya berbeda.
+ * HANYA dari `fieldNip` (NACO_FIELD_NIP). Kosong = null, tidak ada penelusuran.
  */
 export function cariNipDariInfo(info: unknown, fieldNip: string | null): string | null {
-  if (fieldNip) {
-    return normalkanNip(ambilJalur(info, fieldNip));
-  }
-  let ketemu: string | null = null;
-  telusuri(info, (_jalur, nilai) => {
-    if (ketemu !== null) return;
-    const normal = normalkanNip(nilai);
-    if (normal) ketemu = normal;
-  });
-  return ketemu;
+  // Tanpa field yang ditetapkan = tidak ada NIP. Lihat komentar di atas
+  // KonfigurasiSso: penelusuran bebas bisa disalahgunakan.
+  if (!fieldNip) return null;
+  return normalkanNip(ambilJalur(info, fieldNip));
 }
 
 /**
@@ -271,25 +251,14 @@ export function cariNipDariInfo(info: unknown, fieldNip: string | null): string 
  * nilai 18 digit di seluruh balasan. Karena itu `fieldNik` default-nya
  * `data.username`, bukan hasil penelusuran.
  *
- * Penelusuran tetap dipakai sebagai cadangan kalau field itu berubah, dan itu
- * AMAN di sini karena sifat langkah berikutnya: kandidat yang keliru (mis.
- * suatu nomor lain yang kebetulan 16 digit) cuma menghasilkan sidik yang
- * TIDAK cocok dengan baris mana pun, jadi hasilnya login ditolak - bukan
- * login sebagai orang lain. Yang memberi akses tetap kecocokan sidik, bukan
- * penemuan angkanya.
+ * HANYA dari `fieldNik`. Kalau Naco mengubah nama field-nya, login ditolak
+ * dan log server mendaftar bentuk field-nya - lebih aman daripada menebak.
  */
 export function cariNikDariInfo(info: unknown, fieldNik: string | null): string | null {
-  if (fieldNik) {
-    const langsung = normalkanNik(ambilJalur(info, fieldNik));
-    if (langsung) return langsung;
-  }
-  let ketemu: string | null = null;
-  telusuri(info, (_jalur, nilai) => {
-    if (ketemu !== null) return;
-    const normal = normalkanNik(nilai);
-    if (normal) ketemu = normal;
-  });
-  return ketemu;
+  // Hanya field yang ditetapkan. TODO(confirm) ke Pusdatik: apakah
+  // `data.username` = NIK yang terverifikasi dan tidak bisa diubah pemiliknya.
+  if (!fieldNik) return null;
+  return normalkanNik(ambilJalur(info, fieldNik));
 }
 
 /** Ambil nilai lewat jalur bertitik, mis. "data.user.nip". */

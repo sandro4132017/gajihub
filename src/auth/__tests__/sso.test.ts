@@ -61,7 +61,7 @@ describe("berbentukNip", () => {
     expect(nipRusakKarenaAngka(199000100000000008)).toBe(true);
     // Dan lewat jalur yang sebenarnya - JSON.parse dari balasan Naco.
     const dariNaco = JSON.parse('{"nip": 199000100000000008}');
-    expect(cariNipDariInfo(dariNaco, null)).toBeNull();
+    expect(cariNipDariInfo(dariNaco, "nip")).toBeNull();
   });
 
   it("menerima NIP berpemisah spasi/titik/strip - bentuk tulisan manusia", () => {
@@ -94,21 +94,16 @@ describe("berbentukNip", () => {
 });
 
 describe("cariNipDariInfo", () => {
-  it("menemukan NIP walau bersarang dalam", () => {
+  it("membaca NIP dari field yang ditetapkan, walau bersarang", () => {
     const info = { data: { user: { name: "Irwan", nip: "199000100000000008" } } };
-    expect(cariNipDariInfo(info, null)).toBe("199000100000000008");
+    expect(cariNipDariInfo(info, "data.user.nip")).toBe("199000100000000008");
   });
 
-  it("menemukan NIP apa pun nama fieldnya", () => {
-    // Bentuk balasan /users/me BELUM terdokumentasi, jadi penelusurannya
-    // sengaja tidak bergantung nama field.
-    const info = { data: { employee_number: "199000100000000008" } };
-    expect(cariNipDariInfo(info, null)).toBe("199000100000000008");
-  });
-
-  it("tidak tertukar dengan NIK 16 digit yang ada di balasan yang sama", () => {
-    const info = { data: { nik: "3175012345678901", nomor_induk: "199000100000000008" } };
-    expect(cariNipDariInfo(info, null)).toBe("199000100000000008");
+  // Akun Kemnaker terbuka untuk umum: field yang diisi pemiliknya sendiri
+  // tidak boleh bisa membawa NIP orang lain masuk.
+  it("TANPA field ditetapkan = null, walau ada nilai 18 digit di field lain", () => {
+    const info = { data: { name: "199000100000000008", employee_number: "199000100000000008" } };
+    expect(cariNipDariInfo(info, null)).toBeNull();
   });
 
   it("mengembalikan null kalau tidak ada yang berbentuk NIP - JANGAN menebak", () => {

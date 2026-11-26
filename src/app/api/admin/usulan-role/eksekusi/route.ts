@@ -26,6 +26,12 @@ export async function POST(req: Request) {
 
   const usulan = await prisma.usulanPerubahanRole.findUnique({ where: { id: usulanId }, include: { user: true } });
   if (!usulan) return NextResponse.json({ error: "Usulan tidak ditemukan." }, { status: 404 });
+  if (usulan.userId === admin.id && keputusan === "EKSEKUSI") {
+    return NextResponse.json(
+      { error: "Usulan untuk akun sendiri tidak bisa dieksekusi sendiri - minta Admin lain." },
+      { status: 400 }
+    );
+  }
   if (usulan.status !== "MENUNGGU") {
     return NextResponse.json({ error: `Usulan ini berstatus ${usulan.status} - sudah diputuskan sebelumnya.` }, { status: 400 });
   }

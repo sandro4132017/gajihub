@@ -5,17 +5,31 @@ import { adaLoginKataSandi } from "../../auth/kredensialLogin";
 import { PesanSso } from "./PesanSso";
 import { PesanSesi } from "./PesanSesi";
 import { SlideFitur } from "./SlideFitur";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { COOKIE_PESAN_SSO } from "../../auth/penandaMasukSso";
 import { HEADER_PESAN_SESI } from "../../auth/tujuanKembali";
 
 export const dynamic = "force-dynamic";
 
+function bacaPesanSso(nilai: string | undefined): string | undefined {
+  if (!nilai) return undefined;
+  try {
+    return decodeURIComponent(nilai).slice(0, 300);
+  } catch {
+    return undefined;
+  }
+}
+
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sso?: string; pesan?: string; sesi?: string }>;
+  searchParams: Promise<{ sso?: string; sesi?: string }>;
 }) {
-  const { sso, pesan, sesi: sesiLama } = await searchParams;
+  const { sso, sesi: sesiLama } = await searchParams;
+  // Rincian SSO dari cookie httpOnly yang diisi callback - `?pesan=` di URL
+  // sengaja tidak dibaca lagi supaya tidak bisa dipakai menulis teks bebas
+  // (phishing) di halaman login resmi.
+  const pesan = bacaPesanSso((await cookies()).get(COOKIE_PESAN_SSO)?.value);
   // Pesan sesi berakhir datang dari middleware (cookie sekali pakai). `?sesi=`
   // tetap dibaca untuk tautan lama yang masih beredar.
   const sesi = (await headers()).get(HEADER_PESAN_SESI) ?? sesiLama;

@@ -37,11 +37,27 @@ export function bersihkanNilaiEnv(v: string | undefined): string | undefined {
 }
 
 /**
+ * Kredensial akun uji coba (DEV_AUTH_*) yang BERLAKU. Akun ini memegang ADMIN +
+ * semua role, jadi di mode PUBLIC (alamat terbuka ke internet) ia MATI kecuali
+ * dibuka sengaja dengan `DEV_AUTH_IZINKAN_PUBLIK="true"`. Mode dibaca dari
+ * `NETWORK_MODE` env yang diberikan (kosong/tak dikenal = INTERNAL, sama dengan
+ * modeJaringan.ts).
+ */
+export function kredensialDev(env: Record<string, string | undefined>): { devUser?: string; devPass?: string } {
+  const devUser = bersihkanNilaiEnv(env.DEV_AUTH_USER);
+  const devPass = bersihkanNilaiEnv(env.DEV_AUTH_PASS);
+  const publik = bersihkanNilaiEnv(env.NETWORK_MODE)?.toUpperCase() === "PUBLIC";
+  if (publik && bersihkanNilaiEnv(env.DEV_AUTH_IZINKAN_PUBLIK) !== "true") return {};
+  return { devUser, devPass };
+}
+
+/**
  * Apakah ada akun berkata sandi yang aktif (akun uji coba lengkap dengan
  * sandinya, atau akun penguji). Bila tidak, halaman login hanya menampilkan SSO.
  */
 export function adaLoginKataSandi(env: Record<string, string | undefined>, now: Date = new Date()): boolean {
-  const devAktif = Boolean(bersihkanNilaiEnv(env.DEV_AUTH_USER) && bersihkanNilaiEnv(env.DEV_AUTH_PASS));
+  const { devUser, devPass } = kredensialDev(env);
+  const devAktif = Boolean(devUser && devPass);
   return devAktif || konfigPenguji(env, now) !== null;
 }
 

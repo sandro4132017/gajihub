@@ -54,7 +54,9 @@ describe("ModalPassphraseTte - mode SPTJM (tanpa prop)", () => {
   );
 
   it("tetap menampilkan akun demo, penyunting nomor, dan pratinjau draft", () => {
-    expect(h).toContain("Gunakan Akun Demo");
+    expect(h).toContain("Pakai NIK Demo");
+    // Passphrase demo TIDAK pernah diisi otomatis (tidak ikut bundel browser).
+    expect(h).toMatch(/id="tte-passphrase"[^>]*value=""/);
     expect(h).toContain("Akun uji coba");
     expect(h).toContain("Nomor Dokumen SPTJM");
     expect(h).toContain("Pratinjau Draft");

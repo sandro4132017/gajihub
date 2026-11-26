@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { NIK_DEMO_BSRE } from "../../lib/tte/simulasiTte";
 import { tandatanganiDokumen } from "@/lib/tte/tandatanganiDokumen";
 import { prisma } from "@/lib/prisma";
 import { ambilUserSesi } from "@/auth/getSessionAccount";
@@ -78,7 +79,7 @@ export async function cekStatusTteAction(nikTarget?: string) {
     return { success: false, error: "Hanya Kasubag TU yang dapat memeriksa sertifikat TTE." };
   }
 
-  const nik = nikTarget || process.env.TEST_BSRE_NIK || "0803202100007062";
+  const nik = nikTarget || process.env.TEST_BSRE_NIK || NIK_DEMO_BSRE;
   const res = await checkUserStatus(nik);
   return res;
 }
@@ -433,7 +434,7 @@ export async function signSptjmUnitAction(
   const bulan = Number(formData.get("bulan"));
   const tahun = Number(formData.get("tahun"));
   const passphrase = String(formData.get("passphrase") || "");
-  const nik = String(formData.get("nik") || process.env.TEST_BSRE_NIK || "0803202100007062");
+  const nik = String(formData.get("nik") || process.env.TEST_BSRE_NIK || NIK_DEMO_BSRE);
   // SATUAN KERJA DITURUNKAN DARI SESI, BUKAN DARI FORM.
   //
   // Sebelumnya nilainya dibaca dari `formData.get("satuanKerja")`, dan titik

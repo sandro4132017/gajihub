@@ -51,9 +51,9 @@ export function PesanSso({ kode, pesan }: { kode?: string; pesan?: string }) {
     >
       <p className="text-sm font-bold text-red">{judul}</p>
       {langkah && <p className="mt-1 text-xs leading-relaxed text-ink-2">{langkah}</p>}
-      {/* Pesan mentah dari Naco/server ditampilkan apa adanya - waktu
-          memasang SSO, justru kalimat inilah yang menyebutkan sebab
-          teknisnya, dan menyembunyikannya berarti menebak-nebak. */}
+      {/* Rincian dari server (cookie httpOnly yang diisi callback, bukan
+          URL) - waktu memasang SSO, kalimat inilah yang menyebutkan sebab
+          teknisnya. */}
       {pesan && (
         <p className="mt-2 break-words font-mono text-[11px] leading-relaxed text-muted">{pesan}</p>
       )}

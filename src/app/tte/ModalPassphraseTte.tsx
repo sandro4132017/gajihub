@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { NIK_DEMO_BSRE } from "../../lib/tte/simulasiTte";
 import type { TteActionResult } from "./actions";
 import {
   type JenisSptjm,
@@ -65,7 +66,7 @@ export function ModalPassphraseTte({
   periodeTahun,
   satuanKerja = "Biro Keuangan dan BMN",
   defaultNomorDokumen,
-  defaultNik = "0803202100007062",
+  defaultNik = NIK_DEMO_BSRE,
   // Dikosongkan, bukan diisi nama siapa pun. Identitas penanda tangan
   // ditentukan SERVER dari sesi (signSptjmUnitAction) dan empat field
   // tersembunyi di bawah sudah tidak lagi dipercaya. Nama yang muncul di
@@ -95,9 +96,9 @@ export function ModalPassphraseTte({
     const t = setInterval(() => setDetikTunggu(Math.floor((Date.now() - mulai) / 1000)), 1000);
     return () => clearInterval(t);
   }, [pending]);
-  const [passphrase, setPassphrase] = useState(
-    pakaiDemo && defaultNik === "0803202100007062" ? "Bsre2026.#!" : ""
-  );
+  // Passphrase SELALU diketik orangnya - tidak pernah diisi otomatis, juga
+  // untuk akun demo (Kriteria BSrE V/VIII; nilai di kode ikut ke browser).
+  const [passphrase, setPassphrase] = useState("");
   // Jalur kirimTandaTangan (lembur) tidak pernah memulai dari NIK demo bawaan.
   const [nik, setNik] = useState(pakaiDemo ? defaultNik : "");
   const wasTerbukaRef = useRef(false);
@@ -189,10 +190,8 @@ export function ModalPassphraseTte({
   };
 
   const gunakanAkunDemo = () => {
-    const demoNik = "0803202100007062";
-    const demoPass = "Bsre2026.#!";
+    const demoNik = NIK_DEMO_BSRE;
     setNik(demoNik);
-    setPassphrase(demoPass);
     periksaStatusNik(demoNik);
   };
 
@@ -215,9 +214,9 @@ export function ModalPassphraseTte({
         setNik("");
         setPassphrase("");
       } else {
-        const targetNik = nik || (pakaiDemo ? defaultNik || "0803202100007062" : "");
+        const targetNik = nik || (pakaiDemo ? defaultNik || NIK_DEMO_BSRE : "");
         if (!nik) setNik(targetNik);
-        if (pakaiDemo && !passphrase && targetNik === "0803202100007062") {
+        if (pakaiDemo && !passphrase && targetNik === NIK_DEMO_BSRE) {
           setPassphrase("Bsre2026.#!");
         }
       }
@@ -228,7 +227,7 @@ export function ModalPassphraseTte({
   // Cek status sertifikat saat modal terbuka atau NIK berubah (debounced 250ms agar tidak memicu double request)
   useEffect(() => {
     if (!terbuka) return;
-    const cleanNik = (nik || (pakaiDemo ? defaultNik || "0803202100007062" : "")).trim();
+    const cleanNik = (nik || (pakaiDemo ? defaultNik || NIK_DEMO_BSRE : "")).trim();
 
     const timer = setTimeout(() => {
       periksaStatusNik(cleanNik);
@@ -464,7 +463,7 @@ export function ModalPassphraseTte({
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmitSign} className="space-y-4 pt-1">
+        <form onSubmit={handleSubmitSign} autoComplete="off" className="space-y-4 pt-1">
           <input type="hidden" name="jenis" value={jenisDokumen} />
           <input type="hidden" name="bulan" value={periodeBulan} />
           <input type="hidden" name="tahun" value={periodeTahun} />
@@ -610,7 +609,7 @@ export function ModalPassphraseTte({
 
                 {pakaiDemo &&
                 (statusSertifikat.status === "NOT_REGISTERED" || statusSertifikat.status === "BELUM_TERDAFTAR") &&
-                nik.trim() !== "0803202100007062" ? (
+                nik.trim() !== NIK_DEMO_BSRE ? (
                   <button
                     type="button"
                     onClick={gunakanAkunDemo}
@@ -640,13 +639,13 @@ export function ModalPassphraseTte({
               <label className="block text-xs font-semibold text-ink" htmlFor="tte-nik">
                 NIK Penandatangan BSrE
               </label>
-              {pakaiDemo && nik !== "0803202100007062" && (
+              {pakaiDemo && nik !== NIK_DEMO_BSRE && (
                 <button
                   type="button"
                   onClick={gunakanAkunDemo}
                   className="text-[11px] font-medium text-biru hover:underline"
                 >
-                  Pakai NIK Demo (0803202100007062)
+                  Pakai NIK Demo ({NIK_DEMO_BSRE})
                 </button>
               )}
             </div>
@@ -664,7 +663,7 @@ export function ModalPassphraseTte({
               *Masukkan 16 digit <strong>NIK</strong> (bukan NIP).
               {pakaiDemo && (
                 <>
-                  {" "}Akun uji coba server BSrE ini: <code>0803202100007062</code>
+                  {" "}Akun uji coba server BSrE ini: <code>{NIK_DEMO_BSRE}</code>
                 </>
               )}
             </p>
@@ -682,7 +681,7 @@ export function ModalPassphraseTte({
                   onClick={gunakanAkunDemo}
                   className="text-[11px] font-medium text-biru hover:underline"
                 >
-                  Gunakan Akun Demo
+                  Pakai NIK Demo
                 </button>
               )}
             </div>

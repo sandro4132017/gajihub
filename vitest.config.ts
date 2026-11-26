@@ -21,6 +21,13 @@ export default defineConfig({
     // salinan test di sana (jumlahnya jadi dobel), dan salinan itu bisa gagal
     // karena konteksnya berbeda - verify merah padahal kodenya sehat.
     exclude: [...configDefaults.exclude, ".claude/**"],
+    // Esign Client tidak punya nilai cadangan di kode (repo publik), jadi test
+    // memberi alamat & kredensial PALSU. `.invalid` tidak pernah ter-resolve.
+    env: {
+      ESIGN_BASE_URL: "http://esign.uji.invalid",
+      ESIGN_API_USER: "pengguna-uji",
+      ESIGN_API_PASS: "sandi-uji",
+    },
   },
   resolve: {
     alias: {

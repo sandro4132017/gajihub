@@ -567,6 +567,8 @@ export interface KoreksiLemburFormState {
  * di RekapKehadiranPeriode) - jadi ini input manual Kasubag TU, bukan
  * "tarik ulang" dari adapter seperti presensi.
  */
+const BATAS_JAM_LEMBUR_SEBULAN = 31 * 24;
+
 export async function koreksiUangLemburAction(
   _state: KoreksiLemburFormState,
   formData: FormData
@@ -579,10 +581,15 @@ export async function koreksiUangLemburAction(
     const periodeBulan = Number(formData.get("periodeBulan"));
     const periodeTahun = Number(formData.get("periodeTahun"));
     const totalJamLembur = Number(formData.get("totalJamLembur"));
-    const tarifPerJam = Number(formData.get("tarifPerJam"));
+    // Tarif TIDAK dibaca dari form - nilai dari browser bisa diubah siapa pun.
+    // Diturunkan di server dari golongan pegawai (SBM, lihat tarifSbm.ts).
 
-    if (!pegawaiId || Number.isNaN(totalJamLembur) || !tarifPerJam) {
+    if (!pegawaiId || !Number.isFinite(totalJamLembur)) {
       return { error: "Data koreksi tidak lengkap." };
+    }
+    // Rentang fisik sebulan (31 x 24 jam), kelipatan setengah jam seperti input form.
+    if (totalJamLembur < 0 || totalJamLembur > BATAS_JAM_LEMBUR_SEBULAN || !Number.isInteger(totalJamLembur * 2)) {
+      return { error: `Jam lembur harus antara 0 dan ${BATAS_JAM_LEMBUR_SEBULAN}, kelipatan 0,5 jam.` };
     }
     // Periode divalidasi SEBELUM apa pun: nilai di luar rentang tidak boleh
     // sampai ke gerbang SPKL (tanggal tidak valid) maupun ke database.
@@ -607,6 +614,24 @@ export async function koreksiUangLemburAction(
         error:
           "Total jam lembur tidak bisa diisi manual untuk unit ini: lembur dibayar hanya berdasarkan perintah lembur (SPKL) per tanggal. Gunakan koreksi jam lembur harian, yang tetap dibatasi perintah.",
       };
+    }
+
+    // Rekap yang sudah dikirim ke PPABP terkunci - sama dengan kalkulasi massal
+    // dan koreksi harian. Dicek di server, bukan hanya menyembunyikan tombol.
+    if (
+      pegawai.satuanKerja &&
+      (await rekapUnitTerkunciUntukTanggal(pegawai.satuanKerja, new Date(Date.UTC(periodeTahun, periodeBulan - 1, 1))))
+    ) {
+      return { error: "Periode ini sudah dikirim ke PPABP dan terkunci. Uang Lembur tidak dapat dikoreksi." };
+    }
+    const lemburLama = await prisma.uangLembur.findUnique({
+      where: { pegawaiId_periodeBulan_periodeTahun: { pegawaiId, periodeBulan, periodeTahun } },
+    });
+    const golTarif = kurungTarifSbm(pegawai.golongan);
+    const tarifPerJam = golTarif ? TARIF_UANG_LEMBUR_PER_JAM[golTarif] : lemburLama?.tarifPerJam;
+    if (!tarifPerJam) {
+      // Jangan menebak tarif - angka ini sampai ke pembayaran.
+      return { error: "Golongan pegawai belum diketahui, jadi tarif lembur tidak bisa ditentukan." };
     }
 
     const hasilLembur = hitungUangLembur({
@@ -651,6 +676,20 @@ export async function koreksiUangLemburAction(
         approvedAt: null,
         approvedBy: null,
         catatanAnomali: validasiLemburHasil.anomali.length ? validasiLemburHasil.anomali.join("; ") : null,
+      },
+    });
+
+    await prisma.auditTrail.create({
+      data: {
+        entitas: "uang_lembur",
+        entitasId: `${pegawai.nip}-${periodeTahun}-${String(periodeBulan).padStart(2, "0")}`,
+        aksi: lemburLama ? "UPDATE" : "CREATE",
+        aktor: authUser.nip,
+        satuanKerja: pegawai.satuanKerja,
+        dataSebelum: lemburLama
+          ? { totalJamLembur: lemburLama.totalJamLembur, tarifPerJam: lemburLama.tarifPerJam, totalUangLembur: lemburLama.totalUangLembur }
+          : undefined,
+        dataSesudah: { totalJamLembur, tarifPerJam, totalUangLembur: hasilLembur.totalUangLembur },
       },
     });
 

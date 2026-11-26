@@ -46,6 +46,9 @@ export async function usulkanPerubahanRoleAction(
 
     const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!targetUser) return { error: "Akun tujuan tidak ditemukan." };
+    if (targetUser.id === user.id) {
+      return { error: "Tidak bisa mengusulkan perubahan role untuk akun sendiri." };
+    }
     if (targetUser.role === roleDiusulkan) {
       return { error: `Akun ini sudah berrole ${roleDiusulkan}.` };
     }
